@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.aiops2.invalid/portal-read-envelope-v0.2.schema.json",
+  "title": "AIOPS2 portal authorized read envelope (proposal)",
+  "description": "Shape validation only. Does not establish actor/tenant ACL, provenance authenticity or freshness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "family",
+    "state",
+    "reason_code",
+    "data",
+    "provenance",
+    "freshness",
+    "request",
+    "page"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "aiops2.read.v0.2"
+    },
+    "family": {
+      "enum": [
+        "dashboard/health",
+        "incidents",
+        "services/CMDB",
+        "NOC",
+        "Twin",
+        "Runs/timeline",
+        "Evidence",
+        "Policy/HITL",
+        "Prometheus/Grafana",
+        "GLPI",
+        "Copilot"
+      ]
+    },
+    "state": {
+      "enum": [
+        "READY",
+        "UNKNOWN",
+        "ERROR",
+        "BLOCKED"
+      ]
+    },
+    "reason_code": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "data": {},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_kind",
+        "source_ref",
+        "observed_at",
+        "collected_at",
+        "snapshot_watermark"
+      ],
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "collected_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "snapshot_watermark": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_age_seconds",
+        "age_seconds",
+        "stale"
+      ],
+      "properties": {
+        "max_age_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "age_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "stale": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generation",
+        "correlation_id"
+      ],
+      "properties": {
+        "generation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "correlation_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "page": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "next_cursor"
+      ],
+      "properties": {
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "UNKNOWN",
+              "ERROR",
+              "BLOCKED"
+            ]
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "READY"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "reason_code": {
+            "type": "null"
+          },
+          "provenance": {
+            "properties": {
+              "source_ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "observed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "collected_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "snapshot_watermark": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "freshness": {
+            "properties": {
+              "age_seconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "stale": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
