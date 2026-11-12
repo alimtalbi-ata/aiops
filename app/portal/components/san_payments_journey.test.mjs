@@ -442,3 +442,25 @@ test('synthetic: provenance styling hook distinguishes demo, missing and unverif
   assert.equal(items.length, 8);
   assert.match(items[1].children[4].textContent, /Horodatage déclaré/);
 });
+
+
+test('synthetic: freshness remains UNKNOWN even when a source is explicitly SYNTHETIC', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC' },
+    impact: { state: 'AVAILABLE', source: 'authorized adapter', observedAt: '2026-11-12T12:00:00Z' },
+    noc: { state: 'BLOCKED' }
+  }, { mode: 'DEMO' });
+  const items = nav.children[2].children;
+  assert.equal(items[0].attributes['data-provenance'], 'SYNTHETIC');
+  assert.equal(items[0].attributes['data-freshness'], 'UNKNOWN');
+  assert.equal(items[1].attributes['data-freshness'], 'DECLARED_UNVERIFIED');
+  assert.equal(items[2].attributes['data-freshness'], 'UNKNOWN');
+  assert.equal(items[2].attributes['data-state'], 'BLOCKED');
+  assert.match(items[0].children[4].textContent, /FRAÎCHEUR INCONNUE/);
+  assert.match(nav.children[3].textContent, /horodatage\\(s\\) inconnu\\(s\\)/);
+});
