@@ -10,10 +10,11 @@ if [[ "$(id -u)" != 1001 || ! -S /run/user/1001/docker.sock ]]; then
 fi
 command -v docker >/dev/null || { echo 'ROOTLESS=UNKNOWN reason=docker_cli'; exit 2; }
 command -v curl >/dev/null || { echo 'HTTP=UNKNOWN reason=curl_cli'; exit 2; }
+command -v timeout >/dev/null || { echo 'QUALIFICATION=UNKNOWN reason=timeout_cli'; exit 2; }
 date -u '+timestamp_utc=%Y-%m-%dT%H:%M:%SZ'
 echo 'scope=READ_ONLY V1=7777 V30=7788 LIVE=BLOCKED DEMO_REPLAY=NOT_EXECUTED'
 # No daemon fallback, and never query rootful socket.
-docker --host "$DOCKER_HOST" info --format 'rootless_security={{json .SecurityOptions}}' 2>/dev/null |
+timeout -k 2s 8s docker --host "$DOCKER_HOST" info --format 'rootless_security={{json .SecurityOptions}}' 2>/dev/null |
   grep -q 'rootless' || { echo 'ROOTLESS=UNKNOWN reason=daemon_not_attested'; exit 2; }
 echo 'ROOTLESS=ATTESTED'
 gate_fail=0
@@ -46,10 +47,10 @@ for port in 7777 7788; do
 done
 # Inventory only named Portal candidates and Grafana/GLPI metadata; no env, mount source paths or volume contents.
 for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-glpi aiops2-rebuild-glpi-db; do
-  if ! docker --host "$DOCKER_HOST" container inspect "$name" >/dev/null 2>&1; then
+  if ! timeout -k 2s 8s docker --host "$DOCKER_HOST" container inspect "$name" >/dev/null 2>&1; then
     echo "MOUNTS container=$name state=UNKNOWN"; mount_review=1; continue
   fi
-  mounts=$(docker --host "$DOCKER_HOST" inspect --format '{{range .Mounts}}{{.Destination}}|{{.Type}}|{{if eq .Type "volume"}}{{.Name}}{{else}}BIND{{end}}{{println}}{{end}}' "$name" 2>/dev/null) || {
+  mounts=$(timeout -k 2s 8s docker --host "$DOCKER_HOST" inspect --format '{{range .Mounts}}{{.Destination}}|{{.Type}}|{{if eq .Type "volume"}}{{.Name}}{{else}}BIND{{end}}{{println}}{{end}}' "$name" 2>/dev/null) || {
     echo "MOUNTS container=$name state=UNKNOWN"; mount_review=1; continue;
   }
   case "$name" in
@@ -68,7 +69,7 @@ for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-
   echo "MOUNTS container=$name metadata_only=YES"
 done
 # Existing scheduler discovery only. Do not install cron, start a timer, or print commands that might contain secrets.
-cron=$(crontab -l 2>/dev/null || true)
+cron=$(timeout -k 2s 5s crontab -l 2>/dev/null || true)
 for job in aiops-debian-reporter aiops-publish-report; do
   if printf '%s\n' "$cron" | grep -Fq "$job"; then
     printf 'CRON job=%s presence=FOUND_USER_CRONTAB\n' "$job"
@@ -77,7 +78,7 @@ for job in aiops-debian-reporter aiops-publish-report; do
   fi
 done
 for job in aiops-debian-reporter aiops-publish-report; do
-  if systemctl --user list-unit-files --no-legend --no-pager 2>/dev/null | grep -Fq "$job"; then
+  if timeout -k 2s 5s systemctl --user list-unit-files --no-legend --no-pager 2>/dev/null | grep -Fq "$job"; then
     printf 'SYSTEMD_USER job=%s presence=FOUND\n' "$job"
   else
     printf 'SYSTEMD_USER job=%s presence=UNKNOWN\n' "$job"
@@ -88,7 +89,7 @@ report_dir=/home/aiops/aiops-debian-audit/reports/SRV-DEB-05/2026-11-12
 if [[ -d "$report_dir" ]]; then
   # Use separate find predicates: shell-safe, no filenames or receipt contents exposed.
   # A candidate count never attests job execution or a published-report SHA.
-  if ! receipt_count=$(find "$report_dir" -maxdepth 4 -type f \
+  if ! receipt_count=$(timeout -k 2s 10s find "$report_dir" -maxdepth 4 -type f \
       \( -iname '*receipt*' -o -iname '*publish*' \) \
       -printf '.' 2>/dev/null | wc -c); then
     echo 'REPORT_RECEIPTS=UNKNOWN reason=scan_failed'
