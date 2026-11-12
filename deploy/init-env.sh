@@ -2,21 +2,22 @@
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-if [[ -f .env ]]; then
-  chmod 600 .env
+ENV_FILE="${1:-.env}"
+if [[ -f "$ENV_FILE" ]]; then
+  chmod 600 "$ENV_FILE"
   echo 'ENV_EXISTS=UNCHANGED'
   exit 0
 fi
 command -v openssl >/dev/null 2>&1 || { echo 'FAIL|openssl_missing_for_secret_generation'; exit 1; }
-cp config/.env.example .env
-chmod 600 .env
+cp config/.env.example "$ENV_FILE"
+chmod 600 "$ENV_FILE"
 set_value() {
   local key="$1" value="$2"
-  if ! grep -q "^${key}=" .env; then
+  if ! grep -q "^${key}=" "$ENV_FILE"; then
     echo "FAIL|missing_template_key|${key}" >&2
     exit 1
   fi
-  sed -i "s|^${key}=.*|${key}=${value}|" .env
+  sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
 }
 # Core, worker and simulator share this internal authentication token by contract.
 INTERNAL_TOKEN="$(openssl rand -hex 32)"
