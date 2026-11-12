@@ -30,14 +30,32 @@ export function describeSanPaymentsJourney(records = {}) {
   // A null/primitive response must never crash the demo or imply an available step.
   const safeRecords = records !== null && typeof records === 'object' ? records : {};
   return SAN_PAYMENTS_STEPS.map(step => {
-    const record = Object.hasOwn(safeRecords, step.id) ? safeRecords[step.id] : null;
-    const state = ALLOWED.has(record?.state) ? record.state : 'UNKNOWN';
+    // Adapter records may contain throwing accessors or Proxies. A failed read
+    // must not remove the journey or turn a partial record into a claim.
+    let state = 'UNKNOWN';
+    let detail = 'Aucune information vérifiée';
+    let source = 'Source non renseignée';
+    let observedAt = 'Fraîcheur inconnue';
+    try {
+      const record = Object.hasOwn(safeRecords, step.id) ? safeRecords[step.id] : null;
+      if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+        const candidate = record.state;
+        if (ALLOWED.has(candidate)) {
+          const nextDetail = text(record.detail);
+          const nextSource = text(record.source);
+          const nextObservedAt = text(record.observedAt);
+          state = candidate;
+          detail = nextDetail ?? detail;
+          source = nextSource ?? source;
+          observedAt = nextObservedAt ?? observedAt;
+        }
+      }
+    } catch {
+      // Fail closed for this step; later steps remain independently readable.
+    }
     return Object.freeze({
       id: step.id, label: step.label, state, guidance: GUIDANCE[state],
-      detail: text(record?.detail) ?? 'Aucune information vérifiée',
-      source: text(record?.source) ?? 'Source non renseignée',
-      observedAt: text(record?.observedAt) ?? 'Fraîcheur inconnue',
-      isOperationalClaim: false
+      detail, source, observedAt, isOperationalClaim: false
     });
   });
 }
