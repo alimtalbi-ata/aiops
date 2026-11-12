@@ -94,6 +94,10 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
     const item = document.createElement('li');
     item.setAttribute('data-step', step.id);
     item.setAttribute('data-state', step.state);
+    // Styling hook only: declared metadata is not proof of LIVE freshness or trust.
+    item.setAttribute('data-provenance', isSyntheticSource(step.source) ? 'SYNTHETIC' :
+      (step.source === 'Source non renseignée' || step.observedAt === 'Fraîcheur inconnue') ?
+        'INCOMPLETE' : 'DECLARED_UNVERIFIED');
     // Native busy semantics are scoped to the pending step, never the whole journey.
     if (step.state === 'LOADING') item.setAttribute('aria-busy', 'true');
     const label = document.createElement('strong');
