@@ -71,8 +71,9 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
   heading.textContent = 'SAN → Payments';
   const note = document.createElement('p');
   note.textContent = 'Étapes de démonstration : aucune validation opérationnelle implicite.';
+  const steps = describeSanPaymentsJourney(records);
   const list = document.createElement('ol');
-  for (const step of describeSanPaymentsJourney(records)) {
+  for (const step of steps) {
     const item = document.createElement('li');
     item.setAttribute('data-step', step.id);
     item.setAttribute('data-state', step.state);
@@ -89,7 +90,14 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     item.append(label, status, detail, guidance, provenance);
     list.append(item);
   }
-  nav.append(heading, note, list);
+  // These counts describe only the eight displayed stages, never platform health.
+  const unresolved = steps.filter(step => step.state === 'UNKNOWN' || step.state === 'ERROR' || step.state === 'EMPTY').length;
+  const blocked = steps.filter(step => step.state === 'BLOCKED').length;
+  const summary = document.createElement('p');
+  summary.textContent = 'Couverture de la démonstration : ' + unresolved +
+    ' étape(s) sans information exploitable ; ' + blocked +
+    ' étape(s) bloquée(s). Comptage des étapes affichées uniquement, pas un indicateur de santé.';
+  nav.append(heading, note, list, summary);
   parent.append(nav);
   return nav;
 }
