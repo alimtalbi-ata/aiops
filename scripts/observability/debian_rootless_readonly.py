@@ -63,12 +63,22 @@ def safe_lines(result, limit=100):
     if result["state"] != "OBSERVED":
         return result
     return {"state": "OBSERVED", "value": result["value"].splitlines()[:limit]}
+def has_symlink_ancestor(path):
+    """Reject symlink components before creating or writing output files."""
+    return any(part.is_symlink() for part in (path, *path.parents))
+
 def main():
     if os.getuid() != UID:
         print("collector must run as aiops UID 1001", file=sys.stderr)
         return 3
     os.umask(0o077)
+    if has_symlink_ancestor(BASE):
+        print("unsafe output path", file=sys.stderr)
+        return 3
     BASE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if has_symlink_ancestor(BASE):
+        print("unsafe output path", file=sys.stderr)
+        return 3
     if BASE.is_symlink() or BASE.stat().st_uid != UID or BASE.stat().st_mode & 0o077:
         print("unsafe output directory", file=sys.stderr)
         return 3
