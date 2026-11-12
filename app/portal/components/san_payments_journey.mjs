@@ -91,12 +91,16 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     list.append(item);
   }
   // These counts describe only the eight displayed stages, never platform health.
-  const unresolved = steps.filter(step => step.state === 'UNKNOWN' || step.state === 'ERROR' || step.state === 'EMPTY').length;
+  const unknown = steps.filter(step => step.state === 'UNKNOWN').length;
+  const errors = steps.filter(step => step.state === 'ERROR').length;
+  const empty = steps.filter(step => step.state === 'EMPTY').length;
+  const unresolved = unknown + errors + empty;
   const blocked = steps.filter(step => step.state === 'BLOCKED').length;
   const loading = steps.filter(step => step.state === 'LOADING').length;
   const summary = document.createElement('p');
   summary.textContent = 'Couverture de la démonstration : ' + unresolved +
-    ' étape(s) sans information exploitable ; ' + blocked +
+    ' étape(s) sans information exploitable (UNKNOWN : ' + unknown +
+    ', ERROR : ' + errors + ', EMPTY : ' + empty + ') ; ' + blocked +
     ' étape(s) bloquée(s) ; ' + loading +
     ' étape(s) en chargement. Comptage des étapes affichées uniquement, pas un indicateur de santé.';
   nav.append(heading, note, list, summary);
