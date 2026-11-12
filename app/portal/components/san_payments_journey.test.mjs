@@ -279,10 +279,31 @@ test('synthetic: consultable stages are counted without implying validation', ()
     run: { state: 'LOADING' }
   });
   const summary = nav.children[3].textContent;
-  assert.match(summary, /2 étape\\(s\\) consultable\\(s\\), non validée\\(s\\)/);
-  assert.match(summary, /1 étape\\(s\\) bloquée\\(s\\)/);
-  assert.match(summary, /1 étape\\(s\\) en chargement/);
+  assert.match(summary, /2 étape\(s\) consultable\(s\), non validée\(s\)/);
+  assert.match(summary, /1 étape\(s\) bloquée\(s\)/);
+  assert.match(summary, /1 étape\(s\) en chargement/);
   assert.match(summary, /pas un indicateur de santé/);
   assert.doesNotMatch(summary, /READY|approuvée|production saine/);
+  assert.equal(nav.children[2].children.length, 8);
+});
+
+
+test('synthetic: provenance coverage counts missing metadata and declared demo sources separately', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC', observedAt: 'unverified demo timestamp' },
+    impact: { state: 'AVAILABLE', source: 'authorized adapter' },
+    noc: { state: 'BLOCKED' }
+  });
+  const summary = nav.children[3].textContent;
+  assert.match(summary, /6 source\\(s\\) non renseignée\\(s\\)/);
+  assert.match(summary, /7 horodatage\\(s\\) inconnu\\(s\\)/);
+  assert.match(summary, /1 source\\(s\\) SYNTHETIC/);
+  assert.match(summary, /démonstration uniquement/);
+  assert.match(summary, /pas un indicateur de santé/);
   assert.equal(nav.children[2].children.length, 8);
 });
