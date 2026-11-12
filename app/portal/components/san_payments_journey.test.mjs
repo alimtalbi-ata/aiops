@@ -421,3 +421,24 @@ test('synthetic: DEMO and REPLAY have distinct accessible provenance warnings', 
   assert.equal(unknown.attributes['data-mode'], 'UNKNOWN');
   assert.equal(replay.children[2].children.length, 8);
 });
+
+test('synthetic: provenance styling hook distinguishes demo, missing and unverified metadata', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'synthetic: fixture', observedAt: '2026-11-12' },
+    impact: { state: 'AVAILABLE', source: 'adapter', observedAt: '2026-11-12' },
+    noc: { state: 'AVAILABLE', source: 'adapter' },
+    run: { state: 'BLOCKED' }
+  }, { mode: 'DEMO' });
+  const items = nav.children[2].children;
+  assert.deepEqual(items.slice(0, 4).map(item => item.attributes['data-provenance']),
+    ['SYNTHETIC', 'DECLARED_UNVERIFIED', 'INCOMPLETE', 'INCOMPLETE']);
+  assert.equal(nav.attributes['data-mode'], 'DEMO');
+  assert.equal(items[3].attributes['data-state'], 'BLOCKED');
+  assert.equal(items.length, 8);
+  assert.match(items[1].children[4].textContent, /Horodatage déclaré/);
+});
