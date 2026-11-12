@@ -146,3 +146,24 @@ test('synthetic: every stage has a separate explicit text status for screen read
   assert.equal(items[7].children[1].textContent, 'État : UNKNOWN');
   assert.ok(items.every(item => item.children[1].tag === 'span'));
 });
+
+test('synthetic: AVAILABLE is visibly consultable but never validated or READY', () => {
+  const document = { createElement(tag) {
+    return { tag, attributes: {}, children: [], textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const root = { append() {} };
+  const nav = renderSanPaymentsJourney(document, root, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC', observedAt: 'not verified' },
+    decision: { state: 'BLOCKED' }
+  });
+  const items = nav.children[2].children;
+  assert.equal(items[0].children[1].textContent,
+    'État : AVAILABLE (données consultables, non validées)');
+  assert.equal(items[6].children[1].textContent, 'État : BLOCKED');
+  assert.equal(items[7].children[1].textContent, 'État : UNKNOWN');
+  assert.match(items[0].children[4].textContent, /Source déclarée : SYNTHETIC/);
+  assert.ok(describeSanPaymentsJourney({ incident: { state: 'AVAILABLE' } })
+    .every(step => step.isOperationalClaim === false));
+});
