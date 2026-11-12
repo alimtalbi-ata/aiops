@@ -56,7 +56,7 @@ def inventory(result, count, limit=150):
     if len(rows) > limit or n != len(rows):
         reason = "INVENTORY_COUNT_MISMATCH" if count["count"] < len(rows) else "INVENTORY_TRUNCATED"
         return {"state": "UNKNOWN", "reason": reason,
-                "items": rows[:limit], "count": count["count"], "complete": False}
+                "items": [], "count": count["count"], "complete": False}
     return {"state": "OBSERVED", "items": rows, "count": count["count"], "complete": True}
 
 def safe_lines(result, limit=100):
