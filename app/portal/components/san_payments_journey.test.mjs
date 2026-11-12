@@ -203,8 +203,28 @@ test('synthetic: pending stages remain distinct from missing and blocked stages'
     noc: { state: 'BLOCKED' }
   });
   const summary = nav.children[3].textContent;
-  assert.match(summary, /5 étape\\(s\\) sans information exploitable/);
-  assert.match(summary, /1 étape\\(s\\) bloquée\\(s\\)/);
-  assert.match(summary, /2 étape\\(s\\) en chargement/);
+  assert.match(summary, /5 étape\(s\) sans information exploitable/);
+  assert.match(summary, /1 étape\(s\) bloquée\(s\)/);
+  assert.match(summary, /2 étape\(s\) en chargement/);
+  assert.match(summary, /pas un indicateur de santé/);
+});
+
+
+test('synthetic: coverage breakdown distinguishes UNKNOWN, ERROR and EMPTY without implying health', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'ERROR' }, impact: { state: 'EMPTY' },
+    noc: { state: 'BLOCKED' }, run: { state: 'LOADING' },
+    evidence: { state: 'AVAILABLE', source: 'SYNTHETIC' }
+  });
+  const summary = nav.children[3].textContent;
+  assert.match(summary, /5 étape\(s\) sans information exploitable/);
+  assert.match(summary, /UNKNOWN : 3, ERROR : 1, EMPTY : 1/);
+  assert.match(summary, /1 étape\(s\) bloquée\(s\)/);
+  assert.match(summary, /1 étape\(s\) en chargement/);
   assert.match(summary, /pas un indicateur de santé/);
 });
