@@ -91,3 +91,40 @@ test('synthetic: rendering with null response retains eight accessible UNKNOWN s
   assert.equal(list.children.length, 8);
   assert.ok(list.children.every(item => item.attributes['data-state'] === 'UNKNOWN'));
 });
+
+test('synthetic: throwing record getter fails closed without hiding other stages', () => {
+  const records = {
+    get incident() { throw new Error('SYNTHETIC adapter failure'); },
+    impact: { state: 'BLOCKED', source: 'SYNTHETIC' }
+  };
+  const steps = describeSanPaymentsJourney(records);
+  assert.equal(steps.length, 8);
+  assert.equal(steps[0].state, 'UNKNOWN');
+  assert.equal(steps[1].state, 'BLOCKED');
+  assert.equal(steps[1].source, 'SYNTHETIC');
+});
+
+test('synthetic: throwing metadata getter cannot publish partial AVAILABLE claim', () => {
+  const records = {
+    decision: {
+      state: 'AVAILABLE',
+      detail: 'SYNTHETIC unverified',
+      get source() { throw new Error('SYNTHETIC metadata failure'); }
+    },
+    result: { state: 'BLOCKED' }
+  };
+  const steps = describeSanPaymentsJourney(records);
+  assert.equal(steps[6].state, 'UNKNOWN');
+  assert.equal(steps[6].detail, 'Aucune information vérifiée');
+  assert.equal(steps[7].state, 'BLOCKED');
+  assert.ok(steps.every(step => !step.isOperationalClaim));
+});
+
+test('synthetic: hostile Proxy and array records cannot crash rendering', () => {
+  const records = new Proxy({}, {
+    getOwnPropertyDescriptor() { throw new Error('SYNTHETIC proxy failure'); }
+  });
+  const steps = describeSanPaymentsJourney(records);
+  assert.ok(steps.every(step => step.state === 'UNKNOWN'));
+  assert.equal(describeSanPaymentsJourney({ run: [{ state: 'AVAILABLE' }] })[3].state, 'UNKNOWN');
+});
