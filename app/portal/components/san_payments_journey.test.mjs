@@ -36,8 +36,8 @@ test('synthetic: semantic ordered navigation, text-only untrusted content and pr
   const list = nav.children[2];
   assert.equal(list.tag, 'ol');
   assert.equal(list.children.length, 8);
-  assert.equal(list.children[0].children[1].textContent, '<script>alert(1)</script>');
-  assert.match(list.children[0].children[3].textContent, /SYNTHETIC/);
+  assert.equal(list.children[0].children[2].textContent, '<script>alert(1)</script>');
+  assert.match(list.children[0].children[4].textContent, /SYNTHETIC/);
   assert.equal(root.children[0], nav);
   assert.equal(nodes.filter(n => n.tag === 'script').length, 0);
 });
@@ -63,9 +63,9 @@ test('synthetic: provenance and guidance are text, not inferred evidence', () =>
     decision: { state: 'BLOCKED', source: 'SYNTHETIC', observedAt: 'not verified' }
   });
   const decision = nav.children[2].children[6];
-  assert.match(decision.children[2].textContent, /Policy\/HITL/);
-  assert.match(decision.children[3].textContent, /Source déclarée : SYNTHETIC/);
-  assert.match(decision.children[3].textContent, /Horodatage déclaré : not verified/);
+  assert.match(decision.children[3].textContent, /Policy\/HITL/);
+  assert.match(decision.children[4].textContent, /Source déclarée : SYNTHETIC/);
+  assert.match(decision.children[4].textContent, /Horodatage déclaré : not verified/);
 });
 
 test('synthetic: null, undefined and primitive payloads fail closed to UNKNOWN', () => {
@@ -127,4 +127,22 @@ test('synthetic: hostile Proxy and array records cannot crash rendering', () => 
   const steps = describeSanPaymentsJourney(records);
   assert.ok(steps.every(step => step.state === 'UNKNOWN'));
   assert.equal(describeSanPaymentsJourney({ run: [{ state: 'AVAILABLE' }] })[3].state, 'UNKNOWN');
+});
+
+test('synthetic: every stage has a separate explicit text status for screen readers', () => {
+  const document = { createElement(tag) {
+    return { tag, attributes: {}, children: [], textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const root = { append() {} };
+  const nav = renderSanPaymentsJourney(document, root, {
+    incident: { state: 'LOADING' }, decision: { state: 'BLOCKED' }
+  });
+  const items = nav.children[2].children;
+  assert.equal(items.length, 8);
+  assert.equal(items[0].children[1].textContent, 'État : LOADING');
+  assert.equal(items[6].children[1].textContent, 'État : BLOCKED');
+  assert.equal(items[7].children[1].textContent, 'État : UNKNOWN');
+  assert.ok(items.every(item => item.children[1].tag === 'span'));
 });
