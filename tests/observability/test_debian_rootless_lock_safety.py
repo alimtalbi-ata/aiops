@@ -18,10 +18,10 @@ class LockSafetyTests(unittest.TestCase):
             target = base / "sentinel"
             target.write_text("unchanged")
             (base / ".lock").symlink_to(target)
+            original_stat = Path.stat
             with mock.patch.object(collector, "BASE", base), mock.patch.object(
                 collector.os, "getuid", return_value=1001
             ), mock.patch.object(collector.Path, "stat", autospec=True) as stat_mock:
-                original_stat = Path.stat
                 stat_mock.side_effect = lambda p, *a, **kw: (
                     type("S", (), {"st_uid": 1001, "st_mode": 0o40700})()
                     if p == base else original_stat(p, *a, **kw)
