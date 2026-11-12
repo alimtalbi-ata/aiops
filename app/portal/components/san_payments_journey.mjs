@@ -23,6 +23,8 @@ const GUIDANCE = Object.freeze({
   BLOCKED: 'Vérifier les droits et la décision Policy/HITL.',
   AVAILABLE: 'Consulter la provenance avant toute interprétation.'
 });
+// Treat explicitly declared synthetic variants as demo-only; never infer LIVE from a label.
+const isSyntheticSource = source => /^SYNTHETIC(?:$|[\s:/.\-_])/i.test(source);
 const text = value => typeof value === 'string' && value.trim() ? value.trim() : null;
 
 /** Explicitly never interprets a missing record as completed or approved. */
@@ -88,7 +90,7 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     const provenance = document.createElement('small');
     provenance.textContent = (step.source === 'Source non renseignée' ? 'PROVENANCE INCOMPLÈTE — source non vérifiable · ' : '') +
       (step.observedAt === 'Fraîcheur inconnue' ? 'FRAÎCHEUR INCONNUE — aucune date vérifiée · ' : '') +
-      (step.source.toUpperCase() === 'SYNTHETIC' ? 'DONNÉES SYNTHÉTIQUES — démonstration uniquement · ' : '') +
+      (isSyntheticSource(step.source) ? 'DONNÉES SYNTHÉTIQUES — démonstration uniquement · ' : '') +
       'Source déclarée : ' + step.source + ' · Horodatage déclaré : ' + step.observedAt;
     item.append(label, status, detail, guidance, provenance);
     list.append(item);
@@ -103,7 +105,7 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
   const consultable = steps.filter(step => step.state === 'AVAILABLE').length;
   const incompleteSource = steps.filter(step => step.source === 'Source non renseignée').length;
   const unknownFreshness = steps.filter(step => step.observedAt === 'Fraîcheur inconnue').length;
-  const synthetic = steps.filter(step => step.source.toUpperCase() === 'SYNTHETIC').length;
+  const synthetic = steps.filter(step => isSyntheticSource(step.source)).length;
   const summary = document.createElement('p');
   summary.textContent = 'Couverture de la démonstration : ' + unresolved +
     ' étape(s) sans information exploitable (UNKNOWN : ' + unknown +
