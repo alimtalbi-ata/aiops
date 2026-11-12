@@ -28,6 +28,30 @@ def cmd(args):
         return {"state": "OBSERVED", "value": p.stdout.strip()[:12000]}
     except (OSError, subprocess.TimeoutExpired, UnicodeError):
         return {"state": "UNKNOWN", "reason": "COMMAND_UNAVAILABLE"}
+def inventory_count(args):
+    """Count metadata identifiers without persisting raw names or command output."""
+    try:
+        p = subprocess.run(args, capture_output=True, timeout=TIMEOUT,
+                           env={"PATH": "/usr/local/bin:/usr/bin:/bin",
+                                "HOME": "/home/aiops",
+                                "XDG_RUNTIME_DIR": "/run/user/1001",
+                                "DOCKER_HOST": "unix:///run/user/1001/docker.sock"})
+        if p.returncode:
+            return {"state": "UNKNOWN", "reason": "COUNT_FAILED", "exit_code": p.returncode}
+        return {"state": "OBSERVED", "count": len(p.stdout.splitlines())}
+    except (OSError, subprocess.TimeoutExpired):
+        return {"state": "UNKNOWN", "reason": "COUNT_UNAVAILABLE"}
+
+def inventory(result, count, limit=150):
+    if result["state"] != "OBSERVED" or count["state"] != "OBSERVED":
+        return {"state": "UNKNOWN", "reason": "INVENTORY_UNVERIFIED", "items": [],
+                "count": count}
+    rows = result["value"].splitlines()
+    if len(rows) > limit or count["count"] > len(rows):
+        return {"state": "UNKNOWN", "reason": "INVENTORY_TRUNCATED",
+                "items": rows[:limit], "count": count["count"], "complete": False}
+    return {"state": "OBSERVED", "items": rows, "count": count["count"], "complete": True}
+
 def safe_lines(result, limit=100):
     if result["state"] != "OBSERVED":
         return result
@@ -51,10 +75,13 @@ def main():
                   "sections": {}}
         s = report["sections"]
         # Explicitly select only metadata fields. No env, mounts, labels, commands, IPs or logs.
-        s["containers"] = safe_lines(cmd(["docker", "ps", "-a", "--format",
-             "{{.ID}}|{{.Image}}|{{.State}}|{{.Status}}"]), 150)
-        s["images"] = safe_lines(cmd(["docker", "image", "ls", "--format",
-             "{{.Repository}}|{{.Tag}}|{{.ID}}"]), 150)
+        # IDs and state only; never persist image repositories/tags or container names.
+        s["containers"] = inventory(
+            cmd(["docker", "ps", "-a", "--format", "{{.ID}}|{{.State}}"]),
+            inventory_count(["docker", "ps", "-aq"]))
+        s["images"] = inventory(
+            cmd(["docker", "image", "ls", "-q", "--no-trunc"]),
+            inventory_count(["docker", "image", "ls", "-q", "--no-trunc"]))
         s["docker_version"] = cmd(["docker", "version", "--format", "{{.Client.Version}}"])
         s["user_units"] = safe_lines(cmd(["systemctl", "--user", "list-units",
              "--type=service", "--all", "--no-legend", "--plain", "--no-pager"]), 100)
