@@ -42,6 +42,12 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "MODE_SOURCE_MISMATCH"}
     if isinstance(value, bool) or not isinstance(value, (float, int)) or not isfinite(value):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "INVALID_SAMPLE"}
+    # A syntactically finite sample is not necessarily a meaningful measurement.
+    # Never present impossible utilization or negative counts as observed health.
+    if ((metric == "node_cpu_utilization" and not 0 <= value <= 1)
+            or (metric in {"node_memory_used", "node_filesystem_available", "http_requests_rate"}
+                and value < 0)):
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "OUT_OF_RANGE_SAMPLE"}
     try:
         observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
         if observed.tzinfo is None or now.tzinfo is None:
