@@ -1,4 +1,5 @@
 from fastapi import FastAPI,HTTPException,Header
+from fastapi.responses import PlainTextResponse
 from shared.db import db
 app=FastAPI(title='ACME Digital Twin',version='2.0.0')
 @app.get('/health')
@@ -47,8 +48,12 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
             p=x.payload;c.execute('insert into aiops.observations(observation_id,node_id,metric,value,unit,observed_at,status,payload) values(%s,%s,%s,%s,%s,now(),%s,%s)',(new('OBS'),x.target_node_id,p.get('metric','synthetic'),p.get('value'),p.get('unit'),p.get('status','UNKNOWN'),__import__('json').dumps({'run_id':x.run_id,'synthetic':True})))
     return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True}
 
-@app.get('/metrics')
+@app.get('/metrics', response_class=PlainTextResponse)
 def metrics():
     with db() as c:
         n,d,f=c.execute("select count(*),count(*) filter(where state='DEGRADED'),count(*) filter(where state='FAILED') from aiops.twin_nodes").fetchone()
     return f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n'
+
+# Register the versioned filesystem exporter routes in clean-source builds.
+from twin.fs_observations import router as fs_observations_router
+app.include_router(fs_observations_router)

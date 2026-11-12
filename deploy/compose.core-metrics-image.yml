@@ -1,0 +1,5 @@
+# FS.1024: explicit image pin for Core; use with the two existing host Compose files.
+# No credentials, network changes, or container recreation are embedded here.
+services:
+  aiops2-core:
+    image: aiops2-core:fs1017-metrics-candidate-20261106
