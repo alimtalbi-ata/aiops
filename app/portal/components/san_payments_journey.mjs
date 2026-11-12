@@ -86,7 +86,8 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     const guidance = document.createElement('p');
     guidance.textContent = step.guidance;
     const provenance = document.createElement('small');
-    provenance.textContent = 'Source déclarée : ' + step.source + ' · Horodatage déclaré : ' + step.observedAt;
+    provenance.textContent = (step.source.toUpperCase() === 'SYNTHETIC' ? 'DONNÉES SYNTHÉTIQUES — démonstration uniquement · ' : '') +
+      'Source déclarée : ' + step.source + ' · Horodatage déclaré : ' + step.observedAt;
     item.append(label, status, detail, guidance, provenance);
     list.append(item);
   }
