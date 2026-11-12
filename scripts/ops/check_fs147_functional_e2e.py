@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Fail-closed functional acceptance for a synthetic filesystem incident use case.
+
+Consumes a reviewed, sanitized E2E receipt. Never triggers actions, HITL or GLPI.
+A green generic CI check or Docker health status is not an E2E receipt.
+"""
+import argparse
+import json
+from pathlib import Path
+
+STAGES = ("filesystem_incident", "twin_evidence", "core_run",
+          "worker_analysis", "worker_critique", "policy_decision",
+          "glpi_ticket", "hitl_action_binding", "safe_resume")
+REQUIRED = ("run_id", "source", "result")
+
+
+def evaluate(receipt):
+    if receipt.get("schema") not in ("aiops2-fs147-functional-e2e-v1", "aiops2-filesystem-functional-e2e-v1"):
+        raise ValueError("unsupported receipt schema")
+    if receipt.get("mode") != "SIMULATED":
+        raise ValueError("receipt must explicitly be SIMULATED")
+    stages = receipt.get("stages")
+    if not isinstance(stages, dict):
+        raise ValueError("stages must be a mapping")
+    failures = []
+    run_id = receipt.get("run_id")
+    if not isinstance(run_id, str) or not run_id.strip():
+        failures.append("missing_run_id")
+    if receipt.get("real_effects_executed") is not False:
+        failures.append("real_effects_must_be_false")
+    ticket = receipt.get("glpi_ticket")
+    if not isinstance(ticket, dict):
+        failures.append("glpi_ticket:missing_identity")
+    else:
+        for field in ("ticket_id", "correlation_id", "operation", "evidence_ref"):
+            if not isinstance(ticket.get(field), str) or not ticket[field].strip():
+                failures.append("glpi_ticket:missing_" + field)
+        if ticket.get("operation") not in ("create", "update", "read"):
+            failures.append("glpi_ticket:invalid_operation")
+        if ticket.get("correlation_id") != run_id:
+            failures.append("glpi_ticket:correlation_mismatch")
+    for name in STAGES:
+        stage = stages.get(name)
+        if not isinstance(stage, dict):
+            failures.append(name + ":missing")
+            continue
+        for field in REQUIRED:
+            if not isinstance(stage.get(field), str) or not stage[field].strip():
+                failures.append(name + ":missing_" + field)
+        if stage.get("result") != "PASS":
+            failures.append(name + ":not_pass")
+        if stage.get("run_id") != run_id:
+            failures.append(name + ":run_id_mismatch")
+        if not isinstance(stage.get("evidence_ref"), str) or not stage["evidence_ref"].strip():
+            failures.append(name + ":missing_evidence_ref")
+    return {
+        "schema": "aiops2-filesystem-functional-e2e-verdict-v1",
+        "run_id": run_id,
+        "result": "PASS" if not failures else "BLOCKED",
+        "failures": failures,
+        "release_decision": "HOLD",
+        "note": "Receipt consistency only; independent verification of source artifacts and host provenance is required.",
+    }
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("receipt", type=Path)
+    args = p.parse_args()
+    verdict = evaluate(json.loads(args.receipt.read_text(encoding="utf-8")))
+    print(json.dumps(verdict, indent=2, sort_keys=True))
+    return 0 if verdict["result"] == "PASS" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

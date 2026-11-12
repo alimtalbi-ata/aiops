@@ -30,6 +30,18 @@ jobs:
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
+      - name: Debian provenance collector offline regression (no Docker host access)
+        run: python -m unittest discover -s tests -p "test_debian_provenance_snapshot.py" -v
+      - name: Debian provenance diff offline regression (no Docker host access)
+        run: python -m unittest discover -s tests -p "test_compare_debian_provenance.py" -v
+      - name: Debian GitHub evidence join offline regression
+        run: python -m unittest discover -s tests -p "test_join_debian_github_evidence.py" -v
+      - name: Existing Debian reporter compatibility offline regression
+        run: python -m unittest discover -s tests -p "test_adapt_existing_debian_report.py" -v
+      - name: FS147 functional E2E receipt fail-closed regression
+        run: python -m unittest discover -s tests -p "test_fs147_functional_e2e.py" -v
+      - name: Debian functional inventory safety regression
+        run: python -m unittest discover -s tests -p "test_debian_functional_inventory.py" -v
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Portal registry and integration navigation unit tests
