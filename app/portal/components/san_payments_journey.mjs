@@ -66,13 +66,23 @@ export function describeSanPaymentsJourney(records = {}) {
  * Accessible ordered journey. Host owns auth, navigation, data and lifecycle.
  * No inline handlers, HTML injection, network calls or synthetic operational data.
  */
-export function renderSanPaymentsJourney(document, parent, records = {}) {
+export function renderSanPaymentsJourney(document, parent, records = {}, options = {}) {
+  // Mode is an explicit host declaration, never inferred from records or a URL.
+  // This read-only component cannot attest LIVE authorization or runtime health.
+  let declaredMode = 'UNKNOWN';
+  try {
+    if (options && typeof options === 'object' &&
+        ['DEMO', 'REPLAY'].includes(options.mode)) declaredMode = options.mode;
+  } catch { /* Invalid adapter metadata fails closed to UNKNOWN. */ }
   const nav = document.createElement('nav');
   nav.setAttribute('aria-label', 'Parcours de démonstration SAN vers Payments');
   const heading = document.createElement('h2');
   heading.textContent = 'SAN → Payments';
   const note = document.createElement('p');
-  note.textContent = 'Étapes de démonstration : aucune validation opérationnelle implicite.';
+  note.textContent = 'Mode : ' + declaredMode +
+    (declaredMode === 'UNKNOWN' ? ' — mode non attesté, LIVE non revendiqué.' :
+      ' — données de démonstration/rejeu, jamais une opération LIVE.') +
+    ' Étapes de démonstration : aucune validation opérationnelle implicite.';
   const steps = describeSanPaymentsJourney(records);
   const list = document.createElement('ol');
   for (const step of steps) {
