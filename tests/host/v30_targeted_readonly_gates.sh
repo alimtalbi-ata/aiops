@@ -56,7 +56,8 @@ for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-
   case "$name" in
     aiops2-rebuild-grafana)
       if ! grep -Fq '|volume|aiops2-rebuild-grafana-data' <<<"$mounts" ||
-         ! grep -Fq '/etc/grafana/provisioning|bind|BIND' <<<"$mounts"; then
+         ! grep -Fxq '/etc/grafana/provisioning|bind|BIND' <<<"$mounts" ||
+         ! grep -Fxq '/var/lib/grafana/dashboards|bind|BIND' <<<"$mounts"; then
         echo "MOUNTS container=$name state=REVIEW"; mount_review=1
       fi ;;
     aiops2-rebuild-glpi)
