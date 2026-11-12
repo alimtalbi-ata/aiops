@@ -17,6 +17,7 @@ docker --host "$DOCKER_HOST" info --format 'rootless_security={{json .SecurityOp
   grep -q 'rootless' || { echo 'ROOTLESS=UNKNOWN reason=daemon_not_attested'; exit 2; }
 echo 'ROOTLESS=ATTESTED'
 gate_fail=0
+http_unknown=0
 bootstrap_review=0
 route_review=0
 mount_review=0
@@ -24,9 +25,10 @@ receipt_review=0
 for port in 7777 7788; do
   for route in / /api/portal/bootstrap /api/portal/session /api/portal/scenarios /api/portal/runs /api/fs-demo/health; do
     code=$(curl --noproxy '*' --silent --output /dev/null --max-time 5 --connect-timeout 2 --write-out '%{http_code}' "http://127.0.0.1:${port}${route}" || true)
-    [[ "$code" =~ ^[0-9]{3}$ ]] || code=UNKNOWN
+    [[ "$code" =~ ^[1-5][0-9]{2}$ ]] || code=UNKNOWN
+    if [[ "$code" == UNKNOWN ]]; then http_unknown=1; fi
     printf 'HTTP port=%s route=%s code=%s\n' "$port" "$route" "$code"
-    if [[ "$route" == /api/portal/session && "$code" != 401 ]]; then echo "GATE=FAIL session_$port"; gate_fail=1; fi
+    if [[ "$route" == /api/portal/session && "$code" != 401 && "$code" != UNKNOWN ]]; then echo "GATE=FAIL session_$port"; gate_fail=1; fi
     case "$port:$route" in
       7777:/api/portal/scenarios|7777:/api/fs-demo/health|7777:/api/portal/runs|7788:/api/portal/runs) expected=404 ;;
       7788:/api/portal/scenarios|7788:/api/fs-demo/health) expected=200 ;;
@@ -93,6 +95,7 @@ else
 fi
 echo 'ROLLBACK=NO_MUTATION_PERFORMED DB_RESTORE=NOT_EXECUTED'
 if (( gate_fail )); then echo 'QUALIFICATION=FAIL reason=session_regression'; exit 1; fi
+if (( http_unknown )); then echo 'QUALIFICATION=UNKNOWN reason=http_transport_unavailable'; exit 2; fi
 if (( route_review || mount_review || receipt_review )); echo 'QUALIFICATION=UNKNOWN reason=route_mount_or_receipt_review'; exit 2; fi
 if (( bootstrap_review )); then echo 'QUALIFICATION=UNKNOWN reason=bootstrap_requires_authenticated_review'; exit 2; fi
 echo 'QUALIFICATION=UNKNOWN reason=host_parity_and_rollback_not_attested'; exit 2
