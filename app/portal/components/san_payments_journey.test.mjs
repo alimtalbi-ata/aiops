@@ -360,7 +360,7 @@ test('synthetic: mode declaration defaults UNKNOWN and never labels a LIVE sessi
   const unknown = render();
   assert.match(unknown.children[1].textContent, /Mode : UNKNOWN.*LIVE non revendiqué/);
   assert.match(render({ mode: 'LIVE' }).children[1].textContent, /Mode : UNKNOWN/);
-  assert.match(render({ mode: 'DEMO' }).children[1].textContent, /Mode : DEMO.*jamais une opération LIVE/);
+  assert.match(render({ mode: 'DEMO' }).children[1].textContent, /Mode : DEMO.*aucune opération LIVE/);
   assert.match(render({ mode: 'REPLAY' }).children[1].textContent, /Mode : REPLAY/);
   assert.match(render({ mode: 'READY' }).children[1].textContent, /Mode : UNKNOWN/);
   assert.match(render(new Proxy({}, { get() { throw Error('synthetic failure'); } }))
@@ -400,4 +400,24 @@ test('synthetic: a supplied timestamp is declarative, never proof of freshness',
     /horodatages renseignés sont déclaratifs et ne prouvent pas la fraîcheur/);
   assert.match(nav.children[1].textContent, /Mode : DEMO/);
   assert.doesNotMatch(nav.children[3].textContent, /production saine|READY/);
+});
+
+
+test('synthetic: DEMO and REPLAY have distinct accessible provenance warnings', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const render = mode => renderSanPaymentsJourney(document, { append() {} }, {}, { mode });
+  const demo = render('DEMO');
+  const replay = render('REPLAY');
+  const unknown = render('LIVE');
+  assert.match(demo.children[1].textContent, /démonstration uniquement, aucune opération LIVE/);
+  assert.match(replay.children[1].textContent, /rejeu déclaré, données historiques non attestées/);
+  assert.match(replay.children[1].textContent, /aucune opération LIVE/);
+  assert.match(unknown.children[1].textContent, /mode non attesté, LIVE non revendiqué/);
+  assert.equal(replay.attributes['data-mode'], 'REPLAY');
+  assert.equal(unknown.attributes['data-mode'], 'UNKNOWN');
+  assert.equal(replay.children[2].children.length, 8);
 });
