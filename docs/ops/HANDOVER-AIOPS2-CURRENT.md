@@ -1,20 +1,16 @@
-# AIOPS2 / Portal V3 — current audit handover
-Updated 2026-11-12 (Europe/Paris). F-025 differential gate. See docs/audits/AIOPS2-PORTAL-V3-FRESHNESS-F025-20261112.md.
+# AIOPS2 / Portal V3 — handover 2026-11-12 05:16 Europe/Paris
 
 ## CODE
-Branch: audit/portal-v3-observation-freshness-f025-20261112; Draft PR pending at handover authoring. Documentation-only F-025 negative freshness/provenance protocol. Existing related Drafts: #670 collector, #673 truncation fail-closed, #671 H-024. No code merge.
+F-026 negative release gate and matrix: docs/audits/AIOPS2-PORTAL-V3-NEGATIVE-F026-20261112.md. Draft branch audit/portal-v3-freshness-negative-f026-20261112. Parent F-025 #674 SHA 9844511d0f9560c14aece7d6261dbca0e8b35cbe. Related #670/#673/#676 collector and #669/#672/#675 UX remain independent stacks of Drafts. No merge.
 
 ## CI
-UNKNOWN at this branch head until checks are queried. Earlier #660 CI run 43109660723 reported failed; not a result for this branch. No test F-025 execution claimed.
+F-025 exact SHA 9844511d0f9560c14aece7d6261dbca0e8b35cbe: workflow 43146450475 completed SUCCESS (GitHub Actions). This verifies that workflow only, not F-025 fixture execution. F-026 new SHA CI pending/UNKNOWN until queried. Tests F-026 NOT_EXECUTED.
 
 ## DEBIAN
-NOT_INSPECTED in this run: no authenticated SRV-DEB-05 access. Operator's historical rootless evidence: aiops UID 1001, socket /run/user/1001/docker.sock, 87 containers and 210 images; age and current state UNKNOWN. Rootful sudo docker is a different daemon; #557 is diagnostic mismatch, not evidence of deleted data. No cron, install, deployment or server changes.
+NOT_INSPECTED. No authenticated SRV-DEB-05 session available. Historical operator rootless UID 1001 socket /run/user/1001/docker.sock, 87 containers and 210 images are stale, not current health. #557 rootful/rootless diagnostic confusion, not data loss. No install, cron, Docker or deployment performed. Collector #676 has additional count equality safeguards; pending privacy review and test.
 
 ## E2E
-NOT_VERIFIED. Portal V3 release gate NO_GO pending same-SHA green CI, v28/V145 parity, host provenance, backup/rollback, ACL/HITL and smoke tests.
+NOT_VERIFIED. Release NO_GO until same-SHA green CI, fresh rootless host observation, v28/V145 parity, rollback tested and tenant ACL/HITL smoke. No LIVE.
 
-## Handoff
-Coordinator #555: review F-025 with #670/#673 and #545, assign tests and collector rollout after review only. Keep CODE/CI/DEBIAN/E2E distinct.
-
-## Rollback
-Close this Draft PR or revert its documentation commits on its branch. No runtime changes to undo. Never merge main automatically.
+## Coordinator / rollback
+Handoff #555; distinguish CODE, CI, DEBIAN, E2E. Git rollback: close Draft or revert docs-only commit(s). No runtime rollback needed. Preserve five other stacks; never merge main automatically.
