@@ -24,18 +24,21 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
     """
     if not actor or not tenant:
         return {"http_status": 401, "state": "BLOCKED", "data": None, "reason": "UNAUTHENTICATED"}
-    if tenant not in authorized_tenants:
+    if not isinstance(authorized_tenants, (set, frozenset, tuple, list)) or tenant not in authorized_tenants:
         return {"http_status": 403, "state": "BLOCKED", "data": None, "reason": "TENANT_DENIED"}
     if mode not in ALLOWED_MODES or metric not in ALLOWED_METRICS:
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_SCOPE"}
-    if generation != expected_generation:
+    if (type(generation) is not int or type(expected_generation) is not int
+            or generation < 0 or generation != expected_generation):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "STALE_GENERATION"}
     unit, max_age = ALLOWED_METRICS[metric]
     if not isinstance(window_seconds, int) or isinstance(window_seconds, bool) or not 0 < window_seconds <= 3600:
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_WINDOW"}
     if not isinstance(source, str) or source not in {"prometheus:v30", "prometheus:replay"}:
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "SOURCE_UNATTESTED"}
-    if mode == "LIVE" and source != "prometheus:v30":
+    if ((mode == "LIVE" and source != "prometheus:v30")
+            or (mode == "REPLAY" and source != "prometheus:replay")
+            or mode == "DEMO"):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "MODE_SOURCE_MISMATCH"}
     if isinstance(value, bool) or not isinstance(value, (float, int)) or not isfinite(value):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "INVALID_SAMPLE"}
