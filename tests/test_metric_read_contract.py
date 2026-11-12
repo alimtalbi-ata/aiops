@@ -6,7 +6,7 @@ NOW = datetime(2026, 11, 12, 14, 0, tzinfo=timezone.utc)
 BASE = dict(actor="operator", tenant="t1", authorized_tenants={"t1"},
             metric="node_memory_used", value=42, observed_at="2026-11-12T13:59:00Z",
             now=NOW, source="prometheus:v30", mode="LIVE", window_seconds=60,
-            generation=4, expected_generation=4)
+            generation=4, expected_generation=4, source_attested=True)
 
 
 class MetricReadContractTests(unittest.TestCase):
@@ -74,6 +74,16 @@ class MetricReadContractTests(unittest.TestCase):
 
     def test_live_replay_mismatch(self):
         self.check("UNKNOWN", source="prometheus:replay")
+
+    def test_source_label_alone_cannot_attest_sample(self):
+        for attested in (False, None, "true", 1):
+            with self.subTest(attested=attested):
+                result = self.check("UNKNOWN", source_attested=attested)
+                self.assertEqual(result["reason"], "SOURCE_UNATTESTED")
+
+    def test_acl_precedes_source_attestation(self):
+        result = self.check("BLOCKED", tenant="other", source_attested=False)
+        self.assertEqual(result["http_status"], 403)
 
     def test_no_arbitrary_source(self):
         self.check("UNKNOWN", source="http://localhost:9090")
