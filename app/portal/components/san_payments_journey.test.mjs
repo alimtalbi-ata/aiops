@@ -300,9 +300,9 @@ test('synthetic: provenance coverage counts missing metadata and declared demo s
     noc: { state: 'BLOCKED' }
   });
   const summary = nav.children[3].textContent;
-  assert.match(summary, /6 source\\(s\\) non renseignée\\(s\\)/);
-  assert.match(summary, /7 horodatage\\(s\\) inconnu\\(s\\)/);
-  assert.match(summary, /1 source\\(s\\) SYNTHETIC/);
+  assert.match(summary, /6 source\(s\) non renseignée\(s\)/);
+  assert.match(summary, /7 horodatage\(s\) inconnu\(s\)/);
+  assert.match(summary, /1 source\(s\) SYNTHETIC/);
   assert.match(summary, /démonstration uniquement/);
   assert.match(summary, /pas un indicateur de santé/);
   assert.equal(nav.children[2].children.length, 8);
