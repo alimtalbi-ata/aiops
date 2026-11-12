@@ -246,3 +246,22 @@ test('synthetic: explicit synthetic provenance warning never implies production 
   assert.doesNotMatch(items[1].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
   assert.equal(items[0].children[1].textContent, 'État : AVAILABLE (données consultables, non validées)');
 });
+
+
+test('synthetic: missing provenance and freshness remain explicitly unverified even when AVAILABLE', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE' },
+    impact: { state: 'AVAILABLE', source: 'SYNTHETIC', observedAt: 'unverified demo timestamp' }
+  });
+  const items = nav.children[2].children;
+  assert.match(items[0].children[4].textContent, /PROVENANCE INCOMPLÈTE/);
+  assert.match(items[0].children[4].textContent, /FRAÎCHEUR INCONNUE/);
+  assert.match(items[0].children[1].textContent, /non validées/);
+  assert.doesNotMatch(items[1].children[4].textContent, /PROVENANCE INCOMPLÈTE|FRAÎCHEUR INCONNUE/);
+  assert.match(items[1].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
+});
