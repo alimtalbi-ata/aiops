@@ -54,7 +54,14 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
             or (mode == "REPLAY" and source != "prometheus:replay")
             or mode == "DEMO"):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "MODE_SOURCE_MISMATCH"}
-    if isinstance(value, bool) or not isinstance(value, (float, int)) or not isfinite(value):
+    # Extremely large Python integers can overflow during isfinite() conversion.
+    # Treat these as invalid observations rather than raising a server 500.
+    try:
+        finite_sample = (not isinstance(value, bool)
+                         and isinstance(value, (float, int)) and isfinite(value))
+    except (OverflowError, TypeError, ValueError):
+        finite_sample = False
+    if not finite_sample:
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "INVALID_SAMPLE"}
     # A syntactically finite sample is not necessarily a meaningful measurement.
     # Never present impossible utilization or negative counts as observed health.
