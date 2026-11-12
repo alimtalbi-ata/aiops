@@ -72,6 +72,15 @@ class MetricReadContractTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.check("UNKNOWN", value=value)
 
+    def test_huge_integer_sample_is_unknown_not_server_error(self):
+        result = self.check("UNKNOWN", value=10 ** 1000)
+        self.assertEqual(result["reason"], "INVALID_SAMPLE")
+        self.assertEqual(result["http_status"], 200)
+
+    def test_acl_precedes_huge_integer_validation(self):
+        result = self.check("BLOCKED", tenant="other", value=10 ** 1000)
+        self.assertEqual(result["http_status"], 403)
+
     def test_live_replay_mismatch(self):
         self.check("UNKNOWN", source="prometheus:replay")
 
