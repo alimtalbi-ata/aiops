@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import stat
 import sys
 import tempfile
 import time
@@ -71,7 +72,18 @@ def main():
     if BASE.is_symlink() or BASE.stat().st_uid != UID or BASE.stat().st_mode & 0o077:
         print("unsafe output directory", file=sys.stderr)
         return 3
-    with (BASE / ".lock").open("a") as lock:
+    # Refuse symlinked or foreign-owned lockfiles before attempting flock.
+    try:
+        lock_fd = os.open(BASE / ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        lock_stat = os.fstat(lock_fd)
+        if not stat.S_ISREG(lock_stat.st_mode) or lock_stat.st_uid != UID or lock_stat.st_mode & 0o077:
+            os.close(lock_fd)
+            print("unsafe lockfile", file=sys.stderr)
+            return 3
+    except OSError:
+        print("unsafe lockfile", file=sys.stderr)
+        return 3
+    with os.fdopen(lock_fd, "a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
