@@ -26,6 +26,24 @@ class MetricReadContractTests(unittest.TestCase):
     def test_unauthenticated(self):
         self.assertEqual(self.check("BLOCKED", actor="")["http_status"], 401)
 
+    def test_malformed_server_identity_fails_closed(self):
+        for actor, tenant in (("   ", "t1"), (True, "t1"), ([], "t1"),
+                              ("operator", "  "), ("operator", None),
+                              ("operator", True)):
+            with self.subTest(actor=actor, tenant=tenant):
+                result = self.check("BLOCKED", actor=actor, tenant=tenant)
+                self.assertEqual(result["http_status"], 401)
+
+    def test_invalid_clock_is_unknown_not_exception(self):
+        for now in (None, "2026-11-12T14:00:00Z", 42):
+            with self.subTest(now=now):
+                result = self.check("UNKNOWN", now=now)
+                self.assertEqual(result["reason"], "INVALID_TIMESTAMP")
+
+    def test_acl_checked_before_malformed_sample(self):
+        result = self.check("BLOCKED", tenant="other", value=object(), now=None)
+        self.assertEqual(result["http_status"], 403)
+
     def test_cross_tenant(self):
         self.assertEqual(self.check("BLOCKED", tenant="t2")["http_status"], 403)
 
