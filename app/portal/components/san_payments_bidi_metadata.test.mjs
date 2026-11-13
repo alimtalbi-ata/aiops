@@ -42,3 +42,22 @@ test('synthetic: control-only provenance remains incomplete, not verified', () =
   assert.match(item.children[4].textContent, /FRAÎCHEUR INCONNUE/);
   assert.match(item.children[1].textContent, /non validées/);
 });
+
+test('synthetic: zero-width format characters cannot hide provenance or forge timestamps', () => {
+  const records = {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC\u200b:fixture', observedAt: '\u200d\ufeff', detail: 'demo\u2060only' },
+    decision: { state: 'BLOCKED' }
+  };
+  const steps = describeSanPaymentsJourney(records);
+  assert.equal(steps[0].source, 'SYNTHETIC :fixture');
+  assert.equal(steps[0].observedAt, 'Fraîcheur inconnue');
+  assert.equal(steps[0].detail, 'demo only');
+  const nav = renderSanPaymentsJourney(document, { append() {} }, records, { mode: 'REPLAY' });
+  const item = nav.children[2].children[0];
+  assert.equal(nav.attributes['data-mode'], 'REPLAY');
+  assert.equal(item.attributes['data-provenance'], 'SYNTHETIC');
+  assert.equal(item.attributes['data-freshness'], 'UNKNOWN');
+  assert.equal(nav.children[2].children[6].attributes['data-state'], 'BLOCKED');
+  assert.match(item.children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
+  assert.equal(nav.children[2].children.length, 8);
+});
