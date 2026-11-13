@@ -515,3 +515,22 @@ test('synthetic: changing mode getter is read once and cannot inject LIVE', () =
   assert.match(nav.children[1].textContent, /aucune opération LIVE/);
   assert.equal(nav.children[2].children.length, 8);
 });
+
+
+test('synthetic: inherited mode metadata cannot declare DEMO or REPLAY', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  for (const inherited of ['DEMO', 'REPLAY']) {
+    const options = Object.create({ mode: inherited });
+    const nav = renderSanPaymentsJourney(document, { append() {} }, {}, options);
+    assert.equal(nav.attributes['data-mode'], 'UNKNOWN');
+    assert.match(nav.children[1].textContent, /LIVE non revendiqué/);
+    assert.equal(nav.children[2].children.length, 8);
+  }
+  const explicit = Object.assign(Object.create({ mode: 'REPLAY' }), { mode: 'DEMO' });
+  assert.equal(renderSanPaymentsJourney(document, { append() {} }, {}, explicit)
+    .attributes['data-mode'], 'DEMO');
+});
