@@ -190,6 +190,23 @@ class MetricReadContractTests(unittest.TestCase):
                 self.assertEqual(stale["reason"], "STALE_SAMPLE")
                 self.assertEqual(stale["http_status"], 200)
 
+    def test_untrusted_observation_timestamps_never_become_ready(self):
+        # Evaluation time is not a substitute for a Prometheus sample timestamp.
+        for observed_at in (None, "", "invalid", "2026-11-12T14:00:00",
+                            "2026-11-12T14:00:01Z", 42, [],
+                            "2026-11-12T13:00:00Z"):
+            with self.subTest(observed_at=observed_at):
+                result = self.check("UNKNOWN", observed_at=observ_at)
+                self.assertIn(result["reason"], ("INVALID_TIMESTAMP", "STALE_SAMPLE"))
+                self.assertEqual(result["http_status"], 200)
+
+    def test_tenant_denial_precedes_missing_and_invalid_observation(self):
+        for observed_at in (None, "", [], "2026-11-12T14:00:01Z"):
+            with self.subTest(observed_at=observ_at):
+                result = self.check("BLOCKED", tenant="other", observed_at=observ_at)
+                self.assertEqual(result["http_status"], 403)
+                self.assertEqual(result["reason"], "TENANT_DENIED")
+
     def test_acl_precedes_stale_and_future_timestamps(self):
         for observed_at in ("2026-11-12T13:00:00Z", "2026-11-12T14:00:01Z", "bad"):
             with self.subTest(observed_at=observed_at):
