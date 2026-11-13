@@ -106,6 +106,35 @@ for job in aiops-debian-reporter aiops-publish-report; do
     printf 'SYSTEMD_USER job=%s presence=UNKNOWN\n' "$job"
   fi
 done
+# System scheduler scope: inspect only readable configuration, never command bodies.
+# A match attests configuration only, not an execution or receipt.
+for job in aiops-debian-reporter aiops-publish-report; do
+  system_cron_state=UNKNOWN
+  for file in /etc/crontab /etc/cron.d/*; do
+    [[ -f "$file" && -r "$file" ]] || continue
+    if timeout -k 2s 5s awk -v job="$job" '
+      /^[[:space:]]*(#|$)/ {next}
+      index($0, job) {found=1; exit}
+      END {exit !found}
+    ' "$file" 2>/dev/null; then
+      system_cron_state=CONFIGURED_SYSTEM_CRON_NOT_EXECUTION
+      break
+    fi
+  done
+  printf 'SYSTEM_CRON job=%s presence=%s\\n' "$job" "$system_cron_state"
+done
+if system_units=$(timeout -k 2s 5s systemctl list-unit-files --no-legend --no-pager 2>/dev/null); then
+  for job in aiops-debian-reporter aiops-publish-report; do
+    if grep -Fq "$job" <<<"$system_units"; then
+      printf 'SYSTEMD_SYSTEM job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\\n' "$job"
+    else
+      printf 'SYSTEMD_SYSTEM job=%s presence=UNKNOWN\\n' "$job"
+    fi
+  done
+else
+  echo 'SYSTEMD_SYSTEM=UNKNOWN reason=unit_list_unavailable'
+fi
+unset system_units
 # Receipt candidates: counts only, never names, contents, commands or credentials.
 report_dir=/home/aiops/aiops-debian-audit/reports/SRV-DEB-05/2026-11-12
 if [[ -d "$report_dir" ]]; then
