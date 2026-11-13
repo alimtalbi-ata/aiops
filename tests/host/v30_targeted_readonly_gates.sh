@@ -92,7 +92,7 @@ fi
 for job in aiops-debian-reporter aiops-publish-report; do
   if [[ "$cron_state" == READABLE ]] && awk -v job="$job" '
     /^[[:space:]]*(#|$)/ {next}
-    index($0, job) {found=1; exit}
+    $0 ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)" {found=1; exit}
     END {exit !found}
   ' <<<"$cron"; then
     printf 'CRON job=%s presence=CONFIGURED_USER_CRONTAB_NOT_EXECUTION\n' "$job"
@@ -106,7 +106,7 @@ else
   units='' ; unit_state=UNKNOWN
 fi
 for job in aiops-debian-reporter aiops-publish-report; do
-  if [[ "$unit_state" == READABLE ]] && grep -Fq "$job" <<<"$units"; then
+  if [[ "$unit_state" == READABLE ]] && awk -v job="$job" '$1 ~ ("^" job "\\.(service|timer|path)$") {found=1} END {exit !found}' <<<"$units"; then
     printf 'SYSTEMD_USER job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\n' "$job"
   else
     printf 'SYSTEMD_USER job=%s presence=UNKNOWN\n' "$job"
@@ -120,7 +120,7 @@ for job in aiops-debian-reporter aiops-publish-report; do
     [[ -f "$file" && -r "$file" ]] || continue
     if timeout -k 2s 5s awk -v job="$job" '
       /^[[:space:]]*(#|$)/ {next}
-      index($0, job) {found=1; exit}
+      $0 ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)" {found=1; exit}
       END {exit !found}
     ' "$file" 2>/dev/null; then
       system_cron_state=CONFIGURED_SYSTEM_CRON_NOT_EXECUTION
@@ -131,7 +131,7 @@ for job in aiops-debian-reporter aiops-publish-report; do
 done
 if system_units=$(timeout -k 2s 5s systemctl list-unit-files --no-legend --no-pager 2>/dev/null); then
   for job in aiops-debian-reporter aiops-publish-report; do
-    if grep -Fq "$job" <<<"$system_units"; then
+    if awk -v job="$job" '$1 ~ ("^" job "\\.(service|timer|path)$") {found=1} END {exit !found}' <<<"$system_units"; then
       printf 'SYSTEMD_SYSTEM job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\n' "$job"
     else
       printf 'SYSTEMD_SYSTEM job=%s presence=UNKNOWN\n' "$job"
