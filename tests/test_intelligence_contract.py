@@ -86,6 +86,7 @@ class IntelligenceContractTests(unittest.TestCase):
     def test_provider_request_uses_schema_and_deterministic_temperature(self):
         output = {'contract_version':'2.0','classification':'storage-path','severity':'P1','severity_rationale':'fixture evidence','hypotheses':[{'id':'H1','statement':'fabric path degradation','confidence':0.9,'supporting_evidence_ids':['E1']}],'confidence':0.9,'confidence_basis':'synthetic fixture'}
         class FakeResponse:
+            status_code = 200
             def raise_for_status(self):
                 return None
             def json(self):
