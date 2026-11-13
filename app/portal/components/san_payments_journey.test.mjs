@@ -534,3 +534,26 @@ test('synthetic: inherited mode metadata cannot declare DEMO or REPLAY', () => {
   assert.equal(renderSanPaymentsJourney(document, { append() {} }, {}, explicit)
     .attributes['data-mode'], 'DEMO');
 });
+
+test('synthetic: throwing mode getter and hostile options Proxy fail closed without hiding stages', () => {
+  const document = { createElement(tag) {
+    return { tag, attributes: {}, children: [], textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const hostileOptions = [
+    { get mode() { throw Error('synthetic mode getter failure'); } },
+    new Proxy({}, { getOwnPropertyDescriptor() { throw Error('synthetic proxy failure'); } }),
+    { mode: 'LIVE' }
+  ];
+  for (const options of hostileOptions) {
+    const nav = renderSanPaymentsJourney(document, { append() {} }, {
+      incident: { state: 'BLOCKED', source: 'SYNTHETIC' }
+    }, options);
+    assert.equal(nav.attributes['data-mode'], 'UNKNOWN');
+    assert.match(nav.attributes['aria-label'], /mode UNKNOWN/);
+    assert.match(nav.children[1].textContent, /LIVE non revendiqué/);
+    assert.equal(nav.children[2].children.length, 8);
+    assert.equal(nav.children[2].children[0].attributes['data-state'], 'BLOCKED');
+  }
+});
