@@ -13,7 +13,7 @@ function documentStub() {
 }
 
 test('control-obfuscated provenance is incomplete, never synthetic or LIVE-attested', () => {
-  for (const source of ['SYN\\u0000THETIC', 'LIVE\\u001fvalidated', 'SYN\\u0085THETIC']) {
+  for (const source of ['SYN\u0000THETIC', 'LIVE\u001fvalidated', 'SYN\u0085THETIC']) {
     const nav = renderSanPaymentsJourney(documentStub(), { append() {} }, {
       incident: { state: 'AVAILABLE', source, observedAt: '2026-11-13T20:00:00Z' }
     }, { mode: 'DEMO' });
