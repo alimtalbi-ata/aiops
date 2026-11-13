@@ -97,7 +97,7 @@ jobs:
         run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
 
   database-migrations:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
@@ -116,8 +116,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL 16 client (match disposable PostgreSQL 16 service)
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
+      - name: Install PostgreSQL client matching PostgreSQL 16 service
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
