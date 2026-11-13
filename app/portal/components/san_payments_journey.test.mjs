@@ -464,3 +464,23 @@ test('synthetic: freshness remains UNKNOWN even when a source is explicitly SYNT
   assert.match(items[0].children[4].textContent, /FRAÎCHEUR INCONNUE/);
   assert.match(nav.children[3].textContent, /horodatage\\(s\\) inconnu\\(s\\)/);
 });
+
+test('synthetic: inherited adapter state and metadata never become trusted declarations', () => {
+  const inheritedState = Object.create({ state: 'AVAILABLE', source: 'forged', observedAt: 'forged' });
+  const inheritedMetadata = Object.assign(
+    Object.create({ source: 'forged LIVE source', observedAt: 'forged freshness', detail: 'forged detail' }),
+    { state: 'AVAILABLE' }
+  );
+  const steps = describeSanPaymentsJourney({
+    incident: inheritedState,
+    impact: inheritedMetadata,
+    noc: { state: 'BLOCKED', source: 'SYNTHETIC' }
+  });
+  assert.equal(steps[0].state, 'UNKNOWN');
+  assert.equal(steps[1].state, 'AVAILABLE');
+  assert.equal(steps[1].source, 'Source non renseignée');
+  assert.equal(steps[1].observedAt, 'Fraîcheur inconnue');
+  assert.equal(steps[1].detail, 'Aucune information vérifiée');
+  assert.equal(steps[2].state, 'BLOCKED');
+  assert.ok(steps.every(step => step.isOperationalClaim === false));
+});
