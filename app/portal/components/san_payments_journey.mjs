@@ -25,12 +25,12 @@ const GUIDANCE = Object.freeze({
 });
 // Treat explicitly declared synthetic variants as demo-only; never infer LIVE from a label.
 const isSyntheticSource = source => /^SYNTHETIC(?:$|[\s:/.\-_])/i.test(source);
-// Remove bidirectional override/isolate controls and non-printing C0/C1 controls
+// Remove bidi controls, zero-width format characters and non-printing C0/C1 controls
 // from untrusted adapter labels before displaying provenance or timestamps.
 // Text-only DOM rendering prevents HTML injection but not visual bidi spoofing.
 const text = value => {
   if (typeof value !== 'string') return null;
-  const cleaned = value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, ' ').trim();
+  const cleaned = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g, ' ').trim();
   return cleaned || null;
 };
 
