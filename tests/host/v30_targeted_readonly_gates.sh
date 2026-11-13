@@ -89,12 +89,30 @@ if cron=$(timeout -k 2s 5s crontab -l 2>/dev/null); then
 else
   cron='' ; cron_state=UNKNOWN
 fi
-for job in aiops-debian-reporter aiops-publish-report; do
-  if [[ "$cron_state" == READABLE ]] && awk -v job="$job" '
+# Only the first executable token after cron fields can attest direct invocation.
+# Wrappers, shell pipelines and arguments are deliberately UNKNOWN.
+cron_direct_match() {
+  local job="$1" mode="$2"
+  awk -v job="$job" -v mode="$mode" '
     /^[[:space:]]*(#|$)/ {next}
-    { line=$0; sub(/[[:space:]]+#.*/, "", line); if (line ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)") {found=1; exit} }
+    {
+      line=$0
+      sub(/[[:space:]]+#.*/, "", line)
+      n=split(line, a, /[[:space:]]+/)
+      offset=(mode=="system" ? 6 : 5)
+      if (n<=offset) next
+      i=offset+1
+      while (i<=n && a[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) i++
+      if (i>n) next
+      executable=a[i]
+      sub(/^.*\//, "", executable)
+      if (executable==job || executable==job ".sh") {found=1; exit}
+    }
     END {exit !found}
-  ' <<<"$cron"; then
+  '
+}
+for job in aiops-debian-reporter aiops-publish-report; do
+  if [[ "$cron_state" == READABLE ]] && cron_direct_match "$job" user <<<"$cron"; then
     printf 'CRON job=%s presence=CONFIGURED_USER_CRONTAB_NOT_EXECUTION\n' "$job"
   else
     printf 'CRON job=%s presence=UNKNOWN_USER_CRONTAB\n' "$job"
@@ -118,11 +136,7 @@ for job in aiops-debian-reporter aiops-publish-report; do
   system_cron_state=UNKNOWN
   for file in /etc/crontab /etc/cron.d/*; do
     [[ -f "$file" && -r "$file" ]] || continue
-    if timeout -k 2s 5s awk -v job="$job" '
-      /^[[:space:]]*(#|$)/ {next}
-      { line=$0; sub(/[[:space:]]+#.*/, "", line); if (line ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)") {found=1; exit} }
-      END {exit !found}
-    ' "$file" 2>/dev/null; then
+    if timeout -k 2s 5s bash -c 'source /dev/stdin; cron_direct_match "$1" system < "$2"' _ "$job" "$file" <<<"$(declare -f cron_direct_match)" 2>/dev/null; then
       system_cron_state=CONFIGURED_SYSTEM_CRON_NOT_EXECUTION
       break
     fi
