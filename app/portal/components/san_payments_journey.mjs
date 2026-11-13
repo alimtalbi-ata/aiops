@@ -94,6 +94,8 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
   const nav = document.createElement('nav');
   // Expose the same fail-closed mode to CSS and assistive technology without implying LIVE.
   nav.setAttribute('data-mode', declaredMode);
+  // Explicit language and native landmark semantics for multilingual operator shells.
+  nav.setAttribute('lang', 'fr');
   nav.setAttribute('aria-label', 'Parcours SAN vers Payments — mode ' + declaredMode);
   const heading = document.createElement('h2');
   heading.textContent = 'SAN → Payments';
@@ -147,6 +149,11 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
   const unknownFreshness = steps.filter(step => step.observedAt === 'Fraîcheur inconnue').length;
   const synthetic = steps.filter(step => isSyntheticSource(step.source)).length;
   const summary = document.createElement('p');
+  // Assistive technology can announce a refreshed read-only snapshot without
+  // interpreting a changed count as a LIVE operational event.
+  summary.setAttribute('role', 'status');
+  summary.setAttribute('aria-live', 'polite');
+  summary.setAttribute('aria-atomic', 'true');
   summary.textContent = 'Couverture de la démonstration : ' + unresolved +
     ' étape(s) sans information exploitable (UNKNOWN : ' + unknown +
     ', ERROR : ' + errors + ', EMPTY : ' + empty + ') ; ' + blocked +
