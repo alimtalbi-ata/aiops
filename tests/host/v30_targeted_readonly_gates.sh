@@ -165,6 +165,6 @@ fi
 echo 'ROLLBACK=NO_MUTATION_PERFORMED DB_RESTORE=NOT_EXECUTED'
 if (( gate_fail )); then echo 'QUALIFICATION=FAIL reason=session_regression'; exit 1; fi
 if (( http_unknown )); then echo 'QUALIFICATION=UNKNOWN reason=http_transport_unavailable'; exit 2; fi
-if (( route_review || mount_review || receipt_review )); echo 'QUALIFICATION=UNKNOWN reason=route_mount_or_receipt_review'; exit 2; fi
+if (( route_review || mount_review || receipt_review )); then echo 'QUALIFICATION=UNKNOWN reason=route_mount_or_receipt_review'; exit 2; fi
 if (( bootstrap_review )); then echo 'QUALIFICATION=UNKNOWN reason=bootstrap_requires_authenticated_review'; exit 2; fi
 echo 'QUALIFICATION=UNKNOWN reason=host_parity_and_rollback_not_attested'; exit 2
