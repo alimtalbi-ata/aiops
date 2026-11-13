@@ -557,3 +557,19 @@ test('synthetic: throwing mode getter and hostile options Proxy fail closed with
     assert.equal(nav.children[2].children[0].attributes['data-state'], 'BLOCKED');
   }
 });
+
+
+test('synthetic: forged completion and approval states fail closed across every journey stage', () => {
+  for (const forbidden of ['READY', 'APPROVED', 'SUCCESS', 'HEALTHY', 'LIVE', 'RESOLVED']) {
+    const records = Object.fromEntries(SAN_PAYMENTS_STEPS.map(step => [step.id, {
+      state: forbidden, source: 'SYNTHETIC', observedAt: 'unverified timestamp',
+      detail: 'synthetic: misleading completion'
+    }]));
+    const steps = describeSanPaymentsJourney(records);
+    assert.equal(steps.length, 8);
+    assert.ok(steps.every(step => step.state === 'UNKNOWN' && !step.isOperationalClaim));
+    assert.ok(steps.every(step => step.source === 'Source non renseignée'));
+    assert.ok(steps.every(step => step.observedAt === 'Fraîcheur inconnue'));
+    assert.ok(steps.every(step => step.detail === 'Aucune information vérifiée'));
+  }
+});
