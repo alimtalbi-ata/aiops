@@ -172,5 +172,31 @@ class MetricReadContractTests(unittest.TestCase):
         self.check("BLOCKED", mode="LIVE_WRITE")
 
 
+    def test_freshness_boundary_is_inclusive_and_exceeded_is_unknown(self):
+        for metric, window, boundary in (
+            ("node_cpu_utilization", 300, "2026-11-12T13:55:00Z"),
+            ("node_memory_used", 0, "2026-11-12T13:55:00Z"),
+            ("http_requests_rate", 120, "2026-11-12T13:58:00Z"),
+        ):
+            with self.subTest(metric=metric):
+                ready = self.check("READY", metric=metric, window_seconds=window,
+                                   observed_at=boundary)
+                self.assertEqual(ready["data"]["freshness_seconds"],
+                                 120.0 if metric == "http_requests_rate" else 300.0)
+                stale = self.check("UNKNOWN", metric=metric, window_seconds=window,
+                                   observed_at="2026-11-12T13:54:59Z"
+                                   if metric != "http_requests_rate"
+                                   else "2026-11-12T13:57:59Z")
+                self.assertEqual(stale["reason"], "STALE_SAMPLE")
+                self.assertEqual(stale["http_status"], 200)
+
+    def test_acl_precedes_stale_and_future_timestamps(self):
+        for observed_at in ("2026-11-12T13:00:00Z", "2026-11-12T14:00:01Z", "bad"):
+            with self.subTest(observed_at=observed_at):
+                result = self.check("BLOCKED", tenant="other", observed_at=observed_at)
+                self.assertEqual(result["http_status"], 403)
+                self.assertEqual(result["reason"], "TENANT_DENIED")
+
+
 if __name__ == "__main__":
     unittest.main()
