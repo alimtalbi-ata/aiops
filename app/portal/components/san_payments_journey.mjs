@@ -57,7 +57,10 @@ export function describeSanPaymentsJourney(records = {}) {
           const rawSource = Object.hasOwn(record, 'source') ? record.source : null;
           const nextSource = typeof rawSource === 'string' && /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/.test(rawSource)
             ? null : text(rawSource);
-          const nextObservedAt = Object.hasOwn(record, 'observedAt') ? text(record.observedAt) : null;
+          // Reject spoofable control characters in timestamps: a sanitized value is not an attested observation.
+          const rawObservedAt = Object.hasOwn(record, 'observedAt') ? record.observedAt : null;
+          const nextObservedAt = typeof rawObservedAt === 'string' && /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/.test(rawObservedAt)
+            ? null : text(rawObservedAt);
           state = candidate;
           detail = nextDetail ?? detail;
           source = nextSource ?? source;
