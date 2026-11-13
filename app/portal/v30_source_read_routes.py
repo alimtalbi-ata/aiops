@@ -24,11 +24,12 @@ def _unqualified_read(authorization, source, request):
     if request.query_params:
         return _noc_json_response({"state": "BLOCKED", "reason": "INVALID_PARAMETERS",
                                    "data": None}, status_code=400)
-    # Shared token is not a server-derived actor+tenant ACL.
+    # Shared token is not a server-derived actor+tenant ACL. The mode is UNKNOWN,
+    # not LIVE: no source read or live-mode qualification has occurred.
     return _noc_json_response({
         "state": "UNKNOWN", "reason": "TENANT_ACL_NOT_QUALIFIED",
         "data": None, "source": source, "source_freshness": "UNKNOWN",
-        "mode": "LIVE", "tenant_acl_qualified": False,
+        "mode": "UNKNOWN", "tenant_acl_qualified": False,
     }, status_code=503)
 
 @router.get("/prometheus")
