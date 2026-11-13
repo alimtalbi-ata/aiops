@@ -42,7 +42,10 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
             or generation < 0 or generation != expected_generation):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "STALE_GENERATION"}
     unit, max_age = ALLOWED_METRICS[metric]
-    if not isinstance(window_seconds, int) or isinstance(window_seconds, bool) or not 0 < window_seconds <= 3600:
+    # Window is determined by the fixed PromQL catalog, never by a caller.
+    # Instant-vector gauges have no lookback range; rate() uses fixed 5m/2m.
+    expected_window = 300 if metric == "node_cpu_utilization" else (120 if metric == "http_requests_rate" else 0)
+    if type(window_seconds) is not int or window_seconds != expected_window:
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_WINDOW"}
     # A source label is not evidence that the server fetched or verified a sample.
     # The trusted adapter must set this only after verifying the upstream response.
