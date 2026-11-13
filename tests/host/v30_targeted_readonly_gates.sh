@@ -156,6 +156,9 @@ if [[ -d "$reports_root" && -r "$reports_root" ]]; then
     receipt_review=1
   fi
   echo 'REPORT_RECEIPT_CORRELATION=UNKNOWN requires_job_timestamp_and_published_sha'
+  # Candidate filenames are not authenticated receipts. Keep this gate blocked
+  # even when files exist until execution timestamp and published SHA correlate.
+  receipt_review=1
 else
   echo 'REPORT_RECEIPTS=UNKNOWN location_not_attested'; receipt_review=1
 fi
