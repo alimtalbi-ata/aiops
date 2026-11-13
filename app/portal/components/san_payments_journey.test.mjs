@@ -265,3 +265,24 @@ test('synthetic: missing provenance and freshness remain explicitly unverified e
   assert.doesNotMatch(items[1].children[4].textContent, /PROVENANCE INCOMPLÈTE|FRAÎCHEUR INCONNUE/);
   assert.match(items[1].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
 });
+
+test('synthetic: consultable stages are counted without implying validation', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC' },
+    impact: { state: 'AVAILABLE' },
+    noc: { state: 'BLOCKED' },
+    run: { state: 'LOADING' }
+  });
+  const summary = nav.children[3].textContent;
+  assert.match(summary, /2 étape\\(s\\) consultable\\(s\\), non validée\\(s\\)/);
+  assert.match(summary, /1 étape\\(s\\) bloquée\\(s\\)/);
+  assert.match(summary, /1 étape\\(s\\) en chargement/);
+  assert.match(summary, /pas un indicateur de santé/);
+  assert.doesNotMatch(summary, /READY|approuvée|production saine/);
+  assert.equal(nav.children[2].children.length, 8);
+});

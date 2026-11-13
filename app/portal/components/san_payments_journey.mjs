@@ -100,12 +100,14 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
   const unresolved = unknown + errors + empty;
   const blocked = steps.filter(step => step.state === 'BLOCKED').length;
   const loading = steps.filter(step => step.state === 'LOADING').length;
+  const consultable = steps.filter(step => step.state === 'AVAILABLE').length;
   const summary = document.createElement('p');
   summary.textContent = 'Couverture de la démonstration : ' + unresolved +
     ' étape(s) sans information exploitable (UNKNOWN : ' + unknown +
     ', ERROR : ' + errors + ', EMPTY : ' + empty + ') ; ' + blocked +
     ' étape(s) bloquée(s) ; ' + loading +
-    ' étape(s) en chargement. Comptage des étapes affichées uniquement, pas un indicateur de santé.';
+    ' étape(s) en chargement ; ' + consultable +
+    ' étape(s) consultable(s), non validée(s). Comptage des étapes affichées uniquement, pas un indicateur de santé.';
   nav.append(heading, note, list, summary);
   parent.append(nav);
   return nav;
