@@ -67,6 +67,7 @@ class IntelligenceContractTests(unittest.TestCase):
 
     def test_malformed_provider_json_returns_gateway_error(self):
         class FakeResponse:
+            status_code = 200
             def raise_for_status(self):
                 return None
             def json(self):
