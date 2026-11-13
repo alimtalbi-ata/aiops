@@ -55,7 +55,11 @@ export function describeSanPaymentsJourney(records = {}) {
         }
       }
     } catch {
-      // Fail closed for this step; later steps remain independently readable.
+      // A getter/Proxy may throw after state was read: discard the entire partial record.
+      state = 'UNKNOWN';
+      detail = 'Aucune information vérifiée';
+      source = 'Source non renseignée';
+      observedAt = 'Fraîcheur inconnue';
     }
     return Object.freeze({
       id: step.id, label: step.label, state, guidance: GUIDANCE[state],
