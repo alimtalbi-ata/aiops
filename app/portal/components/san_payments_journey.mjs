@@ -25,7 +25,14 @@ const GUIDANCE = Object.freeze({
 });
 // Treat explicitly declared synthetic variants as demo-only; never infer LIVE from a label.
 const isSyntheticSource = source => /^SYNTHETIC(?:$|[\s:/.\-_])/i.test(source);
-const text = value => typeof value === 'string' && value.trim() ? value.trim() : null;
+// Remove bidirectional override/isolate controls and non-printing C0/C1 controls
+// from untrusted adapter labels before displaying provenance or timestamps.
+// Text-only DOM rendering prevents HTML injection but not visual bidi spoofing.
+const text = value => {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, ' ').trim();
+  return cleaned || null;
+};
 
 /** Explicitly never interprets a missing record as completed or approved. */
 export function describeSanPaymentsJourney(records = {}) {
