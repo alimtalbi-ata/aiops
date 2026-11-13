@@ -41,11 +41,13 @@ export function describeSanPaymentsJourney(records = {}) {
     try {
       const record = Object.hasOwn(safeRecords, step.id) ? safeRecords[step.id] : null;
       if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
-        const candidate = record.state;
+        // Only explicit adapter fields are accepted: inherited prototype values
+        // must not forge state, provenance or timestamps in the operator cockpit.
+        const candidate = Object.hasOwn(record, 'state') ? record.state : null;
         if (ALLOWED.has(candidate)) {
-          const nextDetail = text(record.detail);
-          const nextSource = text(record.source);
-          const nextObservedAt = text(record.observedAt);
+          const nextDetail = Object.hasOwn(record, 'detail') ? text(record.detail) : null;
+          const nextSource = Object.hasOwn(record, 'source') ? text(record.source) : null;
+          const nextObservedAt = Object.hasOwn(record, 'observedAt') ? text(record.observedAt) : null;
           state = candidate;
           detail = nextDetail ?? detail;
           source = nextSource ?? source;
