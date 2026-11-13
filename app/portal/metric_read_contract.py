@@ -16,35 +16,65 @@ ALLOWED_MODES = {"LIVE", "DEMO", "REPLAY"}
 
 def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
                       observed_at, now, source, mode, window_seconds,
-                      generation, expected_generation):
+                      generation, expected_generation, cancelled=False, timed_out=False,
+                      source_attested=False):
     """Return safe envelope. Authorization is mandatory before sample inspection.
 
     Caller MUST derive actor/tenant/authorized_tenants from verified server session,
     not from browser parameters. This function is not an authentication adapter.
     """
-    if not actor or not tenant:
+    if (not isinstance(actor, str) or not actor.strip()
+            or not isinstance(tenant, str) or not tenant.strip()):
         return {"http_status": 401, "state": "BLOCKED", "data": None, "reason": "UNAUTHENTICATED"}
-    if not isinstance(authorized_tenants, (set, frozenset, tuple, list)) or tenant not in authorized_tenants:
+    if (not isinstance(authorized_tenants, (set, frozenset, tuple, list))
+            or tenant not in authorized_tenants):
         return {"http_status": 403, "state": "BLOCKED", "data": None, "reason": "TENANT_DENIED"}
-    if mode not in ALLOWED_MODES or metric not in ALLOWED_METRICS:
+    if cancelled is True:
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "CANCELLED"}
+    if timed_out is True:
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "UPSTREAM_TIMEOUT"}
+    if type(cancelled) is not bool or type(timed_out) is not bool:
+        return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_REQUEST_STATE"}
+    if (not isinstance(mode, str) or not isinstance(metric, str)
+            or mode not in ALLOWED_MODES or metric not in ALLOWED_METRICS):
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_SCOPE"}
     if (type(generation) is not int or type(expected_generation) is not int
             or generation < 0 or generation != expected_generation):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "STALE_GENERATION"}
     unit, max_age = ALLOWED_METRICS[metric]
-    if not isinstance(window_seconds, int) or isinstance(window_seconds, bool) or not 0 < window_seconds <= 3600:
+    # Window is determined by the fixed PromQL catalog, never by a caller.
+    # Instant-vector gauges have no lookback range; rate() uses fixed 5m/2m.
+    expected_window = 300 if metric == "node_cpu_utilization" else (120 if metric == "http_requests_rate" else 0)
+    if type(window_seconds) is not int or window_seconds != expected_window:
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_WINDOW"}
+    # A source label is not evidence that the server fetched or verified a sample.
+    # The trusted adapter must set this only after verifying the upstream response.
+    if source_attested is not True:
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "SOURCE_UNATTESTED"}
     if not isinstance(source, str) or source not in {"prometheus:v30", "prometheus:replay"}:
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "SOURCE_UNATTESTED"}
     if ((mode == "LIVE" and source != "prometheus:v30")
             or (mode == "REPLAY" and source != "prometheus:replay")
             or mode == "DEMO"):
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "MODE_SOURCE_MISMATCH"}
-    if isinstance(value, bool) or not isinstance(value, (float, int)) or not isfinite(value):
+    # Extremely large Python integers can overflow during isfinite() conversion.
+    # Treat these as invalid observations rather than raising a server 500.
+    try:
+        finite_sample = (not isinstance(value, bool)
+                         and isinstance(value, (float, int)) and isfinite(value))
+    except (OverflowError, TypeError, ValueError):
+        finite_sample = False
+    if not finite_sample:
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "INVALID_SAMPLE"}
+    # A syntactically finite sample is not necessarily a meaningful measurement.
+    # Never present impossible utilization or negative counts as observed health.
+    if ((metric == "node_cpu_utilization" and not 0 <= value <= 1)
+            or (metric in {"node_memory_used", "node_filesystem_available", "http_requests_rate"}
+                and value < 0)):
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "OUT_OF_RANGE_SAMPLE"}
     try:
         observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
-        if observed.tzinfo is None or now.tzinfo is None:
+        if not isinstance(now, datetime) or observed.tzinfo is None or now.tzinfo is None:
             raise ValueError("timezone required")
         age = (now.astimezone(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()
     except (AttributeError, TypeError, ValueError, OverflowError):
