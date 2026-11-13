@@ -10,6 +10,14 @@ TARGET="aiops_dr_rehearsal"
 [[ "$HOST" == 127.0.0.1 || "$HOST" == localhost ]] || { echo 'FAIL|dr_must_run_on_loopback'; exit 2; }
 [[ "$SOURCE" == aiops && "$TARGET" != "$SOURCE" ]] || { echo 'FAIL|dr_unsafe_database_identity'; exit 2; }
 export PGHOST="$HOST" PGPORT="$PORT" PGUSER="$USER"
+SERVER_MAJOR="$(psql -d postgres -At -v ON_ERROR_STOP=1 -c "SHOW server_version_num" | cut -c1-2)"
+DUMP_MAJOR="$(pg_dump --version | sed -E 's/.* ([0-9]+)(\.[0-9]+)?.*/\1/')"
+RESTORE_MAJOR="$(pg_restore --version | sed -E 's/.* ([0-9]+)(\.[0-9]+)?.*/\1/')"
+[[ "$DUMP_MAJOR" == "$SERVER_MAJOR" && "$RESTORE_MAJOR" == "$SERVER_MAJOR" ]] || {
+  echo "FAIL|postgres_client_server_major_mismatch|server=$SERVER_MAJOR|pg_dump=$DUMP_MAJOR|pg_restore=$RESTORE_MAJOR"
+  exit 2
+}
+echo "POSTGRES_CLIENT_SERVER_MAJOR=PASS|$SERVER_MAJOR"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$ROOT/reports"
 TMP="$(mktemp -d)"
