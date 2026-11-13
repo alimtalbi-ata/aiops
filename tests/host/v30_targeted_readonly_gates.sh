@@ -147,7 +147,7 @@ reports_root=/home/aiops/aiops-debian-audit/reports/SRV-DEB-05
 if [[ -d "$reports_root" && -r "$reports_root" ]]; then
   # Date-scoped paths only. Never traverse arbitrary backup or database trees.
   if receipt_count=$(timeout -k 2s 10s find "$reports_root" -mindepth 2 -maxdepth 6 \
-      -type f \\( -iname '*receipt*' -o -iname '*publish*' \\) \
+      -type f \( -iname '*receipt*' -o -iname '*publish*' \) \
       -printf '.' 2>/dev/null | wc -c); then
     echo "REPORT_RECEIPT_CANDIDATE_COUNT=$receipt_count"
     if (( receipt_count == 0 )); then receipt_review=1; fi
