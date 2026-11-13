@@ -5,7 +5,7 @@ from app.portal.metric_read_contract import metric_read_model
 NOW = datetime(2026, 11, 12, 14, 0, tzinfo=timezone.utc)
 BASE = dict(actor="operator", tenant="t1", authorized_tenants={"t1"},
             metric="node_memory_used", value=42, observed_at="2026-11-12T13:59:00Z",
-            now=NOW, source="prometheus:v30", mode="LIVE", window_seconds=60,
+            now=NOW, source="prometheus:v30", mode="LIVE", window_seconds=0,
             generation=4, expected_generation=4, source_attested=True)
 
 
@@ -98,7 +98,22 @@ class MetricReadContractTests(unittest.TestCase):
         self.check("UNKNOWN", source="http://localhost:9090")
 
     def test_bad_window(self):
-        self.check("BLOCKED", window_seconds=-1)
+        for window in (-1, 1, 60, True, None):
+            with self.subTest(window=window):
+                result = self.check("BLOCKED", window_seconds=window)
+                self.assertEqual(result["reason"], "INVALID_WINDOW")
+
+    def test_promql_window_cannot_be_misreported(self):
+        for metric, actual in (("node_cpu_utilization", 300), ("http_requests_rate", 120),
+                               ("node_memory_used", 0), ("node_filesystem_available", 0)):
+            with self.subTest(metric=metric):
+                self.assertEqual(self.check("READY", metric=metric, window_seconds=actual)["data"]["window_seconds"], actual)
+                for forged in (60, 120 if actual != 120 else 300, 3600):
+                    if forged != actual:
+                        self.assertEqual(self.check("BLOCKED", metric=metric, window_seconds=forged)["reason"], "INVALID_WINDOW")
+
+    def test_acl_precedes_window_validation(self):
+        self.assertEqual(self.check("BLOCKED", tenant="other", window_seconds=999)["http_status"], 403)
 
     def test_replay_cannot_launder_live_source(self):
         self.check("UNKNOWN", mode="REPLAY", source="prometheus:v30")
@@ -128,8 +143,8 @@ class MetricReadContractTests(unittest.TestCase):
                 self.assertEqual(result["reason"], "OUT_OF_RANGE_SAMPLE")
 
     def test_boundary_samples_remain_ready(self):
-        self.check("READY", metric="node_cpu_utilization", value=0)
-        self.check("READY", metric="node_cpu_utilization", value=1)
+        self.check("READY", metric="node_cpu_utilization", value=0, window_seconds=300)
+        self.check("READY", metric="node_cpu_utilization", value=1, window_seconds=300)
         self.check("READY", metric="node_filesystem_available", value=0)
 
     def test_cancelled_read_never_returns_sample(self):
