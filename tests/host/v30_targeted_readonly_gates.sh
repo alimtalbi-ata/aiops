@@ -89,9 +89,9 @@ for job in aiops-debian-reporter aiops-publish-report; do
     index($0, job) {found=1; exit}
     END {exit !found}
   ' <<<"$cron"; then
-    printf 'CRON job=%s presence=FOUND_ACTIVE_USER_CRONTAB\\n' "$job"
+    printf 'CRON job=%s presence=CONFIGURED_USER_CRONTAB_NOT_EXECUTION\n' "$job"
   else
-    printf 'CRON job=%s presence=UNKNOWN_USER_CRONTAB\\n' "$job"
+    printf 'CRON job=%s presence=UNKNOWN_USER_CRONTAB\n' "$job"
   fi
 done
 if units=$(timeout -k 2s 5s systemctl --user list-unit-files --no-legend --no-pager 2>/dev/null); then
@@ -101,9 +101,9 @@ else
 fi
 for job in aiops-debian-reporter aiops-publish-report; do
   if [[ "$unit_state" == READABLE ]] && grep -Fq "$job" <<<"$units"; then
-    printf 'SYSTEMD_USER job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\\n' "$job"
+    printf 'SYSTEMD_USER job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\n' "$job"
   else
-    printf 'SYSTEMD_USER job=%s presence=UNKNOWN\\n' "$job"
+    printf 'SYSTEMD_USER job=%s presence=UNKNOWN\n' "$job"
   fi
 done
 # Receipt candidates: counts only, never names, contents, commands or credentials.
