@@ -77,8 +77,11 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
   // This read-only component cannot attest LIVE authorization or runtime health.
   let declaredMode = 'UNKNOWN';
   try {
-    if (options && typeof options === 'object' &&
-        ['DEMO', 'REPLAY'].includes(options.mode)) declaredMode = options.mode;
+    if (options && typeof options === 'object') {
+      // Read once: an accessor or Proxy may return different values on successive reads.
+      const mode = options.mode;
+      if (mode === 'DEMO' || mode === 'REPLAY') declaredMode = mode;
+    }
   } catch { /* Invalid adapter metadata fails closed to UNKNOWN. */ }
   const nav = document.createElement('nav');
   // Expose the same fail-closed mode to CSS and assistive technology without implying LIVE.
