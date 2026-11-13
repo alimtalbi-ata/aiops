@@ -18,7 +18,7 @@ class V30SourceReadRouteTests(unittest.TestCase):
                 self.assertIsNone(response.json().get("data"))
                 self.assertEqual(response.headers["cache-control"], "no-store")
 
-    def test_authenticated_shared_bearer_is_not_tenant_acl(self):
+    def test_authenticated_shared_bearer_is_not_tenant_acl_or_live_mode(self):
         with patch("portal.v30_source_read_routes._require_portal_read_auth", return_value=None):
             for path in ("/prometheus", "/databases", "/cmdb",
                          "/api/portal/prometheus", "/api/portal/databases",
@@ -26,9 +26,13 @@ class V30SourceReadRouteTests(unittest.TestCase):
                 with self.subTest(path=path):
                     response = self.client.get(path, headers={"Authorization": "Bearer synthetic-test-only"})
                     self.assertEqual(response.status_code, 503)
-                    self.assertEqual(response.json()["state"], "UNKNOWN")
-                    self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
-                    self.assertIsNone(response.json()["data"])
+                    payload = response.json()
+                    self.assertEqual(payload["state"], "UNKNOWN")
+                    self.assertEqual(payload["reason"], "TENANT_ACL_NOT_QUALIFIED")
+                    self.assertEqual(payload["mode"], "UNKNOWN")
+                    self.assertFalse(payload["tenant_acl_qualified"])
+                    self.assertEqual(payload["source_freshness"], "UNKNOWN")
+                    self.assertIsNone(payload["data"])
 
     def test_query_parameters_rejected_after_authentication(self):
         paths = ("/prometheus", "/databases", "/cmdb",
