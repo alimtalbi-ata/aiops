@@ -59,9 +59,15 @@ class V30SourceReadRouteTests(unittest.TestCase):
                 self.assertIsNone(response.json()["data"])
 
     def test_no_mutating_methods(self):
-        for path in ("/prometheus", "/databases", "/cmdb"):
-            with self.subTest(path=path):
-                self.assertEqual(self.client.post(path).status_code, 405)
+        paths = ("/prometheus", "/databases", "/cmdb",
+                 "/api/portal/prometheus", "/api/portal/databases",
+                 "/api/portal/cmdb")
+        for path in paths:
+            for method in ("POST", "PUT", "PATCH", "DELETE"):
+                with self.subTest(path=path, method=method):
+                    response = self.client.request(method, path,
+                                                   params={"query": "up", "sql": "SELECT 1"})
+                    self.assertEqual(response.status_code, 405)
 
 if __name__ == "__main__":
     unittest.main()
