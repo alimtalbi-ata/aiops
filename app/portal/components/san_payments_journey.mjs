@@ -79,7 +79,8 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
   try {
     if (options && typeof options === 'object') {
       // Read once: an accessor or Proxy may return different values on successive reads.
-      const mode = options.mode;
+      // Only an own host declaration counts; inherited mode metadata is untrusted.
+      const mode = Object.hasOwn(options, 'mode') ? options.mode : null;
       if (mode === 'DEMO' || mode === 'REPLAY') declaredMode = mode;
     }
   } catch { /* Invalid adapter metadata fails closed to UNKNOWN. */ }
