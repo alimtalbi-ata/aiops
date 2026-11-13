@@ -5,7 +5,7 @@ cron_match() {
   local job="$1"
   awk -v job="$job" '
     /^[[:space:]]*(#|$)/ {next}
-    $0 ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)" {found=1; exit}
+    { line=$0; sub(/[[:space:]]+#.*/, "", line); if (line ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)") {found=1; exit} }
     END {exit !found}
   '
 }
@@ -21,9 +21,11 @@ expect_no cron_match aiops-publish-report <<< '*/5 * * * * /bin/aiops-publish-re
 expect_no cron_match aiops-publish-report <<< '# */5 * * * * /bin/aiops-publish-report.sh'
 expect_no cron_match aiops-publish-report <<< '*/5 * * * * /bin/backup-aiops-publish-report-old'
 expect_no cron_match aiops-publish-report <<< '*/5 * * * * echo aiops-publish-report-disabled'
+expect_no cron_match aiops-publish-report <<< '* * * * * /bin/true # aiops-publish-report'
+expect_no cron_match aiops-debian-reporter <<< '* * * * * /bin/true # /usr/local/bin/aiops-debian-reporter.sh'
 expect_yes unit_match aiops-publish-report <<< 'aiops-publish-report.timer enabled'
 expect_yes unit_match aiops-debian-reporter <<< 'aiops-debian-reporter.service enabled'
 expect_no unit_match aiops-publish-report <<< 'backup-aiops-publish-report-old.service enabled'
 expect_no unit_match aiops-publish-report <<< 'aiops-publish-report-disabled.timer enabled'
 expect_no unit_match aiops-publish-report <<< 'aiops-publish-report.service.bak enabled'
-echo 'PASS reporter identifier fixtures (11 assertions); host/runtime NOT_INSPECTED'
+echo 'PASS reporter identifier fixtures (13 assertions); host/runtime NOT_INSPECTED'
