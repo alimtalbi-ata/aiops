@@ -60,6 +60,35 @@ fi
  echo "ci_evidence_carried=$([[ "$QUALIFICATION" == "CI-runtime-e2e-PASS" ]] && echo yes || echo no)"
  echo "author=Abdelhalim Talbi"
 } > "$TMP/RELEASE-MANIFEST.txt"
+# Reconcile the legacy secondary manifest against the exact staged release tree.
+# Do this before FILES-SHA256SUMS so both inventories describe identical bytes.
+python3 - "$TMP" <<'PY_MANIFEST'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1]).resolve()
+manifest_path = root / "manifests" / "MANIFEST.json"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+entries = manifest["files"]
+assert isinstance(entries, list) and entries, "empty secondary manifest"
+seen = set()
+for entry in entries:
+    rel = entry["path"]
+    assert isinstance(rel, str) and rel and rel not in seen, "duplicate/invalid manifest path"
+    seen.add(rel)
+    path = (root / rel).resolve()
+    assert path.is_relative_to(root) and path.is_file(), f"unsafe or missing manifest path: {rel}"
+    data = path.read_bytes()
+    entry["bytes"] = len(data)
+    entry["sha256"] = hashlib.sha256(data).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+for entry in entries:
+    data = (root / entry["path"]).read_bytes()
+    assert len(data) == entry["bytes"] and hashlib.sha256(data).hexdigest() == entry["sha256"]
+print(f"SECONDARY_MANIFEST=PASS|files={len(entries)}")
+PY_MANIFEST
 (cd "$TMP" && find . -type f ! -name FILES-SHA256SUMS -print0 | sort -z | xargs -0 sha256sum) > "$TMP/FILES-SHA256SUMS"
 (
  cd "$TMP"

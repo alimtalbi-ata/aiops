@@ -279,10 +279,297 @@ test('synthetic: consultable stages are counted without implying validation', ()
     run: { state: 'LOADING' }
   });
   const summary = nav.children[3].textContent;
-  assert.match(summary, /2 étape\\(s\\) consultable\\(s\\), non validée\\(s\\)/);
-  assert.match(summary, /1 étape\\(s\\) bloquée\\(s\\)/);
-  assert.match(summary, /1 étape\\(s\\) en chargement/);
+  assert.match(summary, /2 étape\(s\) consultable\(s\), non validée\(s\)/);
+  assert.match(summary, /1 étape\(s\) bloquée\(s\)/);
+  assert.match(summary, /1 étape\(s\) en chargement/);
   assert.match(summary, /pas un indicateur de santé/);
   assert.doesNotMatch(summary, /READY|approuvée|production saine/);
   assert.equal(nav.children[2].children.length, 8);
+});
+
+
+test('synthetic: provenance coverage counts missing metadata and declared demo sources separately', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC', observedAt: 'unverified demo timestamp' },
+    impact: { state: 'AVAILABLE', source: 'authorized adapter' },
+    noc: { state: 'BLOCKED' }
+  });
+  const summary = nav.children[3].textContent;
+  assert.match(summary, /6 source\(s\) non renseignée\(s\)/);
+  assert.match(summary, /7 horodatage\(s\) inconnu\(s\)/);
+  assert.match(summary, /1 source\(s\) SYNTHETIC/);
+  assert.match(summary, /démonstration uniquement/);
+  assert.match(summary, /pas un indicateur de santé/);
+  assert.equal(nav.children[2].children.length, 8);
+});
+
+test('synthetic: declared synthetic source variants are never presented without demo warning', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'synthetic: acme fixture' },
+    impact: { state: 'AVAILABLE', source: 'SYNTHETIC/replay' },
+    noc: { state: 'BLOCKED', source: 'synthetic_fixture' },
+    run: { state: 'UNKNOWN', source: 'synthetically named production adapter' }
+  });
+  const items = nav.children[2].children;
+  for (const i of [0, 1, 2]) {
+    assert.match(items[i].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
+  }
+  assert.doesNotMatch(items[3].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
+  assert.match(nav.children[3].textContent, /3 source\(s\) SYNTHETIC/);
+  assert.match(items[0].children[1].textContent, /non validées/);
+});
+
+
+test('synthetic: only pending stages expose aria-busy; BLOCKED and UNKNOWN are not busy', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'LOADING' },
+    impact: { state: 'BLOCKED' },
+    noc: { state: 'ERROR' },
+    run: { state: 'AVAILABLE', source: 'SYNTHETIC' }
+  });
+  const items = nav.children[2].children;
+  assert.equal(items[0].attributes['aria-busy'], 'true');
+  assert.ok(items.slice(1).every(item => !Object.hasOwn(item.attributes, 'aria-busy')));
+  assert.equal(items[1].attributes['data-state'], 'BLOCKED');
+  assert.equal(items[4].attributes['data-state'], 'UNKNOWN');
+});
+
+test('synthetic: mode declaration defaults UNKNOWN and never labels a LIVE session', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const render = options => renderSanPaymentsJourney(document, { append() {} },
+    { incident: { state: 'AVAILABLE', source: 'SYNTHETIC' } }, options);
+  const unknown = render();
+  assert.match(unknown.children[1].textContent, /Mode : UNKNOWN.*LIVE non revendiqué/);
+  assert.match(render({ mode: 'LIVE' }).children[1].textContent, /Mode : UNKNOWN/);
+  assert.match(render({ mode: 'DEMO' }).children[1].textContent, /Mode : DEMO.*aucune opération LIVE/);
+  assert.match(render({ mode: 'REPLAY' }).children[1].textContent, /Mode : REPLAY/);
+  assert.match(render({ mode: 'READY' }).children[1].textContent, /Mode : UNKNOWN/);
+  assert.match(render(new Proxy({}, { get() { throw Error('synthetic failure'); } }))
+    .children[1].textContent, /Mode : UNKNOWN/);
+  assert.equal(unknown.children[2].children[0].attributes['data-state'], 'AVAILABLE');
+});
+
+
+test('synthetic: accessible navigation and CSS mode always fail closed for LIVE or invalid mode', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const render = options => renderSanPaymentsJourney(document, { append() {} }, {}, options);
+  for (const [options, expected] of [[undefined, 'UNKNOWN'], [{ mode: 'LIVE' }, 'UNKNOWN'],
+    [{ mode: 'DEMO' }, 'DEMO'], [{ mode: 'REPLAY' }, 'REPLAY'], [{ mode: 'READY' }, 'UNKNOWN']]) {
+    const nav = render(options);
+    assert.equal(nav.attributes['data-mode'], expected);
+    assert.match(nav.attributes['aria-label'], new RegExp('mode ' + expected + '$'));
+    assert.equal(nav.children[2].children.length, 8);
+  }
+});
+
+test('synthetic: a supplied timestamp is declarative, never proof of freshness', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC', observedAt: '2026-11-12T12:00:00Z' }
+  }, { mode: 'DEMO' });
+  assert.match(nav.children[2].children[0].children[4].textContent,
+    /Horodatage déclaré : 2026-11-12T12:00:00Z/);
+  assert.match(nav.children[3].textContent,
+    /horodatages renseignés sont déclaratifs et ne prouvent pas la fraîcheur/);
+  assert.match(nav.children[1].textContent, /Mode : DEMO/);
+  assert.doesNotMatch(nav.children[3].textContent, /production saine|READY/);
+});
+
+
+test('synthetic: DEMO and REPLAY have distinct accessible provenance warnings', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const render = mode => renderSanPaymentsJourney(document, { append() {} }, {}, { mode });
+  const demo = render('DEMO');
+  const replay = render('REPLAY');
+  const unknown = render('LIVE');
+  assert.match(demo.children[1].textContent, /démonstration uniquement, aucune opération LIVE/);
+  assert.match(replay.children[1].textContent, /rejeu déclaré, données historiques non attestées/);
+  assert.match(replay.children[1].textContent, /aucune opération LIVE/);
+  assert.match(unknown.children[1].textContent, /mode non attesté, LIVE non revendiqué/);
+  assert.equal(replay.attributes['data-mode'], 'REPLAY');
+  assert.equal(unknown.attributes['data-mode'], 'UNKNOWN');
+  assert.equal(replay.children[2].children.length, 8);
+});
+
+test('synthetic: provenance styling hook distinguishes demo, missing and unverified metadata', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'synthetic: fixture', observedAt: '2026-11-12' },
+    impact: { state: 'AVAILABLE', source: 'adapter', observedAt: '2026-11-12' },
+    noc: { state: 'AVAILABLE', source: 'adapter' },
+    run: { state: 'BLOCKED' }
+  }, { mode: 'DEMO' });
+  const items = nav.children[2].children;
+  assert.deepEqual(items.slice(0, 4).map(item => item.attributes['data-provenance']),
+    ['SYNTHETIC', 'DECLARED_UNVERIFIED', 'INCOMPLETE', 'INCOMPLETE']);
+  assert.equal(nav.attributes['data-mode'], 'DEMO');
+  assert.equal(items[3].attributes['data-state'], 'BLOCKED');
+  assert.equal(items.length, 8);
+  assert.match(items[1].children[4].textContent, /Horodatage déclaré/);
+});
+
+
+test('synthetic: freshness remains UNKNOWN even when a source is explicitly SYNTHETIC', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC' },
+    impact: { state: 'AVAILABLE', source: 'authorized adapter', observedAt: '2026-11-12T12:00:00Z' },
+    noc: { state: 'BLOCKED' }
+  }, { mode: 'DEMO' });
+  const items = nav.children[2].children;
+  assert.equal(items[0].attributes['data-provenance'], 'SYNTHETIC');
+  assert.equal(items[0].attributes['data-freshness'], 'UNKNOWN');
+  assert.equal(items[1].attributes['data-freshness'], 'DECLARED_UNVERIFIED');
+  assert.equal(items[2].attributes['data-freshness'], 'UNKNOWN');
+  assert.equal(items[2].attributes['data-state'], 'BLOCKED');
+  assert.match(items[0].children[4].textContent, /FRAÎCHEUR INCONNUE/);
+  assert.match(nav.children[3].textContent, /horodatage\(s\) inconnu\(s\)/);
+});
+
+test('synthetic: inherited adapter state and metadata never become trusted declarations', () => {
+  const inheritedState = Object.create({ state: 'AVAILABLE', source: 'forged', observedAt: 'forged' });
+  const inheritedMetadata = Object.assign(
+    Object.create({ source: 'forged LIVE source', observedAt: 'forged freshness', detail: 'forged detail' }),
+    { state: 'AVAILABLE' }
+  );
+  const steps = describeSanPaymentsJourney({
+    incident: inheritedState,
+    impact: inheritedMetadata,
+    noc: { state: 'BLOCKED', source: 'SYNTHETIC' }
+  });
+  assert.equal(steps[0].state, 'UNKNOWN');
+  assert.equal(steps[1].state, 'AVAILABLE');
+  assert.equal(steps[1].source, 'Source non renseignée');
+  assert.equal(steps[1].observedAt, 'Fraîcheur inconnue');
+  assert.equal(steps[1].detail, 'Aucune information vérifiée');
+  assert.equal(steps[2].state, 'BLOCKED');
+  assert.ok(steps.every(step => step.isOperationalClaim === false));
+});
+
+
+test('synthetic: throwing adapter getter discards partial AVAILABLE and keeps other steps', () => {
+  const partial = { state: 'AVAILABLE', source: 'claimed live adapter' };
+  Object.defineProperty(partial, 'detail', { get() { throw Error('synthetic adapter failure'); } });
+  const steps = describeSanPaymentsJourney({
+    incident: partial,
+    impact: { state: 'BLOCKED', source: 'SYNTHETIC' }
+  });
+  assert.equal(steps[0].state, 'UNKNOWN');
+  assert.equal(steps[0].detail, 'Aucune information vérifiée');
+  assert.equal(steps[0].source, 'Source non renseignée');
+  assert.equal(steps[0].observedAt, 'Fraîcheur inconnue');
+  assert.equal(steps[1].state, 'BLOCKED');
+  assert.ok(steps.every(step => step.isOperationalClaim === false));
+});
+
+test('synthetic: changing mode getter is read once and cannot inject LIVE', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  let reads = 0;
+  const options = { get mode() { reads++; return reads === 1 ? 'DEMO' : 'LIVE'; } };
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {}, options);
+  assert.equal(reads, 1);
+  assert.equal(nav.attributes['data-mode'], 'DEMO');
+  assert.match(nav.children[1].textContent, /aucune opération LIVE/);
+  assert.equal(nav.children[2].children.length, 8);
+});
+
+
+test('synthetic: inherited mode metadata cannot declare DEMO or REPLAY', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  for (const inherited of ['DEMO', 'REPLAY']) {
+    const options = Object.create({ mode: inherited });
+    const nav = renderSanPaymentsJourney(document, { append() {} }, {}, options);
+    assert.equal(nav.attributes['data-mode'], 'UNKNOWN');
+    assert.match(nav.children[1].textContent, /LIVE non revendiqué/);
+    assert.equal(nav.children[2].children.length, 8);
+  }
+  const explicit = Object.assign(Object.create({ mode: 'REPLAY' }), { mode: 'DEMO' });
+  assert.equal(renderSanPaymentsJourney(document, { append() {} }, {}, explicit)
+    .attributes['data-mode'], 'DEMO');
+});
+
+test('synthetic: throwing mode getter and hostile options Proxy fail closed without hiding stages', () => {
+  const document = { createElement(tag) {
+    return { tag, attributes: {}, children: [], textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const hostileOptions = [
+    { get mode() { throw Error('synthetic mode getter failure'); } },
+    new Proxy({}, { getOwnPropertyDescriptor() { throw Error('synthetic proxy failure'); } }),
+    { mode: 'LIVE' }
+  ];
+  for (const options of hostileOptions) {
+    const nav = renderSanPaymentsJourney(document, { append() {} }, {
+      incident: { state: 'BLOCKED', source: 'SYNTHETIC' }
+    }, options);
+    assert.equal(nav.attributes['data-mode'], 'UNKNOWN');
+    assert.match(nav.attributes['aria-label'], /mode UNKNOWN/);
+    assert.match(nav.children[1].textContent, /LIVE non revendiqué/);
+    assert.equal(nav.children[2].children.length, 8);
+    assert.equal(nav.children[2].children[0].attributes['data-state'], 'BLOCKED');
+  }
+});
+
+
+test('synthetic: forged completion and approval states fail closed across every journey stage', () => {
+  for (const forbidden of ['READY', 'APPROVED', 'SUCCESS', 'HEALTHY', 'LIVE', 'RESOLVED']) {
+    const records = Object.fromEntries(SAN_PAYMENTS_STEPS.map(step => [step.id, {
+      state: forbidden, source: 'SYNTHETIC', observedAt: 'unverified timestamp',
+      detail: 'synthetic: misleading completion'
+    }]));
+    const steps = describeSanPaymentsJourney(records);
+    assert.equal(steps.length, 8);
+    assert.ok(steps.every(step => step.state === 'UNKNOWN' && !step.isOperationalClaim));
+    assert.ok(steps.every(step => step.source === 'Source non renseignée'));
+    assert.ok(steps.every(step => step.observedAt === 'Fraîcheur inconnue'));
+    assert.ok(steps.every(step => step.detail === 'Aucune information vérifiée'));
+  }
 });
