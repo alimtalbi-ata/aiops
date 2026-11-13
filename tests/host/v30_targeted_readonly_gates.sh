@@ -92,7 +92,7 @@ fi
 for job in aiops-debian-reporter aiops-publish-report; do
   if [[ "$cron_state" == READABLE ]] && awk -v job="$job" '
     /^[[:space:]]*(#|$)/ {next}
-    $0 ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)" {found=1; exit}
+    { line=$0; sub(/[[:space:]]+#.*/, "", line); if (line ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)") {found=1; exit} }
     END {exit !found}
   ' <<<"$cron"; then
     printf 'CRON job=%s presence=CONFIGURED_USER_CRONTAB_NOT_EXECUTION\n' "$job"
@@ -120,7 +120,7 @@ for job in aiops-debian-reporter aiops-publish-report; do
     [[ -f "$file" && -r "$file" ]] || continue
     if timeout -k 2s 5s awk -v job="$job" '
       /^[[:space:]]*(#|$)/ {next}
-      $0 ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)" {found=1; exit}
+      { line=$0; sub(/[[:space:]]+#.*/, "", line); if (line ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)") {found=1; exit} }
       END {exit !found}
     ' "$file" 2>/dev/null; then
       system_cron_state=CONFIGURED_SYSTEM_CRON_NOT_EXECUTION
