@@ -52,6 +52,7 @@ for port in 7777 7788; do
   done
 done
 # Inventory only named Portal candidates and Grafana/GLPI metadata; no env, mount source paths or volume contents.
+# Compare exact volume-name fields: substring matching can accept a similarly prefixed wrong volume.
 for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-glpi aiops2-rebuild-glpi-db; do
   if ! timeout -k 2s 8s docker --host "$DOCKER_HOST" container inspect "$name" >/dev/null 2>&1; then
     echo "MOUNTS container=$name state=UNKNOWN"; mount_review=1; continue
@@ -61,15 +62,15 @@ for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-
   }
   case "$name" in
     aiops2-rebuild-grafana)
-      if ! grep -Fq '|volume|aiops2-rebuild-grafana-data' <<<"$mounts" ||
+      if ! awk -F '|' '$2 == "volume" && $3 == "aiops2-rebuild-grafana-data" {found=1} END {exit !found}' <<<"$mounts" ||
          ! grep -Fxq '/etc/grafana/provisioning|bind|BIND' <<<"$mounts" ||
          ! grep -Fxq '/var/lib/grafana/dashboards|bind|BIND' <<<"$mounts"; then
         echo "MOUNTS container=$name state=REVIEW"; mount_review=1
       fi ;;
     aiops2-rebuild-glpi)
-      if ! grep -Fq '|volume|aiops2-rebuild-glpi-data' <<<"$mounts"; then echo "MOUNTS container=$name state=REVIEW"; mount_review=1; fi ;;
+      if ! awk -F '|' '$2 == "volume" && $3 == "aiops2-rebuild-glpi-data" {found=1} END {exit !found}' <<<"$mounts"; then echo "MOUNTS container=$name state=REVIEW"; mount_review=1; fi ;;
     aiops2-rebuild-glpi-db)
-      if ! grep -Fq '|volume|aiops2-rebuild-glpi-db-data' <<<"$mounts"; then echo "MOUNTS container=$name state=REVIEW"; mount_review=1; fi ;;
+      if ! awk -F '|' '$2 == "volume" && $3 == "aiops2-rebuild-glpi-db-data" {found=1} END {exit !found}' <<<"$mounts"; then echo "MOUNTS container=$name state=REVIEW"; mount_review=1; fi ;;
     aiops2-portal-v3-qual-exposed)
       if grep -Eq '^/app/portal[|/]' <<<"$mounts"; then echo 'MOUNTS container=V30 state=REVIEW'; mount_review=1; fi ;;
   esac
