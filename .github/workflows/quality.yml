@@ -116,8 +116,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 16 client (match disposable PostgreSQL 16 service)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
+
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password
