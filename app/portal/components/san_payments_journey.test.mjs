@@ -500,3 +500,18 @@ test('synthetic: throwing adapter getter discards partial AVAILABLE and keeps ot
   assert.equal(steps[1].state, 'BLOCKED');
   assert.ok(steps.every(step => step.isOperationalClaim === false));
 });
+
+test('synthetic: changing mode getter is read once and cannot inject LIVE', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  let reads = 0;
+  const options = { get mode() { reads++; return reads === 1 ? 'DEMO' : 'LIVE'; } };
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {}, options);
+  assert.equal(reads, 1);
+  assert.equal(nav.attributes['data-mode'], 'DEMO');
+  assert.match(nav.children[1].textContent, /aucune opération LIVE/);
+  assert.equal(nav.children[2].children.length, 8);
+});
