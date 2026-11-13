@@ -10,11 +10,8 @@ const doc = { createElement(tag) {
 } };
 
 test('spoofed timestamp controls fail closed independently of source provenance', () => {
-  for (const observedAt of [
-    '2026-11-13T20:00:00Z\\u202e',
-    '2026-11-13T20:00:00Z\\u0000',
-    '2026-11-13T20:00:00Z\\u200b'
-  ].map(value => value.replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16))))) {
+  for (const control of [0x202e, 0x0000, 0x200b]) {
+    const observedAt = '2026-11-13T20:00:00Z' + String.fromCharCode(control);
     const nav = renderSanPaymentsJourney(doc, { append() {} }, {
       incident: { state: 'AVAILABLE', source: 'SYNTHETIC:fixture', observedAt }
     }, { mode: 'DEMO' });
@@ -24,6 +21,6 @@ test('spoofed timestamp controls fail closed independently of source provenance'
     assert.equal(incident.attributes['data-provenance'], 'SYNTHETIC');
     assert.equal(incident.attributes['data-freshness'], 'UNKNOWN');
     assert.match(incident.children[4].textContent, /FRAÎCHEUR INCONNUE/);
-    assert.match(nav.children[3].textContent, /8 horodatage\\(s\\) inconnu\\(s\\)/);
+    assert.ok(nav.children[3].textContent.includes('8 horodatage(s) inconnu(s)'));
   }
 });
