@@ -2,10 +2,22 @@
 # Offline regression fixtures for exact reporter identifiers. No host access.
 set -euo pipefail
 cron_match() {
-  local job="$1"
-  awk -v job="$job" '
+  local job="$1" mode="${2:-user}"
+  awk -v job="$job" -v mode="$mode" '
     /^[[:space:]]*(#|$)/ {next}
-    { line=$0; sub(/[[:space:]]+#.*/, "", line); if (line ~ "(^|[[:space:]/;])" job "(\\.sh)?([[:space:];]|$)") {found=1; exit} }
+    {
+      line=$0
+      sub(/[[:space:]]+#.*/, "", line)
+      n=split(line, a, /[[:space:]]+/)
+      offset=(mode=="system" ? 6 : 5)
+      if (n <= offset) next
+      i=offset+1
+      while (i<=n && a[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) i++
+      if (i>n) next
+      executable=a[i]
+      sub(/^.*\//, "", executable)
+      if (executable==job || executable==job ".sh") {found=1; exit}
+    }
     END {exit !found}
   '
 }
@@ -28,4 +40,10 @@ expect_yes unit_match aiops-debian-reporter <<< 'aiops-debian-reporter.service e
 expect_no unit_match aiops-publish-report <<< 'backup-aiops-publish-report-old.service enabled'
 expect_no unit_match aiops-publish-report <<< 'aiops-publish-report-disabled.timer enabled'
 expect_no unit_match aiops-publish-report <<< 'aiops-publish-report.service.bak enabled'
-echo 'PASS reporter identifier fixtures (13 assertions); host/runtime NOT_INSPECTED'
+expect_no cron_match aiops-publish-report <<< '*/5 * * * * /bin/echo aiops-publish-report'
+expect_no cron_match aiops-debian-reporter <<< '*/5 * * * * /usr/bin/printf aiops-debian-reporter'
+expect_no cron_match aiops-publish-report system <<< '*/5 * * * * root /bin/echo aiops-publish-report'
+expect_yes cron_match aiops-publish-report system <<< '*/5 * * * * aiops /home/aiops/bin/aiops-publish-report.sh'
+expect_yes cron_match aiops-debian-reporter system <<< '0 * * * * aiops /home/aiops/bin/aiops-debian-reporter'
+expect_no cron_match aiops-publish-report <<< '*/5 * * * * /bin/true ; /home/aiops/bin/aiops-publish-report.sh'
+echo 'PASS reporter identifier fixtures (19 assertions); host/runtime NOT_INSPECTED'
