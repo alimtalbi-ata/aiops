@@ -31,8 +31,13 @@ mount_review=0
 receipt_review=0
 for port in 7777 7788; do
   for route in / /api/portal/bootstrap /api/portal/session /api/portal/scenarios /api/portal/runs /api/fs-demo/health; do
-    code=$(curl --noproxy '*' --silent --output /dev/null --max-time 5 --connect-timeout 2 --write-out '%{http_code}' "http://127.0.0.1:${port}${route}" || true)
-    [[ "$code" =~ ^[1-5][0-9]{2}$ ]] || code=UNKNOWN
+    # A received status is not reliable when curl exits nonzero (timeout, reset,
+    # incomplete transfer). Fail closed even if curl printed a plausible 401/200.
+    if code=$(curl --noproxy '*' --silent --output /dev/null --max-time 5 --connect-timeout 2 --write-out '%{http_code}' "http://127.0.0.1:${port}${route}"); then
+      [[ "$code" =~ ^[1-5][0-9]{2}$ ]] || code=UNKNOWN
+    else
+      code=UNKNOWN
+    fi
     if [[ "$code" == UNKNOWN ]]; then http_unknown=1; fi
     printf 'HTTP port=%s route=%s code=%s\n' "$port" "$route" "$code"
     if [[ "$route" == /api/portal/session && "$code" != 401 && "$code" != UNKNOWN ]]; then echo "GATE=FAIL session_$port"; gate_fail=1; fi
