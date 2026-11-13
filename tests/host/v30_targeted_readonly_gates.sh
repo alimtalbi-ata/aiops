@@ -57,7 +57,7 @@ for port in 7777 7788; do
   done
 done
 # Inventory only named Portal candidates and Grafana/GLPI metadata; no env, mount source paths or volume contents.
-# Compare exact volume-name fields: substring matching can accept a similarly prefixed wrong volume.
+# Compare exact Grafana data destination, mount type and volume name; other destinations remain REVIEW until Compose contracts are attested.
 for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-glpi aiops2-rebuild-glpi-db; do
   if ! timeout -k 2s 8s docker --host "$DOCKER_HOST" container inspect "$name" >/dev/null 2>&1; then
     echo "MOUNTS container=$name state=UNKNOWN"; mount_review=1; continue
@@ -67,7 +67,7 @@ for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-
   }
   case "$name" in
     aiops2-rebuild-grafana)
-      if ! awk -F '|' '$2 == "volume" && $3 == "aiops2-rebuild-grafana-data" {found=1} END {exit !found}' <<<"$mounts" ||
+      if ! awk -F '|' '$1 == "/var/lib/grafana" && $2 == "volume" && $3 == "aiops2-rebuild-grafana-data" {found=1} END {exit !found}' <<<"$mounts" ||
          ! grep -Fxq '/etc/grafana/provisioning|bind|BIND' <<<"$mounts" ||
          ! grep -Fxq '/var/lib/grafana/dashboards|bind|BIND' <<<"$mounts"; then
         echo "MOUNTS container=$name state=REVIEW"; mount_review=1
