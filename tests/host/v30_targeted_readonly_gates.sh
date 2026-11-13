@@ -141,19 +141,19 @@ else
   echo 'SYSTEMD_SYSTEM=UNKNOWN reason=unit_list_unavailable'
 fi
 unset system_units
-# Receipt candidates: counts only, never names, contents, commands or credentials.
-report_dir=/home/aiops/aiops-debian-audit/reports/SRV-DEB-05/2026-11-12
-if [[ -d "$report_dir" ]]; then
-  # Use separate find predicates: shell-safe, no filenames or receipt contents exposed.
-  # A candidate count never attests job execution or a published-report SHA.
-  if ! receipt_count=$(timeout -k 2s 10s find "$report_dir" -maxdepth 4 -type f \
-      \( -iname '*receipt*' -o -iname '*publish*' \) \
+# Receipt candidates across dated report directories, without exposing names or contents.
+# A file count is NOT a job execution receipt or a publication SHA attestation.
+reports_root=/home/aiops/aiops-debian-audit/reports/SRV-DEB-05
+if [[ -d "$reports_root" && -r "$reports_root" ]]; then
+  # Date-scoped paths only. Never traverse arbitrary backup or database trees.
+  if receipt_count=$(timeout -k 2s 10s find "$reports_root" -mindepth 2 -maxdepth 6 \
+      -type f \\( -iname '*receipt*' -o -iname '*publish*' \\) \
       -printf '.' 2>/dev/null | wc -c); then
-    echo 'REPORT_RECEIPTS=UNKNOWN reason=scan_failed'
-    receipt_review=1
-  else
     echo "REPORT_RECEIPT_CANDIDATE_COUNT=$receipt_count"
     if (( receipt_count == 0 )); then receipt_review=1; fi
+  else
+    echo 'REPORT_RECEIPTS=UNKNOWN reason=scan_failed'
+    receipt_review=1
   fi
   echo 'REPORT_RECEIPT_CORRELATION=UNKNOWN requires_job_timestamp_and_published_sha'
 else
