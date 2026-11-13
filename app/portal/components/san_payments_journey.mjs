@@ -53,9 +53,9 @@ export function describeSanPaymentsJourney(records = {}) {
         const candidate = Object.hasOwn(record, 'state') ? record.state : null;
         if (ALLOWED.has(candidate)) {
           const nextDetail = Object.hasOwn(record, 'detail') ? text(record.detail) : null;
-          // Reject format-control obfuscation in provenance instead of silently changing its classification.
+          // Reject control-character obfuscation in provenance instead of silently changing its classification.
           const rawSource = Object.hasOwn(record, 'source') ? record.source : null;
-          const nextSource = typeof rawSource === 'string' && /[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/.test(rawSource)
+          const nextSource = typeof rawSource === 'string' && /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/.test(rawSource)
             ? null : text(rawSource);
           const nextObservedAt = Object.hasOwn(record, 'observedAt') ? text(record.observedAt) : null;
           state = candidate;
