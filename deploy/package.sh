@@ -83,7 +83,7 @@ for entry in entries:
     data = path.read_bytes()
     entry["bytes"] = len(data)
     entry["sha256"] = hashlib.sha256(data).hexdigest()
-manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 for entry in entries:
     data = (root / entry["path"]).read_bytes()
     assert len(data) == entry["bytes"] and hashlib.sha256(data).hexdigest() == entry["sha256"]
