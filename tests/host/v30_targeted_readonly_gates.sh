@@ -76,19 +76,34 @@ for name in aiops2-portal-v3-qual-exposed aiops2-rebuild-grafana aiops2-rebuild-
   echo "MOUNTS container=$name metadata_only=YES"
 done
 # Existing scheduler discovery only. Do not install cron, start a timer, or print commands that might contain secrets.
-cron=$(timeout -k 2s 5s crontab -l 2>/dev/null || true)
+# A missing crontab is not proof of a missing job. Ignore comments and
+# disabled lines; never print command bodies (which may contain credentials).
+if cron=$(timeout -k 2s 5s crontab -l 2>/dev/null); then
+  cron_state=READABLE
+else
+  cron='' ; cron_state=UNKNOWN
+fi
 for job in aiops-debian-reporter aiops-publish-report; do
-  if printf '%s\n' "$cron" | grep -Fq "$job"; then
-    printf 'CRON job=%s presence=FOUND_USER_CRONTAB\n' "$job"
+  if [[ "$cron_state" == READABLE ]] && awk -v job="$job" '
+    /^[[:space:]]*(#|$)/ {next}
+    index($0, job) {found=1; exit}
+    END {exit !found}
+  ' <<<"$cron"; then
+    printf 'CRON job=%s presence=FOUND_ACTIVE_USER_CRONTAB\\n' "$job"
   else
-    printf 'CRON job=%s presence=UNKNOWN_USER_CRONTAB\n' "$job"
+    printf 'CRON job=%s presence=UNKNOWN_USER_CRONTAB\\n' "$job"
   fi
 done
+if units=$(timeout -k 2s 5s systemctl --user list-unit-files --no-legend --no-pager 2>/dev/null); then
+  unit_state=READABLE
+else
+  units='' ; unit_state=UNKNOWN
+fi
 for job in aiops-debian-reporter aiops-publish-report; do
-  if timeout -k 2s 5s systemctl --user list-unit-files --no-legend --no-pager 2>/dev/null | grep -Fq "$job"; then
-    printf 'SYSTEMD_USER job=%s presence=FOUND\n' "$job"
+  if [[ "$unit_state" == READABLE ]] && grep -Fq "$job" <<<"$units"; then
+    printf 'SYSTEMD_USER job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\\n' "$job"
   else
-    printf 'SYSTEMD_USER job=%s presence=UNKNOWN\n' "$job"
+    printf 'SYSTEMD_USER job=%s presence=UNKNOWN\\n' "$job"
   fi
 done
 # Receipt candidates: counts only, never names, contents, commands or credentials.
