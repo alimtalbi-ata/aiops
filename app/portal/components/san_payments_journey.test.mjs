@@ -484,3 +484,19 @@ test('synthetic: inherited adapter state and metadata never become trusted decla
   assert.equal(steps[2].state, 'BLOCKED');
   assert.ok(steps.every(step => step.isOperationalClaim === false));
 });
+
+
+test('synthetic: throwing adapter getter discards partial AVAILABLE and keeps other steps', () => {
+  const partial = { state: 'AVAILABLE', source: 'claimed live adapter' };
+  Object.defineProperty(partial, 'detail', { get() { throw Error('synthetic adapter failure'); } });
+  const steps = describeSanPaymentsJourney({
+    incident: partial,
+    impact: { state: 'BLOCKED', source: 'SYNTHETIC' }
+  });
+  assert.equal(steps[0].state, 'UNKNOWN');
+  assert.equal(steps[0].detail, 'Aucune information vérifiée');
+  assert.equal(steps[0].source, 'Source non renseignée');
+  assert.equal(steps[0].observedAt, 'Fraîcheur inconnue');
+  assert.equal(steps[1].state, 'BLOCKED');
+  assert.ok(steps.every(step => step.isOperationalClaim === false));
+});
