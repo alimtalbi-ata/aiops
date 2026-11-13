@@ -121,14 +121,14 @@ for job in aiops-debian-reporter aiops-publish-report; do
       break
     fi
   done
-  printf 'SYSTEM_CRON job=%s presence=%s\\n' "$job" "$system_cron_state"
+  printf 'SYSTEM_CRON job=%s presence=%s\n' "$job" "$system_cron_state"
 done
 if system_units=$(timeout -k 2s 5s systemctl list-unit-files --no-legend --no-pager 2>/dev/null); then
   for job in aiops-debian-reporter aiops-publish-report; do
     if grep -Fq "$job" <<<"$system_units"; then
-      printf 'SYSTEMD_SYSTEM job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\\n' "$job"
+      printf 'SYSTEMD_SYSTEM job=%s presence=FOUND_UNIT_FILE_NOT_EXECUTION\n' "$job"
     else
-      printf 'SYSTEMD_SYSTEM job=%s presence=UNKNOWN\\n' "$job"
+      printf 'SYSTEMD_SYSTEM job=%s presence=UNKNOWN\n' "$job"
     fi
   done
 else
