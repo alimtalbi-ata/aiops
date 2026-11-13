@@ -462,7 +462,7 @@ test('synthetic: freshness remains UNKNOWN even when a source is explicitly SYNT
   assert.equal(items[2].attributes['data-freshness'], 'UNKNOWN');
   assert.equal(items[2].attributes['data-state'], 'BLOCKED');
   assert.match(items[0].children[4].textContent, /FRAÎCHEUR INCONNUE/);
-  assert.match(nav.children[3].textContent, /horodatage\\(s\\) inconnu\\(s\\)/);
+  assert.match(nav.children[3].textContent, /horodatage\(s\) inconnu\(s\)/);
 });
 
 test('synthetic: inherited adapter state and metadata never become trusted declarations', () => {
