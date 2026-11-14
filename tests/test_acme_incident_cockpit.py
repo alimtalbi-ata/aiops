@@ -176,3 +176,34 @@ def test_noc_decision_card_rejects_forged_authority(field, value):
     cockpit["analyst_critic_review"][field] = value
     with pytest.raises(ValueError, match="unqualified_cockpit_details"):
         render_synthetic_cockpit_html(cockpit)
+
+
+def test_customer_evidence_register_names_nine_actual_requirements():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "Registre des preuves attendues" in page.text
+    assert page.text.count("MISSING — contrôle humain requis") == 9
+    for kind in ("ALERT_STATE", "CORRELATION_EVENT",
+                 "SERVICE_DEPENDENCY_OBSERVATION", "ANALYST_CRITIC_REVIEW",
+                 "GLPI_AUTHENTICATED_TICKET_READBACK", "POLICY_AND_HITL_DECISION",
+                 "ISOLATED_SIMULATOR_RECEIPT", "INDEPENDENT_POSTCHECK",
+                 "GLPI_AUTHENTICATED_CLOSURE_AND_PIR_READBACK"):
+        assert kind in page.text
+    assert "observed_at, source_id, content_sha256" in page.text
+    assert "<form" not in page.text.lower()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("submitted_evidence", {"fake": "receipt"}),
+    ("attested", True),
+    ("qualifies_runtime", True),
+    ("collection_mode", "AUTO_LIVE"),
+])
+def test_customer_evidence_register_rejects_forged_receipts(field, value):
+    from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
+    cockpit = project_synthetic_incident_cockpit(build_acme_impact_read_model())
+    cockpit["evidence_plan"]["requests"][0][field] = value
+    with pytest.raises(ValueError, match="unqualified_evidence_requirements"):
+        render_synthetic_cockpit_html(cockpit)
