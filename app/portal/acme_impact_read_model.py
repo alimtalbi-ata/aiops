@@ -318,7 +318,7 @@ def acme_grafana_pilot_preview_page():
             "qualification": cockpit["overall_qualification"],
         }
         page = render_grafana_pilot_preview_html(preview)
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, HTTPException) as exc:
         raise HTTPException(status_code=503, detail="synthetic_grafana_pilot_preview_unqualified") from exc
     return HTMLResponse(content=page, headers=HEADERS)
 
