@@ -126,17 +126,29 @@ def make_verified_principal_glpi_xref_resolver(
                 raise exc
             return allowed is True
 
+        observed_events = {}
+        def preflight_fetch(*, actor, tenant_id, ticket_id):
+            event = fetch_signed_event(actor=actor, tenant_id=tenant_id, ticket_id=ticket_id)
+            observed_events[tenant_id] = event
+            return event
+
+        def final_fetch(*, actor, tenant_id, ticket_id):
+            event = fetch_signed_event(actor=actor, tenant_id=tenant_id, ticket_id=ticket_id)
+            if event != observed_events.get(tenant_id):
+                raise VerifiedGLPIXrefDenied("signed_xref_changed_after_preflight")
+            return event
+
         # Check uniqueness before consuming any one-time signed event.
         preflight = make_hmac_canonical_xref_resolver(
             secret=secret,
-            fetch_signed_event=fetch_signed_event,
+            fetch_signed_event=preflight_fetch,
             consume_nonce=lambda **_: True,
             authorize_actor=authorize_actor,
             clock=clock,
         )
         resolver = make_hmac_canonical_xref_resolver(
             secret=secret,
-            fetch_signed_event=fetch_signed_event,
+            fetch_signed_event=final_fetch,
             consume_nonce=consume_nonce,
             authorize_actor=authorize_actor,
             clock=clock,
