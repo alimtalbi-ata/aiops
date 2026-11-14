@@ -69,3 +69,7 @@ GET `/api/demo/acme-evidence-plan` provides a **non-executable** checklist for a
 ## Offline evidence manifest inspection — 2026-11-14
 
 `portal.acme_evidence_manifest_validator.inspect_synthetic_evidence_manifest` accepts a strictly shaped **in-memory** DEMO metadata manifest for independent review. It checks scenario SHA-256/incident binding, unique checkpoints, expected source/evidence type, UTC observation timestamps, bounded source IDs and lowercase SHA-256 syntax. **A well-formed manifest is not an authenticated proof:** every item remains `UNVERIFIED`, zero evidence is independently verified, and no ITIL transition, GLPI write, Temporal action or LIVE remediation is authorized. There is deliberately no HTTP upload/acceptance route, no persistence and no remote evidence fetch. Future ingestion requires a separately reviewed tenant/actor trust boundary and source attestations.
+
+## Operator-facing evidence checklist — 2026-11-14
+
+GET `/demo/acme-evidence-plan` now renders the nine independent evidence requirements as a static French table in the canonical Portal: checkpoint, lifecycle phase, expected source, proof type, required metadata and MISSING status. The page visibly shows **0/9 verified**, the source fixture SHA-256, and the NO-GO LIVE warning. There are no scripts, forms, upload capabilities or backend calls. A broken or unqualified synthetic fixture fails HTTP 503.
