@@ -89,7 +89,7 @@ def build_acme_impact_read_model() -> dict[str, Any]:
     fixture = load_fixture_bytes(raw)
     report = validate_fixture(fixture)
     digest = hashlib.sha256(raw).hexdigest()
-    return {
+    model = {
         "schema": "aiops.synthetic-impact-read-model.v1",
         "entrypoint": "http://10.79.94.202:17777/",
         "run_id": "SIM-ACME-" + digest[:16].upper(),
@@ -168,21 +168,29 @@ def build_acme_impact_read_model() -> dict[str, Any]:
             "live_execution": False,
             "backend_writes": False,
         },
-        "incident_readiness": {
-            "state": "BLOCKED_UNATTESTED",
-            "mode": "SYNTHETIC_ONLY",
-            "required_checkpoints": 9,
-            "verified_checkpoints": 0,
-            "missing_checkpoints": 9,
-            "next_operator_action": "COLLECT_AUTHENTICATED_RUNTIME_EVIDENCE",
-            "reason": "No independently authenticated runtime checkpoints or GLPI ticket",
-            "live_action_allowed": False,
-        },
         "runtime_evidence_present": False,
         "runtime_attested": False,
         "production_qualified": False,
         "live_remediation_authorized": False,
     }
+
+    # This is a synthetic contract, not runtime evidence. Derive counters from
+    # the actual fixture checkpoint projection to prevent a stale 9/0/9 claim.
+    checkpoints = model["checkpoint_evidence"]
+    missing = sum(1 for item in checkpoints if item["status"] == "MISSING")
+    if missing != len(checkpoints) or any(item["runtime_authenticated"] is not False for item in checkpoints):
+        raise ValueError("synthetic checkpoint projection must remain unattested")
+    model["incident_readiness"] = {
+        "state": "BLOCKED_UNATTESTED",
+        "mode": "SYNTHETIC_ONLY",
+        "required_checkpoints": len(checkpoints),
+        "verified_checkpoints": 0,
+        "missing_checkpoints": missing,
+        "next_operator_action": "COLLECT_AUTHENTICATED_RUNTIME_EVIDENCE",
+        "reason": "No independently authenticated runtime checkpoints or GLPI ticket",
+        "live_action_allowed": False,
+    }
+    return model
 
 
 def _load_or_503() -> dict[str, Any]:
