@@ -98,3 +98,12 @@ avec IDs et SHA issus du dossier vérifié. Elle ne fait aucun appel réseau
 et ne modifie aucun ticket. Une pièce modifiée ou absente bloque la génération.
 L'animateur doit verbaliser les trois résultats séparés : **GO scénario
 synthétique**, **NO-GO LIVE**, **UNKNOWN preuves runtime**.
+
+## Étape suivante après la démonstration synthétique
+
+Le passage vers des sources d'intégration réelles est soumis au plan
+`docs/ops/AIOPS2-READONLY-INTEGRATION-PILOT-PLAN.md`. Il définit les portes
+P0–P4 pour OIDC, Grafana, n8n, CMDB/GLPI, Core/Temporal, Policy/HITL et
+postcheck indépendant. Ce plan ne vaut pas autorisation d'accès : chaque
+source doit être explicitement configurée et qualifiée dans un environnement
+éphémère avant d'être montrée comme preuve.
