@@ -33,3 +33,15 @@ def test_forged_register_verification_is_rejected():
  p=preview();p['register']['sources']['grafana']['status']='VERIFIED'
  with pytest.raises(ValueError,match='grafana_pilot_evidence_not_attested'):
   render_grafana_pilot_preview_html(p)
+
+def test_forged_scenario_hash_is_rejected():
+ p=preview()
+ p['synthetic_scenario']={'incident_id':'SAN','business_impact_incident_id':'PAYMENTS','source_sha256':'not-a-hash','qualification':'UNKNOWN'}
+ with pytest.raises(ValueError,match='grafana_pilot_scenario_unqualified'):
+  render_grafana_pilot_preview_html(p)
+
+def test_scenario_html_escapes_untrusted_identifiers():
+ p=preview()
+ p['synthetic_scenario']={'incident_id':'<script>alert(1)</script>','business_impact_incident_id':'PAYMENTS','source_sha256':'a'*64,'qualification':'UNKNOWN'}
+ html=render_grafana_pilot_preview_html(p)
+ assert '&lt;script&gt;' in html and '<script>' not in html
