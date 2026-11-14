@@ -113,3 +113,7 @@ Joint evidence qualification now blocks the independent byte reader **before** a
 ## Cross-checkpoint source-address alias protection — 2026-11-14
 
 The joint evidence reader addresses a source by `(source, source_id)`. It now refuses a manifest containing that same address under two distinct checkpoints, **before any resolver or readback callback**, because a valid receipt for one checkpoint could otherwise unlock the other's external readback. This is an integrity isolation guard for the offline DEMO adapter; it does not establish LIVE source identity or tenant/actor authorization.
+
+## Pure DEMO remediation simulator — 2026-11-14
+
+`portal.acme_isolated_remediation_simulator.simulate_remediation_dry_run` provides a deterministic **in-memory hypothetical** state transition for `SERVICE_RESTART_SIMULATION` or `NOOP_OBSERVATION` under explicit `DEMO` / `SIMULATE_ONLY` inputs. The result includes request, before/after and receipt SHA-256 digests; `verify_simulation_receipt` independently recomputes the expected output to detect tampering. A hypothetical HEALTHY state is **not actual recovery**: no worker, Temporal execution, command, network call, post-check, GLPI write or LIVE authorization is performed. The module is not exposed as a production endpoint.
