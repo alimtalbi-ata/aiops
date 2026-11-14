@@ -130,7 +130,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install real Core HTTP/PostgreSQL dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0" "pytest==8.4.2"
       - name: Create isolated ephemeral tenant test database
         run: createdb -h 127.0.0.1 -U aiops tenant_isolation
       - name: Apply Core schema to ephemeral real PostgreSQL
