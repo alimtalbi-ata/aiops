@@ -80,3 +80,26 @@ def test_extra_authorization_flag_and_invalid_state_rejected():
     obj["before"]["alert_active"] = 1
     with pytest.raises(ValueError):
         simulate_remediation_dry_run(obj)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("tenant_id", "ténant"), ("incident_id", "SAN-Ｐ１"),
+    ("action_id", "action\u200bhidden"),
+])
+def test_unicode_identity_spoofing_rejected(field, value):
+    obj = request()
+    obj[field] = value
+    with pytest.raises(ValueError, match="invalid_simulation_identity"):
+        simulate_remediation_dry_run(obj)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("health", []), ("health", {}), ("health", 1),
+    ("service", "payménts"), ("service", "payments\nINJECTED"),
+])
+def test_malformed_before_state_fails_with_value_error(field, value):
+    obj = request()
+    obj["before"][field] = value
+    with pytest.raises(ValueError, match="invalid_before_state"):
+        simulate_remediation_dry_run(obj)
+    assert verify_simulation_receipt(obj, {}) is False
