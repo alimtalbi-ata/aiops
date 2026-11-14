@@ -137,3 +137,14 @@ The simulation/evidence gate additionally requires `expected_incident_id` from a
 ## Operator CLI for the offline simulation — 2026-11-14
 
 From the repository root, run `python scripts/run_acme_demo_simulation.py --verify`. The command composes the local synthetic ACME cockpit, simulates the hypothetical Payments restart, independently recomputes the receipt, checks the safety gate and prints deterministic JSON to stdout. It exits with status 2 and emits no JSON on invalid tenant or failed verification. It does **not** connect to GLPI, n8n, Grafana, Temporal, Core or production; `--tenant` is a DEMO label, not authenticated tenant authorization. No real recovery or ITIL transition is asserted.
+
+## Independent saved DEMO artifact verification — 2026-11-14
+
+To save and verify a run locally:
+
+```sh
+python scripts/run_acme_demo_simulation.py --verify > acme-demo.json
+python scripts/verify_acme_demo_simulation.py acme-demo.json --expected-tenant acme-demo
+```
+
+The second command recomputes the **entire** expected artifact from the trusted local ACME fixture, instead of accepting the incident ID, tenant or hashes claimed by the saved JSON. It refuses modified results, duplicate JSON keys, nonfinite values, symlinks and files over 128 KiB; exit 0 means only `DEMO_ARTIFACT_MATCHES_LOCAL_FIXTURE`, **not** independent runtime evidence. Exit 2 means rejected. This is a local deterministic comparison, not a digital signature, anti-replay system or production authorization.
