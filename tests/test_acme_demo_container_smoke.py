@@ -136,3 +136,17 @@ def test_packaged_demo_rejects_broken_customer_navigation():
     with patch.object(smoke, "acme_grafana_pilot_preview_page", new=broken):
         with pytest.raises(ValueError, match="synthetic_customer_navigation_missing"):
             verify_packaged_demo()
+
+def test_packaged_demo_rejects_customer_route_with_write_method():
+    import portal.acme_demo_container_smoke as smoke
+    from types import SimpleNamespace
+
+    routes = [SimpleNamespace(path=route.path, endpoint=getattr(route, "endpoint", None),
+                              methods=getattr(route, "methods", None))
+              for route in smoke.portal_app.routes]
+    for route in routes:
+        if route.path == "/demo/acme-incident-cockpit":
+            route.methods = {"GET", "POST"}
+    with patch.object(smoke.portal_app, "routes", routes):
+        with pytest.raises(ValueError, match="synthetic_customer_route_not_get_only"):
+            verify_packaged_demo()
