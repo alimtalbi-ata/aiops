@@ -53,7 +53,7 @@ def test_prior_intent_blocks_network_before_retry():
 
 
 def test_immutable_schema_has_mutation_guard():
-    sql = (SOURCE.parents[1] / "db/migrations/013_execution_start_intents.sql").read_text()
+    sql = (SOURCE.parents[2] / "db/migrations/013_execution_start_intents.sql").read_text()
     assert "BEFORE UPDATE OR DELETE" in sql
     assert "RAISE EXCEPTION" in sql
     assert "PRIMARY KEY REFERENCES aiops.runs(run_id)" in sql
