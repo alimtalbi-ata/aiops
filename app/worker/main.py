@@ -139,7 +139,9 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
  try:
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}
  except WorkflowAlreadyStartedError:
-  return {'workflow_id':args['run_id'],'run_id':args['run_id'],'executor':'temporal','idempotent':True}
+  # A matching workflow ID does not prove that its original mode, scenario,
+  # version or Core run ownership matches this request. Never attest replay.
+  raise HTTPException(409,'workflow id already exists; reconcile with Core receipt')
 async def worker_main():
  while True:
   try:
