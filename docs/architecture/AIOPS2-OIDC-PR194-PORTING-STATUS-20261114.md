@@ -152,3 +152,9 @@ The GLPI REST session payload shape and permissions must be confirmed against th
 The actor credential broker now re-queries the active tenant grant and exact GLPI user binding **after** the external vault callback returns, before returning a credential. Revocation, identity swap, ambiguous binding or PostgreSQL outage during the vault round-trip fails closed. Offline race/outage tests and a disposable PostgreSQL test that revokes a grant inside the vault callback are included in CI.
 
 This narrows, but does not eliminate, time-of-check/time-of-use races: revocation can still occur after the second check and before the GLPI session request. A deployment must enforce short-lived per-actor credentials, revocation at the vault/GLPI boundary and session identity proof. No production vault or GLPI environment has been qualified.
+
+## End-to-end isolated actor credential and GLPI-native ACL chain — 2026-11-14
+
+Added `tests/test_glpi_actor_native_acl_chain.py` exercising the actual broker, native ACL and GLPI REST session transport together, with controlled PostgreSQL, vault and HTTPS GLPI responses. The happy path proves `initSession → getFullSession → Ticket/42 → killSession`. Negative cases prove no ticket read on mismatched GLPI session user, no GLPI call on mismatched vault identity or missing actor binding, and denial for wrong ticket entity, GLPI permission failure and non-read actions. Included in `quality.yml`.
+
+This is an isolated contract test, **not** a live GLPI server, external vault or IdP integration. The route remains unmounted and production readiness is unchanged.
