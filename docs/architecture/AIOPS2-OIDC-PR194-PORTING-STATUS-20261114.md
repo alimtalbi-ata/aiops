@@ -158,3 +158,9 @@ This narrows, but does not eliminate, time-of-check/time-of-use races: revocatio
 Added `tests/test_glpi_actor_native_acl_chain.py` exercising the actual broker, native ACL and GLPI REST session transport together, with controlled PostgreSQL, vault and HTTPS GLPI responses. The happy path proves `initSession → getFullSession → Ticket/42 → killSession`. Negative cases prove no ticket read on mismatched GLPI session user, no GLPI call on mismatched vault identity or missing actor binding, and denial for wrong ticket entity, GLPI permission failure and non-read actions. Included in `quality.yml`.
 
 This is an isolated contract test, **not** a live GLPI server, external vault or IdP integration. The route remains unmounted and production readiness is unchanged.
+
+## Full Core/GLPI read-only qualifier integration contract — 2026-11-14
+
+Added `tests/test_glpi_core_readonly_qualifier_chain.py` running the real read-only qualifier composition, PostgreSQL credential broker, native GLPI ACL, Core HTTPS bearer GET transport, GLPI REST session identity check, independent Core/GLPI ACL gates and raw association comparison. Only the external services and signed OIDC/xref resolver are fixtures. The positive path proves two GLPI session identity checks and ticket reads (native ACL + readback), one Core run read, and no Copilot/HITL/write/execution. Negative cases cover wrong GLPI user/entity, wrong Core incident, LIVE Core mode, and denied independent read ACLs. Included in the quality workflow.
+
+This is an isolated end-to-end **adapter contract**, not a real IdP, signed event producer, GLPI server, Core server or vault. No route or LIVE action is enabled.
