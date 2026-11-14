@@ -54,7 +54,8 @@ def test_forged_worker_success_never_writes_execution_receipt(worker_payload):
 
     ns = {"db": db, "auth": lambda _: None, "bearer": lambda x: x,
           "Header": lambda default=None: default, "HTTPException": HttpError,
-          "requests": SimpleNamespace(post=post, HTTPError=requests.HTTPError,\n                                      RequestException=requests.RequestException),
+          "requests": SimpleNamespace(post=post, HTTPError=requests.HTTPError,
+                                      RequestException=requests.RequestException),
           "WORKER": "http://worker", "ADMIN": "inert"}
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(SOURCE), "exec"), ns)
     with pytest.raises(HttpError) as exc:
