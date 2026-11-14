@@ -111,3 +111,57 @@ def test_database_and_vault_failures_deny():
             RuntimeError("vault offline")))
     with pytest.raises(GLPIActorCredentialDenied):
         broker(**ARGS)
+
+
+def test_revocation_during_vault_lookup_denies_without_returning_credential():
+    calls = []
+    def connect():
+        conn = Connection([(17,)] if not calls else [])
+        calls.append(conn)
+        return conn
+    broker = make_glpi_actor_user_token_broker(
+        connect=connect,
+        get_bound_credential=lambda **_: dict(
+            glpi_user_id=17, glpi_instance_id="glpi-eu",
+            tenant_id="tenant-a", user_token="actor-secret",
+        ),
+    )
+    with pytest.raises(GLPIActorCredentialDenied, match="glpi_actor_binding_changed"):
+        broker(**ARGS)
+    assert len(calls) == 2
+    assert all(conn.closed for conn in calls)
+
+
+def test_identity_swap_during_vault_lookup_denies():
+    calls = []
+    def connect():
+        conn = Connection([(17,)] if not calls else [(18,)])
+        calls.append(conn)
+        return conn
+    broker = make_glpi_actor_user_token_broker(
+        connect=connect,
+        get_bound_credential=lambda **_: dict(
+            glpi_user_id=17, glpi_instance_id="glpi-eu",
+            tenant_id="tenant-a", user_token="actor-secret",
+        ),
+    )
+    with pytest.raises(GLPIActorCredentialDenied, match="glpi_actor_binding_changed"):
+        broker(**ARGS)
+
+
+def test_database_outage_on_post_vault_recheck_denies():
+    calls = []
+    def connect():
+        if calls:
+            raise RuntimeError("database unavailable during recheck")
+        calls.append(True)
+        return Connection([(17,)])
+    broker = make_glpi_actor_user_token_broker(
+        connect=connect,
+        get_bound_credential=lambda **_: dict(
+            glpi_user_id=17, glpi_instance_id="glpi-eu",
+            tenant_id="tenant-a", user_token="actor-secret",
+        ),
+    )
+    with pytest.raises(GLPIActorCredentialDenied, match="glpi_actor_credentials_unavailable"):
+        broker(**ARGS)
