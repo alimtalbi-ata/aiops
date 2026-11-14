@@ -33,7 +33,7 @@ def config():
         authorize_glpi_read=lambda **_: True,
         core_token=lambda **_: "core-service-token",
         glpi_app_token=lambda **_: "glpi-app-token",
-        glpi_user_token=lambda **_: "glpi-user-token",
+        get_bound_glpi_credential=lambda **_: {"user_token": "glpi-user-token"},
         core_base_url="https://core.example.invalid",
         glpi_base_url="https://glpi.example.invalid",
         clock=lambda: 1_800_000_000,
@@ -62,7 +62,8 @@ def test_readonly_qualifier_accepts_only_bearer_and_ticket_and_uses_derived_scop
             return {"id": ticket_id, "entities_id": "17"}
         return core, glpi
 
-    with patch("shared.verified_principal_glpi_readonly.make_json_get", return_value=lambda **_: {}), \
+    with patch("shared.verified_principal_glpi_readonly.make_glpi_actor_user_token_broker", return_value=lambda **_: "actor-token"), \
+         patch("shared.verified_principal_glpi_readonly.make_json_get", return_value=lambda **_: {}), \
          patch("shared.verified_principal_glpi_readonly.make_glpi_session_ticket_get", return_value=lambda **_: {}), \
          patch("shared.verified_principal_glpi_readonly.make_core_glpi_readers", side_effect=readers_factory), \
          patch("shared.verified_principal_glpi_readonly.make_verified_principal_glpi_xref_resolver", side_effect=resolver_factory):
@@ -84,7 +85,7 @@ def test_readonly_qualifier_accepts_only_bearer_and_ticket_and_uses_derived_scop
 
 def test_missing_actor_glpi_credential_provider_fails_during_construction():
     cfg = config()
-    cfg["glpi_user_token"] = None
+    cfg["get_bound_glpi_credential"] = None
     with pytest.raises(ValueError, match="verified_glpi_readonly_trust_dependencies_missing"):
         make_verified_principal_glpi_readonly_qualifier(**cfg)
 
