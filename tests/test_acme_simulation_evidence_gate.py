@@ -7,7 +7,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from portal.acme_isolated_remediation_simulator import simulate_remediation_dry_run
-from portal.acme_simulation_evidence_gate import assess_simulation_evidence_gate
+from portal.acme_simulation_evidence_gate import assess_simulation_evidence_gate as _assess_simulation_evidence_gate
+
+
+def assess_simulation_evidence_gate(request, simulation, evidence):
+    return _assess_simulation_evidence_gate(
+        request, simulation, evidence, expected_source_sha256="a" * 64)
 
 
 def sample():
@@ -90,3 +95,19 @@ def test_forged_count_rejected():
     evidence["integrity_consistent_unattested_count"] = 1
     with pytest.raises(ValueError, match="forged_evidence_count"):
         assess_simulation_evidence_gate(request, simulation, evidence)
+
+
+def test_foreign_incident_evidence_digest_rejected():
+    request, simulation, evidence = sample()
+    evidence["source_sha256"] = "b" * 64
+    with pytest.raises(ValueError, match="evidence_scope_or_safety_mismatch"):
+        assess_simulation_evidence_gate(request, simulation, evidence)
+
+
+def test_expected_digest_must_be_independently_supplied():
+    request, simulation, evidence = sample()
+    with pytest.raises(TypeError):
+        _assess_simulation_evidence_gate(request, simulation, evidence)
+    with pytest.raises(ValueError, match="trusted_expected_source_sha256_required"):
+        _assess_simulation_evidence_gate(
+            request, simulation, evidence, expected_source_sha256="invalid")
