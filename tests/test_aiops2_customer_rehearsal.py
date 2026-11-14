@@ -19,6 +19,12 @@ def test_rehearsal_contains_business_story_and_no_go(tmp_path):
     assert "UNKNOWN" in text
     assert "GLPI" in text
     assert "00–02" in text and "10–12" in text
+    assert "Matrice des preuves manquantes (9 étapes)" in text
+    assert "Transitions ITIL bloquées (8 contrôles)" in text
+    for cue in ("detect", "correlate", "enrich", "analyze", "ticket", "approve", "simulate", "verify", "close"):
+        assert f"`{cue}`" in text
+    for transition in ("ACKNOWLEDGE_P1", "DECLARE_BUSINESS_IMPACT", "PROPOSE_REMEDIATION", "REQUEST_HITL_APPROVAL", "SIMULATE_REMEDIATION", "VERIFY_RECOVERY", "RESOLVE_INCIDENT", "CLOSE_ITIL_AND_OPEN_PIR"):
+        assert f"`{transition}`" in text
 
 
 def test_rehearsal_rejects_forged_runtime_claim(tmp_path):
