@@ -65,7 +65,8 @@ def verify(smoke: object, provenance: object, *, repository: str,
         if re.fullmatch(r"refs/pull/[1-9][0-9]*/merge", ref) is None:
             return False
     elif event in {"push", "schedule", "workflow_dispatch"}:
-        if not ref.startswith("refs/heads/") or len(ref) <= len("refs/heads/"):
+        prefixes = ("refs/heads/", "refs/tags/") if event != "schedule" else ("refs/heads/",)
+        if not any(ref.startswith(prefix) and len(ref) > len(prefix) for prefix in prefixes):
             return False
         if provenance["commit_sha"] != head_sha:
             return False
