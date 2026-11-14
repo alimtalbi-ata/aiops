@@ -365,7 +365,9 @@ test('synthetic: mode declaration defaults UNKNOWN and never labels a LIVE sessi
   assert.match(render({ mode: 'READY' }).children[1].textContent, /Mode : UNKNOWN/);
   assert.match(render(new Proxy({}, { get() { throw Error('synthetic failure'); } }))
     .children[1].textContent, /Mode : UNKNOWN/);
-  assert.equal(unknown.children[2].children[0].attributes['data-state'], 'AVAILABLE');
+  assert.equal(unknown.children[2].children[0].attributes['data-adapter-state'], 'AVAILABLE');
+  assert.equal(unknown.children[2].children[0].attributes['data-state'], 'UNKNOWN');
+  assert.equal(unknown.children[2].children[0].attributes['data-trust-state'], 'UNVERIFIED');
 });
 
 
