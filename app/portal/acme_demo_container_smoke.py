@@ -56,9 +56,9 @@ def verify_packaged_demo() -> dict[str, object]:
             or any(value != "NOT_RUN" for value in register["negative_tests"].values())
             or any(not isinstance(v, dict) or v.get("status") != "UNKNOWN"
                    or v.get("evidence_refs") != []
-                   or any(value != permitted_source_fields.get(field)
-                          for field, value in v.items()
-                          if field not in permitted_source_fields)
+                   or any(field not in permitted_source_fields or
+                          value != permitted_source_fields[field]
+                          for field, value in v.items())
                    or any(v.get(field) != permitted_source_fields[field]
                           for field in ("arguments_comparison", "execution_outcome", "decision")
                           if field in v)
