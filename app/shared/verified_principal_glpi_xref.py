@@ -126,6 +126,14 @@ def make_verified_principal_glpi_xref_resolver(
                 raise exc
             return allowed is True
 
+        # Check uniqueness before consuming any one-time signed event.
+        preflight = make_hmac_canonical_xref_resolver(
+            secret=secret,
+            fetch_signed_event=fetch_signed_event,
+            consume_nonce=lambda **_: True,
+            authorize_actor=authorize_actor,
+            clock=clock,
+        )
         resolver = make_hmac_canonical_xref_resolver(
             secret=secret,
             fetch_signed_event=fetch_signed_event,
@@ -137,7 +145,7 @@ def make_verified_principal_glpi_xref_resolver(
         matches = []
         for tenant_id in active_tenants():
             try:
-                result = resolver(actor=actor, tenant_id=tenant_id, ticket_id=ticket_id)
+                result = preflight(actor=actor, tenant_id=tenant_id, ticket_id=ticket_id)
             except Exception:
                 if fatal_acl_error:
                     raise VerifiedGLPIXrefDenied(fatal_acl_error[-1])
@@ -148,6 +156,16 @@ def make_verified_principal_glpi_xref_resolver(
                 "signed_xref_missing_or_ambiguous" if matches
                 else "signed_xref_not_authorized"
             )
-        return {**matches[0], "actor": actor}
+        # Commit only the unique candidate through the durable replay barrier.
+        selected = matches[0]
+        try:
+            committed = resolver(
+                actor=actor, tenant_id=selected["tenant_id"], ticket_id=ticket_id,
+            )
+        except Exception as exc:
+            raise VerifiedGLPIXrefDenied("signed_xref_final_verification_failed") from exc
+        if committed != selected:
+            raise VerifiedGLPIXrefDenied("signed_xref_changed_after_preflight")
+        return {**committed, "actor": actor}
 
     return resolve_ticket
