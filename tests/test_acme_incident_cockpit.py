@@ -57,3 +57,31 @@ def test_canonical_portal_cockpit_endpoint_fail_closed():
     with patch("portal.acme_impact_read_model.build_acme_impact_read_model",
                return_value={"schema": "invalid"}):
         assert client.get("/api/demo/acme-incident-cockpit").status_code == 503
+
+
+def test_canonical_operator_cockpit_page_contains_all_gates_and_no_actions():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    client = TestClient(app)
+    page = client.get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert page.headers["cache-control"] == "no-store"
+    assert "NO-GO LIVE" in page.text
+    assert "SAN P1" in page.text and "Payments P2" in page.text
+    assert "HOLD_FOR_HUMAN_REVIEW" in page.text
+    assert "DENY_LIVE_ACTION" in page.text
+    assert "0 / 9" in page.text
+    assert page.text.count("<tr><th scope='row'>") == 17
+    assert "<script" not in page.text.lower()
+    assert "<form" not in page.text.lower()
+    with patch("portal.acme_impact_read_model.build_acme_impact_read_model",
+               return_value={"schema": "invalid"}):
+        assert client.get("/demo/acme-incident-cockpit").status_code == 503
+
+
+def test_html_renderer_rejects_forged_success():
+    from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
+    cockpit = project_synthetic_incident_cockpit(build_acme_impact_read_model())
+    cockpit["itil_readiness"]["transitions"][0]["authorized"] = True
+    with pytest.raises(ValueError, match="unqualified_cockpit_details"):
+        render_synthetic_cockpit_html(cockpit)
