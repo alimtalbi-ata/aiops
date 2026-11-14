@@ -124,6 +124,19 @@ jobs:
         run: |
           python -m pytest -q tests/test_aiops2_demo_acceptance.py
           python scripts/verify_aiops2_demo_acceptance.py
+      - name: Reproducible SAN Payments customer evidence package (synthetic only)
+        run: |
+          python -m pytest -q tests/test_aiops2_demo_evidence_package.py
+          python scripts/package_aiops2_demo_evidence.py --output "${{ runner.temp }}/aiops2-demo-evidence"
+          python scripts/package_aiops2_demo_evidence.py --verify "${{ runner.temp }}/aiops2-demo-evidence"
+      - name: Upload synthetic customer demo package (not runtime evidence)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-san-payments-synthetic-demo
+          path: ${{ runner.temp }}/aiops2-demo-evidence/
+          if-no-files-found: error
+          retention-days: 7
       - name: ACME incident to simulation to evidence DEMO pipeline
         run: python -m pytest -q tests/test_acme_demo_simulation_pipeline.py
       - name: ACME offline simulation CLI receipt verification
