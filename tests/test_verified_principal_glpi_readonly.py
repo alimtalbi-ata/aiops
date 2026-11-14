@@ -52,7 +52,8 @@ def test_readonly_qualifier_accepts_only_bearer_and_ticket_and_uses_derived_scop
             return dict(ASSOCIATION)
         return resolve
 
-    config_acl = config()["authorize_glpi_native_acl"]
+    cfg = config()
+    config_acl = cfg["authorize_glpi_native_acl"]
 
     def readers_factory(**kwargs):
         def core(*, actor, tenant_id, run_id):
@@ -67,7 +68,7 @@ def test_readonly_qualifier_accepts_only_bearer_and_ticket_and_uses_derived_scop
          patch("shared.verified_principal_glpi_readonly.make_glpi_session_ticket_get", return_value=lambda **_: {}), \
          patch("shared.verified_principal_glpi_readonly.make_core_glpi_readers", side_effect=readers_factory), \
          patch("shared.verified_principal_glpi_readonly.make_verified_principal_glpi_xref_resolver", side_effect=resolver_factory):
-        qualify = make_verified_principal_glpi_readonly_qualifier(**config())
+        qualify = make_verified_principal_glpi_readonly_qualifier(**cfg)
         result = qualify(bearer_token="opaque-bearer", ticket_id="42")
 
     assert result["status"] == "OIDC_AUTHENTICATED_READ_ONLY_XREF_MATCH"
