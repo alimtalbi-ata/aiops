@@ -6,6 +6,7 @@ does not establish source freshness, tenant/actor authorization or LIVE proof.
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 
 from portal.acme_evidence_digest_readback import compare_synthetic_evidence_readbacks
 from portal.acme_evidence_source_binding import inspect_source_bound_receipts
@@ -15,13 +16,22 @@ def qualify_synthetic_evidence_jointly(
     lifecycle: dict, manifest: object, receipts: object,
     readback: Callable[[str, str], bytes],
     resolve_key: Callable[[str, str], bytes],
+    *, expected_tenant_id: str,
 ) -> dict:
     # Both components independently validate the complete manifest before any
     # source callback. Structural invalidity never results in a partial success.
     from portal.acme_evidence_manifest_validator import inspect_synthetic_evidence_manifest
     inspect_synthetic_evidence_manifest(lifecycle, manifest)
+    if (not isinstance(expected_tenant_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}", expected_tenant_id) is None):
+        raise ValueError("trusted_expected_tenant_required")
     if not isinstance(receipts, list):
         raise ValueError("invalid_receipts")
+    # A valid MAC for tenant B must not qualify in tenant A.
+    # Check trusted tenant scope before any callback.
+    if any(not isinstance(receipt, dict)
+           or receipt.get("tenant_id") != expected_tenant_id for receipt in receipts):
+        raise ValueError("receipt_tenant_scope_mismatch")
     # Validate and authenticate receipts first. A bad MAC must never be used to
     # justify an operational decision even if a separate byte digest matches.
     signed = inspect_source_bound_receipts(lifecycle, manifest, receipts, resolve_key)
@@ -50,6 +60,7 @@ def qualify_synthetic_evidence_jointly(
     return {
         "schema": "aiops.synthetic-evidence-joint-qualification.v1",
         "mode": "DEMO",
+        "expected_tenant_id": expected_tenant_id,
         "source_sha256": digests["source_sha256"],
         "checkpoints": rows,
         "integrity_consistent_unattested_count": sum(
