@@ -85,3 +85,7 @@ GET `/api/demo/acme-incident-cockpit` composes **one** validated ACME fixture sn
 ## Unified operator cockpit page — 2026-11-14
 
 GET `/demo/acme-incident-cockpit` renders the consolidated read-only synthetic incident view: SAN P1 → Payments P2 business impact path, nine lifecycle stages, eight ITIL transitions with missing evidence, Analyst/Critic/Policy HOLD/DENY, zero of nine independently verified checkpoints, and the fixture SHA-256. The page is script-free, form-free, no-store and always displays **DEMO SYNTHÉTIQUE — NO-GO LIVE**. It is backed by the same cross-checked snapshot as `/api/demo/acme-incident-cockpit`; invalid fixtures and forged success are rejected.
+
+## ITIL incident handoff draft — 2026-11-14
+
+GET `/api/demo/acme-itil-handoff-draft` generates a deterministic **non-executable** incident handoff draft from the consolidated ACME cockpit: SAN P1 source, Payments P2 impact path, proposed priority, hypothesis/Critic/Policy statuses, nine evidence requirements and operator next step. Its content has a stable SHA-256 for offline comparison. It is **not** a GLPI API payload: `glpi_ticket_id=null`, `glpi_payload=null`, `glpi_write_performed=false`; no approval, transition or LIVE authority. Any unqualified fixture fails HTTP 503. Authenticated GLPI ticket creation and HITL require separately qualified actor/tenant authorization and explicit operational approval.
