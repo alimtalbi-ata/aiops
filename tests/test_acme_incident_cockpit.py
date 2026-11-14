@@ -202,6 +202,8 @@ def test_customer_evidence_register_names_nine_actual_requirements():
     ("attested", True),
     ("qualifies_runtime", True),
     ("collection_mode", "AUTO_LIVE"),
+    ("required_evidence_type", "FORGED_PROOF"),
+    ("expected_source", "forged-source"),
 ])
 def test_customer_evidence_register_rejects_forged_receipts(field, value):
     from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
