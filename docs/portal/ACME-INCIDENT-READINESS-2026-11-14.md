@@ -11,7 +11,7 @@ Expose an operator-readable, deterministic qualification state for the existing 
 - `next_operator_action=COLLECT_AUTHENTICATED_RUNTIME_EVIDENCE`
 - `live_action_allowed=false`
 
-These are fixture-specific constants, not computed runtime health. The nine checkpoints remain MISSING. The scenario's Analyst/Critic/Policy decision still denies LIVE actions. Missing proof is never upgraded to success.
+The checkpoint counts are derived from the synthetic checkpoint projection (currently nine MISSING), not from runtime health. The builder rejects any unexpectedly attested checkpoint in this synthetic-only view. The scenario's Analyst/Critic/Policy decision still denies LIVE actions. Missing proof is never upgraded to success.
 
 ## Validation and limitations
 Added offline contract assertions in `tests/test_acme_impact_read_model.py`. Tests **not executed in this session**; no PASS claimed. No container, API, GLPI, Checkmk, Grafana, Temporal, Debian or production qualification. Existing API fields preserved; this is an additive DEV contract requiring consumer review.
