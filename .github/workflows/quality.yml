@@ -129,12 +129,21 @@ jobs:
           python -m pytest -q tests/test_aiops2_demo_evidence_package.py tests/test_aiops2_demo_zip.py tests/test_aiops2_customer_rehearsal.py
           python scripts/package_aiops2_demo_evidence.py --output "${{ runner.temp }}/aiops2-demo-evidence"
           python scripts/package_aiops2_demo_evidence.py --verify "${{ runner.temp }}/aiops2-demo-evidence"
+          python scripts/rehearse_aiops2_customer_demo.py "${{ runner.temp }}/aiops2-demo-evidence" --output "${{ runner.temp }}/aiops2-demo-operator-rehearsal.md"
       - name: Upload synthetic customer demo package (not runtime evidence)
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: aiops2-san-payments-synthetic-demo
           path: ${{ runner.temp }}/aiops2-demo-evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload synthetic operator rehearsal sheet (not runtime evidence)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-san-payments-operator-rehearsal
+          path: ${{ runner.temp }}/aiops2-demo-operator-rehearsal.md
           if-no-files-found: error
           retention-days: 7
       - name: ACME incident to simulation to evidence DEMO pipeline
