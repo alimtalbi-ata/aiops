@@ -31,15 +31,17 @@ def verify_packaged_demo() -> dict[str, object]:
         "temporal_inspection_no_start_or_restart",
         "n8n_existing_execution_no_replay",
     }
-    if (register.get("decision") != "BLOCKED"
+    if (not isinstance(register, dict)
+            or register.get("schema") != "aiops2.readonly-pilot-evidence-register.v1"
+            or register.get("decision") != "BLOCKED"
             or register.get("live_actions_authorized") is not False
             or not isinstance(register.get("sources"), dict)
             or set(register["sources"]) != expected_sources
             or not isinstance(register.get("negative_tests"), dict)
             or set(register["negative_tests"]) != expected_negative_tests
             or any(value != "NOT_RUN" for value in register["negative_tests"].values())
-            or any(v.get("evidence_refs") != [] for v in register["sources"].values())
             or any(not isinstance(v, dict) or v.get("status") != "UNKNOWN"
+                   or v.get("evidence_refs") != []
                    for v in register["sources"].values())):
         raise ValueError("packaged_register_not_blocked")
 
