@@ -43,7 +43,7 @@ def test_actor_broker_requires_active_grant_verified_binding_and_vault_identity(
                     tenant_id="tenant-a", user_token="user-specific-secret")
     broker = make_glpi_actor_user_token_broker(
         connect=lambda: conn, get_bound_credential=vault)
-    assert broker(**ARGS) == "user-specific-secret"
+    assert broker(**ARGS) == {"user_token": "user-specific-secret", "glpi_user_id": 17}
     assert conn.closed
     sql, params = conn.cursor_obj.executed[0]
     assert "glpi_actor_user_bindings" in sql
