@@ -37,6 +37,34 @@ def verify_bundle(package_dir: Path, smoke_dir: Path, *,
         return False
 
 
+
+def build_qualification_report(package_dir: Path, smoke_dir: Path, *,
+                               repository: str, head_sha: str,
+                               run_id: str, run_attempt: str) -> dict:
+    """Report offline artifact consistency; never assert GitHub CI or LIVE."""
+    passed = verify_bundle(package_dir, smoke_dir, repository=repository,
+                           head_sha=head_sha, run_id=run_id,
+                           run_attempt=run_attempt)
+    return {
+        "schema": "aiops2.customer-demo-qualification.v1",
+        "scope": "LOCAL_SYNTHETIC_ARTIFACT_CONSISTENCY_ONLY",
+        "repository": repository,
+        "pr_head_sha": head_sha,
+        "run_id": run_id,
+        "run_attempt": run_attempt,
+        "artifact_consistency": "PASS" if passed else "BLOCKED",
+        "ci_run_verified": False,
+        "browser_rehearsal_verified": False,
+        "runtime_attested": False,
+        "independent_postcheck_verified": False,
+        "live_remediation_authorized": False,
+        "customer_demo_qualification": "PENDING_INDEPENDENT_CI_AND_BROWSER_REVIEW"
+        if passed else "BLOCKED",
+        "live_qualification": "NO_GO",
+        "trust_boundary": "UNSIGNED_LOCAL_REPORT_NOT_CI_OR_RUNTIME_ATTESTATION",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package_dir", type=Path)
@@ -45,7 +73,13 @@ def main() -> int:
     parser.add_argument("--head-sha", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--run-attempt", required=True)
+    parser.add_argument("--report", type=Path, help="Write a fail-closed offline JSON qualification report")
     args = parser.parse_args()
+    report = build_qualification_report(args.package_dir, args.smoke_dir,
+                                        repository=args.repository, head_sha=args.head_sha,
+                                        run_id=args.run_id, run_attempt=args.run_attempt)
+    if args.report is not None:
+        args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\\n", encoding="utf-8")
     if not verify_bundle(args.package_dir, args.smoke_dir,
                          repository=args.repository, head_sha=args.head_sha,
                          run_id=args.run_id, run_attempt=args.run_attempt):
