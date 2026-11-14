@@ -148,3 +148,7 @@ python scripts/verify_acme_demo_simulation.py acme-demo.json --expected-tenant a
 ```
 
 The second command recomputes the **entire** expected artifact from the trusted local ACME fixture, instead of accepting the incident ID, tenant or hashes claimed by the saved JSON. It refuses modified results, duplicate JSON keys, nonfinite values, symlinks and files over 128 KiB; exit 0 means only `DEMO_ARTIFACT_MATCHES_LOCAL_FIXTURE`, **not** independent runtime evidence. Exit 2 means rejected. This is a local deterministic comparison, not a digital signature, anti-replay system or production authorization.
+
+## DEMO simulator input hardening — 2026-11-14
+
+The deterministic simulator now constrains tenant, incident, action and service identifiers to explicit ASCII `[A-Za-z0-9_.:-]` (1–128 characters). This avoids accepting visually confusable Unicode identifiers or control characters. The `before.health` field is type-checked before set membership, so malformed lists/dictionaries fail closed with `ValueError` rather than an unhandled `TypeError`. No LIVE authorization or external action is introduced.
