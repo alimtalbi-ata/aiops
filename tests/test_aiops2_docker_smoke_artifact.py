@@ -1,5 +1,6 @@
 """Offline Docker smoke artifact provenance validation regression tests."""
-import copy
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -101,3 +102,22 @@ def test_tag_ref_for_manual_run_is_allowed_with_matching_sha():
 def test_schedule_must_reference_branch():
     assert not check(provenance=dict(PROVENANCE, event_name="schedule",
                                      ref="refs/tags/v1.0"))
+
+
+def test_offline_cli_accepts_matching_artifact(tmp_path):
+    (tmp_path / "aiops2-packaged-demo-smoke.json").write_text(json.dumps(SMOKE))
+    (tmp_path / "aiops2-packaged-demo-smoke-provenance.json").write_text(
+        json.dumps(PROVENANCE))
+    script = Path(__file__).resolve().parents[1] / "scripts" / "verify_aiops2_docker_smoke_artifact.py"
+    command = [sys.executable, str(script), str(tmp_path),
+               "--repository", "alimtalbi-ata/aiops", "--head-sha", HEAD,
+               "--run-id", "12345", "--run-attempt", "1"]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert result.returncode == 0
+    assert "runtime NOT attested" in result.stdout
+    altered = dict(PROVENANCE, run_id="999")
+    (tmp_path / "aiops2-packaged-demo-smoke-provenance.json").write_text(
+        json.dumps(altered))
+    rejected = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert rejected.returncode == 1
+    assert "BLOCKED" in rejected.stderr
