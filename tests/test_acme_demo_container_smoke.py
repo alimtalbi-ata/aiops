@@ -147,6 +147,6 @@ def test_packaged_demo_rejects_customer_route_with_write_method():
     for route in routes:
         if route.path == "/demo/acme-incident-cockpit":
             route.methods = {"GET", "POST"}
-    with patch.object(smoke.portal_app, "routes", routes):
+    with patch.object(smoke.portal_app.router, "routes", routes):
         with pytest.raises(ValueError, match="synthetic_customer_route_not_get_only"):
             verify_packaged_demo()
