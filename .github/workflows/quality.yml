@@ -183,10 +183,10 @@ jobs:
         env:
           AIOPS2_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          python scripts/verify_aiops2_docker_smoke_artifact.py "${{ runner.temp }}" \\
-            --repository "${{ github.repository }}" \\
-            --head-sha "$AIOPS2_PR_HEAD_SHA" \\
-            --run-id "${{ github.run_id }}" \\
+          python scripts/verify_aiops2_docker_smoke_artifact.py "${{ runner.temp }}" \
+            --repository "${{ github.repository }}" \
+            --head-sha "$AIOPS2_PR_HEAD_SHA" \
+            --run-id "${{ github.run_id }}" \
             --run-attempt "${{ github.run_attempt }}"
       - name: Publish SAN Payments offline Docker smoke evidence
         uses: actions/upload-artifact@v4
