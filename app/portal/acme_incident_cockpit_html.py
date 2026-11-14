@@ -127,9 +127,6 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<a href='#decision'>3. Décision</a> · "
         "<a href='#itil'>4. ITIL</a> · "
         "<a href='#verdict'>5. Verdict</a></nav>"
-        "<div id='verdict' class='warning'><strong>Décision opérateur :</strong> "
-        "GO pour le scénario synthétique ; UNKNOWN pour les preuves runtime ; "
-        "NO-GO LIVE pour toute action réelle ou clôture GLPI.</div>"
         "<div class='demo-cards' aria-label='Résumé de qualification'>"
         "<div class='demo-card'><strong>GO — scénario synthétique</strong>"
         "<p>Corrélation SAN vers Payments sur fixture locale.</p></div>"
@@ -201,6 +198,9 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<h2 id='itil'>Transitions ITIL (8)</h2><div class='table-scroll'><table><thead><tr>"
         "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
         "</tr></thead><tbody>" + transition_rows + "</tbody></table></div>"
+        "<div id='verdict' class='warning'><strong>Décision opérateur :</strong> "
+        "GO pour le scénario synthétique ; UNKNOWN pour les preuves runtime ; "
+        "NO-GO LIVE pour toute action réelle ou clôture GLPI.</div>"
         "<p>SHA-256 de la fixture : <code>" + safe(cockpit["source_sha256"])
         + "</code></p></main></body></html>"
     )
