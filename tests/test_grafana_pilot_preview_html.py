@@ -14,7 +14,7 @@ def preview():
 
 def test_customer_preview_is_readonly_and_explicitly_unattested():
  html=render_grafana_pilot_preview_html(preview())
- for marker in ('SAN → Payments','san-p1','acme-test','UNKNOWN / BLOCKED','NO-GO','Analyst/Critic','postcheck indépendant'):
+ for marker in ('SAN → Payments','san-p1','acme-test','UNKNOWN / BLOCKED','NO-GO','Analyst/Critic','postcheck indépendant','État candidat','firing'):
   assert marker in html
  assert '<script' not in html and '<form' not in html
 
