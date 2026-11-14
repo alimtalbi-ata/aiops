@@ -181,3 +181,27 @@ def test_ticket_resolver_has_no_caller_actor_or_tenant_override():
     assert list(inspect.signature(resolve).parameters) == ["bearer_token", "ticket_id"]
     with pytest.raises(VerifiedGLPIXrefDenied, match="invalid_ticket_id"):
         resolve("token", "../42")
+
+
+def test_reusable_resolver_rechecks_jti_revocation_on_every_request():
+    cursors = []
+    def connect():
+        index = len(cursors)
+        cursor = Cursor(revoked=(index == 4))
+        cursors.append(cursor)
+        return Connection(cursor)
+
+    with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
+        resolve = make_verified_principal_glpi_xref_resolver(
+            connect=connect, secret=SECRET,
+            fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]),
+            authorize_glpi_native_acl=lambda **kwargs: True,
+            clock=lambda: NOW,
+        )
+        assert resolve("token", "42")["tenant_id"] == "tenant-a"
+        with pytest.raises(IdentityError, match="oidc_assertion_revoked_or_store_unavailable"):
+            resolve("token", "42")
+    # First request: revocation, tenant discovery, membership and nonce.
+    # Second request: the revocation lookup alone; no tenant or GLPI work.
+    assert len(cursors) == 5
+    assert "oidc_jti_revocations" in cursors[-1].calls[0][0]
