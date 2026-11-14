@@ -132,3 +132,26 @@ def test_expected_incident_id_required_from_trusted_context():
         _assess_simulation_evidence_gate(
             request, simulation, evidence, expected_source_sha256="a" * 64,
             expected_incident_id="../other")
+
+
+@pytest.mark.parametrize("checkpoint,digest_state,receipt_state", [
+    ("not-a-real-stage", "DIGEST_MATCH_UNATTESTED", "MAC_VALID_SOURCE_KEY_UNATTESTED"),
+    ("verify", "PASS", "MAC_VALID_SOURCE_KEY_UNATTESTED"),
+    ("verify", "DIGEST_MATCH_UNATTESTED", "RUNTIME_ATTESTED"),
+])
+def test_unknown_checkpoint_or_forged_integrity_state_rejected(
+        checkpoint, digest_state, receipt_state):
+    request, simulation, evidence = sample()
+    evidence["checkpoints"] = [{
+        "checkpoint": checkpoint, "digest_state": digest_state,
+        "source_receipt_state": receipt_state,
+        "integrity_consistent_unattested": (
+            digest_state == "DIGEST_MATCH_UNATTESTED"
+            and receipt_state == "MAC_VALID_SOURCE_KEY_UNATTESTED"),
+        "runtime_observation_independently_verified": False,
+        "tenant_actor_authorized": False, "itil_transition_authorized": False,
+    }]
+    evidence["integrity_consistent_unattested_count"] = int(
+        evidence["checkpoints"][0]["integrity_consistent_unattested"])
+    with pytest.raises(ValueError):
+        assess_simulation_evidence_gate(request, simulation, evidence)
