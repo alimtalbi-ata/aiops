@@ -5,11 +5,16 @@ insufficient to attest runtime recovery or authorize ITIL/LIVE transitions.
 """
 from __future__ import annotations
 
+import re
+
 from portal.acme_isolated_remediation_simulator import verify_simulation_receipt
 
 
 def assess_simulation_evidence_gate(request: object, simulation: object,
-                                    evidence: object) -> dict:
+                                    evidence: object, *, expected_source_sha256: str) -> dict:
+    if (not isinstance(expected_source_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_source_sha256) is None):
+        raise ValueError("trusted_expected_source_sha256_required")
     if not isinstance(request, dict) or not verify_simulation_receipt(request, simulation):
         raise ValueError("simulation_receipt_not_verified")
     if not isinstance(evidence, dict) or set(evidence) != {
@@ -22,6 +27,7 @@ def assess_simulation_evidence_gate(request: object, simulation: object,
     if (evidence["schema"] != "aiops.synthetic-evidence-joint-qualification.v1"
             or evidence["mode"] != "DEMO"
             or evidence["expected_tenant_id"] != request["tenant_id"]
+            or evidence["source_sha256"] != expected_source_sha256
             or evidence["overall_qualification"] != "UNKNOWN"
             or evidence["independently_attested_count"] != 0
             or evidence["evidence_accepted"] is not False
@@ -60,6 +66,7 @@ def assess_simulation_evidence_gate(request: object, simulation: object,
         "schema": "aiops.demo-simulation-evidence-gate.v1",
         "mode": "DEMO",
         "tenant_id": request["tenant_id"],
+        "source_sha256": expected_source_sha256,
         "incident_id": request["incident_id"],
         "action_id": request["action_id"],
         "simulation_receipt_sha256": simulation["receipt_sha256"],
