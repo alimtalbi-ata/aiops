@@ -43,3 +43,28 @@ def read_runs_for_verified_actor(cursor, *, actor_id: str, limit: int = MAX_RUNS
         raise ValueError("invalid bounded Runs limit")
     rows = cursor.execute(RUNS_FOR_ACTOR_SQL, (actor_id, limit)).fetchall()
     return {"items": [dict(zip(RUN_FIELDS, row)) for row in rows]}
+
+
+def read_runs_for_bearer(connect, *, bearer_token: str, limit: int = MAX_RUNS) -> dict:
+    """Resolve a verified OIDC bearer through durable JTI revocation, then read.
+
+    The caller supplies only a server-owned PostgreSQL connection factory and
+    the bearer token. Actor and tenant identifiers are never caller inputs.
+    The tenant-scoped SQL remains the sole source of row authorization. There
+    is intentionally no global fallback and no upstream/GLPI call in this path.
+    """
+    from shared.oidc_jti_store import make_oidc_jti_store
+    from shared.verified_principal import principal_from_bearer
+
+    is_revoked, _, _ = make_oidc_jti_store(connect)
+    principal = principal_from_bearer(bearer_token, is_revoked=is_revoked)
+
+    connection = connect()
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                return read_runs_for_verified_actor(
+                    cursor, actor_id=principal.actor_id, limit=limit
+                )
+    finally:
+        connection.close()
