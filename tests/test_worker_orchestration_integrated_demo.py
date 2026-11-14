@@ -81,6 +81,5 @@ def test_actual_workflow_and_stage_activity_stop_before_resolve():
     assert ("COMMAND", "RESOLVE") not in events
     assert not any(stage in {"RECONCILE", "LEARN"} for stage, _ in events)
     assert ("VERIFY", "STAGE_COMPLETED") not in events
-    assert all(path != "/api/evidence" for origin, path in external[-0:]) is not None
     assert len([x for x in external if x[1] == "/api/evidence"]) == 10
     assert result["final_version"] == version[0]
