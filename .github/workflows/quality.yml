@@ -25,8 +25,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
-      - name: Daily quality schedule contract
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "pytest==8.4.2"
+      - name: Tenant actor boundary offline security contracts (ported from PR #631)\n        run: python -m pytest -q tests/test_portal_tenant_actor_boundary_20261111.py tests/test_portal_tenant_actor_http_denial_20261111.py tests/test_portal_tenant_actor_schema_20261111.py tests/test_portal_tenant_actor_core_reader_20261111.py\n      - name: Daily quality schedule contract
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
@@ -113,6 +113,8 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       DATABASE_URL: postgresql://aiops:ci-noc-ephemeral-only@127.0.0.1:5432/aiops
+      AIOPS_TENANT_TEST_DSN: postgresql://aiops:ci-noc-ephemeral-only@127.0.0.1:5432/tenant_isolation
+      PGPASSWORD: ci-noc-ephemeral-only
       AIOPS_INTERNAL_TOKEN: ci-noc-internal-ephemeral-token-20261028-only
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +123,7 @@ jobs:
           python-version: "3.12"
       - name: Install real Core HTTP/PostgreSQL dependencies
         run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0"
-      - name: Apply Core schema to ephemeral real PostgreSQL
+      - name: Create isolated ephemeral tenant test database\n        run: createdb -h 127.0.0.1 -U aiops tenant_isolation\n      - name: Apply Core schema to ephemeral real PostgreSQL
         run: |
           python - <<'PY'
           import os
@@ -131,6 +133,8 @@ jobs:
               for name in ("001_schema.sql", "004_operational_model.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
+      - name: Real PostgreSQL actor/tenant isolation and revocation contract (ported from PR #631)
+        run: python -m pytest -q tests/test_portal_tenant_actor_postgres_20261111.py
       - name: Start actual Core HTTP service and verify readiness
         run: |
           PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 1810 > /tmp/aiops-core-ci.log 2>&1 &
