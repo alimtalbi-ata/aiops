@@ -57,3 +57,24 @@ def test_packaged_demo_rejects_missing_evidence_source():
     with patch.object(smoke.Path, "read_text", new=incomplete):
         with pytest.raises(ValueError, match="packaged_register_not_blocked"):
             verify_packaged_demo()
+
+@pytest.mark.parametrize("mutation", ["forged_pass", "forged_evidence_ref", "missing_negative_test"])
+def test_packaged_demo_rejects_forged_pilot_evidence(mutation):
+    import portal.acme_demo_container_smoke as smoke
+    original = Path.read_text
+
+    def forged(path, *args, **kwargs):
+        if str(path).endswith("acme-readonly-pilot-register.template.json"):
+            payload = json.loads(original(path, *args, **kwargs))
+            if mutation == "forged_pass":
+                payload["negative_tests"]["cross_tenant_zero_upstream_calls"] = "PASS"
+            elif mutation == "forged_evidence_ref":
+                payload["sources"]["grafana"]["evidence_refs"] = ["fabricated"]
+            else:
+                del payload["negative_tests"]["n8n_existing_execution_no_replay"]
+            return json.dumps(payload)
+        return original(path, *args, **kwargs)
+
+    with patch.object(smoke.Path, "read_text", new=forged):
+        with pytest.raises(ValueError, match="packaged_register_not_blocked"):
+            verify_packaged_demo()
