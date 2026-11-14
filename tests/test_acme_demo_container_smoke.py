@@ -78,3 +78,24 @@ def test_packaged_demo_rejects_forged_pilot_evidence(mutation):
     with patch.object(smoke.Path, "read_text", new=forged):
         with pytest.raises(ValueError, match="packaged_register_not_blocked"):
             verify_packaged_demo()
+
+@pytest.mark.parametrize("mutation", ["root_array", "source_null", "schema_invalid"])
+def test_packaged_demo_rejects_malformed_register_shapes(mutation):
+    import portal.acme_demo_container_smoke as smoke
+    original = Path.read_text
+
+    def malformed(path, *args, **kwargs):
+        if str(path).endswith("acme-readonly-pilot-register.template.json"):
+            payload = json.loads(original(path, *args, **kwargs))
+            if mutation == "root_array":
+                return json.dumps([payload])
+            if mutation == "source_null":
+                payload["sources"]["grafana"] = None
+            else:
+                payload["schema"] = "unknown"
+            return json.dumps(payload)
+        return original(path, *args, **kwargs)
+
+    with patch.object(smoke.Path, "read_text", new=malformed):
+        with pytest.raises(ValueError, match="packaged_register_not_blocked"):
+            verify_packaged_demo()
