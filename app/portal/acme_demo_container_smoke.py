@@ -51,12 +51,20 @@ def verify_packaged_demo() -> dict[str, object]:
         "arguments_comparison": "UNKNOWN", "execution_outcome": "UNKNOWN",
         "decision": "UNKNOWN",
     }
+    expected_notes = [
+        "Template only: no integration has been asserted by this file.",
+        "UNKNOWN is not PASS. Missing evidence must remain UNKNOWN or BLOCKED.",
+        "A service token does not establish the human actor's native GLPI permissions.",
+        "A Temporal MATCH does not prove successful execution or idempotence.",
+        "A simulated receipt is not an independent postcheck.",
+    ]
     expected_register_fields = {
         "schema", "pilot_id", "environment", "git_revision", "decision",
         "live_actions_authorized", "sources", "negative_tests", "notes",
     }
     if (not isinstance(register, dict)
             or set(register) != expected_register_fields
+            or register.get("notes") != expected_notes
             or register.get("schema") != "aiops2.readonly-pilot-evidence-register.v1"
             or register.get("pilot_id") != "UNASSIGNED"
             or register.get("git_revision") is not None
