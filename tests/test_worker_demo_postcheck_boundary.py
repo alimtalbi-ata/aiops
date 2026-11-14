@@ -14,7 +14,7 @@ def _stage_body():
 
 def test_demo_verify_blocks_before_synthetic_evidence_and_completion():
     body = _stage_body()
-    guard = body.index("if mode == 'DEMO' and stage == 'VERIFY':")
+    guard = body.index("if mode in ('DEMO', 'REPLAY', 'STORY') and stage == 'VERIFY':")
     evidence = body.index("ev=post_json(EVID")
     complete = body.index("'event_type':'STAGE_COMPLETED'")
     assert guard < evidence < complete
