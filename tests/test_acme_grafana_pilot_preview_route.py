@@ -56,3 +56,16 @@ def test_command_center_exposes_customer_demo_entrypoint():
  response=client().get('/')
  assert response.status_code==200
  assert 'href="/demo/acme-incident-cockpit">SAN → Payments (DEMO)</a>' in response.text
+
+def test_container_packaged_register_matches_canonical_blocked_template():
+ import json
+ root=Path(__file__).resolve().parents[1]
+ packaged=root/'app/portal/acme-readonly-pilot-register.template.json'
+ canonical=root/'docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json'
+ assert packaged.read_bytes()==canonical.read_bytes()
+ register=json.loads(packaged.read_text(encoding='utf-8'))
+ assert register['decision']=='BLOCKED'
+ assert register['live_actions_authorized'] is False
+ assert all(source['status']=='UNKNOWN' for source in register['sources'].values())
+ dockerfile=(root/'app/portal/Dockerfile').read_text(encoding='utf-8')
+ assert 'COPY portal /app/portal' in dockerfile
