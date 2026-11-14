@@ -117,6 +117,7 @@ def test_resolver_derives_actor_and_tenant_from_oidc_grants_and_signed_xref():
     assert fetches == [
         (PRINCIPAL_CLAIMS["subject_id"], "tenant-a", "42"),
         (PRINCIPAL_CLAIMS["subject_id"], "tenant-b", "42"),
+        (PRINCIPAL_CLAIMS["subject_id"], "tenant-b", "42"),
     ]
     assert acl_calls == [{
         "actor": PRINCIPAL_CLAIMS["subject_id"],
@@ -125,7 +126,7 @@ def test_resolver_derives_actor_and_tenant_from_oidc_grants_and_signed_xref():
         "glpi_entity_id": "17",
         "ticket_id": "42",
         "action": "read_ticket",
-    }]
+    }] * 2
     sql = [call for cursor in cursors for call in cursor.calls]
     assert any("oidc_jti_revocations" in statement for statement, _ in sql)
     assert any("portal_actor_tenant_grants" in statement and "revoked_at IS NULL" in statement for statement, _ in sql)
@@ -186,7 +187,7 @@ def test_reusable_resolver_rechecks_jti_revocation_on_every_request():
     cursors = []
     def connect():
         index = len(cursors)
-        cursor = Cursor(revoked=(index == 4))
+        cursor = Cursor(revoked=(index == 5))
         cursors.append(cursor)
         return Connection(cursor)
 
@@ -200,9 +201,9 @@ def test_reusable_resolver_rechecks_jti_revocation_on_every_request():
         assert resolve("token", "42")["tenant_id"] == "tenant-a"
         with pytest.raises(IdentityError, match="oidc_assertion_revoked_or_store_unavailable"):
             resolve("token", "42")
-    # First request: revocation, tenant discovery, membership and nonce.
+    # First request: revocation, tenant discovery, two membership checks and nonce.
     # Second request: the revocation lookup alone; no tenant or GLPI work.
-    assert len(cursors) == 5
+    assert len(cursors) == 6
     assert "oidc_jti_revocations" in cursors[-1].calls[0][0]
 
 
@@ -217,4 +218,52 @@ def test_multiple_valid_tenant_xrefs_are_denied_as_ambiguous():
             clock=lambda: NOW,
         )
         with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_missing_or_ambiguous"):
+            resolve("token", "42")
+
+
+def test_ambiguous_signed_xref_does_not_consume_any_nonce():
+    cursors = []
+    def connect():
+        cursor = Cursor()
+        cursors.append(cursor)
+        return Connection(cursor)
+    with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
+        resolve = make_verified_principal_glpi_xref_resolver(
+            connect=connect, secret=SECRET,
+            fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]),
+            authorize_glpi_native_acl=lambda **_: True, clock=lambda: NOW,
+        )
+        with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_missing_or_ambiguous"):
+            resolve("token", "42")
+    assert not any("INSERT INTO aiops.glpi_xref_consumed_nonces" in sql
+                   for cursor in cursors for sql, _ in cursor.calls)
+
+
+def test_changed_signed_event_after_preflight_denies():
+    cursors = []
+    calls = []
+    def connect():
+        cursor = Cursor()
+        cursors.append(cursor)
+        return Connection(cursor)
+    def fetch_signed_event(**kwargs):
+        if kwargs["tenant_id"] != "tenant-b":
+            return None
+        calls.append(1)
+        # Both events are correctly signed, but their association differs.
+        claims = signed_event("tenant-b")
+        if len(calls) == 2:
+            claims["claims"]["incident_id"] = "INC-OPS-CHANGED"
+            claims["signature"] = hmac.new(
+                SECRET, canonical_event_bytes(claims["claims"]),
+                hashlib.sha256,
+            ).hexdigest()
+        return claims
+    with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
+        resolve = make_verified_principal_glpi_xref_resolver(
+            connect=connect, secret=SECRET,
+            fetch_signed_event=fetch_signed_event,
+            authorize_glpi_native_acl=lambda **_: True, clock=lambda: NOW,
+        )
+        with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_changed_after_preflight"):
             resolve("token", "42")
