@@ -55,3 +55,21 @@ On branch HEAD `6462607f26ee839e9c202c3502baaa4ba865bdf2`, quality run #43591676
 - Real PostgreSQL 16 OIDC JTI revocation and concurrent one-time action replay: SUCCESS (the concurrent race produced exactly one accepted consumption).
 - Grafana real integration: SUCCESS.
 - Overall quality job still running through Chromium/browser E2E at the time of this update. Do not call the full quality workflow green until the run concludes.
+
+## OIDC principal → tenant-scoped Runs reader adapter — 2026-11-14
+
+Added to `app/core/portal_tenant_runs.py`:
+- `read_runs_for_bearer(connect, bearer_token, limit)` resolves the principal only through `principal_from_bearer`.
+- The principal resolver performs the PostgreSQL-backed issuer+JTI revocation check before any Runs query.
+- The subsequent Runs query uses the existing actor/tenant grant joins and bounded limit. Actor and tenant IDs are not accepted as caller parameters.
+- Revoked token or unavailable revocation DB prevents the Runs query. No global fallback and no GLPI/upstream call exists in this adapter.
+- Added `tests/test_portal_tenant_runs_oidc_adapter.py` and included it in the tenant/actor offline CI contract.
+
+Exact-head qualification at branch HEAD `1efb2d603d7d3a2644d735c98e611996566f30ec`:
+- Portal tenant/actor exact-head workflow #43591860320: SUCCESS.
+- Quality offline tenant/actor suite (including the new bearer adapter), OIDC/JTI unit/schema suite: SUCCESS in #43591860325.
+- Real PostgreSQL actor/tenant isolation and OIDC JTI concurrency/revocation suite: SUCCESS in #43591860325.
+- Grafana real integration: SUCCESS in #43591860325.
+- Overall quality workflow was still running its Chromium portal E2E at the last observation.
+
+Boundary remains explicit: this is a callable Core reader adapter, NOT a mounted HTTP route or deployed authorization surface. Real IdP/JWKS reachability, grant provisioning/lifecycle, GLPI native ACL and authenticated GLPI readback are not qualified. No GLPI calls, writes, deployment, migration application on a server, Debian access, or LIVE execution.
