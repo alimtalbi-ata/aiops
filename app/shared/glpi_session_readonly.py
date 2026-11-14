@@ -23,13 +23,15 @@ class _NoRedirect(HTTPRedirectHandler):
 def make_glpi_session_ticket_get(
     *, glpi_base_url: str, get_app_token: Callable, get_user_token: Callable,
     timeout: float = 3.0, max_bytes: int = 262144,
+    require_session_user_identity: bool = False,
 ):
     """Return a GET-only callback compatible with make_core_glpi_readers.
 
     The supplied URL must be exactly /Ticket/{id} under glpi_base_url.
     Credential callbacks are server-owned and scoped by actor and tenant.
     """
-    if (not callable(get_app_token) or not callable(get_user_token)
+    if (type(require_session_user_identity) is not bool
+            or not callable(get_app_token) or not callable(get_user_token)
             or type(timeout) not in (int, float) or not 0 < timeout <= 10
             or type(max_bytes) is not int or not 1024 <= max_bytes <= 1048576):
         raise ValueError("glpi_session_dependencies_missing")
@@ -97,12 +99,34 @@ def make_glpi_session_ticket_get(
         session = None
         app = token(get_app_token(actor=actor, tenant_id=tenant_id,
                                   ticket_id=ticket_id, glpi_instance_id=glpi_instance_id))
-        user = token(get_user_token(actor=actor, tenant_id=tenant_id,
-                                    ticket_id=ticket_id, glpi_instance_id=glpi_instance_id))
+        user_credential = get_user_token(actor=actor, tenant_id=tenant_id,
+                                         ticket_id=ticket_id, glpi_instance_id=glpi_instance_id)
+        expected_glpi_user_id = None
+        if require_session_user_identity:
+            if (not isinstance(user_credential, dict)
+                    or set(user_credential) != {"user_token", "glpi_user_id"}
+                    or type(user_credential["glpi_user_id"]) is not int
+                    or user_credential["glpi_user_id"] <= 0):
+                raise GLPISessionReadBlocked("glpi_user_identity_required")
+            expected_glpi_user_id = user_credential["glpi_user_id"]
+            user_credential = user_credential["user_token"]
+        user = token(user_credential)
         try:
             initial = get_json("initSession", {"App-Token": app,
                                                 "Authorization": "user_token " + user})
             session = token(initial.get("session_token"))
+            if require_session_user_identity:
+                observed = get_json("getFullSession", {
+                    "App-Token": app, "Session-Token": session,
+                })
+                session_data = observed.get("session")
+                if not isinstance(session_data, dict):
+                    raise GLPISessionReadBlocked("glpi_session_identity_missing")
+                glpi_id = session_data.get("glpiID")
+                if (type(glpi_id) not in (str, int)
+                        or not re.fullmatch(r"[1-9][0-9]{0,17}", str(glpi_id))
+                        or str(glpi_id) != str(expected_glpi_user_id)):
+                    raise GLPISessionReadBlocked("glpi_session_identity_mismatch")
             ticket = get_json("Ticket/" + ticket_id, {"App-Token": app,
                                                        "Session-Token": session})
             # Authentication does not establish the requested ticket identity.
