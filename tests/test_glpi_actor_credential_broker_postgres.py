@@ -59,7 +59,7 @@ def test_revocation_and_tenant_isolation_in_real_postgres():
         connect=lambda: psycopg.connect(dsn), get_bound_credential=vault)
     scope = dict(actor=actor, tenant_id=tenant, glpi_instance_id=instance,
                  ticket_id="42")
-    assert broker(**scope) == "ci-only-actor-token"
+    assert broker(**scope) == {"user_token": "ci-only-actor-token", "glpi_user_id": 17}
     assert len(vault_calls) == 1
     with pytest.raises(GLPIActorCredentialDenied):
         broker(**{**scope, "tenant_id": other_tenant})
