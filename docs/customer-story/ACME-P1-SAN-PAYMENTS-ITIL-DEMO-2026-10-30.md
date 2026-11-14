@@ -160,3 +160,7 @@ The deterministic simulator now constrains tenant, incident, action and service 
 ## Temporal Worker DEMO VERIFY safety boundary — 2026-11-14
 
 The existing Temporal Worker now **blocks DEMO at VERIFY** after a stage-start event when no independent runtime postcheck exists. It emits `INDEPENDENT_POSTCHECK_MISSING` with `actual_recovery_state=UNKNOWN`, issues an idempotent Core `BLOCK` command, and stops the workflow before `STAGE_COMPLETED/PASS`, `RECONCILE`, `LEARN` or `RESOLVE`. This deliberately changes the previously optimistic synthetic DEMO workflow: a simulated observation is not a verified recovery. This is a fail-closed stop, **not yet** a production-attested postcheck or a resume mechanism. No LIVE remediation is enabled. A static AST contract test in CI guards the stop ordering; real Core/Temporal runtime E2E of this specific branch remains to be qualified.
+
+## Executed Worker VERIFY safety regression — 2026-11-14
+
+`tests/test_worker_demo_verify_execution.py` executes the **actual async `execute_stage` body** from `app/worker/main.py` with inert Core/Evidence/Policy/Twin stubs (no Temporal service). It asserts DEMO VERIFY emits `STAGE_STARTED` → `INDEPENDENT_POSTCHECK_MISSING` → idempotent `BLOCK`, with no Evidence/Twin/Policy calls or `STAGE_COMPLETED`. The LIVE VERIFY branch must likewise block with `LIVE_ADAPTER_UNAVAILABLE`. This supplements the static ordering test; it is not a full Temporal/Core integration test.
