@@ -146,3 +146,9 @@ Added unit tests and a disposable PostgreSQL test for tenant isolation and immed
 The actor credential broker now returns both the vault-attested token and the bound numeric GLPI user ID. Both native ACL and readback sessions enable strict `require_session_user_identity=True`. After `initSession` and **before** any `GET Ticket/{id}`, the client issues GLPI `GET getFullSession` and compares the session `glpiID` exactly with the reviewed binding; mismatch/missing/malformed identity denies and `killSession` still runs. Plain token strings are forbidden in this strict path. Offline tests cover valid, wrong, missing, malformed and bool identities.
 
 The GLPI REST session payload shape and permissions must be confirmed against the actual isolated GLPI deployment before activation. No real vault, GLPI server, or route is configured. This is a server-side qualification candidate, not a claim of live integration.
+
+## Post-vault revocation race protection — 2026-11-14
+
+The actor credential broker now re-queries the active tenant grant and exact GLPI user binding **after** the external vault callback returns, before returning a credential. Revocation, identity swap, ambiguous binding or PostgreSQL outage during the vault round-trip fails closed. Offline race/outage tests and a disposable PostgreSQL test that revokes a grant inside the vault callback are included in CI.
+
+This narrows, but does not eliminate, time-of-check/time-of-use races: revocation can still occur after the second check and before the GLPI session request. A deployment must enforce short-lived per-actor credentials, revocation at the vault/GLPI boundary and session identity proof. No production vault or GLPI environment has been qualified.
