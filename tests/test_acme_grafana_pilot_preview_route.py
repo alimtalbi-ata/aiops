@@ -34,3 +34,14 @@ def test_customer_can_navigate_both_synthetic_views_without_network():
  assert "href='/demo/acme-incident-cockpit'" in preview.text
  assert 'NO-GO LIVE' in cockpit.text
  assert 'UNKNOWN / BLOCKED' in preview.text
+
+def test_grafana_preview_reuses_canonical_san_payments_incident_ids():
+ from portal.acme_impact_read_model import build_acme_impact_read_model
+ from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+ cockpit=project_synthetic_incident_cockpit(build_acme_impact_read_model())
+ page=client().get('/demo/acme-grafana-pilot-preview')
+ assert page.status_code==200
+ assert cockpit['incident_id'] in page.text
+ assert cockpit['business_impact_incident_id'] in page.text
+ assert cockpit['source_sha256'] in page.text
+ assert 'ne prouvent aucune corrélation runtime' in page.text
