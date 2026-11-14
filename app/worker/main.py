@@ -51,6 +51,33 @@ async def execute_stage(a):
         if synthetic and stage=='OBSERVE':
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'SET_STATE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'state':'DEGRADED','health':0.42}},token=ADMIN)
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'OBSERVE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL'}},token=ADMIN)
+        # DEMO synthetic evidence cannot qualify a real post-remediation check.
+        # Stop Temporal before VERIFY PASS, reconciliation, learning or RESOLVE.
+        if mode == 'DEMO' and stage == 'VERIFY':
+            blocked = call('POST',f'{CORE}/api/runs/{rid}/events',{
+                'expected_version':v,
+                'stage':stage,
+                'event_type':'INDEPENDENT_POSTCHECK_MISSING',
+                'event_key':f'{stage}:INDEPENDENT-POSTCHECK-MISSING',
+                'status':'BLOCKED',
+                'decision':'HUMAN_APPROVAL',
+                'confidence':0.0,
+                'payload':{
+                    'reason':'DEMO synthetic observations are not independent runtime recovery proof',
+                    'independent_runtime_postcheck_verified':False,
+                    'actual_recovery_state':'UNKNOWN',
+                    'simulation_only':True,
+                    'itil_transition_authorized':False,
+                    'live_remediation_authorized':False,
+                },
+            })
+            state = call('POST',f'{CORE}/api/runs/{rid}/command',{
+                'expected_version':blocked['version'],
+                'idempotency_key':f'DEMO-POSTCHECK-BLOCK-{rid}',
+                'command':'BLOCK',
+            })
+            return {'run_id':rid,'stage':stage,'status':'BLOCKED',
+                    'version':state['version'],'sequence':blocked['sequence']}
         ev=post_json(EVID,'/api/evidence',{'source':f'run:{rid}:{stage.lower()}','claim':f'{stage} completed for scenario {scenario}','confidence':0.94 if stage not in ('DGX_ANALYST','DGX_CRITIC') else 0.91,'provenance':{'synthetic':synthetic,'run_id':rid,'stage':stage,'scenario_id':scenario},'payload':{'stage':stage,'scenario_id':scenario,'mode':mode,'attempt':activity.info().attempt}},token=ADMIN)
         eids=[ev['evidence_id']]
         if stage=='POLICY':
