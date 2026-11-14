@@ -117,3 +117,7 @@ The joint evidence reader addresses a source by `(source, source_id)`. It now re
 ## Pure DEMO remediation simulator — 2026-11-14
 
 `portal.acme_isolated_remediation_simulator.simulate_remediation_dry_run` provides a deterministic **in-memory hypothetical** state transition for `SERVICE_RESTART_SIMULATION` or `NOOP_OBSERVATION` under explicit `DEMO` / `SIMULATE_ONLY` inputs. The result includes request, before/after and receipt SHA-256 digests; `verify_simulation_receipt` independently recomputes the expected output to detect tampering. A hypothetical HEALTHY state is **not actual recovery**: no worker, Temporal execution, command, network call, post-check, GLPI write or LIVE authorization is performed. The module is not exposed as a production endpoint.
+
+## Simulation receipt × evidence integrity gate — 2026-11-14
+
+`portal.acme_simulation_evidence_gate.assess_simulation_evidence_gate` checks the deterministic simulator receipt by recomputation, enforces the same expected tenant and validates the joint evidence integrity summary, rejecting forged authorization, recovery and attestation flags. It outputs a linked simulation receipt hash and hypothetical after-state hash, but keeps `actual_recovery_state=UNKNOWN`, `independent_runtime_postcheck_verified=false` and ITIL/LIVE authorization false. It is an offline DEMO assessment only, not an operational post-check or a Temporal/Worker execution.
