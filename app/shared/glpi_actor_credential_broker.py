@@ -21,7 +21,7 @@ def make_glpi_actor_user_token_broker(*, connect: Callable,
     def valid(value, limit):
         return (isinstance(value, str) and bool(value.strip())
                 and len(value) <= limit
-                and not any(ord(ch) < 33 or ord(ch) > 126 for ch in value))
+                and not any(ord(ch) < 33 or ord(ch) > 126 or ch == "\\\\" for ch in value))
 
     def get_user_token(*, actor, tenant_id, ticket_id, glpi_instance_id):
         if (not valid(actor, 200) or not valid(tenant_id, 128)
