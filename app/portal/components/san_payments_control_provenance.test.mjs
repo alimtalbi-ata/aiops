@@ -21,7 +21,7 @@ test('control-obfuscated provenance is incomplete, never synthetic or LIVE-attes
     assert.equal(nav.attributes['data-mode'], 'DEMO');
     assert.equal(incident.attributes['data-provenance'], 'INCOMPLETE');
     assert.match(incident.children.at(-1).textContent, /PROVENANCE INCOMPLÈTE/);
-    assert.match(nav.children.at(-1).textContent, /1 source\\(s\\) non renseignée\\(s\\)/);
+    assert.match(nav.children.at(-1).textContent, /1 source\(s\) non renseignée\(s\)/);
   }
 });
 
