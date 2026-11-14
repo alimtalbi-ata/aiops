@@ -296,7 +296,7 @@ def acme_grafana_pilot_preview_page():
     from portal.grafana_pilot_preview import preview_grafana_pilot_evidence
     from portal.grafana_pilot_preview_html import render_grafana_pilot_preview_html
     try:
-        template_path = Path(__file__).resolve().parents[2] / "docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json"
+        template_path = Path(__file__).resolve().with_name("acme-readonly-pilot-register.template.json")
         register = json.loads(template_path.read_text(encoding="utf-8"))
         observed = "2026-11-14T11:59:00Z"
         candidate = collect_grafana_alert_readonly(
