@@ -28,7 +28,16 @@ def decode_initial_start_args(events):
             return None
         if not isinstance(payload.data, bytes) or len(payload.data) > 8192:
             return None
-        value = json.loads(payload.data.decode("utf-8"))
+        # Reject duplicate JSON keys rather than accepting the last value.
+        def unique_object(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError("duplicate JSON key")
+                value[key] = item
+            return value
+        value = json.loads(payload.data.decode("utf-8"),
+                           object_pairs_hook=unique_object)
         if not isinstance(value, dict) or set(value) != {
             "run_id", "mode", "scenario_id", "version"
         }:
