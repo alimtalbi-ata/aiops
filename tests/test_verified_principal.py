@@ -54,7 +54,7 @@ def test_invalid_or_simulated_verified_claims_never_create_principal(field, valu
     claims[field] = value
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=claims):
         with pytest.raises(IdentityError, match="verified_principal_claims_invalid"):
-            principal_from_bearer("opaque-bearer")
+            principal_from_bearer("opaque-bearer", is_revoked=lambda **_: False)
 
 
 def test_oidc_verifier_failure_is_propagated_without_fallback():
