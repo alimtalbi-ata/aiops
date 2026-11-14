@@ -24,3 +24,17 @@ def test_verified_postcheck_must_be_independent():
 def test_negative_tests_must_all_pass():
  d=json.loads(TEMPLATE.read_text());d['negative_tests']['cross_tenant_zero_upstream_calls']='FAIL'
  assert 'cross_tenant_zero_upstream_calls_not_passed' in validate(d)
+
+def test_malformed_nested_structures_fail_closed():
+ d=json.loads(TEMPLATE.read_text())
+ for field in ('environment','sources','negative_tests'):
+  broken=copy.deepcopy(d);broken[field]=['not-a-mapping']
+  assert validate(broken)
+ for source in d['sources']:
+  broken=copy.deepcopy(d);broken['sources'][source]=['not-a-source']
+  assert validate(broken)
+
+def test_string_true_cannot_impersonate_native_acl():
+ d=json.loads(TEMPLATE.read_text());s=d['sources']['glpi_cmdb']
+ s.update(status='VERIFIED',instance_id='i',entity_id='e',ticket_id='t',ci_id='ci',human_actor_subject='sub',native_acl_verified='true',xref_verified=True,response_sha256='a'*64,evidence_refs=['proof'])
+ assert 'glpi_cmdb_native_acl_verified_must_be_true' in validate(d)
