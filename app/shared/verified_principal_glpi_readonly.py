@@ -58,6 +58,7 @@ def make_verified_principal_glpi_readonly_qualifier(
         glpi_base_url=glpi_base_url,
         get_app_token=glpi_app_token,
         get_user_token=glpi_user_token,
+        require_session_user_identity=True,
     )
 
     def authorize_read(*, actor, tenant_id, resource, resource_id, **scope):
