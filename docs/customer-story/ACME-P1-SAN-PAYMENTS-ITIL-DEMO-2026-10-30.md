@@ -121,3 +121,7 @@ The joint evidence reader addresses a source by `(source, source_id)`. It now re
 ## Simulation receipt × evidence integrity gate — 2026-11-14
 
 `portal.acme_simulation_evidence_gate.assess_simulation_evidence_gate` checks the deterministic simulator receipt by recomputation, enforces the same expected tenant and validates the joint evidence integrity summary, rejecting forged authorization, recovery and attestation flags. It outputs a linked simulation receipt hash and hypothetical after-state hash, but keeps `actual_recovery_state=UNKNOWN`, `independent_runtime_postcheck_verified=false` and ITIL/LIVE authorization false. It is an offline DEMO assessment only, not an operational post-check or a Temporal/Worker execution.
+
+## Incident digest binding for simulation/evidence join — 2026-11-14
+
+The simulation/evidence gate now requires a **trusted independently supplied** `expected_source_sha256` (exact lowercase 64-character SHA-256). The joint evidence report must match it, as well as the expected tenant from the simulation request. This prevents an internally consistent evidence summary for a different incident fixture being attached to the simulation. The caller must obtain the digest from a trusted validated incident context, not from the submitted evidence report itself. This remains DEMO-only and never proves live incident identity or authorizes remediation.
