@@ -51,7 +51,12 @@ def verify_packaged_demo() -> dict[str, object]:
         "arguments_comparison": "UNKNOWN", "execution_outcome": "UNKNOWN",
         "decision": "UNKNOWN",
     }
+    expected_register_fields = {
+        "schema", "pilot_id", "environment", "git_revision", "decision",
+        "live_actions_authorized", "sources", "negative_tests", "notes",
+    }
     if (not isinstance(register, dict)
+            or set(register) != expected_register_fields
             or register.get("schema") != "aiops2.readonly-pilot-evidence-register.v1"
             or register.get("pilot_id") != "UNASSIGNED"
             or register.get("git_revision") is not None
