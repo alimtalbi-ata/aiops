@@ -64,7 +64,7 @@ def test_wrong_mac_cannot_be_rescued_by_matching_bytes():
     lifecycle, manifest, receipt, raw = sample()
     receipt["mac_sha256"] = "f" * 64
     result = qualify(lifecycle, manifest, [receipt], lambda *_: raw)
-    assert result["checkpoints"][0]["digest_state"] == "DIGEST_MATCH_UNATTESTED"
+    assert result["checkpoints"][0]["digest_state"] == "READBACK_UNAVAILABLE"
     assert result["checkpoints"][0]["source_receipt_state"] == "MAC_MISMATCH"
     assert result["integrity_consistent_unattested_count"] == 0
 
