@@ -107,11 +107,11 @@ def test_resolver_derives_actor_and_tenant_from_oidc_grants_and_signed_xref():
 
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
         resolve = make_verified_principal_glpi_xref_resolver(
-            connect=connect, bearer_token="verified-bearer", secret=SECRET,
+            connect=connect, secret=SECRET,
             fetch_signed_event=fetch_signed_event,
             authorize_glpi_native_acl=native_acl, clock=lambda: NOW,
         )
-    result = resolve("42")
+    result = resolve("verified-bearer", "42")
 
     assert result["tenant_id"] == "tenant-b"
     assert result["actor"] == PRINCIPAL_CLAIMS["subject_id"]
@@ -142,12 +142,13 @@ def test_revoked_oidc_jti_denies_before_tenant_discovery_or_glpi_acl():
     acl = []
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
         with pytest.raises(IdentityError, match="oidc_assertion_revoked_or_store_unavailable"):
-            make_verified_principal_glpi_xref_resolver(
+            resolve = make_verified_principal_glpi_xref_resolver(
                 connect=connect, bearer_token="revoked", secret=SECRET,
                 fetch_signed_event=lambda **_: signed_event(),
                 authorize_glpi_native_acl=lambda **kwargs: acl.append(kwargs) or True,
                 clock=lambda: NOW,
             )
+            resolve("revoked", "42")
     assert len(cursors) == 1
     assert acl == []
 
@@ -157,13 +158,13 @@ def test_native_glpi_acl_must_return_exact_true():
         return Connection(Cursor())
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
         resolve = make_verified_principal_glpi_xref_resolver(
-            connect=connect, bearer_token="token", secret=SECRET,
+            connect=connect, secret=SECRET,
             fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]),
             authorize_glpi_native_acl=lambda **kwargs: 1,
             clock=lambda: NOW,
         )
     with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_not_authorized"):
-        resolve("42")
+        resolve("token", "42")
 
 
 def test_ticket_resolver_has_no_caller_actor_or_tenant_override():
@@ -177,6 +178,6 @@ def test_ticket_resolver_has_no_caller_actor_or_tenant_override():
             clock=lambda: NOW,
         )
     import inspect
-    assert list(inspect.signature(resolve).parameters) == ["ticket_id"]
+    assert list(inspect.signature(resolve).parameters) == ["bearer_token", "ticket_id"]
     with pytest.raises(VerifiedGLPIXrefDenied, match="invalid_ticket_id"):
-        resolve("../42")
+        resolve("token", "../42")
