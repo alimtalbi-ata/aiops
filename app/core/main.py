@@ -143,7 +143,16 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
             winner=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()[0]
         data['idempotent']=bool(data.get('idempotent',False)); data['workflow_id']=winner
         return data
-    except requests.RequestException as e: raise HTTPException(503,f'execution service unavailable: {e}')
+    except requests.HTTPError as e:
+        if e.response is not None and e.response.status_code == 409:
+            # The Worker knows a workflow ID exists but has NOT verified that
+            # its original parameters match this Core run. Do not retry blindly.
+            raise HTTPException(409,'Temporal workflow conflict; operator reconciliation required')
+        raise HTTPException(503,'execution service HTTP failure')
+    except requests.RequestException:
+        # Timeout/connection failure may mean Temporal accepted the start but
+        # its response was lost. Never assert that a second start is safe.
+        raise HTTPException(503,'execution start outcome unknown; reconcile before retry')
 @app.post('/api/runs/{rid}/events')
 def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
