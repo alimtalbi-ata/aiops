@@ -90,8 +90,8 @@ def make_qualifier(server, *, core_allowed=True, glpi_allowed=True):
             ) is True
             return dict(ASSOCIATION)
         return resolve
-    with patch("shared.glpi_session_readonly.build_opener", return_value=server), \\
-         patch("shared.glpi_http_json_transport.build_opener", return_value=server), \\
+    with patch("shared.glpi_session_readonly.build_opener", return_value=server), \
+         patch("shared.glpi_http_json_transport.build_opener", return_value=server), \
          patch("shared.verified_principal_glpi_readonly.make_verified_principal_glpi_xref_resolver",
                side_effect=resolver_factory):
         return make_verified_principal_glpi_readonly_qualifier(
