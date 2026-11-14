@@ -21,3 +21,9 @@ Revert the feature and test commits on this branch, or discard the branch. No de
 
 ## Next
 Run exact-head Python unit tests and quality workflow; review additive API compatibility and operator display; obtain independently authenticated runtime checkpoints before designing any LIVE readiness transition. Preserve G0/G1 and human authorization gates.
+
+## Follow-up: offline Incident → Run → Ticket correlation
+
+`app/portal/incident_ticket_correlation.py` adds an isolated, deterministic identity-join contract. It does **not** mount a route, call GLPI/Core, inspect real tickets or grant tenant ACL. Default without the explicit caller prerequisite is `UNKNOWN / ACTOR_TENANT_ACL_REQUIRED`. A synthetic exact-match case returns `MATCHED_UNATTESTED`, never `CONNECTED`, `runtime_attested=true` or LIVE authorization. Cross-tenant identities, malformed IDs, unknown/LIVE modes and mismatched Run/Ticket IDs are refused. The boolean caller prerequisite does **not** establish authorization; the returned `tenant_acl_qualified` is always false. A future integration must supply independently authenticated actor/tenant/entity authorization and authoritative service records before any browser exposure.
+
+`tests/test_incident_ticket_correlation.py` covers refusal and matching; `.github/workflows/quality.yml` now runs it. No host action, deployment or runtime proof. Check the exact latest CI SHA before qualification.
