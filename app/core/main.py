@@ -195,7 +195,17 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         if not inserted:
             raise HTTPException(409,'prior execution start intent exists; inspect before retry')
     try:
-        r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
+        r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status()
+        try:
+            data=r.json()
+        except (ValueError,TypeError):
+            raise HTTPException(503,'invalid Worker start response; outcome UNKNOWN')
+        # A Worker success response is not proof of execution, but it must
+        # never create a receipt for a different workflow or run.
+        if (not isinstance(data,dict) or data.get('workflow_id')!=rid
+            or data.get('run_id')!=rid or data.get('executor')!='temporal'
+            or data.get('idempotent') is True):
+            raise HTTPException(503,'unqualified Worker start response; outcome UNKNOWN')
         with db() as c:
             c.execute('insert into aiops.execution_receipts(run_id,workflow_id) values(%s,%s) on conflict(run_id) do nothing',(rid,data['workflow_id']))
             winner=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()[0]
