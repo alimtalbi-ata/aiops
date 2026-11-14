@@ -16,8 +16,8 @@ from shared.oidc_jti_store import make_oidc_jti_store
 from shared.verified_principal import principal_from_bearer
 
 
-_TENANT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}\\Z")
-_TICKET = re.compile(r"[1-9][0-9]{0,17}\\Z")
+_TENANT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}\Z")
+_TICKET = re.compile(r"[1-9][0-9]{0,17}\Z")
 
 
 class VerifiedGLPIXrefDenied(PermissionError):
