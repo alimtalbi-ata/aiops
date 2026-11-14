@@ -31,8 +31,21 @@ def verify_packaged_demo() -> dict[str, object]:
         "temporal_inspection_no_start_or_restart",
         "n8n_existing_execution_no_replay",
     }
+    expected_environment = {
+        "name": "UNASSIGNED", "owner": "UNASSIGNED",
+        "is_ephemeral": None, "created_at_utc": None,
+        "expires_at_utc": None, "destruction_record": None,
+    }
+    permitted_source_fields = {
+        "status": "UNKNOWN", "evidence_refs": [],
+        "arguments_comparison": "UNKNOWN", "execution_outcome": "UNKNOWN",
+        "decision": "UNKNOWN",
+    }
     if (not isinstance(register, dict)
             or register.get("schema") != "aiops2.readonly-pilot-evidence-register.v1"
+            or register.get("pilot_id") != "UNASSIGNED"
+            or register.get("git_revision") is not None
+            or register.get("environment") != expected_environment
             or register.get("decision") != "BLOCKED"
             or register.get("live_actions_authorized") is not False
             or not isinstance(register.get("sources"), dict)
@@ -42,6 +55,12 @@ def verify_packaged_demo() -> dict[str, object]:
             or any(value != "NOT_RUN" for value in register["negative_tests"].values())
             or any(not isinstance(v, dict) or v.get("status") != "UNKNOWN"
                    or v.get("evidence_refs") != []
+                   or any(value != permitted_source_fields.get(field)
+                          for field, value in v.items()
+                          if field not in permitted_source_fields)
+                   or any(v.get(field) != permitted_source_fields[field]
+                          for field in ("arguments_comparison", "execution_outcome", "decision")
+                          if field in v)
                    for v in register["sources"].values())):
         raise ValueError("packaged_register_not_blocked")
 
