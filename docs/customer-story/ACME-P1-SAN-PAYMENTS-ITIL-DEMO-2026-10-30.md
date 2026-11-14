@@ -164,3 +164,7 @@ The existing Temporal Worker now **blocks DEMO at VERIFY** after a stage-start e
 ## Executed Worker VERIFY safety regression — 2026-11-14
 
 `tests/test_worker_demo_verify_execution.py` executes the **actual async `execute_stage` body** from `app/worker/main.py` with inert Core/Evidence/Policy/Twin stubs (no Temporal service). It asserts DEMO VERIFY emits `STAGE_STARTED` → `INDEPENDENT_POSTCHECK_MISSING` → idempotent `BLOCK`, with no Evidence/Twin/Policy calls or `STAGE_COMPLETED`. The LIVE VERIFY branch must likewise block with `LIVE_ADAPTER_UNAVAILABLE`. This supplements the static ordering test; it is not a full Temporal/Core integration test.
+
+## Executed Temporal workflow stop-order regression — 2026-11-14
+
+`tests/test_worker_temporal_workflow_stop.py` executes the actual `IncidentWorkflow.run` coroutine with a deterministic `workflow.execute_activity` stub. It asserts that a `VERIFY` block stops the stage sequence before `RECONCILE` and `LEARN`, and never invokes `finish_run` / `RESOLVE`; earlier `POLICY`, `HITL` and `REMEDIATE` blocks also stop immediately. This is a unit-level orchestration test, not a Temporal server E2E.
