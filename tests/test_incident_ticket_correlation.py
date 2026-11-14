@@ -46,6 +46,25 @@ class IncidentTicketCorrelationTests(unittest.TestCase):
         self.assertEqual(result["reason"], "IDENTITY_MISMATCH")
         self.assertFalse(result["ticket_run_match"])
 
+    def test_alias_and_nested_tenant_claims_refused(self):
+        for field, value in (
+            ("tenant", "TEN-2"),
+            ("actor", {"tenant_id": "TEN-2"}),
+            ("entity_id", "OTHER-ENTITY"),
+        ):
+            with self.subTest(field=field):
+                self.ticket[field] = value
+                result = self.join(actor_acl_qualified=True)
+                self.assertEqual(result["state"], "UNKNOWN")
+                self.assertEqual(result["reason"], "UNEXPECTED_IDENTITY_FIELDS")
+                del self.ticket[field]
+
+    def test_acl_requires_literal_true(self):
+        for flag in (1, "true", None, False):
+            with self.subTest(flag=flag):
+                result = self.join(actor_acl_qualified=flag)
+                self.assertEqual(result["reason"], "ACTOR_TENANT_ACL_REQUIRED")
+
     def test_live_mode_refused(self):
         self.run["mode"] = "LIVE"
         result = self.join(actor_acl_qualified=True)
