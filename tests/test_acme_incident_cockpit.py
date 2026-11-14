@@ -145,3 +145,34 @@ def test_customer_timeline_is_nine_unattested_business_steps():
         assert label in page.text
     assert "aucune horodatée ni attestée" in page.text
     assert "NO-GO LIVE" in page.text
+
+
+def test_noc_decision_card_explains_proof_human_gate_and_safe_next_step():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "Fiche de décision" in page.text
+    for label in ("Ce que nous savons", "Ce qui manque", "Qui doit valider",
+                  "Pourquoi c'est bloqué", "Prochaine étape permise"):
+        assert label in page.text
+    assert "Neuf preuves indépendantes sur neuf" in page.text
+    assert "HOLD_FOR_HUMAN_REVIEW" in page.text
+    assert "DENY_LIVE_ACTION" in page.text
+    assert "lecture seule" in page.text
+    assert "Pas d'exécution Temporal" in page.text
+    assert "<form" not in page.text.lower()
+    assert "<script" not in page.text.lower()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("human_approval_verified", True),
+    ("independent_postcheck_verified", True),
+    ("operational_decision_authorized", True),
+])
+def test_noc_decision_card_rejects_forged_authority(field, value):
+    from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
+    cockpit = project_synthetic_incident_cockpit(build_acme_impact_read_model())
+    cockpit["analyst_critic_review"][field] = value
+    with pytest.raises(ValueError, match="unqualified_cockpit_details"):
+        render_synthetic_cockpit_html(cockpit)
