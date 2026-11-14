@@ -126,6 +126,7 @@ def test_customer_walkthrough_has_five_working_anchor_targets_and_safe_verdict()
     assert anchors.targets == ["impact", "evidence", "decision", "itil", "verdict"]
     assert set(anchors.targets).issubset(anchors.ids)
     assert page.text.index("id='decision'") < page.text.index("id='itil'")
+    assert page.text.index("id='itil'") < page.text.index("id='verdict'")
     assert "GO pour le scénario synthétique" in page.text
     assert "UNKNOWN pour les preuves runtime" in page.text
     assert "NO-GO LIVE" in page.text
