@@ -237,6 +237,20 @@ def acme_itil_readiness_page():
     return HTMLResponse(content=page, headers=HEADERS)
 
 
+@router.get("/api/demo/acme-evidence-plan", name="synthetic_acme_evidence_plan")
+def acme_evidence_plan_json():
+    """Read-only requirements for independent proof; never collects or accepts it."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_evidence_collection_plan import plan_synthetic_evidence_collection
+    try:
+        plan = plan_synthetic_evidence_collection(
+            project_synthetic_incident_lifecycle(_load_or_503())
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_evidence_plan_unqualified") from exc
+    return JSONResponse(content=plan, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-itil-readiness", name="synthetic_acme_itil_readiness")
 def acme_itil_readiness_json():
     """Expose missing evidence for ITIL transitions; never approve a transition."""
