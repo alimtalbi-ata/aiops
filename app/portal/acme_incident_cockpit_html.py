@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from html import escape
 
+from portal.acme_evidence_collection_plan import EVIDENCE_REQUIREMENTS
+
 
 def render_synthetic_cockpit_html(cockpit: dict) -> str:
     if (not isinstance(cockpit, dict)
@@ -66,9 +68,11 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
                    or request.get("qualifies_runtime") is not False
                    or request.get("required_metadata")
                    != ["observed_at", "source_id", "content_sha256"]
-                   or not isinstance(request.get("required_evidence_type"), str)
-                   or not request["required_evidence_type"]
-                   for request in evidence["requests"])
+                   or request.get("required_evidence_type")
+                   != EVIDENCE_REQUIREMENTS[request["checkpoint"]][0]
+                   or request.get("expected_source")
+                   != lifecycle["stages"][index]["expected_source"]
+                   for index, request in enumerate(evidence["requests"]))
             or evidence.get("evidence_acceptance_enabled") is not False
             or evidence.get("outbound_collection_enabled") is not False):
         raise ValueError("unqualified_evidence_requirements")
