@@ -101,3 +101,7 @@ GET `/api/demo/acme-itil-handoff-draft` generates a deterministic **non-executab
 ## Joint evidence integrity gate — 2026-11-14
 
 `portal.acme_evidence_joint_qualification.qualify_synthetic_evidence_jointly` combines independent byte digest readback with the tenant/source-bound HMAC receipt check. A checkpoint is marked `integrity_consistent_unattested=true` only when **both** checks agree; a missing receipt, wrong MAC, changed bytes or unavailable callback fails that consistency check. Even a double match remains **UNKNOWN / unattested**: the module cannot prove source freshness, tenant/actor authorization, real runtime observation or operational effects. No HTTP upload, network adapter, GLPI write, Temporal execution or LIVE authorization is exposed.
+
+## Cross-tenant receipt isolation hardening — 2026-11-14
+
+The joint evidence qualification now **requires** a trusted, independently supplied `expected_tenant_id` keyword argument. All submitted receipt tenant IDs must match this scope before any key resolver or readback callback runs. A valid receipt from tenant B must not be processed in tenant A's context. This is a defensive tenant scope fence, **not** actor authentication or a production ACL grant; the trusted caller must establish the expected tenant independently. Tests cover foreign-tenant refusal without callbacks and missing/empty trusted tenant.
