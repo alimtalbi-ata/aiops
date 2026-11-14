@@ -79,10 +79,8 @@ def main() -> int:
                                         repository=args.repository, head_sha=args.head_sha,
                                         run_id=args.run_id, run_attempt=args.run_attempt)
     if args.report is not None:
-        args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\\n", encoding="utf-8")
-    if not verify_bundle(args.package_dir, args.smoke_dir,
-                         repository=args.repository, head_sha=args.head_sha,
-                         run_id=args.run_id, run_attempt=args.run_attempt):
+        args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    if report["artifact_consistency"] != "PASS":
         print("BLOCKED: customer package and Docker smoke do not share a qualified synthetic fixture/run", file=sys.stderr)
         return 1
     print("PASS: canonical synthetic package and offline Docker smoke agree; runtime UNKNOWN, LIVE BLOCKED")
