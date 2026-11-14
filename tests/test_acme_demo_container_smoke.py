@@ -120,3 +120,19 @@ def test_packaged_demo_rejects_claimed_runtime_metadata(mutation):
     with patch.object(smoke.Path, "read_text", new=forged):
         with pytest.raises(ValueError, match="packaged_register_not_blocked"):
             verify_packaged_demo()
+
+def test_packaged_demo_rejects_broken_customer_navigation():
+    import portal.acme_demo_container_smoke as smoke
+    original = smoke.acme_grafana_pilot_preview_page
+
+    def broken():
+        response = original()
+        response.body = response.body.replace(
+            b"href='/demo/acme-incident-cockpit'",
+            b"href='/demo/missing-cockpit'",
+        )
+        return response
+
+    with patch.object(smoke, "acme_grafana_pilot_preview_page", new=broken):
+        with pytest.raises(ValueError, match="synthetic_customer_navigation_missing"):
+            verify_packaged_demo()
