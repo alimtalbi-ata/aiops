@@ -140,3 +140,9 @@ Added `make_glpi_actor_user_token_broker`: on every native ACL and GLPI readback
 The vault and provisioning workflow are **not installed**; no actor↔GLPI user identity can be assumed. The vault provider must enforce credential ownership (the broker cannot cryptographically prove a token belongs to the declared GLPI user without upstream session identity evidence). This is an unmounted, read-only candidate and not a production authentication claim.
 
 Added unit tests and a disposable PostgreSQL test for tenant isolation and immediate grant/binding revocation. No real GLPI IdP, vault, actor credential or live ticket is contacted.
+
+## GLPI session user identity attestation — 2026-11-14
+
+The actor credential broker now returns both the vault-attested token and the bound numeric GLPI user ID. Both native ACL and readback sessions enable strict `require_session_user_identity=True`. After `initSession` and **before** any `GET Ticket/{id}`, the client issues GLPI `GET getFullSession` and compares the session `glpiID` exactly with the reviewed binding; mismatch/missing/malformed identity denies and `killSession` still runs. Plain token strings are forbidden in this strict path. Offline tests cover valid, wrong, missing, malformed and bool identities.
+
+The GLPI REST session payload shape and permissions must be confirmed against the actual isolated GLPI deployment before activation. No real vault, GLPI server, or route is configured. This is a server-side qualification candidate, not a claim of live integration.
