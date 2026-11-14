@@ -1,5 +1,6 @@
 """Evidence package is reproducible, offline, and detects tampering."""
 import json
+import hashlib
 import sys
 from pathlib import Path
 
@@ -47,3 +48,32 @@ def test_package_does_not_overwrite_existing_evidence(tmp_path):
     with pytest.raises(ValueError, match="empty"):
         create_package(directory, revision="test")
     assert (directory / "operator-notes.txt").read_text() == "preserve"
+
+
+def test_rehashed_forged_report_is_still_rejected(tmp_path):
+    directory = tmp_path / "package"
+    create_package(directory, revision="test")
+    report_path = directory / "acceptance.json"
+    report = json.loads(report_path.read_text())
+    report["checks"]["no_verified_evidence"] = False
+    report["accepted"] = True
+    report_path.write_text(json.dumps(report))
+    manifest_path = directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files_sha256"]["acceptance.json"] = hashlib.sha256(
+        report_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+    assert verify_package(directory) is False
+
+
+def test_rehashed_forged_html_is_still_rejected(tmp_path):
+    directory = tmp_path / "package"
+    create_package(directory, revision="test")
+    html_path = directory / "cockpit.html"
+    html_path.write_text("<h1>LIVE remediation completed</h1>")
+    manifest_path = directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files_sha256"]["cockpit.html"] = hashlib.sha256(
+        html_path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+    assert verify_package(directory) is False
