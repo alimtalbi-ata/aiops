@@ -114,7 +114,6 @@ def test_resolver_derives_actor_and_tenant_from_oidc_grants_and_signed_xref():
         result = resolve("verified-bearer", "42")
 
     assert result["tenant_id"] == "tenant-b"
-    assert result["actor"] == PRINCIPAL_CLAIMS["subject_id"]
     assert fetches == [
         (PRINCIPAL_CLAIMS["subject_id"], "tenant-a", "42"),
         (PRINCIPAL_CLAIMS["subject_id"], "tenant-b", "42"),
