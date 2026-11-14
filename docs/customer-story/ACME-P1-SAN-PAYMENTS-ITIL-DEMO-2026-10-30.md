@@ -133,3 +133,7 @@ The simulation/evidence gate additionally requires `expected_incident_id` from a
 ## Callable incident → simulation → evidence gate DEMO — 2026-11-14
 
 `portal.acme_demo_simulation_pipeline.run_acme_demo_simulation()` now composes the validated ACME incident cockpit snapshot, a deterministic hypothetical Payments restart, and the simulation/evidence safety gate **in one callable path**. The trusted incident ID and fixture digest come from the cockpit; the DEMO has no collected runtime evidence and therefore produces an empty evidence summary, no accepted proof and actual recovery `UNKNOWN`. The result contains the simulation receipt and the gate result, with explicit false runtime/Temporal/GLPI-write flags. This is a real executable *in-memory* DEMO flow, **not** a production worker or operational integration.
+
+## Operator CLI for the offline simulation — 2026-11-14
+
+From the repository root, run `python scripts/run_acme_demo_simulation.py --verify`. The command composes the local synthetic ACME cockpit, simulates the hypothetical Payments restart, independently recomputes the receipt, checks the safety gate and prints deterministic JSON to stdout. It exits with status 2 and emits no JSON on invalid tenant or failed verification. It does **not** connect to GLPI, n8n, Grafana, Temporal, Core or production; `--tenant` is a DEMO label, not authenticated tenant authorization. No real recovery or ITIL transition is asserted.
