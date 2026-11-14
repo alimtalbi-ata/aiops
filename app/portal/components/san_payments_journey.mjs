@@ -118,7 +118,12 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
   for (const step of steps) {
     const item = document.createElement('li');
     item.setAttribute('data-step', step.id);
-    item.setAttribute('data-state', step.state);
+    // Adapter availability is not operational trust. Keep legacy CSS from
+    // painting an unattested AVAILABLE step as healthy or LIVE.
+    const trustState = 'UNVERIFIED';
+    item.setAttribute('data-adapter-state', step.state);
+    item.setAttribute('data-trust-state', trustState);
+    item.setAttribute('data-state', step.state === 'AVAILABLE' ? 'UNKNOWN' : step.state);
     // Styling hook only: declared metadata is not proof of LIVE freshness or trust.
     item.setAttribute('data-provenance', isSyntheticSource(step.source) ? 'SYNTHETIC' :
       (step.source === 'Source non renseignée' || step.observedAt === 'Fraîcheur inconnue') ?
