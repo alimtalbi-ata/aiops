@@ -58,8 +58,17 @@ def verify(smoke: object, provenance: object, *, repository: str,
             or not isinstance(provenance["ref"], str)
             or not provenance["ref"].startswith("refs/")):
         return False
-    if provenance["event_name"] != "pull_request" and provenance["commit_sha"] != head_sha:
-        return False
+    event = provenance["event_name"]
+    ref = provenance["ref"]
+    if event == "pull_request":
+        # A PR checkout can use a synthetic merge SHA, but not an arbitrary ref.
+        if re.fullmatch(r"refs/pull/[1-9][0-9]*/merge", ref) is None:
+            return False
+    elif event in {"push", "schedule", "workflow_dispatch"}:
+        if not ref.startswith("refs/heads/") or len(ref) <= len("refs/heads/"):
+            return False
+        if provenance["commit_sha"] != head_sha:
+            return False
     return True
 
 
