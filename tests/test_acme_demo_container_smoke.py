@@ -150,3 +150,19 @@ def test_packaged_demo_rejects_customer_route_with_write_method():
     with patch.object(smoke.portal_app.router, "routes", routes):
         with pytest.raises(ValueError, match="synthetic_customer_route_not_get_only"):
             verify_packaged_demo()
+
+
+def test_packaged_demo_rejects_unexpected_null_source_field():
+    import portal.acme_demo_container_smoke as smoke
+    original = Path.read_text
+
+    def forged(path, *args, **kwargs):
+        if str(path).endswith("acme-readonly-pilot-register.template.json"):
+            payload = json.loads(original(path, *args, **kwargs))
+            payload["sources"]["grafana"]["unreviewed_claim"] = None
+            return json.dumps(payload)
+        return original(path, *args, **kwargs)
+
+    with patch.object(smoke.Path, "read_text", new=forged):
+        with pytest.raises(ValueError, match="packaged_register_not_blocked"):
+            verify_packaged_demo()
