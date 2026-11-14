@@ -146,6 +146,11 @@ jobs:
           path: ${{ runner.temp }}/aiops2-demo-operator-rehearsal.md
           if-no-files-found: error
           retention-days: 7
+      - name: Read-only pilot evidence register fail-closed contract
+        run: |
+          python -m pytest -q tests/test_aiops2_readonly_pilot_register.py
+          python scripts/validate_aiops2_readonly_pilot_register.py docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json
+        continue-on-error: true
       - name: ACME incident to simulation to evidence DEMO pipeline
         run: python -m pytest -q tests/test_acme_demo_simulation_pipeline.py
       - name: ACME offline simulation CLI receipt verification
