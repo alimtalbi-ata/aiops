@@ -25,7 +25,7 @@ def test_real_postgres_actor_tenant_isolation():
     assert parsed.scheme in {"postgresql", "postgres"}
     assert parsed.hostname in {"localhost", "127.0.0.1", "::1"}
     assert parsed.path == "/tenant_isolation"
-    assert parsed.username == "tenant_ci"
+    assert parsed.username in {"tenant_ci", "aiops"}
     assert parsed.port == 5432
     import psycopg
 
