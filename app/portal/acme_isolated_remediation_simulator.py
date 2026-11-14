@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 _ALLOWED = {"SERVICE_RESTART_SIMULATION", "NOOP_OBSERVATION"}
 _REQUIRED = {"schema", "mode", "tenant_id", "incident_id", "action_id",
@@ -27,8 +28,8 @@ def simulate_remediation_dry_run(request: object) -> dict:
         raise ValueError("demo_only")
     for field in ("tenant_id", "incident_id", "action_id"):
         value = request[field]
-        if not isinstance(value, str) or not 1 <= len(value) <= 128 or not all(
-                c.isalnum() or c in "_.:-" for c in value):
+        if not isinstance(value, str) or not 1 <= len(value) <= 128
+                or re.fullmatch(r"[A-Za-z0-9_.:-]+", value) is None):
             raise ValueError("invalid_simulation_identity")
     kind = request["action_kind"]
     if not isinstance(kind, str) or kind not in _ALLOWED:
@@ -40,6 +41,8 @@ def simulate_remediation_dry_run(request: object) -> dict:
         raise ValueError("invalid_before_state")
     if (not isinstance(before["service"], str)
             or not 1 <= len(before["service"]) <= 128
+            or re.fullmatch(r"[A-Za-z0-9_.:-]+", before["service"]) is None
+            or not isinstance(before["health"], str)
             or before["health"] not in _HEALTH
             or type(before["alert_active"]) is not bool):
         raise ValueError("invalid_before_state")
