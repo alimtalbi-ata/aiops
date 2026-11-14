@@ -9,27 +9,33 @@ def validate(d):
  if not isinstance(d,dict) or d.get('schema')!=SCHEMA:return ['invalid_schema']
  if d.get('live_actions_authorized') is not False:e.append('live_actions_must_remain_false')
  env=d.get('environment') or {}
+ if not isinstance(env,dict):return ['environment_invalid']
  for k in ['name','owner','created_at_utc','expires_at_utc','destruction_record']:
   if not env.get(k) or env[k]=='UNASSIGNED':e.append('environment_'+k+'_missing')
  if env.get('is_ephemeral') is not True:e.append('environment_not_ephemeral')
  if not isinstance(d.get('git_revision'),str) or not re.fullmatch('[0-9a-f]{40}',d['git_revision']):e.append('git_revision_invalid')
  sources=d.get('sources') or {}
+ if not isinstance(sources,dict):return ['source_set_invalid']
  if set(sources)!=set(SOURCES):e.append('source_set_invalid')
  for name,fields in SOURCES.items():
   s=sources.get(name,{})
+  if not isinstance(s,dict):e.append(name+'_invalid');continue
   if s.get('status')!='VERIFIED':e.append(name+'_not_verified');continue
   for f in fields:
    if s.get(f) in (None,'','UNKNOWN'):e.append(name+'_'+f+'_missing')
+  for f in ('revocation_check','mfa_assurance','native_acl_verified','xref_verified','read_only_existing_execution','start_intent_present','inspection_read_only','source_independent_from_action'):
+   if f in fields and s.get(f) is not True:e.append(name+'_'+f+'_must_be_true')
   refs=s.get('evidence_refs')
   if not isinstance(refs,list) or not refs or any(not isinstance(x,str) or not x.strip() for x in refs):e.append(name+'_evidence_refs_missing')
   if 'response_sha256' in s and s.get('response_sha256') is not None and not re.fullmatch('[0-9a-f]{64}',str(s['response_sha256'])):e.append(name+'_sha256_invalid')
- if sources.get('core_temporal',{}).get('status')=='VERIFIED':
+ if isinstance(sources.get('core_temporal'),dict) and sources['core_temporal'].get('status')=='VERIFIED':
   t=sources['core_temporal']
   if t.get('inspection_read_only') is not True or t.get('start_intent_present') is not True or t.get('execution_outcome')!='UNKNOWN':e.append('temporal_read_only_contract_invalid')
- if sources.get('n8n',{}).get('status')=='VERIFIED' and sources['n8n'].get('read_only_existing_execution') is not True:e.append('n8n_replay_forbidden')
- if sources.get('glpi_cmdb',{}).get('status')=='VERIFIED' and (sources['glpi_cmdb'].get('native_acl_verified') is not True or sources['glpi_cmdb'].get('xref_verified') is not True):e.append('glpi_acl_xref_required')
- if sources.get('independent_postcheck',{}).get('status')=='VERIFIED' and sources['independent_postcheck'].get('source_independent_from_action') is not True:e.append('postcheck_not_independent')
+ if isinstance(sources.get('n8n'),dict) and sources['n8n'].get('status')=='VERIFIED' and sources['n8n'].get('read_only_existing_execution') is not True:e.append('n8n_replay_forbidden')
+ if isinstance(sources.get('glpi_cmdb'),dict) and sources['glpi_cmdb'].get('status')=='VERIFIED' and (sources['glpi_cmdb'].get('native_acl_verified') is not True or sources['glpi_cmdb'].get('xref_verified') is not True):e.append('glpi_acl_xref_required')
+ if isinstance(sources.get('independent_postcheck'),dict) and sources['independent_postcheck'].get('status')=='VERIFIED' and sources['independent_postcheck'].get('source_independent_from_action') is not True:e.append('postcheck_not_independent')
  tests=d.get('negative_tests') or {}
+ if not isinstance(tests,dict):return sorted(set(e+['negative_test_set_invalid']))
  if set(tests)!=set(NEGATIVE):e.append('negative_test_set_invalid')
  else:
   for k in NEGATIVE:
