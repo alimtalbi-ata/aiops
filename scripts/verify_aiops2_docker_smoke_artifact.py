@@ -54,7 +54,7 @@ def verify(smoke: object, provenance: object, *, repository: str,
             or not isinstance(provenance["workflow"], str)
             or provenance["workflow"] != "AIOps quality gates"
             or not isinstance(provenance["event_name"], str)
-            or provenance["event_name"] not in {"push", "pull_request", "workflow_dispatch"}
+            or provenance["event_name"] not in {"push", "pull_request", "workflow_dispatch", "schedule"}
             or not isinstance(provenance["ref"], str)
             or not provenance["ref"].startswith("refs/")):
         return False
