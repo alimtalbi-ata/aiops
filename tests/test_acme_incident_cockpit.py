@@ -71,7 +71,8 @@ def test_canonical_operator_cockpit_page_contains_all_gates_and_no_actions():
     assert "HOLD_FOR_HUMAN_REVIEW" in page.text
     assert "DENY_LIVE_ACTION" in page.text
     assert "0 / 9" in page.text
-    assert page.text.count("<tr><th scope='row'>") == 17
+    # 9 lifecycle + 8 ITIL + 9 customer timeline + 9 evidence requirements.
+    assert page.text.count("<tr><th scope='row'>") == 35
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
     with patch("portal.acme_impact_read_model.build_acme_impact_read_model",
