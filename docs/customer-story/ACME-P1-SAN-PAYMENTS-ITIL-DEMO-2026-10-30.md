@@ -125,3 +125,7 @@ The joint evidence reader addresses a source by `(source, source_id)`. It now re
 ## Incident digest binding for simulation/evidence join — 2026-11-14
 
 The simulation/evidence gate now requires a **trusted independently supplied** `expected_source_sha256` (exact lowercase 64-character SHA-256). The joint evidence report must match it, as well as the expected tenant from the simulation request. This prevents an internally consistent evidence summary for a different incident fixture being attached to the simulation. The caller must obtain the digest from a trusted validated incident context, not from the submitted evidence report itself. This remains DEMO-only and never proves live incident identity or authorizes remediation.
+
+## Independent incident identity fence — 2026-11-14
+
+The simulation/evidence gate additionally requires `expected_incident_id` from a trusted incident context, independent of the submitted simulation request. It rejects a valid simulation receipt bound to a different incident **even within the same tenant**. Both the incident ID and source fixture digest must come from the trusted context; copying either from untrusted input defeats the intended boundary. No production authorization is inferred.
