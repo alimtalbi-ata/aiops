@@ -120,6 +120,31 @@ class IncidentWorkflow:
 def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
 def metrics(): return 'aiops_worker_up 1\n'
+@app.get('/api/execution/{run_id}/inspect')
+async def inspect_execution(run_id:str,authorization:str|None=Header(default=None)):
+ if (authorization or '').removeprefix('Bearer ')!=ADMIN:
+  raise HTTPException(401,'invalid internal token')
+ import re
+ if (not isinstance(run_id,str) or not 1<=len(run_id)<=128
+     or re.fullmatch(r'[A-Za-z0-9_.:-]+',run_id) is None):
+  raise HTTPException(422,'invalid execution identifier')
+ # Read-only lookup: no workflow start, no signal, no reset, no cancellation.
+ # Workflow existence is not proof that mode/scenario/version match Core.
+ try:
+  c=await Client.connect(TEMP)
+  h=c.get_workflow_handle(run_id)
+  desc=await h.describe()
+ except Exception:
+  # No reliable attestation from an unreachable or unknown Temporal service.
+  raise HTTPException(503,'workflow inspection unavailable or unverified')
+ return {'run_id':run_id,'workflow_id':run_id,
+         'temporal_visibility':'EXISTS_UNATTESTED',
+         'status_observed':str(desc.status),
+         'original_start_arguments_verified':False,
+         'core_receipt_verified':False,
+         'idempotent_start_confirmed':False,
+         'live_remediation_authorized':False}
+
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
