@@ -35,9 +35,22 @@ def qualify_synthetic_evidence_jointly(
     # Validate and authenticate receipts first. A bad MAC must never be used to
     # justify an operational decision even if a separate byte digest matches.
     signed = inspect_source_bound_receipts(lifecycle, manifest, receipts, resolve_key)
-    digests = compare_synthetic_evidence_readbacks(lifecycle, manifest, readback)
-    by_digest = {item["checkpoint"]: item for item in digests["comparisons"]}
     by_mac = {item["checkpoint"]: item for item in signed["results"]}
+    # Never invoke an external readback for an unsigned, invalid or missing
+    # receipt. This is a preflight gate, not a post-hoc result annotation.
+    authorized_sources = {
+        (item["source"], item["source_id"])
+        for item in manifest["items"]
+        if item["checkpoint"] in by_mac
+        and by_mac[item["checkpoint"]]["receipt_integrity"]
+            == "MAC_VALID_SOURCE_KEY_UNATTESTED"
+    }
+    def gated_readback(source: str, source_id: str) -> bytes:
+        if (source, source_id) not in authorized_sources:
+            raise ValueError("source_receipt_not_qualified_for_readback")
+        return readback(source, source_id)
+    digests = compare_synthetic_evidence_readbacks(lifecycle, manifest, gated_readback)
+    by_digest = {item["checkpoint"]: item for item in digests["comparisons"]}
     if len(by_digest) != len(digests["comparisons"]) or len(by_mac) != len(signed["results"]):
         raise ValueError("duplicate_joint_checkpoint")
     rows = []
