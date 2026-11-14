@@ -43,7 +43,7 @@ jobs:
       - name: GLPI signed xref and OIDC-bound native ACL contracts (offline)
         run: python -m pytest -q tests/test_glpi_signed_xref_boundary.py tests/test_glpi_xref_hmac_verifier.py tests/test_glpi_xref_postgres_nonce.py tests/test_glpi_xref_resolver_factory.py tests/test_verified_principal_glpi_xref.py
       - name: OIDC-bound authenticated Core and GLPI read-only assembly contracts (offline)
-        run: python -m pytest -q tests/test_verified_principal_glpi_readonly.py tests/test_glpi_http_json_transport.py tests/test_glpi_session_readonly.py tests/test_glpi_http_readers.py tests/test_glpi_raw_readback.py tests/test_glpi_readback_comparison.py tests/test_glpi_full_readonly_chain.py tests/test_glpi_server_readonly_assembly.py
+        run: python -m pytest -q tests/test_verified_principal_glpi_readonly.py tests/test_glpi_native_ticket_acl.py tests/test_glpi_http_json_transport.py tests/test_glpi_session_readonly.py tests/test_glpi_http_readers.py tests/test_glpi_raw_readback.py tests/test_glpi_readback_comparison.py tests/test_glpi_full_readonly_chain.py tests/test_glpi_server_readonly_assembly.py
       - name: Portal registry and integration navigation unit tests
         run: python -m unittest discover -s tests -p "test_portal_integrations.py" -v
       - name: Portal navigation browser JavaScript syntax
