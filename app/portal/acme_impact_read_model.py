@@ -301,6 +301,18 @@ def acme_incident_cockpit_page():
     return HTMLResponse(content=page, headers=HEADERS)
 
 
+@router.get("/api/demo/acme-itil-handoff-draft",
+            name="synthetic_acme_itil_handoff_draft")
+def acme_itil_handoff_draft_json():
+    """Inert incident handoff draft: never a GLPI write request."""
+    from portal.acme_itil_draft import build_synthetic_itil_handoff_draft
+    try:
+        draft = build_synthetic_itil_handoff_draft(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_itil_draft_unqualified") from exc
+    return JSONResponse(content=draft, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-incident-cockpit", name="synthetic_acme_incident_cockpit")
 def acme_incident_cockpit_json():
     """One fixture snapshot, cross-checked incident-to-ITIL DEMO cockpit."""
