@@ -1,9 +1,9 @@
-"""Bind signed GLPI xrefs to a verified OIDC actor and active tenant grants.
+"""Bind signed GLPI xrefs to a per-request OIDC principal and active tenant grants.
 
 This is an unmounted server-side resolver, not an HTTP endpoint. The tenant
 candidate comes from active PostgreSQL grants, never the browser. A separate
 injected GLPI-native ACL evaluator must affirm the exact actor/entity/ticket
-read. All missing or uncertain dependencies deny.
+read. Every call re-verifies the bearer and checks durable JTI revocation.
 """
 from __future__ import annotations
 
@@ -27,112 +27,113 @@ class VerifiedGLPIXrefDenied(PermissionError):
 def make_verified_principal_glpi_xref_resolver(
     *,
     connect: Callable,
-    bearer_token: str,
     secret: bytes,
     fetch_signed_event: Callable,
     authorize_glpi_native_acl: Callable,
     clock: Callable | None = None,
 ):
-    """Return resolve_ticket(ticket_id), with actor/tenant derived server-side.
+    """Return resolve_ticket(bearer_token, ticket_id), with scope server-derived.
 
-    OIDC principal and JTI revocation are checked at construction. Candidate
-    tenants are loaded from active actor grants. For each candidate, the signed
-    event must bind actor+tenant+ticket, pass durable nonce replay protection,
-    and pass an injected native GLPI ACL check. Exactly one candidate may pass.
-    The native ACL callback signature is:
-      (actor, tenant_id, glpi_instance_id, glpi_entity_id, ticket_id, action)
-    It must return exactly True for action="read_ticket".
+    Every request verifies the OIDC bearer and checks its issuer+JTI against
+    PostgreSQL before discovering active tenants. Candidate tenants are loaded
+    from actor grants. A signed event must bind actor+tenant+ticket, pass the
+    durable nonce replay barrier, and pass an injected native GLPI ACL check.
+    Exactly one candidate may pass. No actor or tenant override is accepted.
     """
     if not callable(connect):
         raise ValueError("postgres_connection_factory_missing")
     if not callable(fetch_signed_event) or not callable(authorize_glpi_native_acl):
         raise ValueError("glpi_server_acl_dependencies_missing")
+    if not isinstance(secret, bytes) or len(secret) < 32:
+        raise ValueError("xref_signing_key_missing")
     if clock is not None and not callable(clock):
         raise ValueError("clock_invalid")
 
-    is_revoked, _, _ = make_oidc_jti_store(connect)
-    principal = principal_from_bearer(bearer_token, is_revoked=is_revoked)
-    actor = principal.actor_id
-    consume_nonce = make_postgres_nonce_consumer(connect)
-
-    def active_tenants():
-        connection = connect()
-        try:
-            with connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT tenant_id FROM aiops.portal_actor_tenant_grants "
-                        "WHERE actor_id = %s AND revoked_at IS NULL ORDER BY tenant_id",
-                        (actor,),
-                    )
-                    rows = cursor.fetchall()
-            values = []
-            for row in rows:
-                if (not isinstance(row, (tuple, list)) or len(row) != 1
-                        or not isinstance(row[0], str)
-                        or not _TENANT.fullmatch(row[0])):
-                    raise VerifiedGLPIXrefDenied("tenant_grants_invalid")
-                values.append(row[0])
-            if len(values) != len(set(values)):
-                raise VerifiedGLPIXrefDenied("tenant_grants_ambiguous")
-            return values
-        except VerifiedGLPIXrefDenied:
-            raise
-        except Exception as exc:
-            raise VerifiedGLPIXrefDenied("tenant_grants_unavailable") from exc
-        finally:
-            connection.close()
-
-    fatal_acl_error = []
-
-    def authorize_actor(*, actor: str, tenant_id: str, ticket_id: str, claims: dict):
-        if actor != principal.actor_id or not _TENANT.fullmatch(tenant_id):
-            return False
-        if not isinstance(claims, dict):
-            return False
-        connection = connect()
-        try:
-            with connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT 1 FROM aiops.portal_actor_tenant_grants "
-                        "WHERE actor_id = %s AND tenant_id = %s AND revoked_at IS NULL",
-                        (principal.actor_id, tenant_id),
-                    )
-                    membership = cursor.fetchone()
-            if membership is None:
-                return False
-        except Exception as exc:
-            fatal_acl_error.append("tenant_membership_unavailable")
-            raise exc
-        finally:
-            connection.close()
-
-        try:
-            allowed = authorize_glpi_native_acl(
-                actor=principal.actor_id,
-                tenant_id=tenant_id,
-                glpi_instance_id=claims.get("glpi_instance_id"),
-                glpi_entity_id=claims.get("glpi_entity_id"),
-                ticket_id=ticket_id,
-                action="read_ticket",
-            )
-        except Exception as exc:
-            fatal_acl_error.append("glpi_native_acl_unavailable")
-            raise exc
-        return allowed is True
-
-    resolver = make_hmac_canonical_xref_resolver(
-        secret=secret,
-        fetch_signed_event=fetch_signed_event,
-        consume_nonce=consume_nonce,
-        authorize_actor=authorize_actor,
-        clock=clock,
-    )
-
-    def resolve_ticket(ticket_id: str):
+    def resolve_ticket(bearer_token: str, ticket_id: str):
         if not isinstance(ticket_id, str) or not _TICKET.fullmatch(ticket_id):
             raise VerifiedGLPIXrefDenied("invalid_ticket_id")
+
+        # Resolve identity and revocation afresh for every incoming request.
+        is_revoked, _, _ = make_oidc_jti_store(connect)
+        principal = principal_from_bearer(bearer_token, is_revoked=is_revoked)
+        actor = principal.actor_id
+        consume_nonce = make_postgres_nonce_consumer(connect)
+
+        def active_tenants():
+            connection = connect()
+            try:
+                with connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT tenant_id FROM aiops.portal_actor_tenant_grants "
+                            "WHERE actor_id = %s AND revoked_at IS NULL ORDER BY tenant_id",
+                            (actor,),
+                        )
+                        rows = cursor.fetchall()
+                values = []
+                for row in rows:
+                    if (not isinstance(row, (tuple, list)) or len(row) != 1
+                            or not isinstance(row[0], str)
+                            or not _TENANT.fullmatch(row[0])):
+                        raise VerifiedGLPIXrefDenied("tenant_grants_invalid")
+                    values.append(row[0])
+                if len(values) != len(set(values)):
+                    raise VerifiedGLPIXrefDenied("tenant_grants_ambiguous")
+                return values
+            except VerifiedGLPIXrefDenied:
+                raise
+            except Exception as exc:
+                raise VerifiedGLPIXrefDenied("tenant_grants_unavailable") from exc
+            finally:
+                connection.close()
+
+        fatal_acl_error = []
+
+        def authorize_actor(*, actor: str, tenant_id: str, ticket_id: str, claims: dict):
+            if actor != principal.actor_id or not _TENANT.fullmatch(tenant_id):
+                return False
+            if not isinstance(claims, dict):
+                return False
+            connection = connect()
+            try:
+                with connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT 1 FROM aiops.portal_actor_tenant_grants "
+                            "WHERE actor_id = %s AND tenant_id = %s AND revoked_at IS NULL",
+                            (principal.actor_id, tenant_id),
+                        )
+                        membership = cursor.fetchone()
+                if membership is None:
+                    return False
+            except Exception as exc:
+                fatal_acl_error.append("tenant_membership_unavailable")
+                raise exc
+            finally:
+                connection.close()
+
+            try:
+                allowed = authorize_glpi_native_acl(
+                    actor=principal.actor_id,
+                    tenant_id=tenant_id,
+                    glpi_instance_id=claims.get("glpi_instance_id"),
+                    glpi_entity_id=claims.get("glpi_entity_id"),
+                    ticket_id=ticket_id,
+                    action="read_ticket",
+                )
+            except Exception as exc:
+                fatal_acl_error.append("glpi_native_acl_unavailable")
+                raise exc
+            return allowed is True
+
+        resolver = make_hmac_canonical_xref_resolver(
+            secret=secret,
+            fetch_signed_event=fetch_signed_event,
+            consume_nonce=consume_nonce,
+            authorize_actor=authorize_actor,
+            clock=clock,
+        )
+
         matches = []
         for tenant_id in active_tenants():
             try:
