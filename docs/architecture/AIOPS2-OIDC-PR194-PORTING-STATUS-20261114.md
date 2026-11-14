@@ -73,3 +73,33 @@ Exact-head qualification at branch HEAD `1efb2d603d7d3a2644d735c98e611996566f30e
 - Overall quality workflow was still running its Chromium portal E2E at the last observation.
 
 Boundary remains explicit: this is a callable Core reader adapter, NOT a mounted HTTP route or deployed authorization surface. Real IdP/JWKS reachability, grant provisioning/lifecycle, GLPI native ACL and authenticated GLPI readback are not qualified. No GLPI calls, writes, deployment, migration application on a server, Debian access, or LIVE execution.
+
+## OIDC-bound signed GLPI xref gate — 2026-11-14
+
+Selective read-only/security components from draft PR #520 have been ported:
+- HMAC signed-xref verifier and canonical resolver boundary.
+- PostgreSQL unique-key nonce replay consumer.
+- Additive migration `011_glpi_xref_nonce_replay_barrier.sql`.
+- `make_verified_principal_glpi_xref_resolver` in `app/shared/verified_principal_glpi_xref.py`.
+
+Security semantics:
+- Bearer verification and durable OIDC JTI revocation lookup occur on every `resolve_ticket(bearer_token, ticket_id)` call, not once when a reusable resolver is constructed.
+- Actor identity comes only from the verified OIDC principal. Tenant candidates come only from active `portal_actor_tenant_grants`; there is no caller-supplied actor or tenant parameter.
+- The signed xref must bind actor, tenant, ticket, issuer, audience, expiry, unique active association, and identity fields.
+- A fresh active tenant grant is checked before an injected GLPI-native ACL callback. That callback must return exactly `True` for the precise actor/tenant/instance/entity/ticket read.
+- The event nonce is consumed atomically in PostgreSQL. Zero or multiple valid tenant associations deny.
+- The resolver does not perform GLPI HTTP reads, writes, Copilot queries, HITL proposals, or execution.
+
+Qualification observed on HEAD `a2c83a03d7bc05577e388f19c00feafe9527286b`:
+- OIDC-bound xref offline contract suite: SUCCESS.
+- PostgreSQL 16 xref nonce durability, tenant scoping, concurrency and outage-denial suite: SUCCESS.
+- Portal exact-head workflow: SUCCESS.
+- The overall quality workflow was still running Chromium portal E2E at the last observation.
+- A further ambiguity-denial test was added after this observation on HEAD `0143d435057c01a7e55559d8a0ee399e2e0a2522`; that exact HEAD is pending CI.
+
+Not yet qualified:
+- No concrete GLPI-native ACL provider/callback is installed; tests use a controlled fake. This remains a mandatory integration dependency.
+- No real GLPI instance, GLPI session credential, IdP/JWKS provider, signed-event producer, or tenant-grant provisioning workflow has been tested live.
+- No HTTP route is mounted. The resolver is an unmounted security adapter only.
+- Migration 011 has been tested only against disposable CI PostgreSQL; it has not been applied to any deployment database.
+- No GLPI ticket GET, PUT, CREATE, Copilot query, HITL proposal, deployment, Debian access, or LIVE execution was performed.
