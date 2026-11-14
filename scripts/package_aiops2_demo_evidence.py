@@ -93,6 +93,24 @@ def verify_package(directory):
     for name, digest in manifest["files_sha256"].items():
         if hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
             return False
+    # Hashes alone are not trust: an attacker can rewrite both files and
+    # manifest. Bind the package to this checkout's validated synthetic fixture.
+    expected_cockpit = project_synthetic_incident_cockpit(
+        build_acme_impact_read_model())
+    expected_report = build_report()
+    expected_files = {
+        "cockpit.json": encode_json(expected_cockpit),
+        "acceptance.json": encode_json(expected_report),
+        "cockpit.html": render_synthetic_cockpit_html(expected_cockpit).encode("utf-8"),
+    }
+    if (manifest.get("scenario") != "ACME-P1-SAN-PAYMENTS"
+            or manifest.get("source_sha256") != expected_report["source_sha256"]
+            or manifest.get("incident_id") != expected_report["incident_id"]
+            or manifest.get("business_impact_incident_id")
+               != expected_report["business_impact_incident_id"]
+            or any((directory / name).read_bytes() != expected_bytes
+                   for name, expected_bytes in expected_files.items())):
+        return False
     report = json.loads((directory / "acceptance.json").read_text("utf-8"))
     cockpit = json.loads((directory / "cockpit.json").read_text("utf-8"))
     return (report.get("accepted") is True
