@@ -61,3 +61,7 @@ Read-only **GET `/api/demo/acme-itil-readiness`** derives eight explicit ITIL tr
 ## Operator-facing ITIL evidence view — 2026-11-14
 
 The existing Portal additionally serves **GET `/demo/acme-itil-readiness`**, a static French operator table showing each transition, its UNKNOWN readiness, missing independent checkpoints and explicit non-authorization. The page uses no scripts, forms, backend writes, or live service calls. It carries the fixture SHA-256 and an always-visible SIMULATION / NO-GO LIVE warning. API and page fail HTTP 503 on unqualified fixture data.
+
+## Independent evidence collection contract — 2026-11-14
+
+GET `/api/demo/acme-evidence-plan` provides a **non-executable** checklist for all nine lifecycle checkpoints, including expected source (Grafana, n8n, GLPI), evidence type, and minimum metadata (observation time, source ID, SHA-256). The plan records zero accepted/verified evidence, no outbound collection, no GLPI writes, no Temporal execution, and no LIVE authorization. This is a preparation contract only; independently authenticated evidence ingestion and attestation remain future work. A forged PASS in the synthetic lifecycle is rejected rather than silently accepted.
