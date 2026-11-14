@@ -265,7 +265,7 @@ def test_changed_signed_event_after_preflight_denies():
             fetch_signed_event=fetch_signed_event,
             authorize_glpi_native_acl=lambda **_: True, clock=lambda: NOW,
         )
-        with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_changed_after_preflight"):
+        with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_final_verification_failed"):
             resolve("token", "42")
     assert not any("INSERT INTO aiops.glpi_xref_consumed_nonces" in sql
                    for cursor in cursors for sql, _ in cursor.calls)
