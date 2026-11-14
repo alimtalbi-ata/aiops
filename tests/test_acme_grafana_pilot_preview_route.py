@@ -75,3 +75,14 @@ def test_grafana_preview_fails_closed_when_incident_fixture_unavailable():
   response=client().get('/demo/acme-grafana-pilot-preview')
  assert response.status_code==503
  assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
+
+def test_grafana_preview_uses_only_portal_packaged_register():
+ original=Path.read_text
+ def read_text(path,*args,**kwargs):
+  if '/docs/' in str(path).replace('\\\\','/'):
+   raise AssertionError('runtime must not read repository docs')
+  return original(path,*args,**kwargs)
+ with patch('pathlib.Path.read_text',new=read_text):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==200
+ assert 'UNKNOWN / BLOCKED' in response.text
