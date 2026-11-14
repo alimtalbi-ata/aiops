@@ -11,6 +11,7 @@ from shared.glpi_http_json_transport import make_json_get
 from shared.glpi_session_readonly import make_glpi_session_ticket_get
 from shared.glpi_http_readers import make_core_glpi_readers
 from shared.glpi_readback_comparison import compare_raw_readbacks_to_association
+from shared.glpi_native_ticket_acl import make_glpi_native_ticket_acl
 from shared.verified_principal_glpi_xref import (
     make_verified_principal_glpi_xref_resolver,
 )
@@ -25,7 +26,6 @@ def make_verified_principal_glpi_readonly_qualifier(
     connect: Callable,
     secret: bytes,
     fetch_signed_event: Callable,
-    authorize_glpi_native_acl: Callable,
     authorize_core_read: Callable,
     authorize_glpi_read: Callable,
     core_token: Callable,
@@ -36,7 +36,7 @@ def make_verified_principal_glpi_readonly_qualifier(
     clock: Callable | None = None,
 ):
     required = (
-        connect, fetch_signed_event, authorize_glpi_native_acl,
+        connect, fetch_signed_event,
         authorize_core_read, authorize_glpi_read, core_token,
         glpi_app_token, glpi_user_token,
     )
@@ -72,6 +72,12 @@ def make_verified_principal_glpi_readonly_qualifier(
         core_get=core_get,
         glpi_get=glpi_get,
         authorize_read=authorize_read,
+    )
+
+    authorize_glpi_native_acl = make_glpi_native_ticket_acl(
+        glpi_base_url=glpi_base_url,
+        get_app_token=glpi_app_token,
+        get_actor_user_token=glpi_user_token,
     )
 
     resolve_ticket = make_verified_principal_glpi_xref_resolver(
