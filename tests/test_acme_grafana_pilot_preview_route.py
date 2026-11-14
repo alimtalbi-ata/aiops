@@ -15,7 +15,7 @@ def test_synthetic_grafana_preview_route_is_safe():
  assert response.status_code==200
  assert response.headers['cache-control']=='no-store'
  assert "default-src 'none'" in response.headers['content-security-policy']
- for marker in ('SAN → Payments','UNKNOWN / BLOCKED','LOCAL_SYNTHETIC_FIXTURE_NOT_AUTHENTICATED','NO-GO','acme-synthetic'):
+ for marker in ('SAN → Payments','UNKNOWN / BLOCKED','LOCAL_SYNTHETIC_FIXTURE_NOT_AUTHENTICATED','NO-GO','acme-synthetic','État candidat','firing'):
   assert marker in response.text
  assert '<script' not in response.text
 
