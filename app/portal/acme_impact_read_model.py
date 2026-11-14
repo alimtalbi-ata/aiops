@@ -237,6 +237,56 @@ def acme_itil_readiness_page():
     return HTMLResponse(content=page, headers=HEADERS)
 
 
+@router.get("/demo/acme-evidence-plan", response_class=HTMLResponse,
+            name="synthetic_acme_evidence_plan_page")
+def acme_evidence_plan_page():
+    """Static operator checklist, no uploads, scripts or evidence acceptance."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_evidence_collection_plan import plan_synthetic_evidence_collection
+    try:
+        plan = plan_synthetic_evidence_collection(
+            project_synthetic_incident_lifecycle(_load_or_503())
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_evidence_plan_unqualified") from exc
+    rows = "".join(
+        "<tr><th scope='row'>" + html.escape(req["checkpoint"], quote=True)
+        + "</th><td>" + html.escape(req["phase"], quote=True)
+        + "</td><td>" + html.escape(req["expected_source"], quote=True)
+        + "</td><td>" + html.escape(req["required_evidence_type"], quote=True)
+        + "</td><td>" + html.escape(", ".join(req["required_metadata"]), quote=True)
+        + "</td><td>MISSING — NON VÉRIFIÉ</td></tr>"
+        for req in plan["requests"]
+    )
+    page = (
+        "<!doctype html><html lang='fr'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<title>AIOPS2 — Preuves requises (DEMO)</title>"
+        "<style>body{font:16px system-ui,sans-serif;max-width:1150px;margin:2rem auto;"
+        "padding:0 1rem;line-height:1.5}table{border-collapse:collapse;width:100%}"
+        "th,td{border:1px solid #777;padding:.65rem;text-align:left}"
+        "thead{background:#eee;color:#111}.warning{border-left:5px solid #9a6700;"
+        "padding:1rem;background:#fff7dd;color:#302400}</style></head><body><main>"
+        "<h1>AIOPS2 — Plan de collecte des preuves</h1>"
+        "<p class='warning'><strong>SIMULATION LOCALE UNIQUEMENT — NO-GO LIVE.</strong>"
+        " Aucune preuve acceptée, aucune collecte automatique, aucun accès GLPI/Temporal."
+        "</p><p>Incident : <code>"
+        + html.escape(plan["incident_id"], quote=True)
+        + "</code> · Impact métier : <code>"
+        + html.escape(plan["business_impact_incident_id"], quote=True)
+        + "</code></p>"
+        "<table><caption>Checkpoints et exigences de preuve indépendante</caption>"
+        "<thead><tr><th>Checkpoint</th><th>Phase</th><th>Source attendue</th>"
+        "<th>Type de preuve</th><th>Métadonnées requises</th><th>État</th></tr></thead>"
+        "<tbody>" + rows + "</tbody></table>"
+        "<p>Preuves vérifiées : 0 / " + str(plan["requested_count"]) + "</p>"
+        "<p>Source SHA-256 : <code>"
+        + html.escape(plan["source_sha256"], quote=True)
+        + "</code></p></main></body></html>"
+    )
+    return HTMLResponse(content=page, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-evidence-plan", name="synthetic_acme_evidence_plan")
 def acme_evidence_plan_json():
     """Read-only requirements for independent proof; never collects or accepts it."""
