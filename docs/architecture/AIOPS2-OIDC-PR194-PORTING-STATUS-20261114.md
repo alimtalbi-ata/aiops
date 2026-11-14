@@ -164,3 +164,9 @@ This is an isolated contract test, **not** a live GLPI server, external vault or
 Added `tests/test_glpi_core_readonly_qualifier_chain.py` running the real read-only qualifier composition, PostgreSQL credential broker, native GLPI ACL, Core HTTPS bearer GET transport, GLPI REST session identity check, independent Core/GLPI ACL gates and raw association comparison. Only the external services and signed OIDC/xref resolver are fixtures. The positive path proves two GLPI session identity checks and ticket reads (native ACL + readback), one Core run read, and no Copilot/HITL/write/execution. Negative cases cover wrong GLPI user/entity, wrong Core incident, LIVE Core mode, and denied independent read ACLs. Included in the quality workflow.
 
 This is an isolated end-to-end **adapter contract**, not a real IdP, signed event producer, GLPI server, Core server or vault. No route or LIVE action is enabled.
+
+## Full signed OIDC xref to Core/GLPI readback contract — 2026-11-14
+
+Added `tests/test_glpi_signed_oidc_full_readonly_chain.py` to exercise the **actual** per-request OIDC principal adapter, durable-JTI check, active tenant discovery, HMAC-signed canonical association verification, PostgreSQL nonce consumer, native GLPI ACL, broker, authenticated GLPI session user identity proof, independent Core and GLPI GET transports, and raw readback comparison. External IdP verification, PostgreSQL, vault and HTTPS services remain controlled fixtures; the cryptographic HMAC verification and replay logic are real adapter code. Regression cases cover tampered signed claims, revoked JTI, missing grant, and repeated signed event nonce. The replay case must fail on second qualification.
+
+This is not a real IdP/JWKS, PostgreSQL integration, GLPI server, vault or signed-event producer. Separate real PostgreSQL tests cover nonce uniqueness and revocation; cross-service staging remains necessary. No Portal route or LIVE operation is enabled.
