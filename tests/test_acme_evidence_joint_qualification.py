@@ -44,7 +44,8 @@ def sample():
 
 def qualify(lifecycle, manifest, receipts, readback):
     return qualify_synthetic_evidence_jointly(
-        lifecycle, manifest, receipts, readback, lambda *_: KEY)
+        lifecycle, manifest, receipts, readback, lambda *_: KEY,
+        expected_tenant_id="acme-demo")
 
 
 def test_both_checks_match_but_no_runtime_or_itil_authority():
@@ -91,5 +92,31 @@ def test_forged_manifest_fails_before_any_callback():
             lifecycle, manifest, [receipt],
             lambda *_: calls.append("readback") or raw,
             lambda *_: calls.append("resolver") or KEY,
+            expected_tenant_id="acme-demo",
         )
     assert calls == []
+
+
+def test_foreign_tenant_receipt_rejected_before_any_callback():
+    lifecycle, manifest, receipt, raw = sample()
+    receipt["tenant_id"] = "other-tenant"
+    calls = []
+    with pytest.raises(ValueError, match="receipt_tenant_scope_mismatch"):
+        qualify_synthetic_evidence_jointly(
+            lifecycle, manifest, [receipt],
+            lambda *_: calls.append("readback") or raw,
+            lambda *_: calls.append("resolver") or KEY,
+            expected_tenant_id="acme-demo",
+        )
+    assert calls == []
+
+
+def test_expected_tenant_must_be_supplied_by_trusted_caller():
+    lifecycle, manifest, receipt, raw = sample()
+    with pytest.raises(TypeError):
+        qualify_synthetic_evidence_jointly(
+            lifecycle, manifest, [receipt], lambda *_: raw, lambda *_: KEY)
+    with pytest.raises(ValueError, match="trusted_expected_tenant_required"):
+        qualify_synthetic_evidence_jointly(
+            lifecycle, manifest, [receipt], lambda *_: raw, lambda *_: KEY,
+            expected_tenant_id="")
