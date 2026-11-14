@@ -1,0 +1,105 @@
+{
+  "schema": "aiops2.readonly-pilot-evidence-register.v1",
+  "pilot_id": "UNASSIGNED",
+  "environment": {
+    "name": "UNASSIGNED",
+    "owner": "UNASSIGNED",
+    "is_ephemeral": null,
+    "created_at_utc": null,
+    "expires_at_utc": null,
+    "destruction_record": null
+  },
+  "git_revision": null,
+  "decision": "BLOCKED",
+  "live_actions_authorized": false,
+  "sources": {
+    "oidc": {
+      "status": "UNKNOWN",
+      "issuer": null,
+      "audience": null,
+      "jwks_key_id": null,
+      "revocation_check": null,
+      "mfa_assurance": null,
+      "evidence_refs": []
+    },
+    "grafana": {
+      "status": "UNKNOWN",
+      "rule_uid": null,
+      "dashboard_uid": null,
+      "observed_at_utc": null,
+      "service_identity": null,
+      "tenant_scope": null,
+      "response_sha256": null,
+      "evidence_refs": []
+    },
+    "n8n": {
+      "status": "UNKNOWN",
+      "workflow_id": null,
+      "execution_id": null,
+      "execution_status": null,
+      "started_at_utc": null,
+      "finished_at_utc": null,
+      "workflow_version": null,
+      "read_only_existing_execution": null,
+      "response_sha256": null,
+      "evidence_refs": []
+    },
+    "glpi_cmdb": {
+      "status": "UNKNOWN",
+      "instance_id": null,
+      "entity_id": null,
+      "ticket_id": null,
+      "ci_id": null,
+      "human_actor_subject": null,
+      "native_acl_verified": null,
+      "xref_verified": null,
+      "response_sha256": null,
+      "evidence_refs": []
+    },
+    "core_temporal": {
+      "status": "UNKNOWN",
+      "core_run_id": null,
+      "workflow_id": null,
+      "start_intent_present": null,
+      "inspection_read_only": null,
+      "arguments_comparison": "UNKNOWN",
+      "execution_outcome": "UNKNOWN",
+      "evidence_refs": []
+    },
+    "policy_hitl": {
+      "status": "UNKNOWN",
+      "policy_version": null,
+      "decision": "UNKNOWN",
+      "human_actor_subject": null,
+      "approval_scope": null,
+      "audit_event_ref": null,
+      "evidence_refs": []
+    },
+    "independent_postcheck": {
+      "status": "UNKNOWN",
+      "source_independent_from_action": null,
+      "observed_at_utc": null,
+      "expected_state": null,
+      "observed_state": null,
+      "verifier_identity": null,
+      "response_sha256": null,
+      "evidence_refs": []
+    }
+  },
+  "negative_tests": {
+    "cross_tenant_zero_upstream_calls": "NOT_RUN",
+    "cross_entity_zero_upstream_calls": "NOT_RUN",
+    "revoked_actor_zero_upstream_calls": "NOT_RUN",
+    "replayed_token_zero_upstream_calls": "NOT_RUN",
+    "glpi_acl_denial_zero_upstream_reads": "NOT_RUN",
+    "temporal_inspection_no_start_or_restart": "NOT_RUN",
+    "n8n_existing_execution_no_replay": "NOT_RUN"
+  },
+  "notes": [
+    "Template only: no integration has been asserted by this file.",
+    "UNKNOWN is not PASS. Missing evidence must remain UNKNOWN or BLOCKED.",
+    "A service token does not establish the human actor's native GLPI permissions.",
+    "A Temporal MATCH does not prove successful execution or idempotence.",
+    "A simulated receipt is not an independent postcheck."
+  ]
+}

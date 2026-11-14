@@ -1,0 +1,122 @@
+"""Offline GET-only Core/GLPI adapter ACL and URL contract tests."""
+import sys
+import unittest
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
+from shared.glpi_http_readers import GLPIHTTPReadBlocked, make_core_glpi_readers
+
+
+class HTTPReadersTests(unittest.TestCase):
+    def setUp(self):
+        self.calls = []
+        self.allowed = True
+
+    def acl(self, **kwargs):
+        self.calls.append(("acl", kwargs))
+        return self.allowed
+
+    def core(self, **kwargs):
+        self.calls.append(("core", kwargs))
+        return {"run": {"run_id": "RUN-12345678"}}
+
+    def glpi(self, **kwargs):
+        self.calls.append(("glpi", kwargs))
+        return {"id": 201}
+
+    def readers(self, **kwargs):
+        args = dict(core_base_url="https://core.internal",
+                    glpi_base_url="https://glpi.internal",
+                    core_get=self.core, glpi_get=self.glpi,
+                    authorize_read=self.acl)
+        args.update(kwargs)
+        return make_core_glpi_readers(**args)
+
+    def test_get_paths_and_acl_before_request(self):
+        core, glpi = self.readers()
+        core(actor="operator", tenant_id="tenant-a", run_id="RUN-12345678")
+        glpi(actor="operator", tenant_id="tenant-a",
+             ticket_id="201", glpi_instance_id="ci")
+        self.assertEqual([call[0] for call in self.calls],
+                         ["acl", "core", "acl", "glpi"])
+        self.assertEqual(self.calls[1][1]["url"],
+                         "https://core.internal/api/runs/RUN-12345678")
+        self.assertEqual(self.calls[3][1]["url"],
+                         "https://glpi.internal/Ticket/201")
+
+    def test_denied_acl_prevents_network(self):
+        self.allowed = False
+        core, glpi = self.readers()
+        with self.assertRaises(GLPIHTTPReadBlocked):
+            core(actor="operator", tenant_id="tenant-a", run_id="RUN-12345678")
+        with self.assertRaises(GLPIHTTPReadBlocked):
+            glpi(actor="operator", tenant_id="tenant-a",
+                 ticket_id="201", glpi_instance_id="ci")
+        self.assertEqual([call[0] for call in self.calls], ["acl", "acl"])
+
+    def test_bad_resource_ids_block_before_acl(self):
+        core, glpi = self.readers()
+        with self.assertRaises(GLPIHTTPReadBlocked):
+            core(actor="operator", tenant_id="tenant-a", run_id="../etc/passwd")
+        with self.assertRaises(GLPIHTTPReadBlocked):
+            glpi(actor="operator", tenant_id="tenant-a",
+                 ticket_id="201/../1", glpi_instance_id="ci")
+        self.assertEqual(self.calls, [])
+
+    def test_run_identifier_grammar_matches_signed_xref_before_acl(self):
+        core, _ = self.readers()
+        for run_id in ("RUN-", "RUN-1", "RUN-abcdefgh",
+                       "RUN-ABC_1234", "RUN-" + "A" * 65):
+            with self.subTest(run_id=run_id), self.assertRaises(GLPIHTTPReadBlocked):
+                core(actor="operator", tenant_id="tenant-a", run_id=run_id)
+        self.assertEqual(self.calls, [])
+
+    def test_missing_scope_and_unicode_run_block_before_acl(self):
+        core, glpi = self.readers()
+        for actor, tenant in (("", "tenant-a"), ("operator", ""),
+                              (None, "tenant-a"), ("operator", None),
+                              ("   ", "tenant-a"), ("operator", "   ")):
+            with self.subTest(actor=actor, tenant=tenant):
+                with self.assertRaises(GLPIHTTPReadBlocked):
+                    core(actor=actor, tenant_id=tenant, run_id="RUN-12345678")
+                with self.assertRaises(GLPIHTTPReadBlocked):
+                    glpi(actor=actor, tenant_id=tenant, ticket_id="201",
+                         glpi_instance_id="ci")
+        with self.assertRaises(GLPIHTTPReadBlocked):
+            core(actor="operator", tenant_id="tenant-a", run_id="RUN-１２３")
+        self.assertEqual(self.calls, [])
+
+    def test_control_characters_in_scope_rejected_before_acl(self):
+        core, glpi = self.readers()
+        for actor, tenant, instance in (
+            ("operator" + chr(10) + "admin", "tenant-a", "ci"),
+            ("operator", "tenant-a" + chr(13) + "other", "ci"),
+            ("operator", "tenant-a", "ci" + chr(0) + "other"),
+            ("operator" + chr(127), "tenant-a", "ci"),
+        ):
+            with self.subTest(actor=actor, tenant=tenant, instance=instance):
+                with self.assertRaises(GLPIHTTPReadBlocked):
+                    glpi(actor=actor, tenant_id=tenant, ticket_id="201",
+                         glpi_instance_id=instance)
+        with self.assertRaises(GLPIHTTPReadBlocked):
+            core(actor="operator" + chr(0) + "admin", tenant_id="tenant-a",
+                 run_id="RUN-12345678")
+        self.assertEqual(self.calls, [])
+
+    def test_untrusted_endpoint_and_missing_acl_rejected(self):
+        for changes in ({"core_base_url": "http://core.internal"},
+                        {"glpi_base_url": "https://user@glpi.internal"},
+                        {"authorize_read": None},
+                        {"core_base_url": "https://core.internal/evil"},
+                        {"core_base_url": "https://core.internal:invalid"},
+                        {"core_base_url": "https://core.internal\\\\@evil.invalid"},
+                        {"core_base_url": "https://core.internal:0"},
+                        {"core_base_url": "https://core.internal" + chr(127)},
+                        {"core_base_url": "https://core.internal?next=evil"},
+                        {"glpi_base_url": "https://core.internal"},
+                        {"glpi_base_url": "https://CORE.internal:443"}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.readers(**changes)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -185,6 +185,223 @@ def _load_or_503() -> dict[str, Any]:
         ) from exc
 
 
+@router.get("/demo/acme-itil-readiness", response_class=HTMLResponse,
+            name="synthetic_acme_itil_readiness_page")
+def acme_itil_readiness_page():
+    """Static, script-free operator view of missing ITIL proof."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_itil_readiness import assess_synthetic_itil_readiness
+    try:
+        readiness = assess_synthetic_itil_readiness(
+            project_synthetic_incident_lifecycle(_load_or_503())
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_itil_readiness_unqualified") from exc
+    rows = "".join(
+        "<tr><th scope='row'>" + html.escape(t["transition"], quote=True)
+        + "</th><td>" + html.escape(t["readiness"], quote=True)
+        + "</td><td>" + html.escape(", ".join(t["missing_evidence"]), quote=True)
+        + "</td><td>NON</td></tr>"
+        for t in readiness["transitions"]
+    )
+    page = (
+        "<!doctype html><html lang='fr'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<title>AIOPS2 — Préparation ITIL (DEMO)</title>"
+        "<style>body{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;"
+        "padding:0 1rem;line-height:1.5}table{border-collapse:collapse;width:100%}"
+        "th,td{border:1px solid #777;padding:.65rem;text-align:left}"
+        "thead{background:#eee;color:#111}caption{text-align:left;font-weight:bold}"
+        ".warning{border-left:5px solid #9a6700;padding:1rem;background:#fff7dd;color:#302400}"
+        "</style></head><body><main>"
+        "<h1>AIOPS2 — Préparation des transitions ITIL</h1>"
+        "<p class='warning'><strong>SIMULATION LOCALE UNIQUEMENT — NO-GO LIVE.</strong> "
+        "Aucune preuve runtime indépendante, aucune transition autorisée, "
+        "aucune écriture GLPI ni exécution Temporal.</p>"
+        "<p>Incident SAN P1 : <code>"
+        + html.escape(readiness["source_incident_id"], quote=True)
+        + "</code> · Impact Payments P2 : <code>"
+        + html.escape(readiness["business_impact_incident_id"], quote=True)
+        + "</code></p>"
+        "<p>Prochaine étape : collecte en lecture seule de preuves runtime indépendantes. "
+        "Checkpoints manquants : " + str(readiness["missing_unique_checkpoint_count"])
+        + ".</p>"
+        "<table><caption>Étapes et preuves manquantes</caption>"
+        "<thead><tr><th>Transition</th><th>Qualification</th>"
+        "<th>Preuves requises absentes</th><th>Autorisée</th></tr></thead>"
+        "<tbody>" + rows + "</tbody></table>"
+        "<p>Source SHA-256 : <code>"
+        + html.escape(readiness["source_sha256"], quote=True)
+        + "</code></p></main></body></html>"
+    )
+    return HTMLResponse(content=page, headers=HEADERS)
+
+
+@router.get("/demo/acme-evidence-plan", response_class=HTMLResponse,
+            name="synthetic_acme_evidence_plan_page")
+def acme_evidence_plan_page():
+    """Static operator checklist, no uploads, scripts or evidence acceptance."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_evidence_collection_plan import plan_synthetic_evidence_collection
+    try:
+        plan = plan_synthetic_evidence_collection(
+            project_synthetic_incident_lifecycle(_load_or_503())
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_evidence_plan_unqualified") from exc
+    rows = "".join(
+        "<tr><th scope='row'>" + html.escape(req["checkpoint"], quote=True)
+        + "</th><td>" + html.escape(req["phase"], quote=True)
+        + "</td><td>" + html.escape(req["expected_source"], quote=True)
+        + "</td><td>" + html.escape(req["required_evidence_type"], quote=True)
+        + "</td><td>" + html.escape(", ".join(req["required_metadata"]), quote=True)
+        + "</td><td>MISSING — NON VÉRIFIÉ</td></tr>"
+        for req in plan["requests"]
+    )
+    page = (
+        "<!doctype html><html lang='fr'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<title>AIOPS2 — Preuves requises (DEMO)</title>"
+        "<style>body{font:16px system-ui,sans-serif;max-width:1150px;margin:2rem auto;"
+        "padding:0 1rem;line-height:1.5}table{border-collapse:collapse;width:100%}"
+        "th,td{border:1px solid #777;padding:.65rem;text-align:left}"
+        "thead{background:#eee;color:#111}.warning{border-left:5px solid #9a6700;"
+        "padding:1rem;background:#fff7dd;color:#302400}</style></head><body><main>"
+        "<h1>AIOPS2 — Plan de collecte des preuves</h1>"
+        "<p class='warning'><strong>SIMULATION LOCALE UNIQUEMENT — NO-GO LIVE.</strong>"
+        " Aucune preuve acceptée, aucune collecte automatique, aucun accès GLPI/Temporal."
+        "</p><p>Incident : <code>"
+        + html.escape(plan["incident_id"], quote=True)
+        + "</code> · Impact métier : <code>"
+        + html.escape(plan["business_impact_incident_id"], quote=True)
+        + "</code></p>"
+        "<table><caption>Checkpoints et exigences de preuve indépendante</caption>"
+        "<thead><tr><th>Checkpoint</th><th>Phase</th><th>Source attendue</th>"
+        "<th>Type de preuve</th><th>Métadonnées requises</th><th>État</th></tr></thead>"
+        "<tbody>" + rows + "</tbody></table>"
+        "<p>Preuves vérifiées : 0 / " + str(plan["requested_count"]) + "</p>"
+        "<p>Source SHA-256 : <code>"
+        + html.escape(plan["source_sha256"], quote=True)
+        + "</code></p></main></body></html>"
+    )
+    return HTMLResponse(content=page, headers=HEADERS)
+
+
+@router.get("/demo/acme-grafana-pilot-preview", response_class=HTMLResponse,
+            name="synthetic_acme_grafana_pilot_preview")
+def acme_grafana_pilot_preview_page():
+    """Synthetic customer illustration; never a real Grafana observation."""
+    import json
+    from portal.grafana_readonly_evidence import collect_grafana_alert_readonly
+    from portal.grafana_pilot_preview import preview_grafana_pilot_evidence
+    from portal.grafana_pilot_preview_html import render_grafana_pilot_preview_html
+    try:
+        template_path = Path(__file__).resolve().parents[2] / "docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json"
+        register = json.loads(template_path.read_text(encoding="utf-8"))
+        observed = "2026-11-14T11:59:00Z"
+        candidate = collect_grafana_alert_readonly(
+            fetch_alert=lambda rule, tenant: {
+                "rule_uid": rule, "tenant_id": tenant,
+                "dashboard_uid": "acme-san-payments-synthetic",
+                "state": "firing", "observed_at_utc": observed,
+            }, rule_uid="acme-san-p1-synthetic", tenant_id="acme-synthetic",
+            service_identity="LOCAL_SYNTHETIC_FIXTURE_NOT_AUTHENTICATED",
+            max_age_seconds=300, now_utc="2026-11-14T12:00:00Z",
+        )
+        preview = preview_grafana_pilot_evidence(register, candidate)
+        page = render_grafana_pilot_preview_html(preview)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_grafana_pilot_preview_unqualified") from exc
+    return HTMLResponse(content=page, headers=HEADERS)
+
+
+@router.get("/demo/acme-incident-cockpit", response_class=HTMLResponse,
+            name="synthetic_acme_incident_cockpit_page")
+def acme_incident_cockpit_page():
+    """Operator view of one validated synthetic incident snapshot."""
+    from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+    from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
+    try:
+        cockpit = project_synthetic_incident_cockpit(_load_or_503())
+        page = render_synthetic_cockpit_html(cockpit)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_incident_cockpit_unqualified") from exc
+    return HTMLResponse(content=page, headers=HEADERS)
+
+
+@router.get("/api/demo/acme-itil-handoff-draft",
+            name="synthetic_acme_itil_handoff_draft")
+def acme_itil_handoff_draft_json():
+    """Inert incident handoff draft: never a GLPI write request."""
+    from portal.acme_itil_draft import build_synthetic_itil_handoff_draft
+    try:
+        draft = build_synthetic_itil_handoff_draft(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_itil_draft_unqualified") from exc
+    return JSONResponse(content=draft, headers=HEADERS)
+
+
+@router.get("/api/demo/acme-incident-cockpit", name="synthetic_acme_incident_cockpit")
+def acme_incident_cockpit_json():
+    """One fixture snapshot, cross-checked incident-to-ITIL DEMO cockpit."""
+    from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+    try:
+        cockpit = project_synthetic_incident_cockpit(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_incident_cockpit_unqualified") from exc
+    return JSONResponse(content=cockpit, headers=HEADERS)
+
+
+@router.get("/api/demo/acme-analyst-critic-review",
+            name="synthetic_acme_analyst_critic_review")
+def acme_analyst_critic_review_json():
+    """Read-only Analyst/Critic evidence gap review; no LLM or execution."""
+    from portal.acme_analyst_critic_review import review_synthetic_analyst_critic
+    try:
+        review = review_synthetic_analyst_critic(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_analyst_critic_unqualified") from exc
+    return JSONResponse(content=review, headers=HEADERS)
+
+
+@router.get("/api/demo/acme-evidence-plan", name="synthetic_acme_evidence_plan")
+def acme_evidence_plan_json():
+    """Read-only requirements for independent proof; never collects or accepts it."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_evidence_collection_plan import plan_synthetic_evidence_collection
+    try:
+        plan = plan_synthetic_evidence_collection(
+            project_synthetic_incident_lifecycle(_load_or_503())
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_evidence_plan_unqualified") from exc
+    return JSONResponse(content=plan, headers=HEADERS)
+
+
+@router.get("/api/demo/acme-itil-readiness", name="synthetic_acme_itil_readiness")
+def acme_itil_readiness_json():
+    """Expose missing evidence for ITIL transitions; never approve a transition."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_itil_readiness import assess_synthetic_itil_readiness
+    try:
+        lifecycle = project_synthetic_incident_lifecycle(_load_or_503())
+        readiness = assess_synthetic_itil_readiness(lifecycle)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_itil_readiness_unqualified") from exc
+    return JSONResponse(content=readiness, headers=HEADERS)
+
+
+@router.get("/api/demo/acme-lifecycle", name="synthetic_acme_incident_itil_lifecycle")
+def acme_lifecycle_json():
+    """Read-only DEMO incident-to-ITIL lifecycle, no backend actions."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    try:
+        model = project_synthetic_incident_lifecycle(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_lifecycle_unqualified") from exc
+    return JSONResponse(content=model, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-impact", name="synthetic_acme_impact_read_model")
 def acme_impact_json():
     """Return the synthetic impact graph and explicit provenance gaps."""

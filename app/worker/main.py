@@ -7,6 +7,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
 from shared.http import post_json
 from shared.simulation_policy_contract import policy_command_for_mode
+from shared.temporal_start_history import decode_initial_start_args
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -51,13 +52,52 @@ async def execute_stage(a):
         if synthetic and stage=='OBSERVE':
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'SET_STATE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'state':'DEGRADED','health':0.42}},token=ADMIN)
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'OBSERVE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL'}},token=ADMIN)
+        # DEMO synthetic evidence cannot qualify a real post-remediation check.
+        # Stop Temporal before VERIFY PASS, reconciliation, learning or RESOLVE.
+        if mode in ('DEMO', 'REPLAY', 'STORY') and stage == 'VERIFY':
+            blocked = call('POST',f'{CORE}/api/runs/{rid}/events',{
+                'expected_version':v,
+                'stage':stage,
+                'event_type':'INDEPENDENT_POSTCHECK_MISSING',
+                'event_key':f'{stage}:INDEPENDENT-POSTCHECK-MISSING',
+                'status':'BLOCKED',
+                'decision':'HUMAN_APPROVAL',
+                'confidence':0.0,
+                'payload':{
+                    'reason':'Synthetic observations are not independent runtime recovery proof',
+                    'independent_runtime_postcheck_verified':False,
+                    'actual_recovery_state':'UNKNOWN',
+                    'simulation_only':True,
+                    'itil_transition_authorized':False,
+                    'live_remediation_authorized':False,
+                },
+            })
+            state = call('POST',f'{CORE}/api/runs/{rid}/command',{
+                'expected_version':blocked['version'],
+                'idempotency_key':f'DEMO-POSTCHECK-BLOCK-{rid}',
+                'command':'BLOCK',
+            })
+            return {'run_id':rid,'stage':stage,'status':'BLOCKED',
+                    'version':state['version'],'sequence':blocked['sequence']}
         ev=post_json(EVID,'/api/evidence',{'source':f'run:{rid}:{stage.lower()}','claim':f'{stage} completed for scenario {scenario}','confidence':0.94 if stage not in ('DGX_ANALYST','DGX_CRITIC') else 0.91,'provenance':{'synthetic':synthetic,'run_id':rid,'stage':stage,'scenario_id':scenario},'payload':{'stage':stage,'scenario_id':scenario,'mode':mode,'attempt':activity.info().attempt}},token=ADMIN)
         eids=[ev['evidence_id']]
         if stage=='POLICY':
             pol=post_json(POLICY,'/api/policy/check',{'mode':mode,'command':policy_command,'severity':'P1','confidence':.94,'evidence_count':len(eids),'critic_validated':True,'redundancy_ok':True},token=ADMIN)
             post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':eids,'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
             if pol['state']!='PASS':
-                return call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'GATE_BLOCKED','event_key':f'{stage}:BLOCKED','status':'BLOCKED','evidence_ids':eids,'decision':pol['decision'],'confidence':.94,'payload':pol})
+                blocked = call('POST',f'{CORE}/api/runs/{rid}/events',{
+                    'expected_version':v,'stage':stage,'event_type':'GATE_BLOCKED',
+                    'event_key':f'{stage}:BLOCKED','status':'BLOCKED',
+                    'evidence_ids':eids,'decision':pol['decision'],
+                    'confidence':0.0,'payload':pol,
+                })
+                state = call('POST',f'{CORE}/api/runs/{rid}/command',{
+                    'expected_version':blocked['version'],
+                    'idempotency_key':f'POLICY-GATE-BLOCK-{rid}',
+                    'command':'BLOCK',
+                })
+                return {'run_id':rid,'stage':stage,'status':'BLOCKED',
+                        'version':state['version'],'sequence':blocked['sequence']}
         completed=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':eids,'confidence':.94,'payload':{'executor':'temporal','synthetic':synthetic,'attempt':activity.info().attempt}})
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:
@@ -81,16 +121,57 @@ class IncidentWorkflow:
 def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
 def metrics(): return 'aiops_worker_up 1\n'
+@app.get('/api/execution/{run_id}/inspect')
+async def inspect_execution(run_id:str,authorization:str|None=Header(default=None)):
+ if (authorization or '').removeprefix('Bearer ')!=ADMIN:
+  raise HTTPException(401,'invalid internal token')
+ import re
+ if (not isinstance(run_id,str) or not 1<=len(run_id)<=128
+     or re.fullmatch(r'[A-Za-z0-9_.:-]+',run_id) is None):
+  raise HTTPException(422,'invalid execution identifier')
+ # Read-only lookup: no workflow start, no signal, no reset, no cancellation.
+ # Workflow existence is not proof that mode/scenario/version match Core.
+ try:
+  c=await Client.connect(TEMP)
+  h=c.get_workflow_handle(run_id)
+  desc=await h.describe()
+  history=await h.fetch_history()
+  original_args=decode_initial_start_args(history.events)
+ except Exception:
+  # No reliable attestation from an unreachable or unknown Temporal service.
+  raise HTTPException(503,'workflow inspection unavailable or unverified')
+ return {'run_id':run_id,'workflow_id':run_id,
+         'temporal_visibility':'EXISTS_UNATTESTED',
+         'status_observed':str(desc.status),
+         'original_start_arguments_verified':False,
+         'temporal_start_history_input':original_args,
+         'temporal_start_history_input_decoded':original_args is not None,
+         'core_receipt_verified':False,
+         'idempotent_start_confirmed':False,
+         'live_remediation_authorized':False}
+
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
- try: policy_command_for_mode(args.get('mode') if isinstance(args,dict) else None)
- except ValueError: raise HTTPException(422,'invalid execution mode')
+ if not isinstance(args,dict) or set(args) != {'run_id','mode','scenario_id','version'}:
+  raise HTTPException(422,'invalid execution request shape')
+ import re
+ for key in ('run_id','scenario_id'):
+  value=args[key]
+  if (not isinstance(value,str) or not 1<=len(value)<=128
+      or re.fullmatch(r'[A-Za-z0-9_.:-]+',value) is None):
+   raise HTTPException(422,'invalid execution identifier')
+ if type(args['version']) is not int or args['version'] < 0:
+  raise HTTPException(422,'invalid execution version')
+ try: policy_command_for_mode(args['mode'])
+ except (ValueError,TypeError): raise HTTPException(422,'invalid execution mode')
  c=await Client.connect(TEMP)
  try:
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}
  except WorkflowAlreadyStartedError:
-  return {'workflow_id':args['run_id'],'run_id':args['run_id'],'executor':'temporal','idempotent':True}
+  # A matching workflow ID does not prove that its original mode, scenario,
+  # version or Core run ownership matches this request. Never attest replay.
+  raise HTTPException(409,'workflow id already exists; reconcile with Core receipt')
 async def worker_main():
  while True:
   try:

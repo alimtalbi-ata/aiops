@@ -7,6 +7,7 @@ from shared.ids import new
 from shared.domain import transition,STAGES
 from shared.tenant_scope import reject_unqualified_tenant_scope
 from shared.demo_policy_gate_read_model import project_demo_policy_gate
+from shared.temporal_start_comparison import compare_temporal_start_input
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
@@ -126,6 +127,55 @@ def demo_artifacts(rid:str):
     with db() as c:r=c.execute('select artifact_id,artifact_type,title,sequence_no,caption,payload,created_at from aiops.demo_artifacts where run_id=%s order by sequence_no',(rid,)).fetchall()
     k=['artifact_id','artifact_type','title','sequence_no','caption','payload','created_at'];return {'items':[dict(zip(k,x)) for x in r]}
 
+@app.get('/api/runs/{rid}/execution-inspection')
+def inspect_run_execution(rid:str,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    import re
+    if not isinstance(rid,str) or re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}',rid) is None:
+        raise HTTPException(422,'invalid run identifier')
+    with db() as c:
+        row=c.execute('select run_id,mode,scenario_id,version,status from aiops.runs where run_id=%s',(rid,)).fetchone()
+        if not row: raise HTTPException(404,'run not found')
+        receipt=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
+        intent=c.execute('select run_id,mode,scenario_id,start_version from aiops.execution_start_intents where run_id=%s',(rid,)).fetchone()
+    try:
+        response=requests.get(WORKER+f'/api/execution/{rid}/inspect',
+                              headers={'Authorization':f'Bearer {ADMIN}'},timeout=10)
+        response.raise_for_status()
+        observed=response.json()
+    except (requests.RequestException,ValueError):
+        raise HTTPException(503,'Temporal inspection unavailable; start outcome UNKNOWN')
+    if (not isinstance(observed,dict) or observed.get('run_id')!=rid
+        or observed.get('workflow_id')!=rid
+        or observed.get('temporal_visibility')!='EXISTS_UNATTESTED'
+        or observed.get('original_start_arguments_verified') is not False
+        or observed.get('core_receipt_verified') is not False
+        or observed.get('idempotent_start_confirmed') is not False
+        or observed.get('live_remediation_authorized') is not False):
+        raise HTTPException(503,'Temporal inspection not qualified')
+    history_input=observed.get('temporal_start_history_input')
+    decoded=observed.get('temporal_start_history_input_decoded') is True
+    expected=({'run_id':intent[0],'mode':intent[1],
+               'scenario_id':intent[2],'version':intent[3]} if intent else None)
+    comparison=(compare_temporal_start_input(expected,history_input)
+                if decoded else 'UNKNOWN')
+    # Comparison is diagnostic only; no receipt or execution attestation.
+    return {'run_id':rid,'core_status':row[4],
+            'start_arguments_comparison':comparison,
+            'start_version_attestation':comparison,
+            'core_start_intent_present':intent is not None,
+            'temporal_history_identity_matches_core':comparison=='MATCH',
+            'temporal_history_input_decoded':decoded,
+            'core_execution_receipt_present':receipt is not None,
+            'core_receipt_workflow_id_matches':bool(receipt and receipt[0]==rid),
+            'temporal_visibility':'EXISTS_UNATTESTED',
+            'temporal_status_observed':observed.get('status_observed'),
+            'original_start_arguments_verified':False,
+            'idempotent_start_confirmed':False,
+            'automatic_reconciliation_performed':False,
+            'execution_start_outcome':'UNKNOWN',
+            'live_remediation_authorized':False}
+
 @app.post('/api/runs/{rid}/execute')
 def execute(rid:str,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
@@ -134,16 +184,46 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         if not row: raise HTTPException(404,'run not found')
         if row[4] not in ('CREATED','WAITING'): raise HTTPException(409,f'run not executable from {row[4]}')
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
-        if existing:return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
+        if existing:
+            # A receipt alone cannot attest the original Temporal start input.
+            # Never assert idempotence from workflow ID equality alone.
+            raise HTTPException(409,'execution receipt exists; inspect original start before idempotence claim')
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
+        # One-shot intent is committed before network I/O. A previous intent
+        # means the start outcome may be unknown: never retry automatically.
+        inserted=c.execute(
+            'insert into aiops.execution_start_intents(run_id,mode,scenario_id,start_version) '
+            'values(%s,%s,%s,%s) on conflict(run_id) do nothing returning run_id',
+            (row[0],row[1],row[2],row[3])).fetchone()
+        if not inserted:
+            raise HTTPException(409,'prior execution start intent exists; inspect before retry')
     try:
-        r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
+        r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status()
+        try:
+            data=r.json()
+        except (ValueError,TypeError):
+            raise HTTPException(503,'invalid Worker start response; outcome UNKNOWN')
+        # A Worker success response is not proof of execution, but it must
+        # never create a receipt for a different workflow or run.
+        if (not isinstance(data,dict) or data.get('workflow_id')!=rid
+            or data.get('run_id')!=rid or data.get('executor')!='temporal'
+            or data.get('idempotent') is True):
+            raise HTTPException(503,'unqualified Worker start response; outcome UNKNOWN')
         with db() as c:
             c.execute('insert into aiops.execution_receipts(run_id,workflow_id) values(%s,%s) on conflict(run_id) do nothing',(rid,data['workflow_id']))
             winner=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()[0]
         data['idempotent']=bool(data.get('idempotent',False)); data['workflow_id']=winner
         return data
-    except requests.RequestException as e: raise HTTPException(503,f'execution service unavailable: {e}')
+    except requests.HTTPError as e:
+        if e.response is not None and e.response.status_code == 409:
+            # The Worker knows a workflow ID exists but has NOT verified that
+            # its original parameters match this Core run. Do not retry blindly.
+            raise HTTPException(409,'Temporal workflow conflict; operator reconciliation required')
+        raise HTTPException(503,'execution service HTTP failure')
+    except requests.RequestException:
+        # Timeout/connection failure may mean Temporal accepted the start but
+        # its response was lost. Never assert that a second start is safe.
+        raise HTTPException(503,'execution start outcome unknown; reconcile before retry')
 @app.post('/api/runs/{rid}/events')
 def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
