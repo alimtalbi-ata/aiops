@@ -20,6 +20,9 @@ def test_every_itil_transition_requires_missing_independent_proof():
     result = build_synthetic_itil_readiness()
     assert len(result["transitions"]) == len(REQUIRED) == 8
     assert result["authorized_transition_count"] == 0
+    assert result["missing_unique_checkpoint_count"] == 9
+    assert result["missing_unique_checkpoints"][0] == "detect"
+    assert result["next_operator_step"] == "COLLECT_INDEPENDENT_RUNTIME_EVIDENCE_READ_ONLY"
     assert result["actual_glpi_ticket_updated"] is False
     assert result["temporal_execution_performed"] is False
     assert result["production_remediation_verified"] is False
@@ -95,3 +98,10 @@ def test_canonical_portal_exposes_both_itil_operator_routes():
     client = TestClient(canonical_app)
     assert client.get("/api/demo/acme-itil-readiness").status_code == 200
     assert client.get("/demo/acme-itil-readiness").status_code == 200
+
+
+def test_forged_stage_reason_rejected():
+    model = copy.deepcopy(build_synthetic_incident_lifecycle())
+    model["stages"][0]["reason"] = "INDEPENDENT_RUNTIME_EVIDENCE_PRESENT"
+    with pytest.raises(ValueError, match="unqualified_itil_stage"):
+        assess_synthetic_itil_readiness(model)
