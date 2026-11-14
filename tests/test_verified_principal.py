@@ -22,7 +22,7 @@ def test_principal_is_derived_only_from_verified_oidc_claims():
         "simulated": False,
     }
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=claims) as verify:
-        principal = principal_from_bearer("opaque-bearer")
+        principal = principal_from_bearer("opaque-bearer", is_revoked=lambda **_: False)
     verify.assert_called_once_with("opaque-bearer")
     assert principal.actor_id == claims["subject_id"]
     assert principal.roles == ("operator",)
@@ -63,4 +63,19 @@ def test_oidc_verifier_failure_is_propagated_without_fallback():
         side_effect=IdentityError("oidc_assertion_verification_failed"),
     ):
         with pytest.raises(IdentityError, match="oidc_assertion_verification_failed"):
-            principal_from_bearer("invalid")
+            principal_from_bearer("invalid", is_revoked=lambda **_: False)
+
+
+def test_revoked_or_unavailable_jti_store_never_issues_principal():
+    claims = {
+        "subject_id": "oidc:" + "c" * 64, "issuer": "https://id.example.invalid",
+        "roles": ["operator"], "groups": ["group"], "mapping_version": "v1",
+        "jti": "revoked-jti", "expires_at": 2_000_000_000, "simulated": False,
+    }
+    with patch("shared.verified_principal.verify_oidc_assertion", return_value=claims):
+        with pytest.raises(IdentityError, match="oidc_assertion_revoked_or_store_unavailable"):
+            principal_from_bearer("token", is_revoked=lambda **_: True)
+        with pytest.raises(IdentityError, match="oidc_assertion_revoked_or_store_unavailable"):
+            principal_from_bearer("token", is_revoked=lambda **_: None)
+        with pytest.raises(IdentityError, match="oidc_revocation_check_failed"):
+            principal_from_bearer("token", is_revoked=lambda **_: (_ for _ in ()).throw(RuntimeError("db down")))
