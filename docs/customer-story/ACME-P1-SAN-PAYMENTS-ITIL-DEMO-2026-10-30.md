@@ -97,3 +97,7 @@ GET `/api/demo/acme-itil-handoff-draft` generates a deterministic **non-executab
 ## Tenant/source-bound receipt integrity (offline) — 2026-11-14
 
 `portal.acme_evidence_source_binding.inspect_source_bound_receipts` verifies an offline DEMO receipt MAC using a **caller-supplied trusted key resolver** keyed by tenant and source. The canonical signed body binds checkpoint, source, source ID, content digest, observation timestamp and fixture SHA-256. It rejects duplicate checkpoints and unrecognized claims; unavailable keys or MAC mismatches fail closed. A valid MAC is `MAC_VALID_SOURCE_KEY_UNATTESTED`: it does not authenticate a live monitoring session, establish tenant/actor ACL, independently verify observations or grant an ITIL/LIVE action. There is no endpoint, secret storage, default resolver or external call; source key provisioning and real attestation remain out of scope.
+
+## Joint evidence integrity gate — 2026-11-14
+
+`portal.acme_evidence_joint_qualification.qualify_synthetic_evidence_jointly` combines independent byte digest readback with the tenant/source-bound HMAC receipt check. A checkpoint is marked `integrity_consistent_unattested=true` only when **both** checks agree; a missing receipt, wrong MAC, changed bytes or unavailable callback fails that consistency check. Even a double match remains **UNKNOWN / unattested**: the module cannot prove source freshness, tenant/actor authorization, real runtime observation or operational effects. No HTTP upload, network adapter, GLPI write, Temporal execution or LIVE authorization is exposed.
