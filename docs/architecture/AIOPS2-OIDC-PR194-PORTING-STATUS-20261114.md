@@ -176,3 +176,7 @@ This is not a real IdP/JWKS, PostgreSQL integration, GLPI server, vault or signe
 The OIDC signed-xref resolver now performs a **non-consuming cryptographic and ACL preflight** across active actor tenants. It refuses zero/multiple valid matches without consuming any durable nonce. Only the unique selected tenant is re-fetched, reverified and consumed through the atomic PostgreSQL replay barrier. The selected signed association must match its preflight identity; changes fail closed. Added regressions for ambiguity not burning nonces and changed events.
 
 Preflight intentionally performs the native GLPI read ACL twice for a unique match; this has additional read-only GLPI session overhead. A signed event changed between preflight and commit may still consume the selected nonce before the mismatch is detected, but cannot authorize a readback. The preflight nonce callback is **never** an authorization result: only the second durable atomic insert can authorize success. No LIVE route is mounted.
+
+## Signed-event change protection before replay commit — 2026-11-14
+
+The unique candidate's preflight event is now snapshotted. The second server fetch is compared with that snapshot **before** invoking HMAC verification and PostgreSQL nonce insertion. A changed signed event fails closed without consuming the original nonce. The regression asserts no nonce INSERT for this case. This is not a distributed lock or proof that an upstream signer cannot rotate an event after the final fetch; the final HMAC, ACL and atomic replay barrier remain mandatory.
