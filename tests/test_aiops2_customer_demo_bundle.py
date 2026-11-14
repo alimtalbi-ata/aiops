@@ -128,3 +128,36 @@ def test_qualification_report_does_not_promote_synthetic_pass_to_ci_or_live(tmp_
     assert report["browser_rehearsal_verified"] is False
     assert report["runtime_attested"] is False
     assert report["trust_boundary"].startswith("UNSIGNED_LOCAL_REPORT")
+
+
+def test_qualification_cli_writes_valid_json_and_checks_only_once(tmp_path, monkeypatch):
+    from verify_aiops2_customer_demo_bundle import main
+    report_path = tmp_path / "qualification.json"
+    monkeypatch.setattr(sys, "argv", [
+        "verify_aiops2_customer_demo_bundle.py", str(tmp_path / "package"),
+        str(tmp_path / "smoke"), "--repository", "alimtalbi-ata/aiops",
+        "--head-sha", "a" * 40, "--run-id", "123", "--run-attempt", "1",
+        "--report", str(report_path),
+    ])
+    with patch("verify_aiops2_customer_demo_bundle.verify_bundle",
+               return_value=True) as verify:
+        assert main() == 0
+    verify.assert_called_once()
+    raw = report_path.read_text(encoding="utf-8")
+    assert raw.endswith("\\n") and not raw.endswith("\\\\n")
+    report = json.loads(raw)
+    assert report["artifact_consistency"] == "PASS"
+    assert report["live_qualification"] == "NO_GO"
+
+
+def test_qualification_cli_persists_blocked_report(tmp_path, monkeypatch):
+    from verify_aiops2_customer_demo_bundle import main
+    report_path = tmp_path / "blocked.json"
+    monkeypatch.setattr(sys, "argv", [
+        "verify_aiops2_customer_demo_bundle.py", str(tmp_path / "missing"),
+        str(tmp_path / "smoke"), "--repository", "alimtalbi-ata/aiops",
+        "--head-sha", "a" * 40, "--run-id", "123", "--run-attempt", "1",
+        "--report", str(report_path),
+    ])
+    assert main() == 1
+    assert json.loads(report_path.read_text())["artifact_consistency"] == "BLOCKED"
