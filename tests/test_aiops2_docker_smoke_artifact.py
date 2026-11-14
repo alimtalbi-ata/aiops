@@ -72,3 +72,9 @@ def test_reject_extra_field_and_invalid_sha():
 def test_reject_missing_or_nonobject():
     assert not check(smoke=[])
     assert not check(provenance=None)
+
+
+def test_scheduled_workflow_uses_same_checkout_as_head():
+    assert check(provenance=dict(PROVENANCE, event_name="schedule", ref="refs/heads/main"))
+    assert not check(provenance=dict(PROVENANCE, event_name="schedule",
+                                     ref="refs/heads/main", commit_sha="c" * 40))
