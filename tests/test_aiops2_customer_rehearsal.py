@@ -41,3 +41,18 @@ def test_rehearsal_rejects_forged_runtime_claim(tmp_path):
 def test_rehearsal_rejects_missing_package(tmp_path):
     with pytest.raises(FileNotFoundError):
         build_rehearsal(tmp_path / "missing")
+
+
+def test_rehearsal_includes_click_path_customer_objections_and_stop_rules(tmp_path):
+    create_package(tmp_path / "demo", revision="test")
+    text = build_rehearsal(tmp_path / "demo")
+    assert "/demo/acme-incident-cockpit" in text
+    assert "/demo/acme-grafana-pilot-preview" in text
+    for section in ("Parcours écran par écran", "Questions client",
+                    "Arrêt immédiat de la démonstration"):
+        assert section in text
+    for fact in ("0/9 preuves", "0/8 transitions", "DENY_LIVE_ACTION",
+                 "postcheck indépendant UNKNOWN", "aucune écriture ni clôture GLPI"):
+        assert fact in text
+    assert "consigner BLOCKED" in text
+    assert "CI du commit présenté" in text
