@@ -93,3 +93,11 @@ Arrêter le pilote si une source n'est pas authentifiée, si le scope tenant/ent
 - **NO-GO :** production, écriture GLPI, démarrage/rejeu automatique Temporal/n8n, remédiation LIVE et clôture ITIL automatique.
 
 Aucun merge, déploiement, migration de production, connexion à un IdP/GLPI de production ou usage de secret réel n'est autorisé par ce plan.
+
+## Parcours Portal démontrable — observation Grafana non attestée
+
+- Cockpit incident SAN P1 → Payments P2 : `GET /demo/acme-incident-cockpit`.
+- Observation Grafana **synthétique et locale** : `GET /demo/acme-grafana-pilot-preview`.
+- Le second écran présente un signal candidat, l'identifiant tenant déclaré, l'horodatage et un SHA-256 local. Il reste `UNKNOWN / BLOCKED` ; ni le transport ni l'ACL native Grafana ne sont attestés.
+- Registre de départ : `docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json`. Vérification négative attendue : `python scripts/validate_aiops2_readonly_pilot_register.py docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json` retourne un code non nul, puisque toutes les preuves restent manquantes.
+- La validation de métadonnées n'est pas une preuve cryptographique d'origine ni une qualification opérationnelle. Aucune transition ITIL ni action LIVE ne peut être déduite de ces vues.
