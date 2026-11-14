@@ -117,6 +117,22 @@ Sur le premier écran, montrer le **P1 SAN**, le **P2 Payments**, les neuf étap
 Contrat automatisé : `python -m pytest -q tests/test_acme_grafana_pilot_preview_route.py tests/test_grafana_pilot_preview_html.py tests/test_grafana_pilot_preview.py`. Il teste les liens bidirectionnels, l'absence de promotion de preuve, le refus de falsification et la défaillance 503 lorsque le registre local manque. Un test vert **ne remplace pas** une capture opérateur horodatée, une preuve d'identité ou un postcheck indépendant.
 
 
+## Contrôle indépendant de l'artifact Docker téléchargé
+
+Après téléchargement **depuis l'exécution GitHub Actions vérifiée**, décompresser l'artifact dans un répertoire isolé, puis utiliser les valeurs affichées dans l'interface GitHub (ne pas recopier les valeurs auto-déclarées par l'artifact) :
+
+```bash
+python scripts/verify_aiops2_docker_smoke_artifact.py /tmp/aiops2-docker-smoke \\
+  --repository alimtalbi-ata/aiops \\
+  --head-sha <SHA_40_CARACTERES_DU_HEAD> \\
+  --run-id <ID_RUN_GITHUB_ACTIONS> \\
+  --run-attempt <NUMERO_TENTATIVE>
+```
+
+Le vérificateur exige exactement les champs attendus, un scénario synthétique qualifié, aucune attestation runtime ou autorisation LIVE, et une concordance entre les métadonnées de run et les paramètres indépendamment relevés. Pour `pull_request`, le SHA du checkout peut différer du HEAD ; pour `push` et `workflow_dispatch`, il doit être identique. Un refus signifie **BLOCKED** et interdit d'utiliser l'artifact comme preuve de ce run.
+
+**Frontière de confiance :** les deux JSON ne sont pas signés. Le résultat `PASS` démontre seulement leur cohérence avec les valeurs saisies ; l'opérateur doit toujours vérifier l'origine du téléchargement et l'état `success` des jobs dans GitHub. Il ne certifie ni Grafana réel, ni GLPI, ni Temporal, ni remédiation.
+
 ## Vérifier le smoke Docker hors réseau depuis GitHub Actions
 
 Le workflow `.github/workflows/quality.yml` construit l'image du Portal depuis `app/`, puis exécute **dans le conteneur sans réseau** :
