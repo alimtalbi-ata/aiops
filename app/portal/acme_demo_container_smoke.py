@@ -14,6 +14,7 @@ from portal.acme_impact_read_model import (
     build_acme_impact_read_model,
 )
 from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+from portal.main import app as portal_app
 
 
 def verify_packaged_demo() -> dict[str, object]:
@@ -63,6 +64,16 @@ def verify_packaged_demo() -> dict[str, object]:
                           if field in v)
                    for v in register["sources"].values())):
         raise ValueError("packaged_register_not_blocked")
+
+    customer_routes = {
+        "/demo/acme-incident-cockpit": acme_incident_cockpit_page,
+        "/demo/acme-grafana-pilot-preview": acme_grafana_pilot_preview_page,
+    }
+    for path, endpoint in customer_routes.items():
+        matches = [route for route in portal_app.routes if getattr(route, "path", None) == path]
+        if (len(matches) != 1 or matches[0].endpoint is not endpoint
+                or matches[0].methods != {"GET"}):
+            raise ValueError("synthetic_customer_route_not_get_only")
 
     grafana = acme_grafana_pilot_preview_page()
     cockpit = acme_incident_cockpit_page()
