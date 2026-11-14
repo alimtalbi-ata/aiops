@@ -57,3 +57,34 @@ def test_immutable_schema_has_mutation_guard():
     assert "BEFORE UPDATE OR DELETE" in sql
     assert "RAISE EXCEPTION" in sql
     assert "PRIMARY KEY REFERENCES aiops.runs(run_id)" in sql
+
+
+def test_existing_receipt_never_claims_idempotence_without_attestation():
+    tree = ast.parse(SOURCE.read_text())
+    fn = next(node for node in tree.body
+              if isinstance(node, ast.FunctionDef) and node.name == "execute")
+    fn.decorator_list = []
+    calls = []
+
+    class Connection:
+        def execute(self, sql, params):
+            calls.append(sql)
+            if "from aiops.runs" in sql:
+                return SimpleNamespace(fetchone=lambda:
+                    ("run-01", "DEMO", "acme", 5, "WAITING"))
+            if "from aiops.execution_receipts" in sql:
+                return SimpleNamespace(fetchone=lambda: ("run-01",))
+            raise AssertionError(sql)
+
+    @contextmanager
+    def db():
+        yield Connection()
+
+    ns = {"db": db, "auth": lambda _: None, "bearer": lambda x: x,
+          "Header": lambda default=None: default, "HTTPException": HttpError}
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), str(SOURCE), "exec"), ns)
+    with pytest.raises(HttpError) as exc:
+        ns["execute"]("run-01", authorization="Bearer inert")
+    assert exc.value.status_code == 409
+    assert "inspect" in exc.value.detail
+    assert not any("insert" in sql.lower() for sql in calls)
