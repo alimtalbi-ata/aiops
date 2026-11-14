@@ -56,6 +56,30 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(customer_explanations[s["cue"]][1]) + "</td></tr>"
         for index, s in enumerate(lifecycle["stages"], start=1)
     )
+    # Evidence requirements are read from the validated projection, never
+    # invented receipts. Display required metadata without accepting uploads.
+    if ([request.get("checkpoint") for request in evidence["requests"]]
+            != [stage["cue"] for stage in lifecycle["stages"]]
+            or any(request.get("collection_mode") != "MANUAL_READ_ONLY_INDEPENDENT_REVIEW"
+                   or request.get("submitted_evidence") is not None
+                   or request.get("attested") is not False
+                   or request.get("qualifies_runtime") is not False
+                   or request.get("required_metadata")
+                   != ["observed_at", "source_id", "content_sha256"]
+                   or not isinstance(request.get("required_evidence_type"), str)
+                   or not request["required_evidence_type"]
+                   for request in evidence["requests"])
+            or evidence.get("evidence_acceptance_enabled") is not False
+            or evidence.get("outbound_collection_enabled") is not False):
+        raise ValueError("unqualified_evidence_requirements")
+    evidence_rows = "".join(
+        "<tr><th scope='row'>" + safe(index) + ". " + safe(request["checkpoint"])
+        + "</th><td>" + safe(request["required_evidence_type"])
+        + "</td><td>" + safe(request["expected_source"])
+        + "</td><td>observed_at, source_id, content_sha256</td>"
+        "<td>MISSING — contrôle humain requis</td></tr>"
+        for index, request in enumerate(evidence["requests"], start=1)
+    )
     transition_rows = "".join(
         "<tr><th scope='row'>" + safe(t["transition"]) + "</th><td>"
         + safe(", ".join(t["missing_evidence"])) + "</td><td>NON</td></tr>"
@@ -112,6 +136,14 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<h2 id='evidence'>Cycle incident (9 étapes)</h2><table><thead><tr>"
         "<th>Étape</th><th>Source attendue</th><th>Preuve</th></tr></thead>"
         "<tbody>" + stage_rows + "</tbody></table>"
+        "<h2>Registre des preuves attendues — lecture seule</h2>"
+        "<p>Chaque ligne est une demande de preuve, pas une pièce collectée. "
+        "Les champs observed_at, source_id et content_sha256 doivent être "
+        "contrôlés indépendamment avant toute qualification. "
+        "Aucun dépôt, appel sortant ou validation automatique ici.</p>"
+        "<table><thead><tr><th>Point de contrôle</th><th>Preuve exigée</th>"
+        "<th>Source attendue</th><th>Métadonnées requises</th>"
+        "<th>État</th></tr></thead><tbody>" + evidence_rows + "</tbody></table>"
         "<h2 id='itil'>Transitions ITIL (8)</h2><table><thead><tr>"
         "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
         "</tr></thead><tbody>" + transition_rows + "</tbody></table>"
