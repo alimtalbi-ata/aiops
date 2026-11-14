@@ -21,10 +21,11 @@ def verify_packaged_demo() -> dict[str, object]:
         "acme-readonly-pilot-register.template.json"
     )
     register = json.loads(template.read_text(encoding="utf-8"))
+    expected_sources = {"oidc", "grafana", "n8n", "glpi_cmdb", "core_temporal", "policy_hitl", "independent_postcheck"}
     if (register.get("decision") != "BLOCKED"
             or register.get("live_actions_authorized") is not False
             or not isinstance(register.get("sources"), dict)
-            or not register["sources"]
+            or set(register["sources"]) != expected_sources
             or any(not isinstance(v, dict) or v.get("status") != "UNKNOWN"
                    for v in register["sources"].values())):
         raise ValueError("packaged_register_not_blocked")
