@@ -207,3 +207,45 @@ def test_customer_evidence_register_rejects_forged_receipts(field, value):
     cockpit["evidence_plan"]["requests"][0][field] = value
     with pytest.raises(ValueError, match="unqualified_evidence_requirements"):
         render_synthetic_cockpit_html(cockpit)
+
+
+def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
+    from html.parser import HTMLParser
+
+    class TableWrappers(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack = []
+            self.wrapper_count = 0
+            self.table_count = 0
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "div" and "table-scroll" in attrs.get("class", "").split():
+                self.wrapper_count += 1
+                self.stack.append("wrapper")
+            elif tag == "table":
+                self.table_count += 1
+                assert self.stack and self.stack[-1] == "wrapper"
+                self.stack.append("table")
+        def handle_endtag(self, tag):
+            if tag == "table":
+                assert self.stack.pop() == "table"
+            elif tag == "div" and self.stack and self.stack[-1] == "wrapper":
+                self.stack.pop()
+
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    parser = TableWrappers()
+    parser.feed(page.text)
+    assert parser.wrapper_count == parser.table_count == 4
+    assert parser.stack == []
+    assert "Résumé de qualification" in page.text
+    assert "GO — scénario synthétique" in page.text
+    assert "UNKNOWN — preuves runtime" in page.text
+    assert "NO-GO LIVE" in page.text
+    assert "prefers-reduced-motion:reduce" in page.text
+    assert "focus-visible" in page.text
+    assert "<script" not in page.text.lower()
+    assert "<form" not in page.text.lower()
