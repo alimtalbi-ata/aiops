@@ -22,6 +22,13 @@ def qualify_synthetic_evidence_jointly(
     # source callback. Structural invalidity never results in a partial success.
     from portal.acme_evidence_manifest_validator import inspect_synthetic_evidence_manifest
     inspect_synthetic_evidence_manifest(lifecycle, manifest)
+    # The readback adapter is addressed by (source, source_id), not checkpoint.
+    # Aliasing that address across checkpoints could allow one valid receipt
+    # to authorize reading bytes for another checkpoint with an invalid MAC.
+    source_addresses = [(item["source"], item["source_id"])
+                        for item in manifest["items"]]
+    if len(set(source_addresses)) != len(source_addresses):
+        raise ValueError("ambiguous_source_readback_address")
     if (not isinstance(expected_tenant_id, str)
             or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}", expected_tenant_id) is None):
         raise ValueError("trusted_expected_tenant_required")
