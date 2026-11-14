@@ -17,6 +17,8 @@ jobs:
   policy-and-static:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      AIOPS_INTERNAL_TOKEN: ci-synthetic-internal-token-not-for-runtime
     steps:
       - name: Checkout
         uses: actions/checkout@v4
