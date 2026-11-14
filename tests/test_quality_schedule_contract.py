@@ -12,6 +12,9 @@ class QualityScheduleContractTests(unittest.TestCase):
     def test_manual_dispatch_is_available(self):
         self.assertIn("  workflow_dispatch:", WORKFLOW)
 
+    def test_convergence_branch_pushes_run_quality_gates(self):
+        self.assertIn('  push:\\n    branches:\\n      - main\\n      - "fix/**"\\n      - "integration/aiops2-convergence-20261114"', WORKFLOW)
+
     def test_quality_workflow_remains_hosted_and_read_only(self):
         self.assertIn("policy-and-static:\n    runs-on: ubuntu-24.04", WORKFLOW)
         self.assertIn("permissions:\n  contents: read", WORKFLOW)
