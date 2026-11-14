@@ -69,3 +69,9 @@ def test_container_packaged_register_matches_canonical_blocked_template():
  assert all(source['status']=='UNKNOWN' for source in register['sources'].values())
  dockerfile=(root/'app/portal/Dockerfile').read_text(encoding='utf-8')
  assert 'COPY portal /app/portal' in dockerfile
+
+def test_grafana_preview_fails_closed_when_incident_fixture_unavailable():
+ with patch('portal.acme_impact_read_model.build_acme_impact_read_model',side_effect=OSError('fixture absent')):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==503
+ assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
