@@ -78,3 +78,26 @@ def test_scheduled_workflow_uses_same_checkout_as_head():
     assert check(provenance=dict(PROVENANCE, event_name="schedule", ref="refs/heads/main"))
     assert not check(provenance=dict(PROVENANCE, event_name="schedule",
                                      ref="refs/heads/main", commit_sha="c" * 40))
+
+
+def test_reject_pr_event_with_non_pr_ref():
+    assert not check(provenance=dict(PROVENANCE, event_name="pull_request",
+                                     ref="refs/heads/main", commit_sha="c" * 40))
+    assert not check(provenance=dict(PROVENANCE, event_name="pull_request",
+                                     ref="refs/pull/713/head", commit_sha="c" * 40))
+
+
+def test_reject_push_with_pr_ref():
+    assert not check(provenance=dict(PROVENANCE, ref="refs/pull/713/merge"))
+
+
+def test_tag_ref_for_manual_run_is_allowed_with_matching_sha():
+    assert check(provenance=dict(PROVENANCE, event_name="workflow_dispatch",
+                                 ref="refs/tags/v1.0"))
+    assert not check(provenance=dict(PROVENANCE, event_name="workflow_dispatch",
+                                     ref="refs/tags/v1.0", commit_sha="c" * 40))
+
+
+def test_schedule_must_reference_branch():
+    assert not check(provenance=dict(PROVENANCE, event_name="schedule",
+                                     ref="refs/tags/v1.0"))
