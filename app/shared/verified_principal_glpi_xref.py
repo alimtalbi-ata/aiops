@@ -175,6 +175,8 @@ def make_verified_principal_glpi_xref_resolver(
             committed = resolver(
                 actor=actor, tenant_id=selected["tenant_id"], ticket_id=ticket_id,
             )
+        except VerifiedGLPIXrefDenied:
+            raise
         except Exception as exc:
             raise VerifiedGLPIXrefDenied("signed_xref_final_verification_failed") from exc
         if committed != selected:
