@@ -152,14 +152,25 @@ def inspect_run_execution(rid:str,authorization:str|None=Header(default=None)):
         or observed.get('idempotent_start_confirmed') is not False
         or observed.get('live_remediation_authorized') is not False):
         raise HTTPException(503,'Temporal inspection not qualified')
-    expected={'run_id':row[0],'mode':row[1],
-              'scenario_id':row[2],'version':row[3]}
-    comparison=compare_temporal_start_input(expected,
-                    observed.get('temporal_start_history_input'))
-    # A matching history tuple is not an idempotency, receipt or execution proof.
+    # aiops.runs.version is mutable. It is NOT the original start version.
+    # Without an immutable Core-owned start record, comparing that value
+    # to Temporal's history would falsely report MISMATCH after progress.
+    history_input=observed.get('temporal_start_history_input')
+    decoded=observed.get('temporal_start_history_input_decoded') is True
+    history_valid=(decoded and isinstance(history_input,dict)
+                   and set(history_input)=={'run_id','mode','scenario_id','version'}
+                   and compare_temporal_start_input(history_input,history_input)=='MATCH')
+    identity_matches=(history_valid
+                      and history_input['run_id']==row[0]
+                      and history_input['mode']==row[1]
+                      and history_input['scenario_id']==row[2])
+    # Start-version attestation remains UNKNOWN until Core persists its
+    # immutable start tuple, including version, in the same authority boundary.
     return {'run_id':rid,'core_status':row[4],
-            'start_arguments_comparison':comparison,
-            'temporal_history_input_decoded':observed.get('temporal_start_history_input_decoded') is True,
+            'start_arguments_comparison':'UNKNOWN',
+            'start_version_attestation':'UNKNOWN',
+            'temporal_history_identity_matches_core':bool(identity_matches),
+            'temporal_history_input_decoded':decoded,
             'core_execution_receipt_present':receipt is not None,
             'core_receipt_workflow_id_matches':bool(receipt and receipt[0]==rid),
             'temporal_visibility':'EXISTS_UNATTESTED',
