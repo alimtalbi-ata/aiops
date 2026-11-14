@@ -56,7 +56,7 @@ def build_rehearsal(directory):
         "| Étape | Source attendue | État |",
         "|---|---|---|",
         *[
-            f"| \`{stage['cue']}\` | \`{stage['expected_source']}\` | UNKNOWN — preuve indépendante absente |"
+            f"| `{stage['cue']}` | `{stage['expected_source']}` | UNKNOWN — preuve indépendante absente |"
             for stage in stages
         ],
         "",
@@ -65,7 +65,7 @@ def build_rehearsal(directory):
         "| Transition | Prérequis manquants | Autorisation |",
         "|---|---|---|",
         *[
-            f"| \`{gate['transition']}\` | {', '.join(gate['missing_evidence'])} | NON — UNKNOWN |"
+            f"| `{gate['transition']}` | {', '.join(gate['missing_evidence'])} | NON — UNKNOWN |"
             for gate in transitions
         ],
         "",
