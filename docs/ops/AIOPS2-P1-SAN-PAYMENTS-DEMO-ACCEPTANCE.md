@@ -107,3 +107,11 @@ P0–P4 pour OIDC, Grafana, n8n, CMDB/GLPI, Core/Temporal, Policy/HITL et
 postcheck indépendant. Ce plan ne vaut pas autorisation d'accès : chaque
 source doit être explicitement configurée et qualifiée dans un environnement
 éphémère avant d'être montrée comme preuve.
+
+## Navigation client — deux écrans, une frontière de confiance
+
+Dans le Portal isolé, ouvrir `GET /demo/acme-incident-cockpit` puis suivre le lien « Voir l'observation Grafana synthétique non attestée » vers `GET /demo/acme-grafana-pilot-preview`. Revenir ensuite au cockpit par le lien de retour. Les deux pages sont **GET, sans script, sans formulaire, sans appel réseau sortant** et renvoient des en-têtes anti-cache et CSP restrictifs.
+
+Sur le premier écran, montrer le **P1 SAN**, le **P2 Payments**, les neuf étapes, les huit transitions ITIL et les **0/9 preuves indépendantes**. Sur le second, montrer la règle SAN candidate, le tenant déclaré, l'horodatage et l'empreinte de projection locale ; expliquer que le transport injecté ne prouve ni une connexion Grafana réelle, ni l'ACL native, ni l'origine cryptographique. La décision demeure **UNKNOWN / BLOCKED** et la remédiation **NO-GO LIVE**.
+
+Contrat automatisé : `python -m pytest -q tests/test_acme_grafana_pilot_preview_route.py tests/test_grafana_pilot_preview_html.py tests/test_grafana_pilot_preview.py`. Il teste les liens bidirectionnels, l'absence de promotion de preuve, le refus de falsification et la défaillance 503 lorsque le registre local manque. Un test vert **ne remplace pas** une capture opérateur horodatée, une preuve d'identité ou un postcheck indépendant.
