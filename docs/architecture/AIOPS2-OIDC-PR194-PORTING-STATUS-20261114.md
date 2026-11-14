@@ -22,3 +22,26 @@ Status: **code ported, CI pending, not production qualified**.
 Implement a PostgreSQL-backed, atomic JTI replay/revocation store with issuer+JTI uniqueness, expiry cleanup, fail-closed DB errors, explicit revocation and race tests. Then integrate principal resolution into the tenant-scoped read path, and prove cross-tenant denial with no upstream call. Only after that add native GLPI ACL checks.
 
 No deployment, production secret, real IdP/GLPI call, Debian access, migration application, or LIVE execution is authorized by this port.
+
+## Durable JTI store tranche — 2026-11-14
+
+Added:
+- `db/migrations/010_oidc_jti_revocation_and_action_replay.sql`
+- `app/shared/oidc_jti_store.py`
+- `tests/test_oidc_jti_store.py`, `tests/test_oidc_jti_schema.py`, and `tests/test_oidc_jti_postgres.py`
+
+Semantics:
+- OIDC JWT JTI revocation is a durable issuer+JTI denylist; normal bearer use is not consumed per HTTP request.
+- Sensitive approval/action replay is a separate atomic one-time key (issuer, JTI, action_id); concurrent duplicates must have exactly one winner.
+- Database failures deny; no token bodies, access tokens, signing keys, automatic cleanup, or DDL-on-request.
+- `principal_from_bearer` now requires a server-supplied durable `is_revoked(issuer, jti)` callback and refuses on missing, positive, null, or failed checks.
+
+CI qualification:
+- Offline OIDC verifier + principal tests and offline JTI store/schema tests passed on HEAD `8f52e05fe16a27c5013bc468ec5c06f33fe5b7f6` in run #43591525311 at the last observation.
+- The PostgreSQL 16 JTI concurrency/revocation test was still pending in the same run.
+- Earlier failing runs exposed a test fixture callback omission; corrected in the current HEAD. Do not treat earlier failed HEADs as current qualification.
+
+Still not complete:
+- The PostgreSQL migration/test has not yet been observed green on the latest HEAD.
+- No endpoint wires the principal or JTI store; no IdP provider has been tested live.
+- Tenant grant binding, GLPI native ACL, and action execution remain unconnected.
