@@ -1,5 +1,7 @@
 """Synthetic cross-artifact consistency regression; no external network."""
 import json
+
+import pytest
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -161,3 +163,56 @@ def test_qualification_cli_persists_blocked_report(tmp_path, monkeypatch):
     ])
     assert main() == 1
     assert json.loads(report_path.read_text())["artifact_consistency"] == "BLOCKED"
+
+
+# Fifty independent mutation checks: 10 trust-boundary fields x 5 bad values.
+# No network, Docker daemon, GitHub API, GLPI, or LIVE access is performed.
+_MUTATION_FIELDS = (
+    ("manifest", "git_revision"),
+    ("manifest", "incident_id"),
+    ("manifest", "source_sha256"),
+    ("manifest", "runtime_execution_attested"),
+    ("manifest", "live_remediation_authorized"),
+    ("cockpit", "incident_id"),
+    ("cockpit", "source_sha256"),
+    ("smoke", "incident_id"),
+    ("smoke", "source_sha256"),
+    ("provenance", "commit_sha"),
+)
+_BAD_VALUES = (None, True, 0, "", "FORGED-SYNTHETIC-RECEIPT")
+
+
+@pytest.mark.parametrize("location,field", _MUTATION_FIELDS)
+@pytest.mark.parametrize("bad_value", _BAD_VALUES, ids=[
+    "null", "boolean-true", "integer-zero", "empty", "forged-receipt",
+])
+def test_bundle_fifty_fail_closed_mutation_checks(tmp_path, location, field, bad_value):
+    sha = "a" * 40
+    fixture = "b" * 64
+    pkg, smoke_dir = tmp_path / "package", tmp_path / "smoke"
+    pkg.mkdir()
+    smoke_dir.mkdir()
+    objects = {
+        "manifest": {
+            "git_revision": sha, "incident_id": "SAN-P1",
+            "source_sha256": fixture, "runtime_execution_attested": False,
+            "live_remediation_authorized": False,
+        },
+        "cockpit": {"incident_id": "SAN-P1", "source_sha256": fixture},
+        "smoke": {"incident_id": "SAN-P1", "source_sha256": fixture},
+        "provenance": {"commit_sha": sha, "run_id": "123"},
+    }
+    objects[location][field] = bad_value
+    for directory, filename, key in (
+        (pkg, "manifest.json", "manifest"),
+        (pkg, "cockpit.json", "cockpit"),
+        (smoke_dir, "aiops2-packaged-demo-smoke.json", "smoke"),
+        (smoke_dir, "aiops2-packaged-demo-smoke-provenance.json", "provenance"),
+    ):
+        (directory / filename).write_text(json.dumps(objects[key]), encoding="utf-8")
+    with patch("verify_aiops2_customer_demo_bundle.verify_package", return_value=True), \\
+         patch("verify_aiops2_customer_demo_bundle.verify_smoke", return_value=True):
+        assert not verify_bundle(
+            pkg, smoke_dir, repository="alimtalbi-ata/aiops",
+            head_sha=sha, run_id="123", run_attempt="1",
+        ), f"fail-open for {location}.{field}={bad_value!r}"
