@@ -70,7 +70,7 @@ def make_glpi_actor_user_token_broker(*, connect: Callable,
                     or credential["tenant_id"] != tenant_id
                     or not valid(credential["user_token"], 4096)):
                 raise GLPIActorCredentialDenied("glpi_vault_identity_not_attested")
-            return credential["user_token"]
+            return {"user_token": credential["user_token"], "glpi_user_id": user_id}
         except GLPIActorCredentialDenied:
             raise
         except Exception as exc:
