@@ -53,7 +53,7 @@ async def execute_stage(a):
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'OBSERVE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL'}},token=ADMIN)
         # DEMO synthetic evidence cannot qualify a real post-remediation check.
         # Stop Temporal before VERIFY PASS, reconciliation, learning or RESOLVE.
-        if mode == 'DEMO' and stage == 'VERIFY':
+        if mode in ('DEMO', 'REPLAY', 'STORY') and stage == 'VERIFY':
             blocked = call('POST',f'{CORE}/api/runs/{rid}/events',{
                 'expected_version':v,
                 'stage':stage,
@@ -63,7 +63,7 @@ async def execute_stage(a):
                 'decision':'HUMAN_APPROVAL',
                 'confidence':0.0,
                 'payload':{
-                    'reason':'DEMO synthetic observations are not independent runtime recovery proof',
+                    'reason':'Synthetic observations are not independent runtime recovery proof',
                     'independent_runtime_postcheck_verified':False,
                     'actual_recovery_state':'UNKNOWN',
                     'simulation_only':True,
