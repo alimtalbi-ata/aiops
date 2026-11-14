@@ -20,6 +20,11 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
             or evidence["requested_count"] != 9 or evidence["verified_count"] != 0
             or review["policy_disposition"] != "DENY_LIVE_ACTION"
             or review["critic_disposition"] != "HOLD_FOR_HUMAN_REVIEW"
+            or review.get("human_approval_verified") is not False
+            or review.get("independent_postcheck_verified") is not False
+            or review.get("operational_decision_authorized") is not False
+            or readiness.get("authorized_transition_count") != 0
+            or readiness.get("next_operator_step") != "COLLECT_INDEPENDENT_RUNTIME_EVIDENCE_READ_ONLY"
             or any(stage["evidence_state"] != "UNKNOWN" for stage in lifecycle["stages"])
             or any(t["authorized"] is not False for t in readiness["transitions"])
             or any(r["evidence_state"] != "MISSING" for r in evidence["requests"])):
@@ -110,6 +115,24 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<h2 id='itil'>Transitions ITIL (8)</h2><table><thead><tr>"
         "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
         "</tr></thead><tbody>" + transition_rows + "</tbody></table>"
+        "<section aria-label='Fiche de décision opérationnelle'>"
+        "<h2>Fiche de décision — que peut faire le NOC ?</h2>"
+        "<dl><dt><strong>Ce que nous savons</strong></dt><dd>"
+        "Le scénario synthétique relie le P1 SAN au P2 Payments par une "
+        "fixture locale cohérente ; il ne prouve pas un incident réel.</dd>"
+        "<dt><strong>Ce qui manque</strong></dt><dd>"
+        "Neuf preuves indépendantes sur neuf ; lectures Grafana, NOC, GLPI "
+        "et postcheck authentifiées non disponibles.</dd>"
+        "<dt><strong>Qui doit valider</strong></dt><dd>"
+        "Un opérateur NOC habilité et un approbateur HITL authentifié ; "
+        "aucune approbation n'est vérifiée.</dd>"
+        "<dt><strong>Pourquoi c'est bloqué</strong></dt><dd>"
+        "Critic : HOLD_FOR_HUMAN_REVIEW ; Policy : DENY_LIVE_ACTION ; "
+        "postcheck indépendant UNKNOWN ; huit transitions ITIL refusées.</dd>"
+        "<dt><strong>Prochaine étape permise</strong></dt><dd>"
+        "Collecter et examiner les preuves en lecture seule, puis demander "
+        "une vérification indépendante. Pas d'exécution Temporal, de "
+        "remédiation LIVE ni de clôture GLPI.</dd></dl></section>"
         "<h2 id='decision'>Analyst / Critic / Policy</h2><p>Analyst : hypothèse déterministe, "
         "pas une conclusion LLM vérifiée. Critic : "
         + safe(review["critic_disposition"]) + ". Policy : "
