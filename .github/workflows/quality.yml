@@ -197,7 +197,16 @@ jobs:
             --repository "${{ github.repository }}" \
             --head-sha "$AIOPS2_PR_HEAD_SHA" \
             --run-id "${{ github.run_id }}" \
-            --run-attempt "${{ github.run_attempt }}"
+            --run-attempt "${{ github.run_attempt }}" \
+            --report "${{ runner.temp }}/aiops2-customer-qualification.json"
+      - name: Publish synthetic customer qualification report (not runtime attestation)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-san-payments-qualification-unattested
+          path: ${{ runner.temp }}/aiops2-customer-qualification.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Publish SAN Payments offline Docker smoke evidence
         uses: actions/upload-artifact@v4
         with:
