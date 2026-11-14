@@ -143,7 +143,7 @@ def test_revoked_oidc_jti_denies_before_tenant_discovery_or_glpi_acl():
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
         with pytest.raises(IdentityError, match="oidc_assertion_revoked_or_store_unavailable"):
             resolve = make_verified_principal_glpi_xref_resolver(
-                connect=connect, bearer_token="revoked", secret=SECRET,
+                connect=connect, secret=SECRET,
                 fetch_signed_event=lambda **_: signed_event(),
                 authorize_glpi_native_acl=lambda **kwargs: acl.append(kwargs) or True,
                 clock=lambda: NOW,
