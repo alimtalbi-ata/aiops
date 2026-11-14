@@ -27,15 +27,18 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "pytest==8.4.2"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "pytest==8.4.2" "PyJWT[crypto]==2.10.1"
       - name: Tenant actor boundary offline security contracts (ported from PR #631)
         run: python -m pytest -q tests/test_portal_tenant_actor_boundary_20261111.py tests/test_portal_tenant_actor_http_denial_20261111.py tests/test_portal_tenant_actor_schema_20261111.py tests/test_portal_tenant_actor_core_reader_20261111.py
+        run: python -m pytest -q tests/test_portal_tenant_actor_boundary_20261111.py tests/test_portal_tenant_actor_http_denial_20261111.py tests/test_portal_tenant_actor_schema_20261111.py tests/test_portal_tenant_actor_core_reader_20261111.py tests/test_verified_principal.py
       - name: Daily quality schedule contract
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
+      - name: Existing HITL OIDC verifier and principal adapter tests (PR #194 selective port)
+        run: python -m pytest -q tests/test_hitl_identity.py tests/test_verified_principal.py
       - name: Portal registry and integration navigation unit tests
         run: python -m unittest discover -s tests -p "test_portal_integrations.py" -v
       - name: Portal navigation browser JavaScript syntax
