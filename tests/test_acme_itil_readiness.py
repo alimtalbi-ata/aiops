@@ -83,3 +83,15 @@ def test_operator_page_shows_all_transitions_and_no_live_authority():
                return_value={"schema": "invalid"}):
         denied = client.get("/demo/acme-itil-readiness")
     assert denied.status_code == 503
+
+
+def test_canonical_portal_exposes_both_itil_operator_routes():
+    import os
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app as canonical_app
+    paths = {route.path for route in canonical_app.routes}
+    assert "/api/demo/acme-itil-readiness" in paths
+    assert "/demo/acme-itil-readiness" in paths
+    client = TestClient(canonical_app)
+    assert client.get("/api/demo/acme-itil-readiness").status_code == 200
+    assert client.get("/demo/acme-itil-readiness").status_code == 200
