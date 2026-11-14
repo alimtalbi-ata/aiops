@@ -179,6 +179,15 @@ jobs:
           AIOPS2_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python -c 'import json, os, pathlib; p = pathlib.Path(os.environ["RUNNER_TEMP"]) / "aiops2-packaged-demo-smoke-provenance.json"; d = {"schema": "aiops2.github-actions-smoke-provenance.v1", "repository": os.environ["GITHUB_REPOSITORY"], "commit_sha": os.environ["GITHUB_SHA"], "pr_head_sha": os.environ["AIOPS2_PR_HEAD_SHA"], "ref": os.environ["GITHUB_REF"], "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"], "workflow": os.environ["GITHUB_WORKFLOW"], "event_name": os.environ["GITHUB_EVENT_NAME"], "trust_boundary": "UNSIGNED_GITHUB_ACTIONS_RUN_METADATA_NOT_RUNTIME_ATTESTATION"}; p.write_text(json.dumps(d, sort_keys=True, indent=2) + chr(10))'
+      - name: Verify SAN Payments Docker smoke and GitHub run binding before upload
+        env:
+          AIOPS2_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python scripts/verify_aiops2_docker_smoke_artifact.py "${{ runner.temp }}" \\
+            --repository "${{ github.repository }}" \\
+            --head-sha "$AIOPS2_PR_HEAD_SHA" \\
+            --run-id "${{ github.run_id }}" \\
+            --run-attempt "${{ github.run_attempt }}"
       - name: Publish SAN Payments offline Docker smoke evidence
         uses: actions/upload-artifact@v4
         with:
