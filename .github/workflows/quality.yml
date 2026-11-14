@@ -167,7 +167,7 @@ jobs:
       - name: SAN Payments Portal Docker image contains blocked register
         run: |
           docker build --file app/portal/Dockerfile --tag aiops2-portal-demo-smoke:ci app
-          docker run --rm --network none --entrypoint python aiops2-portal-demo-smoke:ci -c "import json,pathlib; from portal.acme_impact_read_model import acme_grafana_pilot_preview_page,acme_incident_cockpit_page; p=pathlib.Path('/app/portal/acme-readonly-pilot-register.template.json'); d=json.loads(p.read_text()); assert d['decision']=='BLOCKED' and d['live_actions_authorized'] is False; assert all(v['status']=='UNKNOWN' for v in d['sources'].values()); grafana=acme_grafana_pilot_preview_page(); cockpit=acme_incident_cockpit_page(); assert grafana.status_code==200 and cockpit.status_code==200; assert b'UNKNOWN / BLOCKED' in grafana.body and b'NO-GO LIVE' in cockpit.body; from portal.acme_incident_cockpit import project_synthetic_incident_cockpit; from portal.acme_impact_read_model import build_acme_impact_read_model; scenario=project_synthetic_incident_cockpit(build_acme_impact_read_model()); assert all(str(scenario[k]).encode() in grafana.body and str(scenario[k]).encode() in cockpit.body for k in ('incident_id','business_impact_incident_id','source_sha256')); assert grafana.headers['cache-control']=='no-store' and cockpit.headers['cache-control']=='no-store'"
+          docker run --rm --network none --entrypoint python aiops2-portal-demo-smoke:ci -m portal.acme_demo_container_smoke
 
       - name: ACME incident to simulation to evidence DEMO pipeline
         run: python -m pytest -q tests/test_acme_demo_simulation_pipeline.py
