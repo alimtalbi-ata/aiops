@@ -77,3 +77,7 @@ GET `/demo/acme-evidence-plan` now renders the nine independent evidence require
 ## Analyst / Critic / Policy evidence review — 2026-11-14
 
 GET `/api/demo/acme-analyst-critic-review` cross-checks the fixture's deterministic Analyst hypothesis, Critic HOLD and Policy DENY against the independent proof plan. The output explicitly lists missing `analyze`, `approve` and `verify` checkpoints, zero verified runtime citations and no verified HITL, simulation or postcheck. This is **not** an LLM call or independently sourced Critic decision; any forged LLM attestation, approval or LIVE authorization fails HTTP 503. No backend action is triggered.
+
+## Unified synthetic incident cockpit — 2026-11-14
+
+GET `/api/demo/acme-incident-cockpit` composes **one** validated ACME fixture snapshot into the nine-stage lifecycle, eight ITIL transition gates, nine evidence requirements and Analyst/Critic/Policy review. The composite checks cross-view incident IDs, fixture SHA-256, DEMO provenance and the absence of runtime evidence or execution authority before returning. If any projection is inconsistent or unqualified it fails HTTP 503. The result is a read-only **synthetic operator API**, not an incident engine connected to real monitoring, GLPI, Temporal, LLM or vault services.
