@@ -70,6 +70,33 @@ def make_glpi_actor_user_token_broker(*, connect: Callable,
                     or credential["tenant_id"] != tenant_id
                     or not valid(credential["user_token"], 4096)):
                 raise GLPIActorCredentialDenied("glpi_vault_identity_not_attested")
+            # Recheck after the external vault round-trip: a grant or binding
+            # may have been revoked while the credential was being fetched.
+            recheck = connect()
+            try:
+                with recheck:
+                    with recheck.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT b.glpi_user_id "
+                            "FROM aiops.glpi_actor_user_bindings b "
+                            "JOIN aiops.portal_actor_tenant_grants g "
+                            "ON g.actor_id = b.actor_id AND g.tenant_id = b.tenant_id "
+                            "WHERE b.actor_id = %s AND b.tenant_id = %s "
+                            "AND b.glpi_instance_id = %s "
+                            "AND b.revoked_at IS NULL AND b.verified_at <= now() "
+                            "AND g.revoked_at IS NULL",
+                            (actor, tenant_id, glpi_instance_id),
+                        )
+                        refreshed = cursor.fetchall()
+            finally:
+                recheck.close()
+            if (not isinstance(refreshed, (list, tuple))
+                    or len(refreshed) != 1
+                    or not isinstance(refreshed[0], (tuple, list))
+                    or len(refreshed[0]) != 1
+                    or type(refreshed[0][0]) is not int
+                    or refreshed[0][0] != user_id):
+                raise GLPIActorCredentialDenied("glpi_actor_binding_changed_during_vault_lookup")
             return {"user_token": credential["user_token"], "glpi_user_id": user_id}
         except GLPIActorCredentialDenied:
             raise
