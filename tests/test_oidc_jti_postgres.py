@@ -32,6 +32,7 @@ def test_postgres_oidc_revocation_and_action_replay_are_durable_and_atomic():
         return psycopg.connect(dsn)
 
     with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute("CREATE SCHEMA IF NOT EXISTS aiops")
         conn.execute((ROOT / "db/migrations/010_oidc_jti_revocation_and_action_replay.sql").read_text())
 
     is_revoked, revoke, consume = make_oidc_jti_store(connect)
