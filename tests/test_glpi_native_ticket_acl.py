@@ -28,7 +28,7 @@ def test_native_acl_reads_exact_ticket_as_oidc_actor_and_checks_entity():
         glpi_instance_id="glpi-eu", glpi_entity_id="17",
         ticket_id="42", action="read_ticket",
     ) is True
-    assert factory.call_args.kwargs["get_actor_user_token"] is not None
+    assert factory.call_args.kwargs["get_user_token"] is not None
     assert seen == [{
         "url": "https://glpi.example.invalid/Ticket/42",
         "actor": "oidc:subject-hash",
