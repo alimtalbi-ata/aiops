@@ -83,3 +83,18 @@ Le résultat PASS est limité au **scénario synthétique**. Le `git_revision`
 du manifeste correspond au checkout GitHub Actions (potentiellement un commit
 de merge de PR), pas nécessairement au SHA de tête de branche. Ne pas utiliser
 ce champ comme signature d'origine.
+
+## Fiche de répétition opérateur (12 minutes, hors production)
+
+Après génération et vérification du dossier canonique :
+
+```bash
+python scripts/rehearse_aiops2_customer_demo.py /tmp/aiops2-demo \
+  --output /tmp/aiops2-demo-repetition.md
+```
+
+La fiche indique les six séquences métier et leurs critères observables,
+avec IDs et SHA issus du dossier vérifié. Elle ne fait aucun appel réseau
+et ne modifie aucun ticket. Une pièce modifiée ou absente bloque la génération.
+L'animateur doit verbaliser les trois résultats séparés : **GO scénario
+synthétique**, **NO-GO LIVE**, **UNKNOWN preuves runtime**.
