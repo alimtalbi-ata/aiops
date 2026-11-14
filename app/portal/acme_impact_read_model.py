@@ -287,6 +287,34 @@ def acme_evidence_plan_page():
     return HTMLResponse(content=page, headers=HEADERS)
 
 
+@router.get("/demo/acme-grafana-pilot-preview", response_class=HTMLResponse,
+            name="synthetic_acme_grafana_pilot_preview")
+def acme_grafana_pilot_preview_page():
+    """Synthetic customer illustration; never a real Grafana observation."""
+    import json
+    from portal.grafana_readonly_evidence import collect_grafana_alert_readonly
+    from portal.grafana_pilot_preview import preview_grafana_pilot_evidence
+    from portal.grafana_pilot_preview_html import render_grafana_pilot_preview_html
+    try:
+        template_path = Path(__file__).resolve().parents[2] / "docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json"
+        register = json.loads(template_path.read_text(encoding="utf-8"))
+        observed = "2026-11-14T11:59:00Z"
+        candidate = collect_grafana_alert_readonly(
+            fetch_alert=lambda rule, tenant: {
+                "rule_uid": rule, "tenant_id": tenant,
+                "dashboard_uid": "acme-san-payments-synthetic",
+                "state": "firing", "observed_at_utc": observed,
+            }, rule_uid="acme-san-p1-synthetic", tenant_id="acme-synthetic",
+            service_identity="LOCAL_SYNTHETIC_FIXTURE_NOT_AUTHENTICATED",
+            max_age_seconds=300, now_utc="2026-11-14T12:00:00Z",
+        )
+        preview = preview_grafana_pilot_evidence(register, candidate)
+        page = render_grafana_pilot_preview_html(preview)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_grafana_pilot_preview_unqualified") from exc
+    return HTMLResponse(content=page, headers=HEADERS)
+
+
 @router.get("/demo/acme-incident-cockpit", response_class=HTMLResponse,
             name="synthetic_acme_incident_cockpit_page")
 def acme_incident_cockpit_page():
