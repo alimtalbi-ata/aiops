@@ -159,7 +159,7 @@ def test_native_glpi_acl_must_return_exact_true():
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
         resolve = make_verified_principal_glpi_xref_resolver(
             connect=connect, secret=SECRET,
-            fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]),
+            fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]) if kwargs["tenant_id"] == "tenant-a" else None,
             authorize_glpi_native_acl=lambda **kwargs: 1,
             clock=lambda: NOW,
         )
