@@ -76,7 +76,7 @@ def signed_event(tenant_id="tenant-b"):
         "ticket_id": "42",
         "iat": NOW - 1,
         "exp": NOW + 120,
-        "nonce": "nonce-0123456789abcdef",
+        "nonce": "nonce0123456789abcdef",
         "association_state": "ACTIVE",
         "association_count": 1,
         "glpi_instance_id": "glpi-prod-eu",
