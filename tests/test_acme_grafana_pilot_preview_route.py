@@ -1,0 +1,26 @@
+"""Customer-facing Grafana preview route is synthetic, read-only and fail-closed."""
+import os, sys
+from pathlib import Path
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
+
+def client():
+ with patch.dict(os.environ,{'AIOPS_INTERNAL_TOKEN':'unit-test-only'}):
+  from portal.main import app
+ return TestClient(app)
+
+def test_synthetic_grafana_preview_route_is_safe():
+ response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==200
+ assert response.headers['cache-control']=='no-store'
+ assert "default-src 'none'" in response.headers['content-security-policy']
+ for marker in ('SAN → Payments','UNKNOWN / BLOCKED','LOCAL_SYNTHETIC_FIXTURE_NOT_AUTHENTICATED','NO-GO','acme-synthetic'):
+  assert marker in response.text
+ assert '<script' not in response.text
+
+def test_synthetic_grafana_preview_fails_closed_when_register_missing():
+ with patch('pathlib.Path.read_text',side_effect=OSError('no evidence template')):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==503
+ assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
