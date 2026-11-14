@@ -42,3 +42,26 @@ La démonstration de la protection contre les démarrages multiples est **un tes
 ## Critères de non-démo
 
 Interrompre la démonstration plutôt que masquer une panne si la fixture ne valide plus son hash, si les IDs divergent, si un composant présente un PASS sans preuve indépendante, si la CI est rouge, ou si l'environnement n'est pas explicitement isolé. Aucun merge, déploiement, ticket GLPI écrit, reconciliation ou LIVE n'est nécessaire.
+
+
+## Dossier de preuve reproductible — contrôle anti-falsification
+
+Générer le dossier depuis le checkout exact de la démonstration :
+
+```bash
+python scripts/package_aiops2_demo_evidence.py --output /tmp/aiops2-demo
+python scripts/package_aiops2_demo_evidence.py --verify /tmp/aiops2-demo
+```
+
+Présenter les quatre fichiers `cockpit.html`, `cockpit.json`,
+`acceptance.json` et `manifest.json`. Le vérificateur compare les SHA-256,
+les identifiants, les marqueurs de non-qualification et **les octets exacts
+régénérés depuis la fixture canonique du checkout**. Recalculer les hashes
+après modification du HTML ou du rapport ne permet pas de faire accepter
+un contenu différent. Le même checkout de référence doit être conservé
+pour une vérification ultérieure.
+
+Cette vérification ne prouve pas l'origine indépendante du dépôt, l'identité
+d'un auteur, la présence de sources externes authentifiées, une exécution
+Temporal ou un rétablissement réel. Pour une chaîne de confiance hors dépôt,
+prévoir un artefact CI signé et une provenance vérifiée séparément.
