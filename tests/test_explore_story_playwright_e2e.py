@@ -380,5 +380,45 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertNotIn("CONNECTED", status.text())
 
 
+    def test_08_customer_incident_cockpit_real_chromium_walkthrough_and_mobile(self):
+        """Real browser checks the actual customer-facing SAN -> Payments page."""
+        response = self.page.goto(self.base + "/demo/acme-incident-cockpit")
+        self.assertEqual(response.status, 200)
+        expect(self.page.get_by_role("heading", name=re.compile("Parcours démontrable"))).to_be_visible()
+        self.assertEqual(self.page.locator("nav[aria-label='Parcours guidé de démonstration'] a[href^='#']").count(), 5)
+        for anchor, heading in (
+            ("impact", "Incident et impact métier"),
+            ("evidence", "Cycle incident"),
+            ("decision", "Analyst / Critic / Policy"),
+            ("itil", "Transitions ITIL"),
+            ("verdict", "Décision opérateur"),
+        ):
+            link = self.page.locator(f"nav a[href='#{anchor}']")
+            self.assertEqual(link.count(), 1, anchor)
+            link.click()
+            self.assertEqual(self.page.evaluate("location.hash"), "#" + anchor)
+            self.assertTrue(self.page.locator(f"#{anchor}").count() == 1)
+        self.assertIn("GO — scénario synthétique", self.page.locator("body").inner_text())
+        self.assertIn("UNKNOWN — preuves runtime", self.page.locator("body").inner_text())
+        self.assertIn("NO-GO LIVE", self.page.locator("body").inner_text())
+        self.assertEqual(self.page.locator("table").count(), 4)
+        self.assertEqual(self.page.locator("form").count(), 0)
+        self.assertEqual(self.page.locator("script").count(), 0)
+
+        # Small viewport: tables remain inside scroll containers and summary cards stack.
+        self.page.set_viewport_size({"width": 390, "height": 844})
+        self.page.reload()
+        self.assertEqual(self.page.locator("div.table-scroll table").count(), 4)
+        self.assertEqual(self.page.locator(".demo-card").count(), 3)
+        self.assertTrue(self.page.locator("body").evaluate(
+            "el => el.scrollWidth <= window.innerWidth"
+        ), "cockpit creates page-level horizontal overflow on mobile")
+        for wrapper in self.page.locator("div.table-scroll").all():
+            self.assertGreaterEqual(
+                wrapper.evaluate("el => el.scrollWidth"),
+                wrapper.evaluate("el => el.clientWidth"),
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
