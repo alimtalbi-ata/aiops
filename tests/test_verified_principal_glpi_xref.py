@@ -204,3 +204,17 @@ def test_reusable_resolver_rechecks_jti_revocation_on_every_request():
     # Second request: the revocation lookup alone; no tenant or GLPI work.
     assert len(cursors) == 5
     assert "oidc_jti_revocations" in cursors[-1].calls[0][0]
+
+
+def test_multiple_valid_tenant_xrefs_are_denied_as_ambiguous():
+    def connect():
+        return Connection(Cursor())
+    with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
+        resolve = make_verified_principal_glpi_xref_resolver(
+            connect=connect, secret=SECRET,
+            fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]),
+            authorize_glpi_native_acl=lambda **kwargs: True,
+            clock=lambda: NOW,
+        )
+        with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_missing_or_ambiguous"):
+            resolve("token", "42")
