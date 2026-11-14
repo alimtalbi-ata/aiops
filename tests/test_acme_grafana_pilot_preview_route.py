@@ -24,3 +24,13 @@ def test_synthetic_grafana_preview_fails_closed_when_register_missing():
   response=client().get('/demo/acme-grafana-pilot-preview')
  assert response.status_code==503
  assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
+
+def test_customer_can_navigate_both_synthetic_views_without_network():
+ c=client()
+ cockpit=c.get('/demo/acme-incident-cockpit')
+ preview=c.get('/demo/acme-grafana-pilot-preview')
+ assert cockpit.status_code==200 and preview.status_code==200
+ assert "href='/demo/acme-grafana-pilot-preview'" in cockpit.text
+ assert "href='/demo/acme-incident-cockpit'" in preview.text
+ assert 'NO-GO LIVE' in cockpit.text
+ assert 'UNKNOWN / BLOCKED' in preview.text
