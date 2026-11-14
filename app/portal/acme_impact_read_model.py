@@ -185,6 +185,19 @@ def _load_or_503() -> dict[str, Any]:
         ) from exc
 
 
+@router.get("/api/demo/acme-itil-readiness", name="synthetic_acme_itil_readiness")
+def acme_itil_readiness_json():
+    """Expose missing evidence for ITIL transitions; never approve a transition."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_itil_readiness import assess_synthetic_itil_readiness
+    try:
+        lifecycle = project_synthetic_incident_lifecycle(_load_or_503())
+        readiness = assess_synthetic_itil_readiness(lifecycle)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_itil_readiness_unqualified") from exc
+    return JSONResponse(content=readiness, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-lifecycle", name="synthetic_acme_incident_itil_lifecycle")
 def acme_lifecycle_json():
     """Read-only DEMO incident-to-ITIL lifecycle, no backend actions."""
