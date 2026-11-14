@@ -14,6 +14,10 @@ create table if not exists aiops.glpi_actor_user_bindings (
     constraint glpi_actor_binding_tenant_nonempty check (length(btrim(tenant_id)) between 1 and 128),
     constraint glpi_actor_binding_instance_nonempty check (length(btrim(glpi_instance_id)) between 1 and 128)
 );
+-- One active GLPI account cannot silently stand in for multiple OIDC actors.
+create unique index if not exists ux_glpi_actor_user_per_instance_tenant
+    on aiops.glpi_actor_user_bindings(tenant_id, glpi_instance_id, glpi_user_id)
+    where revoked_at is null;
 create index if not exists ix_glpi_actor_user_bindings_tenant
     on aiops.glpi_actor_user_bindings(tenant_id, glpi_instance_id)
     where revoked_at is null;
