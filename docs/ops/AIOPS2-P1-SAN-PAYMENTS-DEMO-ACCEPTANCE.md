@@ -128,12 +128,12 @@ docker run --rm --network none --entrypoint python \\
 
 Le contrôle porte sur les deux écrans SAN P1 → Payments P2, les mêmes identifiants d'incident et SHA-256, les en-têtes de sécurité, ainsi que les sept sources `UNKNOWN` et les sept tests négatifs `NOT_RUN`. Toute preuve positive inventée ou écran indisponible doit faire échouer l'étape.
 
-**Procédure opérateur de vérification :** ouvrir la page GitHub Actions du commit exact à démontrer, sélectionner le workflow « AIOps quality gates » et vérifier que le job contenant « SAN Payments Portal Docker image contains blocked register » est **success**. Télécharger depuis **cette même exécution** l'artifact `aiops2-san-payments-offline-docker-smoke` (rétention sept jours), puis inspecter le JSON :
+**Procédure opérateur de vérification :** ouvrir la page GitHub Actions du commit exact à démontrer, sélectionner le workflow « AIOps quality gates » et vérifier que le job contenant « SAN Payments Portal Docker image contains blocked register » est **success**. Télécharger depuis **cette même exécution** l'artifact `aiops2-san-payments-offline-docker-smoke` (rétention sept jours). Il contient le résultat `aiops2-packaged-demo-smoke.json` **et** `aiops2-packaged-demo-smoke-provenance.json`, qui indique le dépôt, le SHA exact du checkout, le numéro de run et sa tentative, le workflow et l'événement déclencheur. Comparer ces métadonnées avec la page GitHub Actions avant d'inspecter le JSON :
 
 ```bash
 python -m json.tool aiops2-packaged-demo-smoke.json
 ```
 
-Les champs attendus sont `schema=aiops2.packaged-demo-smoke.v1`, `accepted=true`, `scope=LOCAL_SYNTHETIC_ONLY`, `runtime_attested=false`, `live_actions_authorized=false`, avec `incident_id` et `source_sha256` non vides. Vérifier visuellement que les identifiants et l'empreinte sont identiques sur les **deux écrans**. Ne pas considérer un fichier téléchargé hors du run GitHub comme une attestation d'origine : ce JSON n'est **pas signé** et ne prouve aucun accès à Grafana, GLPI, Temporal, IdP ou production.
+Les champs attendus sont `schema=aiops2.packaged-demo-smoke.v1`, `accepted=true`, `scope=LOCAL_SYNTHETIC_ONLY`, `runtime_attested=false`, `live_actions_authorized=false`, avec `incident_id` et `source_sha256` non vides. Vérifier visuellement que les identifiants et l'empreinte sont identiques sur les **deux écrans**. Ne pas considérer un fichier téléchargé hors du run GitHub comme une attestation d'origine : ces JSON ne sont **pas signés** et ne prouve aucun accès à Grafana, GLPI, Temporal, IdP ou production.
 
 **En cas de workflow absent, rouge, annulé, ou d'artifact introuvable/expiré :** consigner `CI_UNCONFIRMED`, ne pas présenter le contrôle Docker comme réussi et conserver le statut **NO-GO LIVE**. Ne pas substituer une ancienne exécution verte au commit en cours.
