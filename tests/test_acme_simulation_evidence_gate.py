@@ -12,7 +12,8 @@ from portal.acme_simulation_evidence_gate import assess_simulation_evidence_gate
 
 def assess_simulation_evidence_gate(request, simulation, evidence):
     return _assess_simulation_evidence_gate(
-        request, simulation, evidence, expected_source_sha256="a" * 64)
+        request, simulation, evidence, expected_source_sha256="a" * 64,
+        expected_incident_id="SAN-P1")
 
 
 def sample():
@@ -110,4 +111,24 @@ def test_expected_digest_must_be_independently_supplied():
         _assess_simulation_evidence_gate(request, simulation, evidence)
     with pytest.raises(ValueError, match="trusted_expected_source_sha256_required"):
         _assess_simulation_evidence_gate(
-            request, simulation, evidence, expected_source_sha256="invalid")
+            request, simulation, evidence, expected_source_sha256="invalid",
+            expected_incident_id="SAN-P1")
+
+
+def test_simulation_for_different_incident_rejected_even_same_tenant():
+    request, simulation, evidence = sample()
+    with pytest.raises(ValueError, match="simulation_incident_scope_mismatch"):
+        _assess_simulation_evidence_gate(
+            request, simulation, evidence, expected_source_sha256="a" * 64,
+            expected_incident_id="ANOTHER-P1")
+
+
+def test_expected_incident_id_required_from_trusted_context():
+    request, simulation, evidence = sample()
+    with pytest.raises(TypeError):
+        _assess_simulation_evidence_gate(
+            request, simulation, evidence, expected_source_sha256="a" * 64)
+    with pytest.raises(ValueError, match="trusted_expected_incident_required"):
+        _assess_simulation_evidence_gate(
+            request, simulation, evidence, expected_source_sha256="a" * 64,
+            expected_incident_id="../other")
