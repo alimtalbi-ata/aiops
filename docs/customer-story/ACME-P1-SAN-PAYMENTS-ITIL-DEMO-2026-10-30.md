@@ -47,3 +47,9 @@ The demonstration then executes only a synthetic simulation in the isolated lab.
 - [ ] No-effect simulator receipt confirmed; effect_receipts count remains zero.
 - [ ] Verification uses independent fixture observations.
 - [ ] Full event timeline, test output, screenshot/video capture and package hashes saved.
+
+## Synthetic full lifecycle read model — 2026-11-14
+
+The existing Portal now exposes **GET `/api/demo/acme-lifecycle`** as a no-store, read-only projection of the validated ACME impact fixture. It covers observability, incident correlation, business impact, Analyst/Critic, ITIL ticket, Policy/HITL, orchestration, independent verification, and ITIL Problem/PIR. Every phase is **UNKNOWN** until independently authenticated runtime evidence exists; no synthetic checkpoint can be promoted to PASS. The model rejects an asserted real GLPI ticket, runtime timestamp, runtime attestation, or LIVE qualification, and returns HTTP 503 for an invalid source. The source SHA-256 and SAN→Payments impact path are carried through.
+
+This API is **not** a runtime incident lifecycle engine, Temporal workflow, GLPI writer, AI Analyst execution, or production verification. No LIVE capability is exposed. Offline tests and CI guard against laundering simulation into production evidence.
