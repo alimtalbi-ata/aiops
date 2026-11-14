@@ -23,6 +23,15 @@ def verify_packaged_demo() -> dict[str, object]:
     )
     register = json.loads(template.read_text(encoding="utf-8"))
     expected_sources = {"oidc", "grafana", "n8n", "glpi_cmdb", "core_temporal", "policy_hitl", "independent_postcheck"}
+    expected_source_fields = {
+        "oidc": {"status", "issuer", "audience", "jwks_key_id", "revocation_check", "mfa_assurance", "evidence_refs"},
+        "grafana": {"status", "rule_uid", "dashboard_uid", "observed_at_utc", "service_identity", "tenant_scope", "response_sha256", "evidence_refs"},
+        "n8n": {"status", "workflow_id", "execution_id", "execution_status", "started_at_utc", "finished_at_utc", "workflow_version", "read_only_existing_execution", "response_sha256", "evidence_refs"},
+        "glpi_cmdb": {"status", "instance_id", "entity_id", "ticket_id", "ci_id", "human_actor_subject", "native_acl_verified", "xref_verified", "response_sha256", "evidence_refs"},
+        "core_temporal": {"status", "core_run_id", "workflow_id", "start_intent_present", "inspection_read_only", "arguments_comparison", "execution_outcome", "evidence_refs"},
+        "policy_hitl": {"status", "policy_version", "decision", "human_actor_subject", "approval_scope", "audit_event_ref", "evidence_refs"},
+        "independent_postcheck": {"status", "source_independent_from_action", "observed_at_utc", "expected_state", "observed_state", "verifier_identity", "response_sha256", "evidence_refs"},
+    }
     expected_negative_tests = {
         "cross_tenant_zero_upstream_calls",
         "cross_entity_zero_upstream_calls",
@@ -54,7 +63,8 @@ def verify_packaged_demo() -> dict[str, object]:
             or not isinstance(register.get("negative_tests"), dict)
             or set(register["negative_tests"]) != expected_negative_tests
             or any(value != "NOT_RUN" for value in register["negative_tests"].values())
-            or any(not isinstance(v, dict) or v.get("status") != "UNKNOWN"
+            or any(not isinstance(v, dict) or set(v) != expected_source_fields[name]
+                   or v.get("status") != "UNKNOWN"
                    or v.get("evidence_refs") != []
                    or any(value != permitted_source_fields.get(field)
                           for field, value in v.items()
@@ -62,7 +72,7 @@ def verify_packaged_demo() -> dict[str, object]:
                    or any(v.get(field) != permitted_source_fields[field]
                           for field in ("arguments_comparison", "execution_outcome", "decision")
                           if field in v)
-                   for v in register["sources"].values())):
+                   for name, v in register["sources"].items())):
         raise ValueError("packaged_register_not_blocked")
 
     customer_routes = {
