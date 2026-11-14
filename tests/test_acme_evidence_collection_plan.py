@@ -52,3 +52,24 @@ def test_canonical_portal_mounts_read_only_evidence_api_and_fails_closed():
                return_value={"schema": "invalid"}):
         denied = client.get("/api/demo/acme-evidence-plan")
     assert denied.status_code == 503
+
+
+def test_canonical_operator_evidence_page_is_static_and_denies_invalid_source():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    client = TestClient(app)
+    page = client.get("/demo/acme-evidence-plan")
+    assert page.status_code == 200
+    assert page.headers["cache-control"] == "no-store"
+    assert "SIMULATION LOCALE UNIQUEMENT" in page.text
+    assert "NO-GO LIVE" in page.text
+    assert "ALERT_STATE" in page.text
+    assert "INDEPENDENT_POSTCHECK" in page.text
+    assert "Preuves vérifiées : 0 / 9" in page.text
+    assert page.text.count("<tr><th scope='row'>") == 9
+    assert "<script" not in page.text.lower()
+    assert "<form" not in page.text.lower()
+    with patch("portal.acme_impact_read_model.build_acme_impact_read_model",
+               return_value={"schema": "invalid"}):
+        denied = client.get("/demo/acme-evidence-plan")
+    assert denied.status_code == 503
