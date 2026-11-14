@@ -42,3 +42,18 @@ def test_packaged_demo_rejects_missing_customer_screen():
                       side_effect=ValueError("unavailable")):
         with pytest.raises(ValueError, match="unavailable"):
             verify_packaged_demo()
+
+def test_packaged_demo_rejects_missing_evidence_source():
+    import portal.acme_demo_container_smoke as smoke
+    original = Path.read_text
+
+    def incomplete(path, *args, **kwargs):
+        if str(path).endswith("acme-readonly-pilot-register.template.json"):
+            payload = json.loads(original(path, *args, **kwargs))
+            del payload["sources"]["independent_postcheck"]
+            return json.dumps(payload)
+        return original(path, *args, **kwargs)
+
+    with patch.object(smoke.Path, "read_text", new=incomplete):
+        with pytest.raises(ValueError, match="packaged_register_not_blocked"):
+            verify_packaged_demo()
