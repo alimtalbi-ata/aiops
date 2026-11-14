@@ -42,7 +42,8 @@ def assess_synthetic_itil_readiness(lifecycle: dict) -> dict:
                 or stage.get("expected_source") != source
                 or stage.get("evidence_state") != "UNKNOWN"
                 or stage.get("runtime_attested") is not False
-                or stage.get("operational_transition_authorized") is not False):
+                or stage.get("operational_transition_authorized") is not False
+                or stage.get("reason") != "INDEPENDENT_RUNTIME_EVIDENCE_MISSING"):
             raise ValueError("unqualified_itil_stage")
         by_cue[cue] = stage
     transitions = [
@@ -64,6 +65,9 @@ def assess_synthetic_itil_readiness(lifecycle: dict) -> dict:
         "business_impact_incident_id": lifecycle["business_impact_incident_id"],
         "transitions": transitions,
         "authorized_transition_count": 0,
+        "missing_unique_checkpoints": [cue for cue, _, _ in STAGES],
+        "missing_unique_checkpoint_count": len(STAGES),
+        "next_operator_step": "COLLECT_INDEPENDENT_RUNTIME_EVIDENCE_READ_ONLY",
         "actual_glpi_ticket_updated": False,
         "temporal_execution_performed": False,
         "production_remediation_verified": False,
