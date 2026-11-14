@@ -73,3 +73,7 @@ GET `/api/demo/acme-evidence-plan` provides a **non-executable** checklist for a
 ## Operator-facing evidence checklist — 2026-11-14
 
 GET `/demo/acme-evidence-plan` now renders the nine independent evidence requirements as a static French table in the canonical Portal: checkpoint, lifecycle phase, expected source, proof type, required metadata and MISSING status. The page visibly shows **0/9 verified**, the source fixture SHA-256, and the NO-GO LIVE warning. There are no scripts, forms, upload capabilities or backend calls. A broken or unqualified synthetic fixture fails HTTP 503.
+
+## Analyst / Critic / Policy evidence review — 2026-11-14
+
+GET `/api/demo/acme-analyst-critic-review` cross-checks the fixture's deterministic Analyst hypothesis, Critic HOLD and Policy DENY against the independent proof plan. The output explicitly lists missing `analyze`, `approve` and `verify` checkpoints, zero verified runtime citations and no verified HITL, simulation or postcheck. This is **not** an LLM call or independently sourced Critic decision; any forged LLM attestation, approval or LIVE authorization fails HTTP 503. No backend action is triggered.
