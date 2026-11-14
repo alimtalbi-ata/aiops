@@ -168,9 +168,6 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<div class='table-scroll'><table><thead><tr><th>Point de contrôle</th><th>Preuve exigée</th>"
         "<th>Source attendue</th><th>Métadonnées requises</th>"
         "<th>État</th></tr></thead><tbody>" + evidence_rows + "</tbody></table></div>"
-        "<h2 id='itil'>Transitions ITIL (8)</h2><div class='table-scroll'><table><thead><tr>"
-        "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
-        "</tr></thead><tbody>" + transition_rows + "</tbody></table></div>"
         "<section aria-label='Fiche de décision opérationnelle'>"
         "<h2>Fiche de décision — que peut faire le NOC ?</h2>"
         "<dl><dt><strong>Ce que nous savons</strong></dt><dd>"
@@ -197,6 +194,9 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(evidence["requested_count"]) + "</strong>. "
         "Prochaine action : collecte manuelle en lecture seule, "
         "puis vérification indépendante.</p>"
+        "<h2 id='itil'>Transitions ITIL (8)</h2><div class='table-scroll'><table><thead><tr>"
+        "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
+        "</tr></thead><tbody>" + transition_rows + "</tbody></table></div>"
         "<p>SHA-256 de la fixture : <code>" + safe(cockpit["source_sha256"])
         + "</code></p></main></body></html>"
     )
