@@ -99,3 +99,33 @@ def test_operator_cockpit_explains_customer_use_case_and_proof_boundary():
     assert "pas une attestation de production" in page.text
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
+
+
+def test_customer_walkthrough_has_five_working_anchor_targets_and_safe_verdict():
+    from html.parser import HTMLParser
+
+    class Anchors(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.ids = set()
+            self.targets = []
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if "id" in attrs:
+                self.ids.add(attrs["id"])
+            if tag == "a" and attrs.get("href", "").startswith("#"):
+                self.targets.append(attrs["href"][1:])
+
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    anchors = Anchors()
+    anchors.feed(page.text)
+    assert anchors.targets == ["impact", "evidence", "decision", "itil", "verdict"]
+    assert set(anchors.targets).issubset(anchors.ids)
+    assert "GO pour le scénario synthétique" in page.text
+    assert "UNKNOWN pour les preuves runtime" in page.text
+    assert "NO-GO LIVE" in page.text
+    assert "<script" not in page.text.lower()
+    assert "<form" not in page.text.lower()
