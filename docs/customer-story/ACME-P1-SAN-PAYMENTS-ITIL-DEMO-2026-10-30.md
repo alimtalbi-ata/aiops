@@ -172,3 +172,7 @@ The existing Temporal Worker now **blocks DEMO at VERIFY** after a stage-start e
 ## In-process Worker orchestration with actual activity bodies — 2026-11-14
 
 `tests/test_worker_orchestration_integrated_demo.py` composes the real async `IncidentWorkflow.run`, `start_run` and `execute_stage` bodies with deterministic fake Core, Policy, Evidence and Twin services. It runs all DEMO stages through VERIFY, confirms 10 earlier synthetic stage evidence writes, then `INDEPENDENT_POSTCHECK_MISSING` and Core `BLOCK` without VERIFY completion, RECONCILE, LEARN or RESOLVE. This is a higher-level in-process integration regression, **not** a Temporal server or real Core/Postgres E2E.
+
+## Policy gate refusal persists Core run BLOCK — 2026-11-14
+
+The Temporal Worker previously returned a blocked Policy stage event without necessarily transitioning the canonical Core run to BLOCKED. A non-PASS Policy decision now writes `GATE_BLOCKED` at confidence zero, then issues an idempotent `BLOCK` Core command with the returned version before ending the workflow. Actual async activity tests cover both `BLOCKED` and `UNKNOWN` Policy decisions and assert no checkpoint or DEMO PASS artifact after refusal. This is an in-process regression, not a live Policy/Core E2E.
