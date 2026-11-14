@@ -42,7 +42,8 @@ def _execute_stage_function(calls):
     return namespace["execute_stage"]
 
 
-@pytest.mark.parametrize("mode", ["DEMO", "REPLAY", "STORY"])\ndef test_demo_verify_blocks_before_any_evidence_or_postcheck_pass(mode):
+@pytest.mark.parametrize("mode", ["DEMO", "REPLAY", "STORY"])
+def test_demo_verify_blocks_before_any_evidence_or_postcheck_pass(mode):
     calls = []
     execute = _execute_stage_function(calls)
     result = asyncio.run(execute({
