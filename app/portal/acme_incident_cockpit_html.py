@@ -31,6 +31,26 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(s["expected_source"]) + "</td><td>" + safe(s["evidence_state"])
         + "</td></tr>" for s in lifecycle["stages"]
     )
+    customer_explanations = {
+        "detect": ("Signal SAN candidat", "Vérifier la règle et l'alerte Grafana en lecture seule"),
+        "correlate": ("Regrouper les signaux en incident P1", "Vérifier la corrélation NOC"),
+        "enrich": ("Relier le SAN au service Payments", "Contrôler les dépendances métier/CMDB"),
+        "analyze": ("Formuler puis contester une hypothèse", "Exiger des citations Analyst/Critic indépendantes"),
+        "ticket": ("Préparer la traçabilité ITIL", "Lire le ticket GLPI et son ACL sans écriture"),
+        "approve": ("Soumettre la décision à Policy/HITL", "Obtenir une approbation humaine authentifiée"),
+        "simulate": ("Montrer une simulation sans effet", "Conserver le reçu isolé sans action LIVE"),
+        "verify": ("Exiger une vérification indépendante", "Comparer des mesures post-incident authentifiées"),
+        "close": ("Préparer Problem et PIR", "Ne pas clôturer sans preuve ni autorisation"),
+    }
+    if [s["cue"] for s in lifecycle["stages"]] != list(customer_explanations):
+        raise ValueError("unexpected_demo_timeline")
+    timeline_rows = "".join(
+        "<tr><th scope='row'>" + safe(index) + ". " + safe(customer_explanations[s["cue"]][0])
+        + "</th><td>" + safe(s["expected_source"])
+        + "</td><td>UNKNOWN — preuve runtime absente</td><td>"
+        + safe(customer_explanations[s["cue"]][1]) + "</td></tr>"
+        for index, s in enumerate(lifecycle["stages"], start=1)
+    )
     transition_rows = "".join(
         "<tr><th scope='row'>" + safe(t["transition"]) + "</th><td>"
         + safe(", ".join(t["missing_evidence"])) + "</td><td>NON</td></tr>"
@@ -78,7 +98,13 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(cockpit["incident_id"]) + "</code> · Payments P2 : <code>"
         + safe(cockpit["business_impact_incident_id"]) + "</code></p>"
         "<p>Chemin d'impact : " + safe(" → ".join(cockpit["business_impact_path"]))
-        + "</p><h2 id='evidence'>Cycle incident (9 étapes)</h2><table><thead><tr>"
+        + "</p><h2>Chronologie explicative — scénario, pas événements observés</h2>"
+        "<p>Neuf étapes attendues, aucune horodatée ni attestée. "
+        "La prochaine vérification ne constitue pas une action exécutée.</p>"
+        "<table><thead><tr><th>Étape métier</th><th>Source attendue</th>"
+        "<th>État de preuve</th><th>Prochaine vérification</th></tr></thead>"
+        "<tbody>" + timeline_rows + "</tbody></table>"
+        "<h2 id='evidence'>Cycle incident (9 étapes)</h2><table><thead><tr>"
         "<th>Étape</th><th>Source attendue</th><th>Preuve</th></tr></thead>"
         "<tbody>" + stage_rows + "</tbody></table>"
         "<h2 id='itil'>Transitions ITIL (8)</h2><table><thead><tr>"
