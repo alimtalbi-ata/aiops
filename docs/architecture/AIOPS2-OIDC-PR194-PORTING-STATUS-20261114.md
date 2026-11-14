@@ -103,3 +103,22 @@ Not yet qualified:
 - No HTTP route is mounted. The resolver is an unmounted security adapter only.
 - Migration 011 has been tested only against disposable CI PostgreSQL; it has not been applied to any deployment database.
 - No GLPI ticket GET, PUT, CREATE, Copilot query, HITL proposal, deployment, Debian access, or LIVE execution was performed.
+
+## Per-request OIDC → signed xref → authenticated GET-only readback — 2026-11-14
+
+Added a server-side composition candidate:
+- Bounded HTTPS JSON GET transport for Core with fixed origin, no redirects/proxy inheritance, response-size/type checks, and server-owned token provider.
+- GLPI REST session adapter using server-owned App-Token/User-Token, exact ticket URL binding, ticket/entity response checks, and mandatory killSession cleanup.
+- Separate Core and GLPI raw readers with independent actor/tenant/resource authorization callbacks.
+- Raw readback normalization/comparison against the canonical signed xref.
+- `make_verified_principal_glpi_readonly_qualifier` accepts only `bearer_token` and `ticket_id`. It resolves OIDC principal and JTI on every request, derives tenant from active grants, verifies signed xref/native GLPI ACL, then performs independently ACL-gated Core and GLPI GETs. It returns a comparison-only result with Copilot/HITL/write/execution flags false.
+
+The assembly remains unmounted and requires real server providers for:
+- OIDC issuer/JWKS verification and JTI revocation database;
+- signed xref event source and HMAC key management;
+- GLPI-native actor/entity/ticket ACL;
+- separate Core Run and GLPI ticket read ACLs;
+- Core service token and GLPI App/User tokens;
+- trusted, distinct HTTPS origins.
+
+Offline composition tests were added in `tests/test_verified_principal_glpi_readonly.py` and included in quality CI. Exact-head CI for commit `5c571d65a14da47e2e2292290b4ad134a1582abf` was in progress at the time of this update. No real upstream GLPI/Core calls, route registration, Copilot query, HITL proposal, mutation, deployment or LIVE execution.
