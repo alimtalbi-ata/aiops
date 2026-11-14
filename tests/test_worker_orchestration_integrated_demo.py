@@ -7,12 +7,12 @@ import ast
 import asyncio
 import datetime
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace\n\nimport pytest
 
 SOURCE = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
 
 
-def test_actual_workflow_and_stage_activity_stop_before_resolve():
+@pytest.mark.parametrize("mode", ["DEMO", "REPLAY", "STORY"])\ndef test_actual_workflow_and_stage_activity_stop_before_resolve(mode):
     module = ast.parse(SOURCE.read_text())
     functions = [n for n in module.body if isinstance(n, ast.AsyncFunctionDef)
                  and n.name in {"start_run", "execute_stage", "finish_run"}]
@@ -72,7 +72,7 @@ def test_actual_workflow_and_stage_activity_stop_before_resolve():
     exec(compile(ast.Module(body=[*functions, klass], type_ignores=[]),
                  str(SOURCE), "exec"), namespace)
     result = asyncio.run(namespace["IncidentWorkflow"]().run({
-        "run_id": "acme-demo-01", "mode": "DEMO",
+        "run_id": "acme-demo-01", "mode": mode,
         "scenario_id": "acme", "version": 0,
     }))
     assert result["status"] == "BLOCKED"
