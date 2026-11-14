@@ -109,3 +109,7 @@ The joint evidence qualification now **requires** a trusted, independently suppl
 ## Readback preflight hardening — 2026-11-14
 
 Joint evidence qualification now blocks the independent byte reader **before** any external readback when a checkpoint has no source receipt, an invalid MAC, or a missing source key. The digest comparison then reports `READBACK_UNAVAILABLE`; it does not fetch untrusted or foreign-source content and only reports `DIGEST_MATCH_UNATTESTED` after the source MAC preflight succeeds. Tenant scope remains independently required. This is still offline DEMO-only, not source runtime attestation or an authorization to act.
+
+## Cross-checkpoint source-address alias protection — 2026-11-14
+
+The joint evidence reader addresses a source by `(source, source_id)`. It now refuses a manifest containing that same address under two distinct checkpoints, **before any resolver or readback callback**, because a valid receipt for one checkpoint could otherwise unlock the other's external readback. This is an integrity isolation guard for the offline DEMO adapter; it does not establish LIVE source identity or tenant/actor authorization.
