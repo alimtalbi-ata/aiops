@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import hmac
 import re
 
-_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\\Z", re.ASCII)
+_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z", re.ASCII)
 
 
 def _valid(value: object) -> bool:
