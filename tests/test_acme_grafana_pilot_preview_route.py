@@ -51,3 +51,8 @@ def test_grafana_preview_fails_closed_when_incident_fixture_invalid():
   response=client().get('/demo/acme-grafana-pilot-preview')
  assert response.status_code==503
  assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
+
+def test_command_center_exposes_customer_demo_entrypoint():
+ response=client().get('/')
+ assert response.status_code==200
+ assert 'href="/demo/acme-incident-cockpit">SAN → Payments (DEMO)</a>' in response.text
