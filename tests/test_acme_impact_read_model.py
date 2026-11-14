@@ -46,6 +46,19 @@ class AcmeImpactTests(unittest.TestCase):
         self.assertTrue(all(not item["runtime_authenticated"] and item["status"] == "MISSING"
                             for item in first["checkpoint_evidence"]))
 
+    def test_incident_readiness_requires_real_evidence(self):
+        model = build_acme_impact_read_model()
+        readiness = model["incident_readiness"]
+        self.assertEqual(readiness["state"], "BLOCKED_UNATTESTED")
+        self.assertEqual(readiness["mode"], "SYNTHETIC_ONLY")
+        self.assertEqual(readiness["required_checkpoints"], len(model["checkpoint_evidence"]))
+        self.assertEqual(readiness["verified_checkpoints"], 0)
+        self.assertEqual(readiness["missing_checkpoints"], 9)
+        self.assertEqual(readiness["next_operator_action"], "COLLECT_AUTHENTICATED_RUNTIME_EVIDENCE")
+        self.assertFalse(readiness["live_action_allowed"])
+        self.assertFalse(model["runtime_attested"])
+        self.assertEqual(model["decision_preview"]["policy"]["decision"], "DENY_LIVE_ACTION")
+
     def test_rejects_live_or_unsafe_actions(self):
         for key, value in (("status", "open"), ("live_remediation", True),
                            ("allowed_actions", ["execute"])):
@@ -78,6 +91,7 @@ class AcmeImpactTests(unittest.TestCase):
         self.assertIn("SIMULATION LOCALE UNIQUEMENT", page.text)
         self.assertIn("SAN-FABRIC-A", page.text)
         self.assertIn("APP-PAY-01", page.text)
+        self.assertIn("BLOCKED_UNATTESTED", page.text)
 
     def test_canonical_portal_mounts_acme_routes(self):
         with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
