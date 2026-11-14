@@ -126,6 +126,42 @@ def demo_artifacts(rid:str):
     with db() as c:r=c.execute('select artifact_id,artifact_type,title,sequence_no,caption,payload,created_at from aiops.demo_artifacts where run_id=%s order by sequence_no',(rid,)).fetchall()
     k=['artifact_id','artifact_type','title','sequence_no','caption','payload','created_at'];return {'items':[dict(zip(k,x)) for x in r]}
 
+@app.get('/api/runs/{rid}/execution-inspection')
+def inspect_run_execution(rid:str,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    import re
+    if not isinstance(rid,str) or re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}',rid) is None:
+        raise HTTPException(422,'invalid run identifier')
+    with db() as c:
+        row=c.execute('select run_id,mode,scenario_id,version,status from aiops.runs where run_id=%s',(rid,)).fetchone()
+        if not row: raise HTTPException(404,'run not found')
+        receipt=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
+    try:
+        response=requests.get(WORKER+f'/api/execution/{rid}/inspect',
+                              headers={'Authorization':f'Bearer {ADMIN}'},timeout=10)
+        response.raise_for_status()
+        observed=response.json()
+    except (requests.RequestException,ValueError):
+        raise HTTPException(503,'Temporal inspection unavailable; start outcome UNKNOWN')
+    if (not isinstance(observed,dict) or observed.get('run_id')!=rid
+        or observed.get('workflow_id')!=rid
+        or observed.get('temporal_visibility')!='EXISTS_UNATTESTED'
+        or observed.get('original_start_arguments_verified') is not False
+        or observed.get('core_receipt_verified') is not False
+        or observed.get('idempotent_start_confirmed') is not False
+        or observed.get('live_remediation_authorized') is not False):
+        raise HTTPException(503,'Temporal inspection not qualified')
+    return {'run_id':rid,'core_status':row[4],
+            'core_execution_receipt_present':receipt is not None,
+            'core_receipt_workflow_id_matches':bool(receipt and receipt[0]==rid),
+            'temporal_visibility':'EXISTS_UNATTESTED',
+            'temporal_status_observed':observed.get('status_observed'),
+            'original_start_arguments_verified':False,
+            'idempotent_start_confirmed':False,
+            'automatic_reconciliation_performed':False,
+            'execution_start_outcome':'UNKNOWN',
+            'live_remediation_authorized':False}
+
 @app.post('/api/runs/{rid}/execute')
 def execute(rid:str,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
