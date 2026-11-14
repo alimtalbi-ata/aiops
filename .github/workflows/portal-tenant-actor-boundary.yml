@@ -7,6 +7,7 @@ on:
       - "tests/test_portal_tenant_actor_http_denial_20261111.py"
       - "tests/test_portal_tenant_actor_schema_20261111.py"
       - "tests/test_portal_tenant_actor_core_reader_20261111.py"
+      - "tests/test_portal_tenant_runs_oidc_adapter.py"
       - "tests/test_portal_tenant_actor_postgres_20261111.py"
       - "app/core/portal_tenant_runs.py"
       - "db/migrations/009_portal_tenant_actor_read_groundwork.sql"
@@ -32,7 +33,7 @@ jobs:
           AIOPS_INTERNAL_TOKEN: ci-synthetic-internal-token-not-for-runtime
         run: |
           python -m pip install --disable-pip-version-check -r app/requirements.txt pytest==8.4.2 httpx
-          python -m pytest -q tests/test_portal_tenant_actor_boundary_20261111.py tests/test_portal_tenant_actor_http_denial_20261111.py tests/test_portal_tenant_actor_schema_20261111.py tests/test_portal_tenant_actor_core_reader_20261111.py
+          python -m pytest -q tests/test_portal_tenant_actor_boundary_20261111.py tests/test_portal_tenant_actor_http_denial_20261111.py tests/test_portal_tenant_actor_schema_20261111.py tests/test_portal_tenant_actor_core_reader_20261111.py tests/test_portal_tenant_runs_oidc_adapter.py
 
   tenant-postgres-isolation:
     runs-on: ubuntu-24.04
