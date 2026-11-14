@@ -176,3 +176,7 @@ The existing Temporal Worker now **blocks DEMO at VERIFY** after a stage-start e
 ## Policy gate refusal persists Core run BLOCK — 2026-11-14
 
 The Temporal Worker previously returned a blocked Policy stage event without necessarily transitioning the canonical Core run to BLOCKED. A non-PASS Policy decision now writes `GATE_BLOCKED` at confidence zero, then issues an idempotent `BLOCK` Core command with the returned version before ending the workflow. Actual async activity tests cover both `BLOCKED` and `UNKNOWN` Policy decisions and assert no checkpoint or DEMO PASS artifact after refusal. This is an in-process regression, not a live Policy/Core E2E.
+
+## Worker Temporal start request validation — 2026-11-14
+
+`POST /api/execution/start` now rejects malformed envelopes **before connecting to Temporal**: exact Core fields `run_id,mode,scenario_id,version`, bounded ASCII identifiers, non-negative integer version (not bool), and an allowed mode under the existing simulation policy contract. Internal bearer authentication remains required before validation. Inert-client async endpoint tests cover missing/extra fields, Unicode/control/path-like IDs, invalid versions/modes, unauthorized calls and a valid canonical Core envelope. This does not introduce tenant/actor-facing authorization or enable LIVE remediation.
