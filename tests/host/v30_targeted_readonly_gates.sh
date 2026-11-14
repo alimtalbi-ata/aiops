@@ -97,6 +97,7 @@ cron_direct_match() {
     /^[[:space:]]*(#|$)/ {next}
     {
       line=$0
+      sub(/^[[:space:]]+/, "", line)
       sub(/[[:space:]]+#.*/, "", line)
       n=split(line, a, /[[:space:]]+/)
       offset=(mode=="system" ? 6 : 5)
