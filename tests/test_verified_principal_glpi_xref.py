@@ -172,7 +172,7 @@ def test_ticket_resolver_has_no_caller_actor_or_tenant_override():
         return Connection(Cursor())
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
         resolve = make_verified_principal_glpi_xref_resolver(
-            connect=connect, bearer_token="token", secret=SECRET,
+            connect=connect, secret=SECRET,
             fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]),
             authorize_glpi_native_acl=lambda **kwargs: True,
             clock=lambda: NOW,
