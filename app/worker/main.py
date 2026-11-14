@@ -7,6 +7,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
 from shared.http import post_json
 from shared.simulation_policy_contract import policy_command_for_mode
+from shared.temporal_start_history import decode_initial_start_args
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -134,6 +135,8 @@ async def inspect_execution(run_id:str,authorization:str|None=Header(default=Non
   c=await Client.connect(TEMP)
   h=c.get_workflow_handle(run_id)
   desc=await h.describe()
+  history=await h.fetch_history()
+  original_args=decode_initial_start_args(history.events)
  except Exception:
   # No reliable attestation from an unreachable or unknown Temporal service.
   raise HTTPException(503,'workflow inspection unavailable or unverified')
@@ -141,6 +144,8 @@ async def inspect_execution(run_id:str,authorization:str|None=Header(default=Non
          'temporal_visibility':'EXISTS_UNATTESTED',
          'status_observed':str(desc.status),
          'original_start_arguments_verified':False,
+         'temporal_start_history_input':original_args,
+         'temporal_start_history_input_decoded':original_args is not None,
          'core_receipt_verified':False,
          'idempotent_start_confirmed':False,
          'live_remediation_authorized':False}
