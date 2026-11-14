@@ -287,6 +287,17 @@ def acme_evidence_plan_page():
     return HTMLResponse(content=page, headers=HEADERS)
 
 
+@router.get("/api/demo/acme-incident-cockpit", name="synthetic_acme_incident_cockpit")
+def acme_incident_cockpit_json():
+    """One fixture snapshot, cross-checked incident-to-ITIL DEMO cockpit."""
+    from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+    try:
+        cockpit = project_synthetic_incident_cockpit(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_incident_cockpit_unqualified") from exc
+    return JSONResponse(content=cockpit, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-analyst-critic-review",
             name="synthetic_acme_analyst_critic_review")
 def acme_analyst_critic_review_json():
