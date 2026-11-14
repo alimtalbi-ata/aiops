@@ -7,12 +7,15 @@ import ast
 import asyncio
 import datetime
 from pathlib import Path
-from types import SimpleNamespace\n\nimport pytest
+from types import SimpleNamespace
+
+import pytest
 
 SOURCE = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
 
 
-@pytest.mark.parametrize("mode", ["DEMO", "REPLAY", "STORY"])\ndef test_actual_workflow_and_stage_activity_stop_before_resolve(mode):
+@pytest.mark.parametrize("mode", ["DEMO", "REPLAY", "STORY"])
+def test_actual_workflow_and_stage_activity_stop_before_resolve(mode):
     module = ast.parse(SOURCE.read_text())
     functions = [n for n in module.body if isinstance(n, ast.AsyncFunctionDef)
                  and n.name in {"start_run", "execute_stage", "finish_run"}]
