@@ -86,3 +86,15 @@ def test_grafana_preview_uses_only_portal_packaged_register():
   response=client().get('/demo/acme-grafana-pilot-preview')
  assert response.status_code==200
  assert 'UNKNOWN / BLOCKED' in response.text
+
+
+def test_customer_demo_routes_reject_write_methods_with_security_headers():
+ c = client()
+ for route in ('/demo/acme-incident-cockpit',
+               '/demo/acme-grafana-pilot-preview'):
+  for method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+   response = c.request(method, route, json={'approve_live': True})
+   assert response.status_code == 405, (route, method, response.status_code)
+   assert response.headers['cache-control'] == 'no-store'
+   assert "default-src 'none'" in response.headers['content-security-policy']
+   assert response.headers['x-content-type-options'] == 'nosniff'
