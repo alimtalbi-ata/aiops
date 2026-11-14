@@ -40,6 +40,16 @@ def test_revocation_and_tenant_isolation_in_real_postgres():
             "VALUES (%s, %s, %s, %s, now())",
             (actor, tenant, instance, 17),
         )
+    # The same active GLPI user cannot be assigned to another OIDC actor
+    # within the same tenant and GLPI instance.
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        with psycopg.connect(dsn) as conn:
+            conn.execute(
+                "INSERT INTO aiops.glpi_actor_user_bindings "
+                "(actor_id, tenant_id, glpi_instance_id, glpi_user_id, verified_at) "
+                "VALUES (%s, %s, %s, %s, now())",
+                ("oidc:" + uuid4().hex, tenant, instance, 17),
+            )
     vault_calls = []
     def vault(**kwargs):
         vault_calls.append(kwargs)
