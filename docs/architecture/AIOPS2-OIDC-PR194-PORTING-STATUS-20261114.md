@@ -45,3 +45,13 @@ Still not complete:
 - The PostgreSQL migration/test has not yet been observed green on the latest HEAD.
 - No endpoint wires the principal or JTI store; no IdP provider has been tested live.
 - Tenant grant binding, GLPI native ACL, and action execution remain unconnected.
+
+## Exact-head PostgreSQL qualification update
+
+On branch HEAD `6462607f26ee839e9c202c3502baaa4ba865bdf2`, quality run #43591676559 has observed:
+- Offline OIDC verifier + principal adapter tests: SUCCESS.
+- Offline JTI store + schema contracts: SUCCESS.
+- Real PostgreSQL 16 actor/tenant isolation and revocation: SUCCESS.
+- Real PostgreSQL 16 OIDC JTI revocation and concurrent one-time action replay: SUCCESS (the concurrent race produced exactly one accepted consumption).
+- Grafana real integration: SUCCESS.
+- Overall quality job still running through Chromium/browser E2E at the time of this update. Do not call the full quality workflow green until the run concludes.
