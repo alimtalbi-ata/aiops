@@ -42,12 +42,12 @@ def _execute_stage_function(calls):
     return namespace["execute_stage"]
 
 
-def test_demo_verify_blocks_before_any_evidence_or_postcheck_pass():
+@pytest.mark.parametrize("mode", ["DEMO", "REPLAY", "STORY"])\ndef test_demo_verify_blocks_before_any_evidence_or_postcheck_pass(mode):
     calls = []
     execute = _execute_stage_function(calls)
     result = asyncio.run(execute({
         "run_id": "demo-run-01", "version": 7, "stage": "VERIFY",
-        "mode": "DEMO", "scenario_id": "acme-synthetic",
+        "mode": mode, "scenario_id": "acme-synthetic",
     }))
     assert result == {
         "run_id": "demo-run-01", "stage": "VERIFY",
