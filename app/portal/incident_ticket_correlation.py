@@ -35,6 +35,15 @@ def correlate_incident_run_ticket(incident, run, ticket, *, actor_acl_qualified=
         return result
     if not all(isinstance(item, dict) for item in (incident, run, ticket)):
         return result
+    # Refuse untrusted aliases or nested claims that could hide a second tenant.
+    allowed = (
+        {"incident_id", "tenant_id"},
+        {"run_id", "incident_id", "tenant_id", "mode"},
+        {"ticket_id", "incident_id", "run_id", "tenant_id"},
+    )
+    if any(set(record) != expected for record, expected in zip((incident, run, ticket), allowed)):
+        result["reason"] = "UNEXPECTED_IDENTITY_FIELDS"
+        return result
     # Reject unknown identity shapes rather than silently choosing aliases.
     keys = (
         (incident, ("incident_id", "tenant_id")),
