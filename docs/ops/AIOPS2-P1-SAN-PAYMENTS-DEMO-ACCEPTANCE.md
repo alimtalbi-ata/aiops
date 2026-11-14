@@ -124,9 +124,9 @@ Après téléchargement **depuis l'exécution GitHub Actions vérifiée**, déco
 ```bash
 python scripts/verify_aiops2_docker_smoke_artifact.py /tmp/aiops2-docker-smoke \\
   --repository alimtalbi-ata/aiops \\
-  --head-sha <SHA_40_CARACTERES_DU_HEAD> \\
-  --run-id <ID_RUN_GITHUB_ACTIONS> \\
-  --run-attempt <NUMERO_TENTATIVE>
+  --head-sha "SHA_40_CARACTERES_DU_HEAD" \\
+  --run-id "ID_RUN_GITHUB_ACTIONS" \\
+  --run-attempt "NUMERO_TENTATIVE"
 ```
 
 Le vérificateur exige exactement les champs attendus, un scénario synthétique qualifié, aucune attestation runtime ou autorisation LIVE, et une concordance entre les métadonnées de run et les paramètres indépendamment relevés. Pour `pull_request`, le SHA du checkout peut différer du HEAD ; pour `push` et `workflow_dispatch`, il doit être identique. Un refus signifie **BLOCKED** et interdit d'utiliser l'artifact comme preuve de ce run.
