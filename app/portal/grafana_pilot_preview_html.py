@@ -36,6 +36,26 @@ def render_grafana_pilot_preview_html(preview):
             raise ValueError("grafana_pilot_field_missing")
         rows.append("<tr><th scope='row'>" + escape(label) + "</th><td><code>"
                     + escape(value, quote=True) + "</code></td></tr>")
+    scenario = preview.get("synthetic_scenario")
+    scenario_html = ""
+    if scenario is not None:
+        if (not isinstance(scenario, dict)
+                or scenario.get("qualification") != "UNKNOWN"
+                or any(not isinstance(scenario.get(k), str) or not scenario[k]
+                       for k in ("incident_id", "business_impact_incident_id", "source_sha256"))
+                or len(scenario["source_sha256"]) != 64
+                or any(c not in "0123456789abcdef" for c in scenario["source_sha256"])):
+            raise ValueError("grafana_pilot_scenario_unqualified")
+        scenario_html = (
+            "<h2>Corrélation avec le cockpit synthétique</h2>"
+            "<p>Incident SAN P1 : <code>" + escape(scenario["incident_id"], quote=True)
+            + "</code> · Impact Payments P2 : <code>"
+            + escape(scenario["business_impact_incident_id"], quote=True)
+            + "</code></p><p>SHA-256 de la fixture du cockpit : <code>"
+            + escape(scenario["source_sha256"], quote=True) + "</code></p>"
+            "<p>Ces identifiants relient deux vues de la même simulation; "
+            "ils ne prouvent aucune corrélation runtime.</p>"
+        )
     return (
         "<!doctype html><html lang='fr'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -52,7 +72,7 @@ def render_grafana_pilot_preview_html(preview):
         "<p><a href='/demo/acme-incident-cockpit'>Retour au cockpit incident SAN → Payments</a></p>"
         "<h2>Observation candidate — lecture seule</h2><table><tbody>"
         + "".join(rows) + "</tbody></table>"
-        "<h2>Chaîne métier attendue</h2>"
+        + scenario_html + "<h2>Chaîne métier attendue</h2>"
         "<p>Signal SAN → incident P1 → dépendance Payments → preuve authentifiée "
         "→ Analyst/Critic → Policy/HITL → simulation → postcheck indépendant → ITIL.</p>"
         "<p><strong>Prochaine porte :</strong> vérifier l'identité de transport, "
