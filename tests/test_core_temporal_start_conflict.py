@@ -38,6 +38,8 @@ def test_core_start_failure_requires_reconciliation_without_receipt(kind, expect
                 return SimpleNamespace(fetchone=lambda: ("run-01", "DEMO", "acme", 0, "CREATED"))
             if "from aiops.execution_receipts" in sql:
                 return SimpleNamespace(fetchone=lambda: None)
+            if "insert into aiops.execution_start_intents" in sql:
+                return SimpleNamespace(fetchone=lambda: ("run-01",))
             raise AssertionError("unexpected SQL: " + sql)
     @contextmanager
     def db():
