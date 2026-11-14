@@ -81,3 +81,7 @@ GET `/api/demo/acme-analyst-critic-review` cross-checks the fixture's determinis
 ## Unified synthetic incident cockpit — 2026-11-14
 
 GET `/api/demo/acme-incident-cockpit` composes **one** validated ACME fixture snapshot into the nine-stage lifecycle, eight ITIL transition gates, nine evidence requirements and Analyst/Critic/Policy review. The composite checks cross-view incident IDs, fixture SHA-256, DEMO provenance and the absence of runtime evidence or execution authority before returning. If any projection is inconsistent or unqualified it fails HTTP 503. The result is a read-only **synthetic operator API**, not an incident engine connected to real monitoring, GLPI, Temporal, LLM or vault services.
+
+## Unified operator cockpit page — 2026-11-14
+
+GET `/demo/acme-incident-cockpit` renders the consolidated read-only synthetic incident view: SAN P1 → Payments P2 business impact path, nine lifecycle stages, eight ITIL transitions with missing evidence, Analyst/Critic/Policy HOLD/DENY, zero of nine independently verified checkpoints, and the fixture SHA-256. The page is script-free, form-free, no-store and always displays **DEMO SYNTHÉTIQUE — NO-GO LIVE**. It is backed by the same cross-checked snapshot as `/api/demo/acme-incident-cockpit`; invalid fixtures and forged success are rejected.
