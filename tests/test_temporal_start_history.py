@@ -31,3 +31,12 @@ def test_missing_wrong_event_or_multiple_payloads_fail_closed():
     assert decode_initial_start_args(history(encoding=b"binary/plain")) is None
     assert decode_initial_start_args(history(dict(ARGS, version=True))) is None
     assert decode_initial_start_args(history(dict(ARGS, extra="forged"))) is None
+
+
+def test_duplicate_json_keys_are_rejected():
+    event = history()[0]
+    event.workflow_execution_started_event_attributes.input.payloads[0].data = (
+        b'{"run_id":"run-01","run_id":"forged","mode":"DEMO",'
+        b'"scenario_id":"acme","version":0}'
+    )
+    assert decode_initial_start_args([event]) is None
