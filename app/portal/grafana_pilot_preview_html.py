@@ -22,7 +22,9 @@ def render_grafana_pilot_preview_html(preview):
     grafana = sources["grafana"]
     if grafana.get("status") != "UNKNOWN" or grafana.get("evidence_refs") != []:
         raise ValueError("grafana_pilot_evidence_not_attested")
-    fields = (("Règle SAN", "rule_uid"), ("Dashboard", "dashboard_uid"),
+    if grafana.get("alert_state") not in ("firing", "pending", "normal"):
+        raise ValueError("grafana_pilot_alert_state_invalid")
+    fields = (("Règle SAN", "rule_uid"), ("État candidat", "alert_state"), ("Dashboard", "dashboard_uid"),
               ("Tenant de test déclaré", "tenant_scope"),
               ("Observation déclarée", "observed_at_utc"),
               ("Identité de collecte déclarée", "service_identity"),
