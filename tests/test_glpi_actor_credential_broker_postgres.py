@@ -87,3 +87,35 @@ def test_revocation_and_tenant_isolation_in_real_postgres():
     with pytest.raises(GLPIActorCredentialDenied):
         broker(**scope)
     assert len(vault_calls) == 1
+
+
+def test_real_postgres_revocation_during_vault_lookup_denies():
+    import psycopg
+    dsn = os.environ["DATABASE_URL"]
+    actor = "oidc:" + uuid4().hex
+    tenant = "ci-" + uuid4().hex
+    instance = "ci-glpi"
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "INSERT INTO aiops.portal_actor_tenant_grants (actor_id, tenant_id) "
+            "VALUES (%s, %s)", (actor, tenant),
+        )
+        conn.execute(
+            "INSERT INTO aiops.glpi_actor_user_bindings "
+            "(actor_id, tenant_id, glpi_instance_id, glpi_user_id, verified_at) "
+            "VALUES (%s, %s, %s, %s, now())",
+            (actor, tenant, instance, 19),
+        )
+    def vault(**_):
+        with psycopg.connect(dsn) as conn:
+            conn.execute(
+                "UPDATE aiops.portal_actor_tenant_grants SET revoked_at = now() "
+                "WHERE actor_id = %s AND tenant_id = %s", (actor, tenant),
+            )
+        return dict(glpi_user_id=19, glpi_instance_id=instance,
+                    tenant_id=tenant, user_token="ci-only-secret")
+    broker = make_glpi_actor_user_token_broker(
+        connect=lambda: psycopg.connect(dsn), get_bound_credential=vault)
+    with pytest.raises(GLPIActorCredentialDenied, match="glpi_actor_binding_changed"):
+        broker(actor=actor, tenant_id=tenant, ticket_id="42",
+               glpi_instance_id=instance)
