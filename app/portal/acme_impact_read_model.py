@@ -308,7 +308,15 @@ def acme_grafana_pilot_preview_page():
             service_identity="LOCAL_SYNTHETIC_FIXTURE_NOT_AUTHENTICATED",
             max_age_seconds=300, now_utc="2026-11-14T12:00:00Z",
         )
+        from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+        cockpit = project_synthetic_incident_cockpit(_load_or_503())
         preview = preview_grafana_pilot_evidence(register, candidate)
+        preview["synthetic_scenario"] = {
+            "incident_id": cockpit["incident_id"],
+            "business_impact_incident_id": cockpit["business_impact_incident_id"],
+            "source_sha256": cockpit["source_sha256"],
+            "qualification": cockpit["overall_qualification"],
+        }
         page = render_grafana_pilot_preview_html(preview)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status_code=503, detail="synthetic_grafana_pilot_preview_unqualified") from exc
