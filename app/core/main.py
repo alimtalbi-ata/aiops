@@ -137,6 +137,7 @@ def inspect_run_execution(rid:str,authorization:str|None=Header(default=None)):
         row=c.execute('select run_id,mode,scenario_id,version,status from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not row: raise HTTPException(404,'run not found')
         receipt=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
+        intent=c.execute('select run_id,mode,scenario_id,start_version from aiops.execution_start_intents where run_id=%s',(rid,)).fetchone()
     try:
         response=requests.get(WORKER+f'/api/execution/{rid}/inspect',
                               headers={'Authorization':f'Bearer {ADMIN}'},timeout=10)
@@ -152,24 +153,18 @@ def inspect_run_execution(rid:str,authorization:str|None=Header(default=None)):
         or observed.get('idempotent_start_confirmed') is not False
         or observed.get('live_remediation_authorized') is not False):
         raise HTTPException(503,'Temporal inspection not qualified')
-    # aiops.runs.version is mutable. It is NOT the original start version.
-    # Without an immutable Core-owned start record, comparing that value
-    # to Temporal's history would falsely report MISMATCH after progress.
     history_input=observed.get('temporal_start_history_input')
     decoded=observed.get('temporal_start_history_input_decoded') is True
-    history_valid=(decoded and isinstance(history_input,dict)
-                   and set(history_input)=={'run_id','mode','scenario_id','version'}
-                   and compare_temporal_start_input(history_input,history_input)=='MATCH')
-    identity_matches=(history_valid
-                      and history_input['run_id']==row[0]
-                      and history_input['mode']==row[1]
-                      and history_input['scenario_id']==row[2])
-    # Start-version attestation remains UNKNOWN until Core persists its
-    # immutable start tuple, including version, in the same authority boundary.
+    expected=({'run_id':intent[0],'mode':intent[1],
+               'scenario_id':intent[2],'version':intent[3]} if intent else None)
+    comparison=(compare_temporal_start_input(expected,history_input)
+                if decoded else 'UNKNOWN')
+    # Comparison is diagnostic only; no receipt or execution attestation.
     return {'run_id':rid,'core_status':row[4],
-            'start_arguments_comparison':'UNKNOWN',
-            'start_version_attestation':'UNKNOWN',
-            'temporal_history_identity_matches_core':bool(identity_matches),
+            'start_arguments_comparison':comparison,
+            'start_version_attestation':comparison,
+            'core_start_intent_present':intent is not None,
+            'temporal_history_identity_matches_core':comparison=='MATCH',
             'temporal_history_input_decoded':decoded,
             'core_execution_receipt_present':receipt is not None,
             'core_receipt_workflow_id_matches':bool(receipt and receipt[0]==rid),
@@ -191,6 +186,14 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
         if existing:return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
+        # One-shot intent is committed before network I/O. A previous intent
+        # means the start outcome may be unknown: never retry automatically.
+        inserted=c.execute(
+            'insert into aiops.execution_start_intents(run_id,mode,scenario_id,start_version) '
+            'values(%s,%s,%s,%s) on conflict(run_id) do nothing returning run_id',
+            (row[0],row[1],row[2],row[3])).fetchone()
+        if not inserted:
+            raise HTTPException(409,'prior execution start intent exists; inspect before retry')
     try:
         r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
         with db() as c:
