@@ -11,12 +11,19 @@ from portal.acme_isolated_remediation_simulator import verify_simulation_receipt
 
 
 def assess_simulation_evidence_gate(request: object, simulation: object,
-                                    evidence: object, *, expected_source_sha256: str) -> dict:
+                                    evidence: object, *, expected_source_sha256: str,
+                                    expected_incident_id: str) -> dict:
     if (not isinstance(expected_source_sha256, str)
             or re.fullmatch(r"[0-9a-f]{64}", expected_source_sha256) is None):
         raise ValueError("trusted_expected_source_sha256_required")
+    if (not isinstance(expected_incident_id, str)
+            or not 1 <= len(expected_incident_id) <= 128
+            or re.fullmatch(r"[A-Za-z0-9_.:-]+", expected_incident_id) is None):
+        raise ValueError("trusted_expected_incident_required")
     if not isinstance(request, dict) or not verify_simulation_receipt(request, simulation):
         raise ValueError("simulation_receipt_not_verified")
+    if request["incident_id"] != expected_incident_id:
+        raise ValueError("simulation_incident_scope_mismatch")
     if not isinstance(evidence, dict) or set(evidence) != {
         "schema", "mode", "expected_tenant_id", "source_sha256", "checkpoints",
         "integrity_consistent_unattested_count", "independently_attested_count",
