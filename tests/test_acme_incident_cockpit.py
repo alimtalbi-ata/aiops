@@ -129,3 +129,19 @@ def test_customer_walkthrough_has_five_working_anchor_targets_and_safe_verdict()
     assert "NO-GO LIVE" in page.text
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
+
+
+def test_customer_timeline_is_nine_unattested_business_steps():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "Chronologie explicative" in page.text
+    assert "pas événements observés" in page.text
+    assert page.text.count("UNKNOWN — preuve runtime absente") == 9
+    for label in ("Signal SAN candidat", "Relier le SAN au service Payments",
+                  "Formuler puis contester une hypothèse",
+                  "Exiger une vérification indépendante", "Préparer Problem et PIR"):
+        assert label in page.text
+    assert "aucune horodatée ni attestée" in page.text
+    assert "NO-GO LIVE" in page.text
