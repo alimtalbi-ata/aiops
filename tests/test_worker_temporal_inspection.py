@@ -33,9 +33,12 @@ def inspection(*, available=True):
                         async def describe(self):
                             calls.append(("describe", run_id))
                             return SimpleNamespace(status="RUNNING")
+                        async def fetch_history(self):
+                            calls.append(("fetch_history", run_id))
+                            return SimpleNamespace(events=[])
                     return Handle()
             return Connection()
-    ns = {"Client": Client, "TEMP": "inert-temporal",
+    ns = {"decode_initial_start_args": lambda events: None, "Client": Client, "TEMP": "inert-temporal",
           "ADMIN": "internal-only", "HTTPException": HttpError,
           "Header": lambda default=None: default}
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(SOURCE), "exec"), ns)
@@ -51,7 +54,7 @@ def test_read_only_visibility_never_attests_original_start_or_core_receipt():
     assert result["core_receipt_verified"] is False
     assert result["idempotent_start_confirmed"] is False
     assert result["live_remediation_authorized"] is False
-    assert [name for name, _ in calls] == ["connect", "get_handle", "describe"]
+    assert [name for name, _ in calls] == ["connect", "get_handle", "describe", "fetch_history"]
 
 
 @pytest.mark.parametrize("run_id", ["../bad", "a\n", "", "é", "a" * 129])
