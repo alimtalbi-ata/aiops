@@ -26,7 +26,7 @@ def verify_bundle(package_dir: Path, smoke_dir: Path, *,
                             head_sha=head_sha, run_id=run_id,
                             run_attempt=run_attempt):
             return False
-        return (manifest.get("git_revision") == head_sha
+        return (manifest.get("git_revision") == provenance.get("commit_sha")
                 and manifest.get("incident_id") == cockpit.get("incident_id")
                 == smoke.get("incident_id")
                 and manifest.get("source_sha256") == cockpit.get("source_sha256")
