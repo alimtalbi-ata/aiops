@@ -180,3 +180,7 @@ The Temporal Worker previously returned a blocked Policy stage event without nec
 ## Worker Temporal start request validation — 2026-11-14
 
 `POST /api/execution/start` now rejects malformed envelopes **before connecting to Temporal**: exact Core fields `run_id,mode,scenario_id,version`, bounded ASCII identifiers, non-negative integer version (not bool), and an allowed mode under the existing simulation policy contract. Internal bearer authentication remains required before validation. Inert-client async endpoint tests cover missing/extra fields, Unicode/control/path-like IDs, invalid versions/modes, unauthorized calls and a valid canonical Core envelope. This does not introduce tenant/actor-facing authorization or enable LIVE remediation.
+
+## Temporal workflow-ID replay requires reconciliation — 2026-11-14
+
+A `WorkflowAlreadyStartedError` previously returned `idempotent=true` solely because the workflow ID matched, without verifying the existing workflow's original mode, scenario, version or Core receipt. The Worker now returns HTTP 409 and asks the caller to reconcile against the canonical Core execution receipt; it does **not** assert that a new request is identical to the existing workflow. Core currently maps Worker HTTP failures to 503 when it lacks a persisted receipt, so automatic recovery from an ambiguous lost start response is **not yet implemented**. This is fail-closed and may require operator reconciliation; no duplicate execution is authorized.
