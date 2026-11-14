@@ -120,3 +120,24 @@ def test_expected_tenant_must_be_supplied_by_trusted_caller():
         qualify_synthetic_evidence_jointly(
             lifecycle, manifest, [receipt], lambda *_: raw, lambda *_: KEY,
             expected_tenant_id="")
+
+
+def test_invalid_mac_prevents_external_readback():
+    lifecycle, manifest, receipt, raw = sample()
+    receipt["mac_sha256"] = "f" * 64
+    calls = []
+    result = qualify(lifecycle, manifest, [receipt],
+                     lambda *_: calls.append("external-read") or raw)
+    assert calls == []
+    assert result["checkpoints"][0]["digest_state"] == "READBACK_UNAVAILABLE"
+    assert result["checkpoints"][0]["source_receipt_state"] == "MAC_MISMATCH"
+
+
+def test_missing_receipt_prevents_external_readback():
+    lifecycle, manifest, _, raw = sample()
+    calls = []
+    result = qualify(lifecycle, manifest, [],
+                     lambda *_: calls.append("external-read") or raw)
+    assert calls == []
+    assert result["checkpoints"][0]["digest_state"] == "READBACK_UNAVAILABLE"
+    assert result["checkpoints"][0]["source_receipt_state"] == "SOURCE_RECEIPT_MISSING"
