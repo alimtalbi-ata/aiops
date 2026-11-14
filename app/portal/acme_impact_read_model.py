@@ -223,6 +223,9 @@ def acme_itil_readiness_page():
         + "</code> · Impact Payments P2 : <code>"
         + html.escape(readiness["business_impact_incident_id"], quote=True)
         + "</code></p>"
+        "<p>Prochaine étape : collecte en lecture seule de preuves runtime indépendantes. "
+        "Checkpoints manquants : " + str(readiness["missing_unique_checkpoint_count"])
+        + ".</p>"
         "<table><caption>Étapes et preuves manquantes</caption>"
         "<thead><tr><th>Transition</th><th>Qualification</th>"
         "<th>Preuves requises absentes</th><th>Autorisée</th></tr></thead>"
