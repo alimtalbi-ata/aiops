@@ -29,6 +29,8 @@ def preview_grafana_pilot_evidence(register, projection):
         value = projection.get(key)
         if not isinstance(value, str) or not value:
             raise ValueError("pilot_preview_" + key + "_invalid")
+    if projection.get("alert_state") not in ("firing", "pending", "normal"):
+        raise ValueError("pilot_preview_alert_state_invalid")
     # All fields are read from an untrusted, injected callback. They are hints,
     # never independently authenticated source evidence.
     result = deepcopy(register)
@@ -37,6 +39,7 @@ def preview_grafana_pilot_evidence(register, projection):
     result["sources"]["grafana"].update({
         "status": "UNKNOWN",
         "rule_uid": projection["rule_uid"],
+        "alert_state": projection["alert_state"],
         "dashboard_uid": projection["dashboard_uid"],
         "tenant_scope": projection["tenant_scope"],
         "observed_at_utc": projection["observed_at_utc"],
