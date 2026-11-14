@@ -130,3 +130,13 @@ Added `shared.glpi_native_ticket_acl.make_glpi_native_ticket_acl` and wired it i
 This removes the externally injected boolean native-ACL decision from the qualifier composition. It does **not** remove the deployment requirement for a credential broker: `glpi_user_token(actor, tenant_id, ticket_id, glpi_instance_id)` must return that actor's own GLPI credential and must never fall back to a shared integration user. The app token remains application identity only and is not treated as user authorization. The credential broker must enforce the actor↔GLPI-user mapping and instance/tenant binding from trusted server configuration.
 
 Added offline tests for actor/tenant/instance-bound credential invocation, exact ticket/entity matching, GLPI denial, malformed scopes and non-read actions. These tests are included in the quality workflow. This remains an unmounted candidate; real GLPI 11 integration with distinct least-privilege GLPI users and cross-entity denial is still required.
+
+## GLPI actor credential broker — 2026-11-14
+
+Added additive migration `012_glpi_actor_credential_bindings.sql` with explicitly reviewed, revocable `(actor_id, tenant_id, glpi_instance_id) -> glpi_user_id` bindings. No passwords, API tokens, or shared integration credentials are stored in PostgreSQL. No automatic backfill or actor default.
+
+Added `make_glpi_actor_user_token_broker`: on every native ACL and GLPI readback, query the exact active actor/tenant grant and unrevoked verified GLPI identity binding, then ask a **server-trusted vault** for a credential attested to the exact `glpi_user_id`, `tenant_id`, and `glpi_instance_id`. Invalid, missing, ambiguous, revoked or mismatched identities and vault/database failures deny before GLPI. `make_verified_principal_glpi_readonly_qualifier` now requires `get_bound_glpi_credential` instead of a generic user-token provider.
+
+The vault and provisioning workflow are **not installed**; no actor↔GLPI user identity can be assumed. The vault provider must enforce credential ownership (the broker cannot cryptographically prove a token belongs to the declared GLPI user without upstream session identity evidence). This is an unmounted, read-only candidate and not a production authentication claim.
+
+Added unit tests and a disposable PostgreSQL test for tenant isolation and immediate grant/binding revocation. No real GLPI IdP, vault, actor credential or live ticket is contacted.
