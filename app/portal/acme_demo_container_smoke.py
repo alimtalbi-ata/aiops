@@ -22,10 +22,23 @@ def verify_packaged_demo() -> dict[str, object]:
     )
     register = json.loads(template.read_text(encoding="utf-8"))
     expected_sources = {"oidc", "grafana", "n8n", "glpi_cmdb", "core_temporal", "policy_hitl", "independent_postcheck"}
+    expected_negative_tests = {
+        "cross_tenant_zero_upstream_calls",
+        "cross_entity_zero_upstream_calls",
+        "revoked_actor_zero_upstream_calls",
+        "replayed_token_zero_upstream_calls",
+        "glpi_acl_denial_zero_upstream_reads",
+        "temporal_inspection_no_start_or_restart",
+        "n8n_existing_execution_no_replay",
+    }
     if (register.get("decision") != "BLOCKED"
             or register.get("live_actions_authorized") is not False
             or not isinstance(register.get("sources"), dict)
             or set(register["sources"]) != expected_sources
+            or not isinstance(register.get("negative_tests"), dict)
+            or set(register["negative_tests"]) != expected_negative_tests
+            or any(value != "NOT_RUN" for value in register["negative_tests"].values())
+            or any(v.get("evidence_refs") != [] for v in register["sources"].values())
             or any(not isinstance(v, dict) or v.get("status") != "UNKNOWN"
                    for v in register["sources"].values())):
         raise ValueError("packaged_register_not_blocked")
