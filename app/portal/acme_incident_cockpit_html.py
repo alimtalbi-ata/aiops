@@ -62,6 +62,8 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<p>Contrat de démonstrabilité : <code>"
         "python scripts/verify_aiops2_demo_acceptance.py</code> "
         "(rapport JSON hors ligne; pas une attestation de production).</p>"
+        "<p><a href='/demo/acme-grafana-pilot-preview'>Voir l'observation Grafana synthétique non attestée</a> — "
+        "UNKNOWN / BLOCKED, sans accès réseau ni qualification runtime.</p>"
         "<h2>Incident et impact métier</h2><p>SAN P1 : <code>"
         + safe(cockpit["incident_id"]) + "</code> · Payments P2 : <code>"
         + safe(cockpit["business_impact_incident_id"]) + "</code></p>"
