@@ -53,7 +53,9 @@ class AcmeImpactTests(unittest.TestCase):
         self.assertEqual(readiness["mode"], "SYNTHETIC_ONLY")
         self.assertEqual(readiness["required_checkpoints"], len(model["checkpoint_evidence"]))
         self.assertEqual(readiness["verified_checkpoints"], 0)
-        self.assertEqual(readiness["missing_checkpoints"], 9)
+        self.assertEqual(readiness["missing_checkpoints"], len(model["checkpoint_evidence"]))
+        self.assertEqual(readiness["required_checkpoints"],
+                         readiness["verified_checkpoints"] + readiness["missing_checkpoints"])
         self.assertEqual(readiness["next_operator_action"], "COLLECT_AUTHENTICATED_RUNTIME_EVIDENCE")
         self.assertFalse(readiness["live_action_allowed"])
         self.assertFalse(model["runtime_attested"])
