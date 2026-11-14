@@ -185,6 +185,55 @@ def _load_or_503() -> dict[str, Any]:
         ) from exc
 
 
+@router.get("/demo/acme-itil-readiness", response_class=HTMLResponse,
+            name="synthetic_acme_itil_readiness_page")
+def acme_itil_readiness_page():
+    """Static, script-free operator view of missing ITIL proof."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    from portal.acme_itil_readiness import assess_synthetic_itil_readiness
+    try:
+        readiness = assess_synthetic_itil_readiness(
+            project_synthetic_incident_lifecycle(_load_or_503())
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_itil_readiness_unqualified") from exc
+    rows = "".join(
+        "<tr><th scope='row'>" + html.escape(t["transition"], quote=True)
+        + "</th><td>" + html.escape(t["readiness"], quote=True)
+        + "</td><td>" + html.escape(", ".join(t["missing_evidence"]), quote=True)
+        + "</td><td>NON</td></tr>"
+        for t in readiness["transitions"]
+    )
+    page = (
+        "<!doctype html><html lang='fr'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<title>AIOPS2 — Préparation ITIL (DEMO)</title>"
+        "<style>body{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;"
+        "padding:0 1rem;line-height:1.5}table{border-collapse:collapse;width:100%}"
+        "th,td{border:1px solid #777;padding:.65rem;text-align:left}"
+        "thead{background:#eee;color:#111}caption{text-align:left;font-weight:bold}"
+        ".warning{border-left:5px solid #9a6700;padding:1rem;background:#fff7dd;color:#302400}"
+        "</style></head><body><main>"
+        "<h1>AIOPS2 — Préparation des transitions ITIL</h1>"
+        "<p class='warning'><strong>SIMULATION LOCALE UNIQUEMENT — NO-GO LIVE.</strong> "
+        "Aucune preuve runtime indépendante, aucune transition autorisée, "
+        "aucune écriture GLPI ni exécution Temporal.</p>"
+        "<p>Incident SAN P1 : <code>"
+        + html.escape(readiness["source_incident_id"], quote=True)
+        + "</code> · Impact Payments P2 : <code>"
+        + html.escape(readiness["business_impact_incident_id"], quote=True)
+        + "</code></p>"
+        "<table><caption>Étapes et preuves manquantes</caption>"
+        "<thead><tr><th>Transition</th><th>Qualification</th>"
+        "<th>Preuves requises absentes</th><th>Autorisée</th></tr></thead>"
+        "<tbody>" + rows + "</tbody></table>"
+        "<p>Source SHA-256 : <code>"
+        + html.escape(readiness["source_sha256"], quote=True)
+        + "</code></p></main></body></html>"
+    )
+    return HTMLResponse(content=page, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-itil-readiness", name="synthetic_acme_itil_readiness")
 def acme_itil_readiness_json():
     """Expose missing evidence for ITIL transitions; never approve a transition."""
