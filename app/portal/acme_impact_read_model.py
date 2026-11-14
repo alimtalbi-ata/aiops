@@ -185,6 +185,17 @@ def _load_or_503() -> dict[str, Any]:
         ) from exc
 
 
+@router.get("/api/demo/acme-lifecycle", name="synthetic_acme_incident_itil_lifecycle")
+def acme_lifecycle_json():
+    """Read-only DEMO incident-to-ITIL lifecycle, no backend actions."""
+    from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+    try:
+        model = project_synthetic_incident_lifecycle(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_lifecycle_unqualified") from exc
+    return JSONResponse(content=model, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-impact", name="synthetic_acme_impact_read_model")
 def acme_impact_json():
     """Return the synthetic impact graph and explicit provenance gaps."""
