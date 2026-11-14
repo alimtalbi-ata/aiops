@@ -7,6 +7,7 @@ cron_match() {
     /^[[:space:]]*(#|$)/ {next}
     {
       line=$0
+      sub(/^[[:space:]]+/, "", line)
       sub(/[[:space:]]+#.*/, "", line)
       n=split(line, a, /[[:space:]]+/)
       offset=(mode=="system" ? 6 : 5)
@@ -46,4 +47,9 @@ expect_no cron_match aiops-publish-report system <<< '*/5 * * * * root /bin/echo
 expect_yes cron_match aiops-publish-report system <<< '*/5 * * * * aiops /home/aiops/bin/aiops-publish-report.sh'
 expect_yes cron_match aiops-debian-reporter system <<< '0 * * * * aiops /home/aiops/bin/aiops-debian-reporter'
 expect_no cron_match aiops-publish-report <<< '*/5 * * * * /bin/true ; /home/aiops/bin/aiops-publish-report.sh'
-echo 'PASS reporter identifier fixtures (19 assertions); host/runtime NOT_INSPECTED'
+expect_yes cron_match aiops-publish-report <<< '  */5 * * * * /home/aiops/bin/aiops-publish-report.sh'
+expect_yes cron_match aiops-debian-reporter <<< 
+\t0 * * * * /home/aiops/bin/aiops-debian-reporter'
+expect_yes cron_match aiops-publish-report system <<< '  */5 * * * * aiops /home/aiops/bin/aiops-publish-report.sh'
+expect_no cron_match aiops-publish-report <<< '  */5 * * * * /bin/echo aiops-publish-report'
+echo 'PASS reporter identifier fixtures (23 assertions); host/runtime NOT_INSPECTED'
