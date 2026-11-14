@@ -141,3 +141,23 @@ def test_missing_receipt_prevents_external_readback():
     assert calls == []
     assert result["checkpoints"][0]["digest_state"] == "READBACK_UNAVAILABLE"
     assert result["checkpoints"][0]["source_receipt_state"] == "SOURCE_RECEIPT_MISSING"
+
+
+def test_aliasing_source_address_across_checkpoints_rejected_before_callbacks():
+    lifecycle, manifest, receipt, raw = sample()
+    # Two different checkpoints must never share a source/readback address.
+    # The signed receipt for the first cannot unlock the second.
+    second = dict(manifest["items"][0])
+    second["checkpoint"] = "verify"
+    second["evidence_type"] = "INDEPENDENT_POSTCHECK"
+    second["source"] = "grafana"
+    manifest["items"].append(second)
+    calls = []
+    with pytest.raises(ValueError, match="ambiguous_source_readback_address"):
+        qualify_synthetic_evidence_jointly(
+            lifecycle, manifest, [receipt],
+            lambda *_: calls.append("readback") or raw,
+            lambda *_: calls.append("resolver") or KEY,
+            expected_tenant_id="acme-demo",
+        )
+    assert calls == []
