@@ -184,7 +184,10 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         if not row: raise HTTPException(404,'run not found')
         if row[4] not in ('CREATED','WAITING'): raise HTTPException(409,f'run not executable from {row[4]}')
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
-        if existing:return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
+        if existing:
+            # A receipt alone cannot attest the original Temporal start input.
+            # Never assert idempotence from workflow ID equality alone.
+            raise HTTPException(409,'execution receipt exists; inspect original start before idempotence claim')
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
         # One-shot intent is committed before network I/O. A previous intent
         # means the start outcome may be unknown: never retry automatically.
