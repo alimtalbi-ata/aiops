@@ -7,6 +7,7 @@ from shared.ids import new
 from shared.domain import transition,STAGES
 from shared.tenant_scope import reject_unqualified_tenant_scope
 from shared.demo_policy_gate_read_model import project_demo_policy_gate
+from shared.temporal_start_comparison import compare_temporal_start_input
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
@@ -151,7 +152,14 @@ def inspect_run_execution(rid:str,authorization:str|None=Header(default=None)):
         or observed.get('idempotent_start_confirmed') is not False
         or observed.get('live_remediation_authorized') is not False):
         raise HTTPException(503,'Temporal inspection not qualified')
+    expected={'run_id':row[0],'mode':row[1],
+              'scenario_id':row[2],'version':row[3]}
+    comparison=compare_temporal_start_input(expected,
+                    observed.get('temporal_start_history_input'))
+    # A matching history tuple is not an idempotency, receipt or execution proof.
     return {'run_id':rid,'core_status':row[4],
+            'start_arguments_comparison':comparison,
+            'temporal_history_input_decoded':observed.get('temporal_start_history_input_decoded') is True,
             'core_execution_receipt_present':receipt is not None,
             'core_receipt_workflow_id_matches':bool(receipt and receipt[0]==rid),
             'temporal_visibility':'EXISTS_UNATTESTED',
