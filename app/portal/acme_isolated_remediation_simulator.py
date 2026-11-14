@@ -28,8 +28,8 @@ def simulate_remediation_dry_run(request: object) -> dict:
         raise ValueError("demo_only")
     for field in ("tenant_id", "incident_id", "action_id"):
         value = request[field]
-        if not isinstance(value, str) or not 1 <= len(value) <= 128
-                or re.fullmatch(r"[A-Za-z0-9_.:-]+", value) is None:
+        if (not isinstance(value, str) or not 1 <= len(value) <= 128
+                or re.fullmatch(r"[A-Za-z0-9_.:-]+", value) is None):
             raise ValueError("invalid_simulation_identity")
     kind = request["action_kind"]
     if not isinstance(kind, str) or kind not in _ALLOWED:
