@@ -287,6 +287,18 @@ def acme_evidence_plan_page():
     return HTMLResponse(content=page, headers=HEADERS)
 
 
+@router.get("/api/demo/acme-analyst-critic-review",
+            name="synthetic_acme_analyst_critic_review")
+def acme_analyst_critic_review_json():
+    """Read-only Analyst/Critic evidence gap review; no LLM or execution."""
+    from portal.acme_analyst_critic_review import review_synthetic_analyst_critic
+    try:
+        review = review_synthetic_analyst_critic(_load_or_503())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_analyst_critic_unqualified") from exc
+    return JSONResponse(content=review, headers=HEADERS)
+
+
 @router.get("/api/demo/acme-evidence-plan", name="synthetic_acme_evidence_plan")
 def acme_evidence_plan_json():
     """Read-only requirements for independent proof; never collects or accepts it."""
