@@ -164,6 +164,11 @@ jobs:
         run: python -m pytest -q tests/test_grafana_pilot_preview_html.py
       - name: SAN Payments Grafana synthetic Portal route safety
         run: python -m pytest -q tests/test_acme_grafana_pilot_preview_route.py
+      - name: SAN Payments Portal Docker image contains blocked register
+        run: |
+          docker build --file app/portal/Dockerfile --tag aiops2-portal-demo-smoke:ci app
+          docker run --rm --network none --entrypoint python aiops2-portal-demo-smoke:ci -c "import json,pathlib; p=pathlib.Path('/app/portal/acme-readonly-pilot-register.template.json'); d=json.loads(p.read_text()); assert d['decision']=='BLOCKED' and d['live_actions_authorized'] is False; assert all(v['status']=='UNKNOWN' for v in d['sources'].values())"
+
       - name: ACME incident to simulation to evidence DEMO pipeline
         run: python -m pytest -q tests/test_acme_demo_simulation_pipeline.py
       - name: ACME offline simulation CLI receipt verification
