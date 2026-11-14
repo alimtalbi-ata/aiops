@@ -172,11 +172,14 @@ jobs:
           docker run --rm --network none --entrypoint python aiops2-portal-demo-smoke:ci -m portal.acme_demo_container_smoke > "${{ runner.temp }}/aiops2-packaged-demo-smoke.json"
           python -m json.tool "${{ runner.temp }}/aiops2-packaged-demo-smoke.json" > /dev/null
           python -c 'import json, pathlib, sys; p = pathlib.Path(sys.argv[1]); d = json.loads(p.read_text()); assert set(d) == {"schema", "accepted", "scope", "runtime_attested", "live_actions_authorized", "incident_id", "source_sha256"}; assert d["schema"] == "aiops2.packaged-demo-smoke.v1" and d["accepted"] is True and d["scope"] == "LOCAL_SYNTHETIC_ONLY"; assert d["runtime_attested"] is False and d["live_actions_authorized"] is False; assert isinstance(d["incident_id"], str) and bool(d["incident_id"]); assert isinstance(d["source_sha256"], str) and len(d["source_sha256"]) == 64 and all(c in "0123456789abcdef" for c in d["source_sha256"])' "${{ runner.temp }}/aiops2-packaged-demo-smoke.json"
+      - name: Record SAN Payments smoke GitHub execution provenance
+        run: |
+          python -c 'import json, os, pathlib; p = pathlib.Path(os.environ["RUNNER_TEMP"]) / "aiops2-packaged-demo-smoke-provenance.json"; d = {"schema": "aiops2.github-actions-smoke-provenance.v1", "repository": os.environ["GITHUB_REPOSITORY"], "commit_sha": os.environ["GITHUB_SHA"], "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"], "workflow": os.environ["GITHUB_WORKFLOW"], "event_name": os.environ["GITHUB_EVENT_NAME"], "trust_boundary": "UNSIGNED_GITHUB_ACTIONS_RUN_METADATA_NOT_RUNTIME_ATTESTATION"}; p.write_text(json.dumps(d, sort_keys=True, indent=2) + "\\n")'
       - name: Publish SAN Payments offline Docker smoke evidence
         uses: actions/upload-artifact@v4
         with:
           name: aiops2-san-payments-offline-docker-smoke
-          path: ${{ runner.temp }}/aiops2-packaged-demo-smoke.json
+          path: |\n            ${{ runner.temp }}/aiops2-packaged-demo-smoke.json\n            ${{ runner.temp }}/aiops2-packaged-demo-smoke-provenance.json
           if-no-files-found: error
           retention-days: 7
 
