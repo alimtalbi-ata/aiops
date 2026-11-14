@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - "fix/**"
+      - "integration/aiops2-convergence-20261114"
 
 permissions:
   contents: read
