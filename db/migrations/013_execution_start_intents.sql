@@ -13,3 +13,19 @@ CREATE TABLE IF NOT EXISTS aiops.execution_start_intents (
 );
 -- Operators must provision a restricted DB role: application UPDATE/DELETE
 -- privileges on this table must be revoked before any LIVE qualification.
+
+-- Database-enforced immutability even if the application role accidentally
+-- retains table UPDATE/DELETE privileges. DDL/owner bypass remains an
+-- operational trust boundary and must be audited separately.
+CREATE OR REPLACE FUNCTION aiops.reject_execution_start_intent_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'execution start intent is immutable'
+        USING ERRCODE = 'integrity_constraint_violation';
+END;
+$$;
+DROP TRIGGER IF EXISTS execution_start_intents_immutable
+    ON aiops.execution_start_intents;
+CREATE TRIGGER execution_start_intents_immutable
+    BEFORE UPDATE OR DELETE ON aiops.execution_start_intents
+    FOR EACH ROW EXECUTE FUNCTION aiops.reject_execution_start_intent_mutation();
