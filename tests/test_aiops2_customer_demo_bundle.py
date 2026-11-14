@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from verify_aiops2_customer_demo_bundle import verify_bundle
+from verify_aiops2_customer_demo_bundle import verify_bundle, build_qualification_report
 
 
 def test_bundle_accepts_same_canonical_incident_and_run(tmp_path):
@@ -99,3 +99,32 @@ def test_bundle_accepts_pr_merge_checkout_but_rejects_wrong_checkout(tmp_path):
         manifest["git_revision"] = head_sha
         (pkg / "manifest.json").write_text(json.dumps(manifest))
         assert not check()
+
+
+def test_qualification_report_fails_closed_when_artifacts_are_missing(tmp_path):
+    report = build_qualification_report(
+        tmp_path / "missing-package", tmp_path / "missing-smoke",
+        repository="alimtalbi-ata/aiops", head_sha="a" * 40,
+        run_id="123", run_attempt="1")
+    assert report["artifact_consistency"] == "BLOCKED"
+    assert report["customer_demo_qualification"] == "BLOCKED"
+    assert report["live_qualification"] == "NO_GO"
+    for field in ("ci_run_verified", "browser_rehearsal_verified",
+                  "runtime_attested", "independent_postcheck_verified",
+                  "live_remediation_authorized"):
+        assert report[field] is False
+
+
+def test_qualification_report_does_not_promote_synthetic_pass_to_ci_or_live(tmp_path):
+    with patch("verify_aiops2_customer_demo_bundle.verify_bundle", return_value=True):
+        report = build_qualification_report(
+            tmp_path / "package", tmp_path / "smoke",
+            repository="alimtalbi-ata/aiops", head_sha="a" * 40,
+            run_id="123", run_attempt="1")
+    assert report["artifact_consistency"] == "PASS"
+    assert report["customer_demo_qualification"] == "PENDING_INDEPENDENT_CI_AND_BROWSER_REVIEW"
+    assert report["live_qualification"] == "NO_GO"
+    assert report["ci_run_verified"] is False
+    assert report["browser_rehearsal_verified"] is False
+    assert report["runtime_attested"] is False
+    assert report["trust_boundary"].startswith("UNSIGNED_LOCAL_REPORT")
