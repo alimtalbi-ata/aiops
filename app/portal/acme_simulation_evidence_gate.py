@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 
 from portal.acme_isolated_remediation_simulator import verify_simulation_receipt
+from portal.acme_lifecycle_read_model import STAGES
 
 
 def assess_simulation_evidence_gate(request: object, simulation: object,
@@ -54,9 +55,15 @@ def assess_simulation_evidence_gate(request: object, simulation: object,
         }:
             raise ValueError("invalid_evidence_row")
         cue = row["checkpoint"]
-        if not isinstance(cue, str) or cue in seen:
+        if not isinstance(cue, str) or cue not in {stage[0] for stage in STAGES} or cue in seen:
             raise ValueError("duplicate_evidence_checkpoint")
         seen.add(cue)
+        if (row["digest_state"] not in {
+                "DIGEST_MATCH_UNATTESTED", "DIGEST_MISMATCH", "READBACK_UNAVAILABLE"}
+                or row["source_receipt_state"] not in {
+                    "MAC_VALID_SOURCE_KEY_UNATTESTED", "MAC_MISMATCH",
+                    "SOURCE_KEY_UNAVAILABLE", "SOURCE_RECEIPT_MISSING"}):
+            raise ValueError("invalid_evidence_integrity_state")
         both = (row["digest_state"] == "DIGEST_MATCH_UNATTESTED"
                 and row["source_receipt_state"] == "MAC_VALID_SOURCE_KEY_UNATTESTED")
         if (row["integrity_consistent_unattested"] is not both
