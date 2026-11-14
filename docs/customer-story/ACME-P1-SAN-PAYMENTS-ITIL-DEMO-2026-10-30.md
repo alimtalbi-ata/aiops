@@ -184,3 +184,7 @@ The Temporal Worker previously returned a blocked Policy stage event without nec
 ## Temporal workflow-ID replay requires reconciliation — 2026-11-14
 
 A `WorkflowAlreadyStartedError` previously returned `idempotent=true` solely because the workflow ID matched, without verifying the existing workflow's original mode, scenario, version or Core receipt. The Worker now returns HTTP 409 and asks the caller to reconcile against the canonical Core execution receipt; it does **not** assert that a new request is identical to the existing workflow. Core currently maps Worker HTTP failures to 503 when it lacks a persisted receipt, so automatic recovery from an ambiguous lost start response is **not yet implemented**. This is fail-closed and may require operator reconciliation; no duplicate execution is authorized.
+
+## All synthetic execution modes stop before unverified recovery — 2026-11-14
+
+The Temporal Worker accepts `DEMO`, `REPLAY`, `STORY` and `LIVE`. The independent-postcheck safety stop at `VERIFY` now covers **all three synthetic modes** (`DEMO/REPLAY/STORY`), not just DEMO. Executed stage-body tests and in-process full-workflow tests exercise each mode and require `INDEPENDENT_POSTCHECK_MISSING`, Core `BLOCK`, no synthetic VERIFY PASS, and no `RECONCILE/LEARN/RESOLVE`. LIVE remains separately blocked by `LIVE_ADAPTER_UNAVAILABLE`. These are CI-inert tests, not production attestation.
