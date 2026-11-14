@@ -168,6 +168,16 @@ def build_acme_impact_read_model() -> dict[str, Any]:
             "live_execution": False,
             "backend_writes": False,
         },
+        "incident_readiness": {
+            "state": "BLOCKED_UNATTESTED",
+            "mode": "SYNTHETIC_ONLY",
+            "required_checkpoints": 9,
+            "verified_checkpoints": 0,
+            "missing_checkpoints": 9,
+            "next_operator_action": "COLLECT_AUTHENTICATED_RUNTIME_EVIDENCE",
+            "reason": "No independently authenticated runtime checkpoints or GLPI ticket",
+            "live_action_allowed": False,
+        },
         "runtime_evidence_present": False,
         "runtime_attested": False,
         "production_qualified": False,
@@ -298,6 +308,10 @@ def acme_impact_page():
         + '<p><strong>Policy :</strong> ' + html.escape(decision["policy"]["decision"], quote=True) + ' — ' + html.escape(decision["policy"]["reason"], quote=True) + '</p>'
         + '<h3>Plan de remédiation proposé (sans exécution)</h3><ol>' + decision_steps + '</ol>'
         + '<p><strong>Exécution LIVE :</strong> NON · <strong>Écritures backend :</strong> NON</p></section>'
+        + '<section aria-label="Qualification opérationnelle"><h2>État de qualification de l’incident</h2>'
+        + '<p><strong>BLOCKED_UNATTESTED</strong> — 0/9 checkpoints vérifiés ; '
+        + 'preuves runtime authentifiées absentes. Prochaine étape : collecter les preuves '
+        + 'indépendantes et confirmer le ticket GLPI avant toute décision LIVE.</p></section>'
         + '<section aria-label="Neuf checkpoints applicatifs attendus"><h2>STAR — checkpoints applicatifs et preuves manquantes</h2>'
         + '<p>Les noms de vues et états sont le contrat attendu, pas des captures observées. Les URL runtime exactes, les identifiants applicatifs et les SHA-256 de captures ne sont pas disponibles dans ce scénario.</p>'
         + '<div class="ci-grid">' + checkpoint_cards + '</div></section>'
