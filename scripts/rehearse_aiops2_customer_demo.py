@@ -6,16 +6,6 @@ from pathlib import Path
 
 from package_aiops2_demo_evidence import verify_package
 
-STOPS = (
-    ("00–02", "Signal SAN P1 → impact Payments", "incident_id", "business_impact_path"),
-    ("02–04", "Plan de collecte et provenance", "evidence_plan", "verified_count"),
-    ("04–06", "Hypothèses Analyst / objections Critic", "analyst_critic_review", "runtime_citations_verified"),
-    ("06–08", "Policy/HITL et transitions ITIL", "itil_readiness", "authorized_transition_count"),
-    ("08–10", "Simulation sans effet et postcheck", "lifecycle", "postcheck_state"),
-    ("10–12", "Décision opérateur et suite ITIL", "itil_readiness", "next_operator_step"),
-)
-
-
 def build_rehearsal(directory):
     directory = Path(directory)
     if not verify_package(directory):
@@ -31,6 +21,16 @@ def build_rehearsal(directory):
             or cockpit["analyst_critic_review"]["runtime_citations_verified"] != 0
             or cockpit["analyst_critic_review"]["policy_disposition"] != "DENY_LIVE_ACTION"):
         raise ValueError("unsafe_rehearsal_state")
+    stages = cockpit["lifecycle"]["stages"]
+    transitions = cockpit["itil_readiness"]["transitions"]
+    if (len(stages) != 9 or len(transitions) != 8
+            or any(stage["evidence_state"] != "UNKNOWN"
+                   or stage["runtime_attested"] is not False
+                   or stage["operational_transition_authorized"] is not False
+                   for stage in stages)
+            or any(gate["readiness"] != "UNKNOWN"
+                   or gate["authorized"] is not False for gate in transitions)):
+        raise ValueError("unsafe_rehearsal_checkpoints")
     lines = [
         "# Répétition opérateur — ACME P1 SAN → Payments",
         "",
@@ -50,6 +50,24 @@ def build_rehearsal(directory):
         "| 06–08 | Policy/HITL | DENY_LIVE_ACTION, 0 transition autorisée |",
         "| 08–10 | Simulation et postcheck | Aucun effet réel, postcheck UNKNOWN |",
         "| 10–12 | Préparation ITIL | Collecter les preuves indépendantes, aucune clôture GLPI |",
+        "",
+        "## Matrice des preuves manquantes (9 étapes)",
+        "",
+        "| Étape | Source attendue | État |",
+        "|---|---|---|",
+        *[
+            f"| \`{stage['cue']}\` | \`{stage['expected_source']}\` | UNKNOWN — preuve indépendante absente |"
+            for stage in stages
+        ],
+        "",
+        "## Transitions ITIL bloquées (8 contrôles)",
+        "",
+        "| Transition | Prérequis manquants | Autorisation |",
+        "|---|---|---|",
+        *[
+            f"| \`{gate['transition']}\` | {', '.join(gate['missing_evidence'])} | NON — UNKNOWN |"
+            for gate in transitions
+        ],
         "",
         "## Décision de sortie",
         "",
