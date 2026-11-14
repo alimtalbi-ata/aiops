@@ -129,3 +129,7 @@ The simulation/evidence gate now requires a **trusted independently supplied** `
 ## Independent incident identity fence — 2026-11-14
 
 The simulation/evidence gate additionally requires `expected_incident_id` from a trusted incident context, independent of the submitted simulation request. It rejects a valid simulation receipt bound to a different incident **even within the same tenant**. Both the incident ID and source fixture digest must come from the trusted context; copying either from untrusted input defeats the intended boundary. No production authorization is inferred.
+
+## Callable incident → simulation → evidence gate DEMO — 2026-11-14
+
+`portal.acme_demo_simulation_pipeline.run_acme_demo_simulation()` now composes the validated ACME incident cockpit snapshot, a deterministic hypothetical Payments restart, and the simulation/evidence safety gate **in one callable path**. The trusted incident ID and fixture digest come from the cockpit; the DEMO has no collected runtime evidence and therefore produces an empty evidence summary, no accepted proof and actual recovery `UNKNOWN`. The result contains the simulation receipt and the gate result, with explicit false runtime/Temporal/GLPI-write flags. This is a real executable *in-memory* DEMO flow, **not** a production worker or operational integration.
