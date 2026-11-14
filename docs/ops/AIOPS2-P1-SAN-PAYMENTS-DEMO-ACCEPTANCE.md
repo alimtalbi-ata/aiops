@@ -65,3 +65,21 @@ Cette vérification ne prouve pas l'origine indépendante du dépôt, l'identit�
 d'un auteur, la présence de sources externes authentifiées, une exécution
 Temporal ou un rétablissement réel. Pour une chaîne de confiance hors dépôt,
 prévoir un artefact CI signé et une provenance vérifiée séparément.
+
+## Vérification de l'archive GitHub Actions téléchargée
+
+Depuis le checkout **exact de la révision ayant généré le dossier**, lancer :
+
+```bash
+python scripts/verify_aiops2_demo_zip.py aiops2-san-payments-synthetic-demo.zip
+```
+
+Le contrôle refuse les fichiers ZIP inattendus, les entrées supplémentaires,
+les contenus falsifiés et les écarts avec les octets canoniques du scénario.
+Il ne décompresse aucune entrée du ZIP sur le système de fichiers cible avant
+la vérification de sa liste et de ses tailles; les quatre fichiers attendus
+sont copiés dans un répertoire temporaire privé pour comparer à la fixture.
+Le résultat PASS est limité au **scénario synthétique**. Le `git_revision`
+du manifeste correspond au checkout GitHub Actions (potentiellement un commit
+de merge de PR), pas nécessairement au SHA de tête de branche. Ne pas utiliser
+ce champ comme signature d'origine.
