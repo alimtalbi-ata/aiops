@@ -188,3 +188,7 @@ A `WorkflowAlreadyStartedError` previously returned `idempotent=true` solely bec
 ## All synthetic execution modes stop before unverified recovery — 2026-11-14
 
 The Temporal Worker accepts `DEMO`, `REPLAY`, `STORY` and `LIVE`. The independent-postcheck safety stop at `VERIFY` now covers **all three synthetic modes** (`DEMO/REPLAY/STORY`), not just DEMO. Executed stage-body tests and in-process full-workflow tests exercise each mode and require `INDEPENDENT_POSTCHECK_MISSING`, Core `BLOCK`, no synthetic VERIFY PASS, and no `RECONCILE/LEARN/RESOLVE`. LIVE remains separately blocked by `LIVE_ADAPTER_UNAVAILABLE`. These are CI-inert tests, not production attestation.
+
+## Core ↔ Temporal ambiguous start response — 2026-11-14
+
+Core now preserves the Worker's HTTP 409 workflow-ID conflict as a **409 operator-reconciliation-required** response instead of disguising it as a generic 503. A timeout or transport failure is reported as `execution start outcome unknown; reconcile before retry` (503), without inserting a false execution receipt or claiming idempotency. An upstream non-409 HTTP failure remains a generic 503 without leaking response internals. Inert DB/HTTP tests execute the actual Core handler for conflict, timeout and other HTTP failure. **Automatic reconciliation and crash-safe start deduplication are still not implemented**; do not blindly retry ambiguous starts.
