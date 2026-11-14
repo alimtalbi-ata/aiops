@@ -63,3 +63,23 @@ def test_portal_api_readonly_and_invalid_fixture_denied():
                return_value={"schema": "unqualified"}):
         denied = client.get("/api/demo/acme-itil-readiness")
     assert denied.status_code == 503
+
+
+def test_operator_page_shows_all_transitions_and_no_live_authority():
+    app = FastAPI()
+    app.include_router(router)
+    client = TestClient(app)
+    page = client.get("/demo/acme-itil-readiness")
+    assert page.status_code == 200
+    assert page.headers["cache-control"] == "no-store"
+    assert "text/html" in page.headers["content-type"]
+    assert "SIMULATION LOCALE UNIQUEMENT" in page.text
+    assert "NO-GO LIVE" in page.text
+    assert "CLOSE_ITIL_AND_OPEN_PIR" in page.text
+    assert page.text.count("<tr><th scope='row'>") == len(REQUIRED)
+    assert "<script" not in page.text.lower()
+    assert "<form" not in page.text.lower()
+    with patch("portal.acme_impact_read_model.build_acme_impact_read_model",
+               return_value={"schema": "invalid"}):
+        denied = client.get("/demo/acme-itil-readiness")
+    assert denied.status_code == 503
