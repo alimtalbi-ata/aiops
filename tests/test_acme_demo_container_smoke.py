@@ -99,3 +99,24 @@ def test_packaged_demo_rejects_malformed_register_shapes(mutation):
     with patch.object(smoke.Path, "read_text", new=malformed):
         with pytest.raises(ValueError, match="packaged_register_not_blocked"):
             verify_packaged_demo()
+
+@pytest.mark.parametrize("mutation", ["fabricated_grafana_digest", "assigned_environment", "claimed_temporal_start"])
+def test_packaged_demo_rejects_claimed_runtime_metadata(mutation):
+    import portal.acme_demo_container_smoke as smoke
+    original = Path.read_text
+
+    def forged(path, *args, **kwargs):
+        if str(path).endswith("acme-readonly-pilot-register.template.json"):
+            payload = json.loads(original(path, *args, **kwargs))
+            if mutation == "fabricated_grafana_digest":
+                payload["sources"]["grafana"]["response_sha256"] = "f" * 64
+            elif mutation == "assigned_environment":
+                payload["environment"]["name"] = "production"
+            else:
+                payload["sources"]["core_temporal"]["start_intent_present"] = True
+            return json.dumps(payload)
+        return original(path, *args, **kwargs)
+
+    with patch.object(smoke.Path, "read_text", new=forged):
+        with pytest.raises(ValueError, match="packaged_register_not_blocked"):
+            verify_packaged_demo()
