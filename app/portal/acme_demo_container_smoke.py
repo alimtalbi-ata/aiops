@@ -73,6 +73,9 @@ def verify_packaged_demo() -> dict[str, object]:
             or b"<script" in grafana.body.lower()
             or b"<script" in cockpit.body.lower()):
         raise ValueError("synthetic_customer_safety_markers_missing")
+    if (b"href='/demo/acme-grafana-pilot-preview'" not in cockpit.body
+            or b"href='/demo/acme-incident-cockpit'" not in grafana.body):
+        raise ValueError("synthetic_customer_navigation_missing")
     for response in (grafana, cockpit):
         if (response.headers.get("cache-control") != "no-store"
                 or "default-src 'none'" not in
