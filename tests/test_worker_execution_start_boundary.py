@@ -14,12 +14,14 @@ class HttpError(Exception):
         self.status_code, self.detail = code, detail
 
 
-def endpoint():
+def endpoint(*, already_started=False):
     module = ast.parse(SOURCE.read_text())
     fn = next(n for n in module.body if isinstance(n, ast.AsyncFunctionDef)
               and n.name == "start")
     fn.decorator_list = []
     calls = []
+    class AlreadyStarted(Exception):
+        pass
     class Client:
         @staticmethod
         async def connect(address):
@@ -27,6 +29,8 @@ def endpoint():
             class Connection:
                 async def start_workflow(self, *args, **kwargs):
                     calls.append(("start", args, kwargs))
+                    if already_started:
+                        raise AlreadyStarted()
                     return SimpleNamespace(id=kwargs["id"])
             return Connection()
     def mode_contract(mode):
@@ -39,7 +43,7 @@ def endpoint():
         "Client": Client, "TEMP": "inert-temporal",
         "ADMIN": "trusted-token", "IncidentWorkflow": SimpleNamespace(run=lambda: None),
         "policy_command_for_mode": mode_contract,
-        "WorkflowAlreadyStartedError": type("AlreadyStarted", (Exception,), {}),
+        "WorkflowAlreadyStartedError": AlreadyStarted,
     }
     exec(compile(ast.Module(body=[fn], type_ignores=[]), str(SOURCE), "exec"), ns)
     return ns["start"], calls
@@ -81,3 +85,14 @@ def test_valid_canonical_core_envelope_starts_once():
     assert result["run_id"] == "r-01"
     assert [x[0] for x in calls] == ["connect", "start"]
     assert calls[1][2]["id"] == "r-01"
+
+
+def test_existing_workflow_id_requires_core_reconciliation_not_fake_idempotency():
+    start, calls = endpoint(already_started=True)
+    with pytest.raises(HttpError) as exc:
+        asyncio.run(start({"run_id": "r-01", "mode": "DEMO",
+                           "scenario_id": "acme", "version": 0},
+                          authorization="Bearer trusted-token"))
+    assert exc.value.status_code == 409
+    assert "reconcile" in exc.value.detail
+    assert [x[0] for x in calls] == ["connect", "start"]
