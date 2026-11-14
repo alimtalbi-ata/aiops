@@ -182,3 +182,19 @@ def test_packaged_demo_rejects_unreviewed_top_level_claim():
     with patch.object(smoke.Path, "read_text", new=forged):
         with pytest.raises(ValueError, match="packaged_register_not_blocked"):
             verify_packaged_demo()
+
+
+def test_packaged_demo_rejects_forged_operator_trust_notes():
+    import portal.acme_demo_container_smoke as smoke
+    original = Path.read_text
+
+    def forged(path, *args, **kwargs):
+        if str(path).endswith("acme-readonly-pilot-register.template.json"):
+            payload = json.loads(original(path, *args, **kwargs))
+            payload["notes"] = ["GLPI, Grafana and Temporal are fully verified in production."]
+            return json.dumps(payload)
+        return original(path, *args, **kwargs)
+
+    with patch.object(smoke.Path, "read_text", new=forged):
+        with pytest.raises(ValueError, match="packaged_register_not_blocked"):
+            verify_packaged_demo()
