@@ -23,6 +23,7 @@ def test_business_preview_shows_alert_but_remains_blocked():
  assert preview['register']['decision']=='BLOCKED'
  assert preview['register']['sources']['grafana']['status']=='UNKNOWN'
  assert preview['register']['sources']['grafana']['rule_uid']=='san-p1'
+ assert preview['register']['sources']['grafana']['alert_state']=='firing'
  assert preview['register']['sources']['grafana']['tenant_scope']=='acme-test'
  assert validate(preview['register'])
 @pytest.mark.parametrize('field,value', [('status','VERIFIED'),('runtime_attested',True),('native_tenant_acl_verified',True),('live_actions_authorized',True)])
@@ -38,3 +39,8 @@ def test_live_register_is_rejected():
  r=fixture();r['live_actions_authorized']=True
  with pytest.raises(ValueError,match='pilot_preview_live_authorization_forbidden'):
   preview_grafana_pilot_evidence(r,projection())
+
+def test_invalid_candidate_state_is_rejected():
+ p=projection();p['alert_state']='resolved_and_verified'
+ with pytest.raises(ValueError,match='pilot_preview_alert_state_invalid'):
+  preview_grafana_pilot_evidence(fixture(),p)
