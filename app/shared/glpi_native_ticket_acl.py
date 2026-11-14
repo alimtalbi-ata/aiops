@@ -31,6 +31,7 @@ def make_glpi_native_ticket_acl(
         glpi_base_url=glpi_base_url,
         get_app_token=get_app_token,
         get_user_token=get_actor_user_token,
+        require_session_user_identity=True,
     )
 
     def authorize(*, actor, tenant_id, glpi_instance_id,
