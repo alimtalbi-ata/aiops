@@ -8,6 +8,7 @@ read. Every call re-verifies the bearer and checks durable JTI revocation.
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from collections.abc import Callable
 
 from shared.glpi_xref_postgres_nonce import make_postgres_nonce_consumer
@@ -129,7 +130,7 @@ def make_verified_principal_glpi_xref_resolver(
         observed_events = {}
         def preflight_fetch(*, actor, tenant_id, ticket_id):
             event = fetch_signed_event(actor=actor, tenant_id=tenant_id, ticket_id=ticket_id)
-            observed_events[tenant_id] = event
+            observed_events[tenant_id] = deepcopy(event)
             return event
 
         def final_fetch(*, actor, tenant_id, ticket_id):
