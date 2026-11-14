@@ -24,8 +24,14 @@ class VerifiedPrincipal:
     simulated: bool = False
 
 
-def principal_from_bearer(token: str) -> VerifiedPrincipal:
-    """Verify OIDC and derive a stable actor ID; never trust caller identity."""
+def principal_from_bearer(token: str, *, is_revoked) -> VerifiedPrincipal:
+    """Verify OIDC, require a durable revocation check, then derive actor ID.
+
+    is_revoked(issuer=..., jti=...) must be backed by PostgreSQL. Missing,
+    failing, or positive revocation checks deny the principal.
+    """
+    if not callable(is_revoked):
+        raise IdentityError("oidc_revocation_store_required")
     claims = verify_oidc_assertion(token)
     actor_id = claims.get("subject_id")
     issuer = claims.get("issuer")
@@ -43,6 +49,12 @@ def principal_from_bearer(token: str) -> VerifiedPrincipal:
         or claims.get("simulated") is not False
     ):
         raise IdentityError("verified_principal_claims_invalid")
+    try:
+        revoked = is_revoked(issuer=issuer, jti=jti)
+    except Exception as exc:
+        raise IdentityError("oidc_revocation_check_failed") from exc
+    if revoked is not False:
+        raise IdentityError("oidc_assertion_revoked_or_store_unavailable")
     return VerifiedPrincipal(
         actor_id=actor_id,
         issuer=issuer,
