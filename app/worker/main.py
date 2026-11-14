@@ -123,8 +123,18 @@ def metrics(): return 'aiops_worker_up 1\n'
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
- try: policy_command_for_mode(args.get('mode') if isinstance(args,dict) else None)
- except ValueError: raise HTTPException(422,'invalid execution mode')
+ if not isinstance(args,dict) or set(args) != {'run_id','mode','scenario_id','version'}:
+  raise HTTPException(422,'invalid execution request shape')
+ import re
+ for key in ('run_id','scenario_id'):
+  value=args[key]
+  if (not isinstance(value,str) or not 1<=len(value)<=128
+      or re.fullmatch(r'[A-Za-z0-9_.:-]+',value) is None):
+   raise HTTPException(422,'invalid execution identifier')
+ if type(args['version']) is not int or args['version'] < 0:
+  raise HTTPException(422,'invalid execution version')
+ try: policy_command_for_mode(args['mode'])
+ except (ValueError,TypeError): raise HTTPException(422,'invalid execution mode')
  c=await Client.connect(TEMP)
  try:
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}
