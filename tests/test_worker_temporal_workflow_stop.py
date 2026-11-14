@@ -40,11 +40,14 @@ def _workflow_with_stub(events, *, block_stage):
         if activity.__name__ == "finish_run":
             return {"status": "RESOLVED", "version": args["version"] + 1}
         raise AssertionError("unknown activity")
+    def start_run(): pass
+    def execute_stage(): pass
+    def finish_run(): pass
     namespace = {
         "workflow": SimpleNamespace(execute_activity=execute_activity),
-        "start_run": lambda: None,
-        "execute_stage": lambda: None,
-        "finish_run": lambda: None,
+        "start_run": start_run,
+        "execute_stage": execute_stage,
+        "finish_run": finish_run,
         "STAGES": stages,
         "RETRY": object(),
         "datetime": datetime,
