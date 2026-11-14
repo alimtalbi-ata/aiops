@@ -85,3 +85,17 @@ def test_html_renderer_rejects_forged_success():
     cockpit["itil_readiness"]["transitions"][0]["authorized"] = True
     with pytest.raises(ValueError, match="unqualified_cockpit_details"):
         render_synthetic_cockpit_html(cockpit)
+
+
+def test_operator_cockpit_explains_customer_use_case_and_proof_boundary():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "Parcours démontrable" in page.text
+    assert "SAN vers Payments" in page.text
+    assert "scripts/verify_aiops2_demo_acceptance.py" in page.text
+    assert "preuve runtime" in page.text
+    assert "pas une attestation de production" in page.text
+    assert "<script" not in page.text.lower()
+    assert "<form" not in page.text.lower()
