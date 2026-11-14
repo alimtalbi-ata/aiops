@@ -152,3 +152,7 @@ The second command recomputes the **entire** expected artifact from the trusted 
 ## DEMO simulator input hardening — 2026-11-14
 
 The deterministic simulator now constrains tenant, incident, action and service identifiers to explicit ASCII `[A-Za-z0-9_.:-]` (1–128 characters). This avoids accepting visually confusable Unicode identifiers or control characters. The `before.health` field is type-checked before set membership, so malformed lists/dictionaries fail closed with `ValueError` rather than an unhandled `TypeError`. No LIVE authorization or external action is introduced.
+
+## Supplied evidence → source MAC → byte readback → simulation gate — 2026-11-14
+
+`portal.acme_demo_evidence_pipeline.inspect_acme_demo_evidence(manifest, receipts, readback, resolve_key, expected_tenant_id=...)` now executes the full **offline** DEMO integrity path with caller-supplied callbacks: validates the manifest against the trusted ACME cockpit, checks tenant/source-bound HMAC receipts, permits readback only after valid MAC, compares bytes to manifest SHA-256, and joins the resulting qualification to the deterministic Payments simulation. Wrong tenant/incident is refused before callbacks; bad MAC never triggers readback. A matching MAC and digest still yield **runtime recovery UNKNOWN, no ITIL/LIVE authorization**. This is not a network adapter, credential vault, independent source attestation, durable anti-replay barrier, production actor ACL or Temporal execution.
