@@ -111,7 +111,7 @@ def test_resolver_derives_actor_and_tenant_from_oidc_grants_and_signed_xref():
             fetch_signed_event=fetch_signed_event,
             authorize_glpi_native_acl=native_acl, clock=lambda: NOW,
         )
-    result = resolve("verified-bearer", "42")
+        result = resolve("verified-bearer", "42")
 
     assert result["tenant_id"] == "tenant-b"
     assert result["actor"] == PRINCIPAL_CLAIMS["subject_id"]
@@ -163,8 +163,8 @@ def test_native_glpi_acl_must_return_exact_true():
             authorize_glpi_native_acl=lambda **kwargs: 1,
             clock=lambda: NOW,
         )
-    with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_not_authorized"):
-        resolve("token", "42")
+        with pytest.raises(VerifiedGLPIXrefDenied, match="signed_xref_not_authorized"):
+            resolve("token", "42")
 
 
 def test_ticket_resolver_has_no_caller_actor_or_tenant_override():
@@ -194,7 +194,7 @@ def test_reusable_resolver_rechecks_jti_revocation_on_every_request():
     with patch("shared.verified_principal.verify_oidc_assertion", return_value=PRINCIPAL_CLAIMS):
         resolve = make_verified_principal_glpi_xref_resolver(
             connect=connect, secret=SECRET,
-            fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]),
+            fetch_signed_event=lambda **kwargs: signed_event(kwargs["tenant_id"]) if kwargs["tenant_id"] == "tenant-a" else None,
             authorize_glpi_native_acl=lambda **kwargs: True,
             clock=lambda: NOW,
         )
