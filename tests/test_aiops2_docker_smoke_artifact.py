@@ -121,3 +121,30 @@ def test_offline_cli_accepts_matching_artifact(tmp_path):
     rejected = subprocess.run(command, capture_output=True, text=True, check=False)
     assert rejected.returncode == 1
     assert "BLOCKED" in rejected.stderr
+
+
+def test_offline_cli_rejects_missing_and_malformed_files(tmp_path):
+    script = Path(__file__).resolve().parents[1] / "scripts" / "verify_aiops2_docker_smoke_artifact.py"
+    command = [sys.executable, str(script), str(tmp_path),
+               "--repository", "alimtalbi-ata/aiops", "--head-sha", HEAD,
+               "--run-id", "12345", "--run-attempt", "1"]
+    missing = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert missing.returncode == 1
+    assert "BLOCKED" in missing.stderr
+    (tmp_path / "aiops2-packaged-demo-smoke.json").write_text("{malformed")
+    (tmp_path / "aiops2-packaged-demo-smoke-provenance.json").write_text(
+        json.dumps(PROVENANCE))
+    malformed = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert malformed.returncode == 1
+    assert "BLOCKED" in malformed.stderr
+
+
+def test_reject_malformed_provenance_and_smoke_types():
+    assert not check(smoke=dict(SMOKE, accepted="true"))
+    assert not check(smoke=dict(SMOKE, live_actions_authorized="false"))
+    assert not check(provenance=dict(PROVENANCE, event_name=[]))
+    assert not check(provenance=dict(PROVENANCE, ref=[]))
+    assert not check(provenance=dict(PROVENANCE, commit_sha=None))
+    assert not check(provenance=dict(PROVENANCE, run_attempt=1))
+    assert not check(provenance=dict(PROVENANCE, run_id="0"))
+    assert not check(provenance=dict(PROVENANCE, run_attempt="0"))
