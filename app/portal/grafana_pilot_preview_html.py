@@ -47,6 +47,7 @@ def render_grafana_pilot_preview_html(preview):
         "<p class='warning'><strong>APERÇU NON ATTESTÉ — UNKNOWN / BLOCKED.</strong> "
         "Source injectée et non authentifiée; aucune ACL native Grafana vérifiée, "
         "aucune preuve de récupération, aucun ticket GLPI écrit et aucune action LIVE.</p>"
+        "<p><a href='/demo/acme-incident-cockpit'>Retour au cockpit incident SAN → Payments</a></p>"
         "<h2>Observation candidate — lecture seule</h2><table><tbody>"
         + "".join(rows) + "</tbody></table>"
         "<h2>Chaîne métier attendue</h2>"
