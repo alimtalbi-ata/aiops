@@ -126,7 +126,7 @@ jobs:
           python scripts/verify_aiops2_demo_acceptance.py
       - name: Reproducible SAN Payments customer evidence package (synthetic only)
         run: |
-          python -m pytest -q tests/test_aiops2_demo_evidence_package.py
+          python -m pytest -q tests/test_aiops2_demo_evidence_package.py tests/test_aiops2_demo_zip.py
           python scripts/package_aiops2_demo_evidence.py --output "${{ runner.temp }}/aiops2-demo-evidence"
           python scripts/package_aiops2_demo_evidence.py --verify "${{ runner.temp }}/aiops2-demo-evidence"
       - name: Upload synthetic customer demo package (not runtime evidence)
