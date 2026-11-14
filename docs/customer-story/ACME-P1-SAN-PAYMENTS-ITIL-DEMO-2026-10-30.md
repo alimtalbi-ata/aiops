@@ -57,3 +57,7 @@ This API is **not** a runtime incident lifecycle engine, Temporal workflow, GLPI
 ## ITIL transition readiness, no inferred remediation — 2026-11-14
 
 Read-only **GET `/api/demo/acme-itil-readiness`** derives eight explicit ITIL transition gates from the nine-stage synthetic lifecycle: acknowledge P1, declare impact, propose remediation, request HITL, simulate, verify recovery, resolve, and close/open PIR. Each gate lists its required independent checkpoints and remains **UNKNOWN / unauthorized** because the local fixture provides no runtime evidence. Any forged stage PASS, LIVE Policy decision, effect receipt or runtime attestation causes rejection; invalid fixture yields HTTP 503. This is a diagnostic readiness view, **not** an authorization engine, GLPI write, Temporal execution or real incident resolution.
+
+## Operator-facing ITIL evidence view — 2026-11-14
+
+The existing Portal additionally serves **GET `/demo/acme-itil-readiness`**, a static French operator table showing each transition, its UNKNOWN readiness, missing independent checkpoints and explicit non-authorization. The page uses no scripts, forms, backend writes, or live service calls. It carries the fixture SHA-256 and an always-visible SIMULATION / NO-GO LIVE warning. API and page fail HTTP 503 on unqualified fixture data.
