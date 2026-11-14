@@ -148,6 +148,6 @@ def make_verified_principal_glpi_xref_resolver(
                 "signed_xref_missing_or_ambiguous" if matches
                 else "signed_xref_not_authorized"
             )
-        return matches[0]
+        return {**matches[0], "actor": actor}
 
     return resolve_ticket
