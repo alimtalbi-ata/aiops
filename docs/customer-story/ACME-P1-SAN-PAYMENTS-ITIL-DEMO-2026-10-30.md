@@ -168,3 +168,7 @@ The existing Temporal Worker now **blocks DEMO at VERIFY** after a stage-start e
 ## Executed Temporal workflow stop-order regression — 2026-11-14
 
 `tests/test_worker_temporal_workflow_stop.py` executes the actual `IncidentWorkflow.run` coroutine with a deterministic `workflow.execute_activity` stub. It asserts that a `VERIFY` block stops the stage sequence before `RECONCILE` and `LEARN`, and never invokes `finish_run` / `RESOLVE`; earlier `POLICY`, `HITL` and `REMEDIATE` blocks also stop immediately. This is a unit-level orchestration test, not a Temporal server E2E.
+
+## In-process Worker orchestration with actual activity bodies — 2026-11-14
+
+`tests/test_worker_orchestration_integrated_demo.py` composes the real async `IncidentWorkflow.run`, `start_run` and `execute_stage` bodies with deterministic fake Core, Policy, Evidence and Twin services. It runs all DEMO stages through VERIFY, confirms 10 earlier synthetic stage evidence writes, then `INDEPENDENT_POSTCHECK_MISSING` and Core `BLOCK` without VERIFY completion, RECONCILE, LEARN or RESOLVE. This is a higher-level in-process integration regression, **not** a Temporal server or real Core/Postgres E2E.
