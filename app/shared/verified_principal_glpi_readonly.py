@@ -12,6 +12,7 @@ from shared.glpi_session_readonly import make_glpi_session_ticket_get
 from shared.glpi_http_readers import make_core_glpi_readers
 from shared.glpi_readback_comparison import compare_raw_readbacks_to_association
 from shared.glpi_native_ticket_acl import make_glpi_native_ticket_acl
+from shared.glpi_actor_credential_broker import make_glpi_actor_user_token_broker
 from shared.verified_principal_glpi_xref import (
     make_verified_principal_glpi_xref_resolver,
 )
@@ -30,7 +31,7 @@ def make_verified_principal_glpi_readonly_qualifier(
     authorize_glpi_read: Callable,
     core_token: Callable,
     glpi_app_token: Callable,
-    glpi_user_token: Callable,
+    get_bound_glpi_credential: Callable,
     core_base_url: str,
     glpi_base_url: str,
     clock: Callable | None = None,
@@ -38,12 +39,18 @@ def make_verified_principal_glpi_readonly_qualifier(
     required = (
         connect, fetch_signed_event,
         authorize_core_read, authorize_glpi_read, core_token,
-        glpi_app_token, glpi_user_token,
+        glpi_app_token, get_bound_glpi_credential,
     )
     if not callable(connect) or not all(callable(fn) for fn in required[1:]):
         raise ValueError("verified_glpi_readonly_trust_dependencies_missing")
     if not isinstance(secret, bytes) or len(secret) < 32:
         raise ValueError("xref_signing_key_missing")
+
+    # A reviewed PostgreSQL actor->GLPI-user binding and a trusted vault are
+    # mandatory. Never use a shared service-user token for actor authorization.
+    glpi_user_token = make_glpi_actor_user_token_broker(
+        connect=connect, get_bound_credential=get_bound_glpi_credential,
+    )
 
     # These are server-owned transports; they never accept a URL from a request.
     core_get = make_json_get(get_token=core_token, allowed_origin=core_base_url)
