@@ -385,6 +385,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         response = self.page.goto(self.base + "/demo/acme-incident-cockpit")
         self.assertEqual(response.status, 200)
         expect(self.page.get_by_role("heading", name=re.compile("Parcours démontrable"))).to_be_visible()
+        expect(self.page.locator("#verdict")).to_be_visible()
         self.assertEqual(self.page.locator("nav[aria-label='Parcours guidé de démonstration'] a[href^='#']").count(), 5)
         for anchor, heading in (
             ("impact", "Incident et impact métier"),
