@@ -144,7 +144,7 @@ def test_qualification_cli_writes_valid_json_and_checks_only_once(tmp_path, monk
         assert main() == 0
     verify.assert_called_once()
     raw = report_path.read_text(encoding="utf-8")
-    assert raw.endswith("\\n") and not raw.endswith("\\\\n")
+    assert raw.endswith("\n") and not raw.endswith("\\n")
     report = json.loads(raw)
     assert report["artifact_consistency"] == "PASS"
     assert report["live_qualification"] == "NO_GO"
