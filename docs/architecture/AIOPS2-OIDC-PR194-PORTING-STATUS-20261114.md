@@ -122,3 +122,11 @@ The assembly remains unmounted and requires real server providers for:
 - trusted, distinct HTTPS origins.
 
 Offline composition tests were added in `tests/test_verified_principal_glpi_readonly.py` and included in quality CI. Exact-head CI for commit `5c571d65a14da47e2e2292290b4ad134a1582abf` was in progress at the time of this update. No real upstream GLPI/Core calls, route registration, Copilot query, HITL proposal, mutation, deployment or LIVE execution.
+
+## Native GLPI per-actor Ticket read authorization — 2026-11-14
+
+Added `shared.glpi_native_ticket_acl.make_glpi_native_ticket_acl` and wired it into the OIDC read-only qualifier. The callback now performs a real GLPI REST `GET Ticket/{id}` using the user-token provider scoped by the verified OIDC actor, tenant, ticket and GLPI instance. GLPI's own permission check must allow that request; the adapter then requires exact ticket ID and exact signed-xref entity ID. Session cleanup failure, HTTP 403, timeout, malformed response, entity mismatch or any other exception returns deny. Only `read_ticket` is accepted.
+
+This removes the externally injected boolean native-ACL decision from the qualifier composition. It does **not** remove the deployment requirement for a credential broker: `glpi_user_token(actor, tenant_id, ticket_id, glpi_instance_id)` must return that actor's own GLPI credential and must never fall back to a shared integration user. The app token remains application identity only and is not treated as user authorization. The credential broker must enforce the actor↔GLPI-user mapping and instance/tenant binding from trusted server configuration.
+
+Added offline tests for actor/tenant/instance-bound credential invocation, exact ticket/entity matching, GLPI denial, malformed scopes and non-read actions. These tests are included in the quality workflow. This remains an unmounted candidate; real GLPI 11 integration with distinct least-privilege GLPI users and cross-entity denial is still required.
