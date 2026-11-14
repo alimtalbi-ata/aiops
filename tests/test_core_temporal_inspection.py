@@ -49,7 +49,8 @@ def endpoint(*, response_kind="valid", receipt=None):
             payload["idempotent_start_confirmed"] = True
         return SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
     ns = {
-        "db": db, "auth": lambda token: None, "bearer": lambda token: token,
+        "db": db, "compare_temporal_start_input": lambda expected, observed: "UNKNOWN",
+        "auth": lambda token: None, "bearer": lambda token: token,
         "Header": lambda default=None: default, "HTTPException": HttpError,
         "requests": SimpleNamespace(get=get, RequestException=requests.RequestException),
         "WORKER": "http://worker", "ADMIN": "inert",
