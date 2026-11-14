@@ -105,3 +105,7 @@ GET `/api/demo/acme-itil-handoff-draft` generates a deterministic **non-executab
 ## Cross-tenant receipt isolation hardening — 2026-11-14
 
 The joint evidence qualification now **requires** a trusted, independently supplied `expected_tenant_id` keyword argument. All submitted receipt tenant IDs must match this scope before any key resolver or readback callback runs. A valid receipt from tenant B must not be processed in tenant A's context. This is a defensive tenant scope fence, **not** actor authentication or a production ACL grant; the trusted caller must establish the expected tenant independently. Tests cover foreign-tenant refusal without callbacks and missing/empty trusted tenant.
+
+## Readback preflight hardening — 2026-11-14
+
+Joint evidence qualification now blocks the independent byte reader **before** any external readback when a checkpoint has no source receipt, an invalid MAC, or a missing source key. The digest comparison then reports `READBACK_UNAVAILABLE`; it does not fetch untrusted or foreign-source content and only reports `DIGEST_MATCH_UNATTESTED` after the source MAC preflight succeeds. Tenant scope remains independently required. This is still offline DEMO-only, not source runtime attestation or an authorization to act.
