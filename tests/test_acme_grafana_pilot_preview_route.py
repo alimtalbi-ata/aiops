@@ -45,3 +45,9 @@ def test_grafana_preview_reuses_canonical_san_payments_incident_ids():
  assert cockpit['business_impact_incident_id'] in page.text
  assert cockpit['source_sha256'] in page.text
  assert 'ne prouvent aucune corrélation runtime' in page.text
+
+def test_grafana_preview_fails_closed_when_incident_fixture_invalid():
+ with patch('portal.acme_impact_read_model.build_acme_impact_read_model',return_value={'schema':'invalid'}):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==503
+ assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
