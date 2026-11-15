@@ -210,7 +210,7 @@ def test_bundle_fifty_fail_closed_mutation_checks(tmp_path, location, field, bad
         (smoke_dir, "aiops2-packaged-demo-smoke-provenance.json", "provenance"),
     ):
         (directory / filename).write_text(json.dumps(objects[key]), encoding="utf-8")
-    with patch("verify_aiops2_customer_demo_bundle.verify_package", return_value=True), \\
+    with patch("verify_aiops2_customer_demo_bundle.verify_package", return_value=True), \
          patch("verify_aiops2_customer_demo_bundle.verify_smoke", return_value=True):
         assert not verify_bundle(
             pkg, smoke_dir, repository="alimtalbi-ata/aiops",
