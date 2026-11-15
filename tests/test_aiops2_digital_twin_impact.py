@@ -210,3 +210,17 @@ def test_twin_rejects_event_service_mismatch():
     sample["events"][0]["service_id"] = "other-service"
     with pytest.raises(InvalidEvent, match="cross-tenant or invalid incident event"):
         resolve_impact(sample, [edge("san-01", "payments")], as_of=NOW)
+
+
+@pytest.mark.parametrize("count,accepted", [(100, True), (101, False)])
+def test_twin_enforces_distinct_incident_ci_origin_budget(count, accepted):
+    sample = incident()
+    sample["events"] = [dict(sample["events"][0], ci_id=f"ci-{i}")
+                        for i in range(count)]
+    if accepted:
+        result = resolve_impact(sample, [], as_of=NOW)
+        assert result["impact_state"] == "UNKNOWN"
+        assert result["resource_budget_exhausted"] is False
+    else:
+        with pytest.raises(InvalidEvent, match="incident CI origin budget exceeded"):
+            resolve_impact(sample, [], as_of=NOW)
