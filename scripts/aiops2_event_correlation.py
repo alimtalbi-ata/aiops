@@ -36,7 +36,7 @@ def normalize_event(raw: object) -> dict:
         raise InvalidEvent("event must be an object")
     for field in ("tenant_id", "source", "source_event_id", "ci_id", "service_id"):
         value = raw.get(field)
-        if not isinstance(value, str) or not value.strip():
+        if not isinstance(value, str) or not value.strip() or len(value) > 256:
             raise InvalidEvent(f"missing or invalid {field}")
     if raw["source"] not in SOURCES:
         raise InvalidEvent("unsupported source")
