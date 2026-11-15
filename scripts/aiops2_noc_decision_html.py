@@ -24,6 +24,8 @@ def render_computed_noc_html(projection: object) -> str:
     def safe(value: object) -> str:
         return escape(str(value), quote=True)
 
+    if len(projection["decisions"]) > 100:
+        raise ValueError("noc_projection_decision_budget_exceeded")
     rows = []
     for item in projection["decisions"]:
         if (not isinstance(item, dict)
@@ -41,6 +43,8 @@ def render_computed_noc_html(projection: object) -> str:
                 or item["analyst"].get("impact_state") != item["impact_state"]):
             raise ValueError("unqualified_noc_decision")
         paths = item["impact_paths"]
+        if len(paths) > 100:
+            raise ValueError("noc_projection_path_budget_exceeded")
         if item["impact_state"] == "UNKNOWN" and paths:
             raise ValueError("unknown_impact_with_paths")
         if item["impact_state"] == "SOURCED_SYNTHETIC_PATH" and not paths:
@@ -58,6 +62,7 @@ def render_computed_noc_html(projection: object) -> str:
         path_labels = []
         for path in paths:
             if (not isinstance(path, dict) or not isinstance(path.get("nodes"), list)
+                    or len(path["nodes"]) > 100
                     or len(path["nodes"]) < 2
                     or not all(isinstance(node, str) and node for node in path["nodes"])
                     or len(set(path["nodes"])) != len(path["nodes"])
