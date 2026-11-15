@@ -40,7 +40,7 @@ def test_cross_tenant_isolation():
 
 
 def test_cross_service_isolation():
-    result = correlate_events([event(), event(service_id="storage")], as_of=NOW)
+    result = correlate_events([event(), event(source_event_id="storage-2", service_id="storage")], as_of=NOW)
     assert len(result["incidents"]) == 2
 
 
