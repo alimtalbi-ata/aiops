@@ -12,10 +12,12 @@ DIGEST = re.compile(r"^[0-9a-f]{64}$")
 
 
 def analyze_and_critique(incident: object, impact: object) -> dict:
-    """Produce a bounded hypothesis and independently validate its evidence.
+    """Produce a synthetic hypothesis using upstream evidence references.
 
-    Only source event hashes and verified synthetic Twin path hashes can support
-    the hypothesis. A missing path cannot be promoted to confirmed impact.
+    This stage checks digest shape and path structure, not whether a digest
+    identifies an authentic source receipt. Twin path provenance is trusted
+    only as synthetic upstream input, never independently attested here.
+    A missing path cannot be promoted to confirmed impact.
     """
     if not isinstance(incident, dict) or not isinstance(impact, dict):
         raise InvalidEvent("incident and impact must be objects")
@@ -85,7 +87,7 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         "missing_evidence": [] if supported else ["SOURCED_DEPENDENCY_PATH"],
         "impact_state": impact["impact_state"],
     }
-    # Critic independently checks the provenance set against the input receipts.
+    # This membership check is internal consistency only, not independent\n    # verification of source authenticity or path-edge correspondence.
     available = evidence | path_evidence
     citations_valid = all(hash_ in available for hash_ in hypothesis["evidence_sha256"])
     critic = {
