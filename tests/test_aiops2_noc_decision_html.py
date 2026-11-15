@@ -34,6 +34,8 @@ def test_unknown_path_is_explicit():
     p = projection()
     p["decisions"][0]["impact_state"] = "UNKNOWN"
     p["decisions"][0]["impact_paths"] = []
+    p["decisions"][0]["analyst"]["impact_state"] = "UNKNOWN"
+    p["decisions"][0]["critic"]["disposition"] = "NEEDS_MORE_EVIDENCE"
     assert "UNKNOWN" in render_computed_noc_html(p)
 
 
@@ -59,5 +61,20 @@ def test_unqualified_projection_rejected(key, value):
 def test_unqualified_decision_rejected():
     p = projection()
     p["decisions"][0]["policy_disposition"] = "ALLOW_LIVE"
+    with pytest.raises(ValueError):
+        render_computed_noc_html(p)
+
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda d: d["critic"].update(disposition="NEEDS_MORE_EVIDENCE"),
+    lambda d: d["critic"].update(runtime_attested=True),
+    lambda d: d["analyst"].update(impact_state="UNKNOWN"),
+    lambda d: d["impact_paths"][0].update(nodes=["san-01", None]),
+    lambda d: d["impact_paths"][0].update(nodes=["san-01"]),
+])
+def test_renderer_rejects_contradictory_or_malformed_evidence(mutation):
+    p = projection()
+    mutation(p["decisions"][0])
     with pytest.raises(ValueError):
         render_computed_noc_html(p)
