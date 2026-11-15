@@ -70,3 +70,21 @@ def test_replay_is_deterministic_and_does_not_mutate_inputs():
     a, b = copy.deepcopy(incident), copy.deepcopy(impact)
     assert analyze_and_critique(incident, impact) == analyze_and_critique(a, b)
     assert incident == a and impact == b
+
+
+
+def test_forged_path_start_not_in_incident_is_rejected():
+    incident, impact = inputs()
+    forged = copy.deepcopy(impact)
+    forged["paths"][0]["nodes"][0] = "unrelated-ci"
+    with pytest.raises(InvalidEvent, match="invalid impact path provenance"):
+        analyze_and_critique(incident, forged)
+
+
+def test_cyclic_forged_path_is_rejected():
+    incident, impact = inputs()
+    forged = copy.deepcopy(impact)
+    forged["paths"][0]["nodes"] = ["san-01", "san-01", "payments"]
+    forged["paths"][0]["evidence_sha256"] = ["b" * 64, "b" * 64]
+    with pytest.raises(InvalidEvent, match="invalid impact path provenance"):
+        analyze_and_critique(incident, forged)
