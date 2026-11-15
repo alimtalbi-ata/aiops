@@ -180,3 +180,18 @@ def test_twin_depth_boundary_exhausts_on_unvisited_neighbor():
     assert result["resource_budget_exhausted"] is True
     assert result["impact_state"] == "UNKNOWN"
     assert result["paths"] == []
+
+
+@pytest.mark.parametrize("field", ["tenant_id", "service_id"])
+def test_twin_rejects_oversized_incident_identity(field):
+    sample = incident()
+    sample[field] = "x" * 257
+    with pytest.raises(InvalidEvent, match="invalid incident identity"):
+        resolve_impact(sample, [], as_of=NOW)
+
+
+def test_twin_rejects_oversized_incident_ci():
+    sample = incident()
+    sample["events"][0]["ci_id"] = "x" * 257
+    with pytest.raises(InvalidEvent, match="invalid incident CI"):
+        resolve_impact(sample, [], as_of=NOW)
