@@ -92,3 +92,13 @@ def test_path_budget_sufficient_for_sourced_path():
 def test_invalid_path_budget_rejected(budget):
     with pytest.raises(InvalidEvent):
         resolve_impact(incident(), [], as_of=NOW, max_path_expansions=budget)
+
+
+
+def test_high_fanout_cannot_overfill_path_queue():
+    graph = [edge("san-01", f"branch-{i}") for i in range(50)]
+    graph.append(edge("branch-0", "payments"))
+    result = resolve_impact(incident(), graph, as_of=NOW, max_path_expansions=5)
+    assert result["resource_budget_exhausted"] is True
+    assert result["impact_state"] == "UNKNOWN"
+    assert result["paths"] == []
