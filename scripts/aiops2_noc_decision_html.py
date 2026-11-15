@@ -42,6 +42,10 @@ def render_computed_noc_html(projection: object) -> str:
                     "SUPPORTED_SYNTHETIC_HYPOTHESIS", "NEEDS_MORE_EVIDENCE")
                 or item["analyst"].get("impact_state") != item["impact_state"]):
             raise ValueError("unqualified_noc_decision")
+        # Bound all incident metadata rendered into the HTML table.
+        if not all(isinstance(item.get(field), str) and 0 < len(item[field]) <= 256
+                   for field in ("incident_id", "tenant_id", "service_id", "priority")):
+            raise ValueError("invalid_noc_display_metadata")
         paths = item["impact_paths"]
         if len(paths) > 100:
             raise ValueError("noc_projection_path_budget_exceeded")
