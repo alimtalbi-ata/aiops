@@ -121,7 +121,8 @@ def test_high_fanout_twin_budget_exhaustion_never_promotes_impact():
     assert decision["impact_state"] == "UNKNOWN"
     assert decision["impact_paths"] == []
     assert decision["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
-    assert decision["next_noc_action"] == "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    assert decision["next_noc_action"] == "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH"
+    assert decision["resource_budget_exhausted"] is True
     assert decision["policy_disposition"] == "DENY_LIVE"
     assert decision["runtime_attested"] is False
     assert decision["live_remediation_authorized"] is False
