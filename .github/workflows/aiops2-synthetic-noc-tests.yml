@@ -5,6 +5,9 @@ on:
   pull_request:
     paths:
       - "scripts/aiops2_*.py"
+      - "app/portal/**"
+      - "app/shared/**"
+      - "app/requirements.txt"
       - "tests/test_aiops2_*.py"
       - ".github/workflows/aiops2-synthetic-noc-tests.yml"
   push:
@@ -12,6 +15,9 @@ on:
       - integration/aiops2-convergence-20261114
     paths:
       - "scripts/aiops2_*.py"
+      - "app/portal/**"
+      - "app/shared/**"
+      - "app/requirements.txt"
       - "tests/test_aiops2_*.py"
       - ".github/workflows/aiops2-synthetic-noc-tests.yml"
 
