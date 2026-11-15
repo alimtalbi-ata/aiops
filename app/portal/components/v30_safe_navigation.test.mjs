@@ -13,11 +13,12 @@ test("six distinct canonical sections and semantic navigation", () => {
   assert.match(html, /data-live="false"/);
 });
 
-test("LIVE is fail closed unless both independent attestations are true", () => {
+test("LIVE is fail closed even with caller-supplied flags", () => {
   for (const props of [{}, {mode:"LIVE"}, {mode:"LIVE",liveAttested:true}, {mode:"LIVE",tenantAuthorized:true}, {mode:"live",liveAttested:true,tenantAuthorized:true}, {mode:"LIVE",liveAttested:1,tenantAuthorized:true}]) {
     assert.deepEqual(resolveV30Presentation(props), {mode:"UNKNOWN",trust:"UNVERIFIED",live:false});
   }
-  assert.deepEqual(resolveV30Presentation({mode:"LIVE",liveAttested:true,tenantAuthorized:true}), {mode:"LIVE",trust:"ATTESTED",live:true});
+  assert.deepEqual(resolveV30Presentation({mode:"LIVE",liveAttested:true,tenantAuthorized:true}), {mode:"UNKNOWN",trust:"UNVERIFIED",live:false});
+  assert.match(renderV30Navigation({mode:"LIVE",liveAttested:true,tenantAuthorized:true}), /data-live="false"/);
 });
 
 test("DEMO and REPLAY remain visibly non-LIVE even with attestations", () => {
