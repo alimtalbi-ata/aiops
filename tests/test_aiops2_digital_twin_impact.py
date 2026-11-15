@@ -148,3 +148,14 @@ def test_twin_rejects_path_depth_above_100_without_partial_proofs():
     assert result["resource_budget_exhausted"] is True
     assert result["impact_state"] == "UNKNOWN"
     assert result["paths"] == []
+
+
+
+def test_twin_accepts_path_depth_at_100_node_boundary():
+    nodes = ["san-01"] + [f"hop-{i}" for i in range(98)] + ["payments"]
+    graph = [edge(src, dst) for src, dst in zip(nodes, nodes[1:])]
+    result = resolve_impact(incident(), graph, as_of=NOW)
+    assert result["resource_budget_exhausted"] is False
+    assert result["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+    assert result["paths"][0]["nodes"] == nodes
+    assert result["live_remediation_authorized"] is False
