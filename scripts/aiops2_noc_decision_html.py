@@ -37,6 +37,8 @@ def render_computed_noc_html(projection: object) -> str:
                 or not isinstance(item.get("analyst"), dict)
                 or not isinstance(item.get("critic"), dict)
                 or item["critic"].get("root_cause_confirmed") is not False
+                or item["critic"].get("citations_valid") is not True
+                or item["analyst"].get("kind") != "HYPOTHESIS_NOT_ROOT_CAUSE"
                 or item["critic"].get("runtime_attested") is not False
                 or item["critic"].get("disposition") not in (
                     "SUPPORTED_SYNTHETIC_HYPOTHESIS", "NEEDS_MORE_EVIDENCE")
