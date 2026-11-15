@@ -175,3 +175,34 @@ def test_resource_action_matrix_denies_invalid_pairs_before_resolvers():
         assert result.allowed is False
         assert result.live_remediation_authorized is False
     assert calls == []
+
+
+def test_reference_policy_rejects_excessive_freshness_and_broken_timezones():
+    from datetime import tzinfo
+
+    class BrokenTimezone(tzinfo):
+        def utcoffset(self, dt):
+            raise ValueError("unverifiable clock")
+        def dst(self, dt):
+            return timedelta(0)
+
+    owner_calls = []
+    def owner(_):
+        owner_calls.append("owner")
+        return "tenant-a"
+
+    for invalid in (
+        replace(grant_for(), expires_at=NOW + timedelta(minutes=5, microseconds=1)),
+        replace(grant_for(), expires_at=NOW + timedelta(days=1)),
+        replace(grant_for(), expires_at=datetime(2026, 11, 15, tzinfo=BrokenTimezone())),
+    ):
+        decision = authorize(REQUEST, resolve_grant=lambda _, g=invalid: g,
+                             resolve_run_tenant=owner, now=NOW)
+        assert decision.allowed is False
+        assert decision.live_remediation_authorized is False
+    decision = authorize(REQUEST, resolve_grant=lambda _: grant_for(),
+                         resolve_run_tenant=owner,
+                         now=datetime(2026, 11, 15, tzinfo=BrokenTimezone()))
+    assert decision.allowed is False
+    assert owner_calls == []
+    assert decide().allowed is True  # Exactly five minutes remains permitted.
