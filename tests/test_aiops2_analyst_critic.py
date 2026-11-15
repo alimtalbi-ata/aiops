@@ -187,3 +187,17 @@ def test_analyst_accepts_path_count_at_boundary():
     assert result["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
     assert result["critic"]["root_cause_confirmed"] is False
     assert result["policy_disposition"] == "DENY_LIVE"
+
+
+@pytest.mark.parametrize("count,accepted", [(100, True), (101, False)])
+def test_analyst_enforces_incident_ci_origin_budget(count, accepted):
+    incident, impact = inputs()
+    template = incident["events"][0]
+    incident["events"] = [dict(template, ci_id=f"ci-{i}") for i in range(count)]
+    if accepted:
+        result = analyze_and_critique(incident, dict(impact, impact_state="UNKNOWN", paths=[]))
+        assert result["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
+        assert result["policy_disposition"] == "DENY_LIVE"
+    else:
+        with pytest.raises(InvalidEvent, match="incident CI origin budget exceeded"):
+            analyze_and_critique(incident, impact)
