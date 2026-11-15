@@ -152,3 +152,26 @@ def test_malformed_request_is_denied_before_any_resolver_call():
         assert decision.allowed is False
         assert decision.live_remediation_authorized is False
     assert calls == []
+
+
+def test_resource_action_matrix_denies_invalid_pairs_before_resolvers():
+    calls = []
+
+    def resolver(value):
+        calls.append(value)
+        raise AssertionError("invalid action must not reach authority or Run lookup")
+
+    for resource, action in (
+        ("core.run", "simulate"),
+        ("twin.impact", "simulate"),
+        ("copilot.context", "simulate"),
+        ("demo.command", "read"),
+        ("demo.command", "execute_live"),
+        ("unknown.resource", "read"),
+    ):
+        request = replace(REQUEST, resource=resource, action=action)
+        result = authorize(request, resolve_grant=resolver,
+                           resolve_run_tenant=resolver, now=NOW)
+        assert result.allowed is False
+        assert result.live_remediation_authorized is False
+    assert calls == []
