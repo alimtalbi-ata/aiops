@@ -12,7 +12,7 @@
 - Twin: adapt qualified dependency graph behind canonical service/CI contract, not an invented live graph.
 
 ## Safety contract
-`resolveV30Presentation` only renders LIVE when both `liveAttested === true` and `tenantAuthorized === true` are supplied. **These flags are not authentication or attestation**; server must validate and scope them, and deny unauthorized access regardless of UI. Missing/contradictory mode yields UNKNOWN/UNVERIFIED. DEMO and REPLAY always remain non-LIVE. The static anchors do not enable LIVE actions.
+`resolveV30Presentation` **never renders LIVE**: caller-supplied `liveAttested` and `tenantAuthorized` flags are untrusted presentation inputs, not authentication or attestation. Even when both are `true`, mode `LIVE` resolves to `UNKNOWN / UNVERIFIED` with `live: false`. A future LIVE implementation requires a reviewed server-side tenant-scoped authorization and provenance contract, plus dedicated integration tests; no such contract is implemented in this PR. Missing/contradictory mode yields UNKNOWN/UNVERIFIED. DEMO and REPLAY always remain non-LIVE. The static anchors do not enable LIVE actions.
 
 ## Qualification / handoff
 Run `node --test app/portal/components/v30_safe_navigation.test.mjs` on the exact PR HEAD. Then architect must connect actual routes, test 320/768/1440 px keyboard/screen-reader focus and WCAG contrast, verify tenant isolation, CSP, Grafana/GLPI/Twin contracts, LIVE fail-closed API, and browser screenshots at exact SHA. **Browser, runtime, connector and Debian tests: UNKNOWN.** A standalone component is not a finished V30 experience.
