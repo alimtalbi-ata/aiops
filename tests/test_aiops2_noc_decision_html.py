@@ -164,7 +164,9 @@ def test_renderer_escapes_untrusted_path_nodes():
 def test_renderer_accepts_valid_sha256_evidence_on_synthetic_path():
     """A well-formed SHA-256 must not be rejected by the end anchor."""
     p = projection()
-    p["decisions"][0]["impact_paths"][0]["evidence_sha256"] = ["0123456789abcdef" * 4]
+    digest = "0123456789abcdef" * 4
+    p["decisions"][0]["impact_paths"][0]["evidence_sha256"] = [digest]
+    p["decisions"][0]["analyst"]["evidence_sha256"] = sorted(["a" * 64, digest])
     html = render_computed_noc_html(p)
     assert "san-01 → payments" in html
 
@@ -259,6 +261,7 @@ def test_renderer_rejects_unrelated_origin_even_with_valid_digest():
 def test_renderer_accepts_one_of_multiple_incident_origins():
     p = projection()
     p["decisions"][0]["incident_ci_ids"] = ["payments-api", "san-01"]
+    p["decisions"][0]["event_count"] = 2
     assert "san-01 → payments" in render_computed_noc_html(p)
 
 
