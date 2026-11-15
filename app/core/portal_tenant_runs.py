@@ -68,3 +68,32 @@ def read_runs_for_bearer(connect, *, bearer_token: str, limit: int = MAX_RUNS) -
                 )
     finally:
         connection.close()
+
+
+# Exact-Run read is authorized by Core's own tenant bindings and actor grants.
+# No Portal-supplied tenant is used; a missing row reveals no Run metadata.
+EXACT_RUN_FOR_ACTOR_SQL = """
+select r.run_id, r.incident_id, r.mode, r.scenario_id, r.status,
+       r.version, r.overall_confidence, r.created_at, r.started_at,
+       r.completed_at
+from aiops.runs as r
+join aiops.portal_run_tenant_bindings as b on b.run_id = r.run_id
+join aiops.portal_actor_tenant_grants as g on g.tenant_id = b.tenant_id
+where r.run_id = %s and g.actor_id = %s and g.revoked_at is null
+limit 1
+"""
+
+
+def read_exact_run_for_verified_actor(cursor, *, actor_id: str, run_id: str) -> dict | None:
+    """Core-owned tenant-scoped read, requiring independently verified actor.
+
+    The caller MUST obtain actor_id from principal_from_bearer with durable JTI
+    revocation, not from Portal headers or request JSON. Not mounted as a route.
+    """
+    if not isinstance(actor_id, str) or not ACTOR_ID.fullmatch(actor_id):
+        raise ValueError("verified actor identity required")
+    if (not isinstance(run_id, str) or not run_id.startswith("RUN-")
+            or not ACTOR_ID.fullmatch(run_id)):
+        raise ValueError("invalid exact Run scope")
+    row = cursor.execute(EXACT_RUN_FOR_ACTOR_SQL, (run_id, actor_id)).fetchone()
+    return dict(zip(RUN_FIELDS, row)) if row is not None else None
