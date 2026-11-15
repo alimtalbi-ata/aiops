@@ -187,3 +187,28 @@ def test_renderer_accepts_path_node_at_length_boundary():
     p = projection()
     p["decisions"][0]["impact_paths"][0]["nodes"] = ["x" * 256, "payments"]
     assert "x" * 256 in render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("field", ["incident_id", "tenant_id", "service_id", "priority"])
+def test_renderer_rejects_oversized_display_metadata(field):
+    p = projection()
+    p["decisions"][0][field] = "X" * 257
+    with pytest.raises(ValueError, match="invalid_noc_display_metadata"):
+        render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("field", ["incident_id", "tenant_id", "service_id", "priority"])
+def test_renderer_accepts_display_metadata_at_boundary(field):
+    p = projection()
+    p["decisions"][0][field] = "X" * 256
+    if field == "service_id":
+        p["decisions"][0]["impact_paths"][0]["nodes"][-1] = "X" * 256
+    assert "X" * 256 in render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("field", ["incident_id", "tenant_id", "service_id", "priority"])
+def test_renderer_rejects_nonstring_display_metadata(field):
+    p = projection()
+    p["decisions"][0][field] = 123
+    with pytest.raises(ValueError, match="invalid_noc_display_metadata"):
+        render_computed_noc_html(p)
