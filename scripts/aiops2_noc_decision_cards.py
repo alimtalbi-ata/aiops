@@ -55,7 +55,7 @@ def render_decision_cards(projection: dict) -> str:
             if len(nodes) < 2 or any(not isinstance(n, str) or not n.strip() for n in nodes):
                 raise ValueError("invalid_path_nodes")
             labels.append(" → ".join(e(n) for n in nodes))
-        impact = "; ".join(labels) if labels else "UNKNOWN — dépendance non prouvée"
+        impact = ("UNKNOWN — provenance non attestée ; chemin proposé (simulation) : " + "; ".join(labels)) if labels else "UNKNOWN — dépendance non prouvée"
         cards.append(
             "<article aria-label='Incident " + e(decision.get("incident_id", "UNKNOWN")) + "'>"
             "<h2>" + e(decision.get("incident_id", "UNKNOWN")) + "</h2>"
@@ -65,7 +65,7 @@ def render_decision_cards(projection: dict) -> str:
             "<dt>Impact SAN → Payments (simulation)</dt><dd>" + impact + "</dd>"
             "<dt>Hypothèse Analyst</dt><dd>" + e(analyst["hypothesis"]) + "</dd>"
             "<dt>Réserve Critic</dt><dd>" + e(critic["disposition"]) + " — cause racine non confirmée</dd>"
-            "<dt>Incertitude</dt><dd>Cause racine non confirmée ; données synthétiques uniquement</dd>"
+            "<dt>Incertitude</dt><dd>Cause racine non confirmée ; chemin non attesté (source, fraîcheur et version du graphe UNKNOWN) ; données synthétiques uniquement</dd>"
             "<dt>Prochaine action NOC</dt><dd>" + e(decision.get("next_noc_action", "UNKNOWN")) + "</dd>"
             "<dt>Décision Policy</dt><dd>DENY_LIVE</dd></dl></article>"
         )
