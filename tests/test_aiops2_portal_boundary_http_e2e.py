@@ -31,7 +31,7 @@ def test_real_portal_boundary_over_http_with_server_resolvers():
             return None
         resource, action = ("core.run", "read") if mode["grant"] == "valid" else ("demo.command", "simulate")
         return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
-                         NOW + timedelta(minutes=5), "server-evidence",
+                         NOW + timedelta(minutes=5), "server-evidence", "policy-v1",
                          resource, action)
 
     def owner(run_id):
