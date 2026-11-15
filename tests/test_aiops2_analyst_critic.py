@@ -177,3 +177,13 @@ def test_analyst_accepts_path_depth_at_boundary():
     result = analyze_and_critique(incident, impact)
     assert result["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
     assert result["live_remediation_authorized"] is False
+
+
+
+def test_analyst_accepts_path_count_at_boundary():
+    incident, impact = inputs()
+    impact["paths"] = impact["paths"] * 100
+    result = analyze_and_critique(incident, impact)
+    assert result["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
+    assert result["critic"]["root_cause_confirmed"] is False
+    assert result["policy_disposition"] == "DENY_LIVE"
