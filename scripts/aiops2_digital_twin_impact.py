@@ -19,10 +19,13 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         raise InvalidEvent("invalid incident or edges")
     tenant = incident.get("tenant_id")
     service = incident.get("service_id")
+    incident_id = incident.get("incident_id")
     events = incident.get("events")
     if (not isinstance(tenant, str) or not 1 <= len(tenant) <= 256
             or not isinstance(service, str) or not 1 <= len(service) <= 256):
         raise InvalidEvent("invalid incident identity")
+    if not isinstance(incident_id, str) or not 1 <= len(incident_id) <= 256:
+        raise InvalidEvent("invalid incident id")
     if not isinstance(events, list) or not events:
         raise InvalidEvent("incident has no events")
     if type(max_age_seconds) is not int or max_age_seconds < 0:
@@ -32,7 +35,8 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
     now = _timestamp(as_of)
     sources = set()
     for event in events:
-        if not isinstance(event, dict) or event.get("tenant_id") != tenant:
+        if (not isinstance(event, dict) or event.get("tenant_id") != tenant
+                or event.get("service_id") != service):
             raise InvalidEvent("cross-tenant or invalid incident event")
         ci = event.get("ci_id")
         if not isinstance(ci, str) or not 1 <= len(ci) <= 256:
@@ -113,7 +117,7 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
     paths.sort(key=lambda p: (len(p["nodes"]), p["nodes"], p["evidence_sha256"]))
     return {
         "schema": "aiops2.synthetic-impact-resolution.v1",
-        "incident_id": incident.get("incident_id"),
+        "incident_id": incident_id,
         "tenant_id": tenant,
         "service_id": service,
         "impact_state": "SOURCED_SYNTHETIC_PATH" if paths else "UNKNOWN",
