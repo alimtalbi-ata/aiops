@@ -182,7 +182,12 @@ def test_analyst_accepts_path_depth_at_boundary():
 
 def test_analyst_accepts_path_count_at_boundary():
     incident, impact = inputs()
-    impact["paths"] = impact["paths"] * 100
+    template = impact["paths"][0]
+    impact["paths"] = [
+        {"nodes": ["san-01", f"hop-{i}", "payments"],
+         "evidence_sha256": template["evidence_sha256"] * 2}
+        for i in range(100)
+    ]
     result = analyze_and_critique(incident, impact)
     assert result["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
     assert result["critic"]["root_cause_confirmed"] is False
