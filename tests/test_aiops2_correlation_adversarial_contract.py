@@ -72,3 +72,30 @@ def test_freshness_boundary_and_unknown_no_policy_bypass():
     assert [x["index"] for x in result["rejected"]] == [1, 2]
     assert result["incidents"][0]["impact_state"] == "UNKNOWN"
     assert result["live_remediation_authorized"] is False
+
+
+def test_invalid_tenant_source_and_provenance_are_rejected_fail_closed():
+    cases = [
+        sample(tenant_id=""),
+        sample(source="unknown-monitor"),
+        sample(evidence_sha256="not-a-sha256"),
+        sample(known_at="2026-11-15T11:58:00Z"),
+        sample(observed_at="2026-11-15T11:59:00"),
+    ]
+    result = correlate_events(cases, as_of=NOW)
+    assert result["incidents"] == []
+    assert [item["index"] for item in result["rejected"]] == list(range(len(cases)))
+    assert result["runtime_attested"] is False
+    assert result["live_remediation_authorized"] is False
+
+
+def test_tenant_boundaries_do_not_merge_same_service_or_source_event_id():
+    result = correlate_events([
+        sample(tenant_id="acme", severity="P1"),
+        sample(tenant_id="another", severity="P4", evidence_sha256="b" * 64),
+    ], as_of=NOW)
+    assert len(result["incidents"]) == 2
+    assert {incident["tenant_id"] for incident in result["incidents"]} == {"acme", "another"}
+    assert all(incident["event_count"] == 1 for incident in result["incidents"])
+    assert all(incident["impact_state"] == "UNKNOWN" for incident in result["incidents"])
+    assert all(incident["live_remediation_authorized"] is False for incident in result["incidents"])
