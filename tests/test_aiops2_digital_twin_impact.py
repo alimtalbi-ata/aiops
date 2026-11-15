@@ -119,3 +119,32 @@ def test_twin_edge_identity_boundary_accepted(field):
     result = resolve_impact(incident(), [e], as_of=NOW)
     assert result["rejected_edges"] == []
     assert result["live_remediation_authorized"] is False
+
+
+
+def test_twin_rejects_more_than_100_sourced_paths_without_partial_proofs():
+    graph = [edge("san-01", f"hop-{i}") for i in range(101)]
+    graph += [edge(f"hop-{i}", "payments") for i in range(101)]
+    result = resolve_impact(incident(), graph, as_of=NOW)
+    assert result["resource_budget_exhausted"] is True
+    assert result["impact_state"] == "UNKNOWN"
+    assert result["paths"] == []
+    assert result["live_remediation_authorized"] is False
+
+
+def test_twin_accepts_exactly_100_sourced_paths():
+    graph = [edge("san-01", f"hop-{i}") for i in range(100)]
+    graph += [edge(f"hop-{i}", "payments") for i in range(100)]
+    result = resolve_impact(incident(), graph, as_of=NOW)
+    assert result["resource_budget_exhausted"] is False
+    assert len(result["paths"]) == 100
+    assert result["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+
+
+def test_twin_rejects_path_depth_above_100_without_partial_proofs():
+    nodes = ["san-01"] + [f"hop-{i}" for i in range(99)] + ["payments"]
+    graph = [edge(src, dst) for src, dst in zip(nodes, nodes[1:])]
+    result = resolve_impact(incident(), graph, as_of=NOW)
+    assert result["resource_budget_exhausted"] is True
+    assert result["impact_state"] == "UNKNOWN"
+    assert result["paths"] == []
