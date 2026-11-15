@@ -20,9 +20,8 @@ const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({
 export function resolveV30Presentation({ mode, liveAttested = false, tenantAuthorized = false } = {}) {
   if (mode === "DEMO") return Object.freeze({ mode: "DEMO", trust: "SYNTHETIC", live: false });
   if (mode === "REPLAY") return Object.freeze({ mode: "REPLAY", trust: "HISTORICAL", live: false });
-  if (mode === "LIVE" && liveAttested === true && tenantAuthorized === true) {
-    return Object.freeze({ mode: "LIVE", trust: "ATTESTED", live: true });
-  }
+  // Presentation-only inputs cannot establish server-side attestation or tenant ACL.
+  // Until a trusted server contract is integrated, LIVE always fails closed.
   return Object.freeze({ mode: "UNKNOWN", trust: "UNVERIFIED", live: false });
 }
 
