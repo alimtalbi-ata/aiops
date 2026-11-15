@@ -112,3 +112,43 @@ def test_offline_service_boundary_never_reads_upstream_on_denial():
         assert denied["live_remediation_authorized"] is False
         assert "run_id" not in denied
     assert calls == [("tenant-a", "run-a")], "denied requests must not reach upstream"
+
+
+def test_run_ownership_not_queried_until_grant_is_valid():
+    ownership_calls = []
+
+    def owner(run_id):
+        ownership_calls.append(run_id)
+        return "tenant-a"
+
+    for bad_grant in (
+        None,
+        replace(grant_for(), subject_id="other"),
+        replace(grant_for(), expires_at=NOW),
+        replace(grant_for(), evidence_id=""),
+        replace(grant_for(), expires_at="invalid"),
+    ):
+        result = authorize(REQUEST, resolve_grant=lambda _, g=bad_grant: g,
+                           resolve_run_tenant=owner, now=NOW)
+        assert result.allowed is False
+        assert ownership_calls == []
+
+    result = authorize(REQUEST, resolve_grant=lambda _: grant_for(),
+                       resolve_run_tenant=owner, now=NOW)
+    assert result.allowed is True
+    assert ownership_calls == ["run-a"]
+
+
+def test_malformed_request_is_denied_before_any_resolver_call():
+    calls = []
+
+    def resolver(value):
+        calls.append(value)
+        raise AssertionError("must not be called")
+
+    for request in (None, {}, "tenant-a", 123, replace(REQUEST, run_id=None)):
+        decision = authorize(request, resolve_grant=resolver,
+                             resolve_run_tenant=resolver, now=NOW)
+        assert decision.allowed is False
+        assert decision.live_remediation_authorized is False
+    assert calls == []
