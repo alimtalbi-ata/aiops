@@ -50,6 +50,9 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
                for k in ("from_id", "to_id", "source_id", "evidence_sha256", "observed_at")):
             rejected.append({"index": index, "reason": "missing edge provenance"})
             continue
+        if any(len(edge[field]) > 256 for field in ("from_id", "to_id", "source_id")):
+            rejected.append({"index": index, "reason": "oversized edge identity"})
+            continue
         if len(edge["evidence_sha256"]) != 64 or any(c not in "0123456789abcdef" for c in edge["evidence_sha256"]):
             rejected.append({"index": index, "reason": "invalid edge digest"})
             continue
