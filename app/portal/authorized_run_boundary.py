@@ -24,6 +24,8 @@ class ReadGrant:
     run_id: str
     expires_at: datetime
     evidence_id: str
+    resource: str
+    action: str
 
 
 class UnqualifiedReadPermission(Exception):
@@ -73,6 +75,10 @@ def read_authorized_run(
             scope.subject_id, scope.tenant_id, scope.run_id):
         raise denied
     if not isinstance(grant.evidence_id, str) or not grant.evidence_id.strip():
+        raise denied
+    # A grant for another API, a DEMO command, or a different action cannot
+    # authorize this exact-Run Core read.
+    if grant.resource != "core.run" or grant.action != "read":
         raise denied
     try:
         owner = resolve_run_tenant(scope.run_id)
