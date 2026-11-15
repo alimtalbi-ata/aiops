@@ -215,3 +215,34 @@ def test_duplicate_twin_edge_order_does_not_change_projection():
     second = build_noc_decision([event()], [dict(e), e, downstream], as_of=NOW)
     assert first["decisions"][0]["impact_paths"] == second["decisions"][0]["impact_paths"]
     assert len(first["decisions"][0]["impact_paths"]) == 1
+
+
+
+def test_conflicting_twin_evidence_never_promotes_noc_impact():
+    from aiops2_noc_decision_html import render_computed_noc_html
+    a = edge("san-01", "payments")
+    b = dict(a, evidence_sha256="c" * 64)
+    for receipts in ([a, b], [b, a]):
+        result = build_noc_decision([event()], receipts, as_of=NOW)
+        decision = result["decisions"][0]
+        assert decision["impact_state"] == "UNKNOWN"
+        assert decision["impact_paths"] == []
+        assert decision["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
+        assert decision["next_noc_action"] == "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+        assert len([r for r in decision["rejected_edges"]
+                    if r["reason"] == "conflicting edge evidence"]) == 2
+        assert "UNKNOWN" in render_computed_noc_html(result)
+        assert decision["policy_disposition"] == "DENY_LIVE"
+
+
+def test_independent_twin_route_survives_conflict_end_to_end():
+    from aiops2_noc_decision_html import render_computed_noc_html
+    a = edge("san-01", "storage")
+    b = dict(a, evidence_sha256="c" * 64)
+    independent = edge("san-01", "payments", source_id="independent")
+    result = build_noc_decision([event()], [a, b, independent], as_of=NOW)
+    decision = result["decisions"][0]
+    assert [p["nodes"] for p in decision["impact_paths"]] == [["san-01", "payments"]]
+    assert decision["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
+    assert "san-01 → payments" in render_computed_noc_html(result)
+    assert decision["live_remediation_authorized"] is False
