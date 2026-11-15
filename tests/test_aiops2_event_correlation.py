@@ -126,3 +126,17 @@ def test_conflicting_event_identity_audits_first_and_all_later_receipts():
         {"index": 2, "reason": "conflicting duplicate event identity"},
         {"index": 3, "reason": "conflicting duplicate event identity"},
     ]
+
+
+def test_conflicting_event_receipts_are_reported_in_input_order():
+    result = correlate_events([
+        event(),
+        event(source_event_id="bad", severity="P0"),
+        event(ci_id="other-ci"),
+    ], as_of=NOW)
+    assert result["incidents"] == []
+    assert result["rejected"] == [
+        {"index": 0, "reason": "conflicting duplicate event identity"},
+        {"index": 1, "reason": "invalid severity"},
+        {"index": 2, "reason": "conflicting duplicate event identity"},
+    ]
