@@ -443,7 +443,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             path=str(output / "acme-cockpit-desktop-ci-simulated.png"),
             full_page=True, animations="disabled",
         )
-        self.assertTrue(desktop_png.startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+        self.assertEqual(desktop_png[:8], bytes((137, 80, 78, 71, 13, 10, 26, 10)))
 
         # Small viewport: tables remain inside scroll containers and summary cards stack.
         self.page.set_viewport_size({"width": 390, "height": 844})
