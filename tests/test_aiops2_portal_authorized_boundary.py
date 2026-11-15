@@ -21,7 +21,7 @@ def test_real_portal_boundary_positive_and_denied_paths():
     def grant(scope):
         calls.append("grant")
         return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
-                         NOW + timedelta(minutes=1), "proof-a", "core.run", "read")
+                         NOW + timedelta(minutes=1), "proof-a", "policy-v1", "core.run", "read")
 
     def owner(run_id):
         calls.append("owner")
@@ -56,7 +56,7 @@ def test_real_portal_boundary_positive_and_denied_paths():
 def test_real_portal_boundary_rejects_unqualified_upstream_payload():
     def grant(scope):
         return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
-                         NOW + timedelta(minutes=1), "proof-a", "core.run", "read")
+                         NOW + timedelta(minutes=1), "proof-a", "policy-v1", "core.run", "read")
 
     for payload in (
         {"run_id": "run-a", "tenant_id": "tenant-a",
@@ -103,7 +103,7 @@ def test_resolver_failures_and_malformed_scope_never_reach_reader():
 
     def valid(scope):
         return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
-                         NOW + timedelta(minutes=1), "proof-a", "core.run", "read")
+                         NOW + timedelta(minutes=1), "proof-a", "policy-v1", "core.run", "read")
 
     for owner_resolver in (lambda _: None, lambda _: "tenant-b", unavailable):
         with pytest.raises(UnqualifiedReadPermission):
@@ -132,7 +132,7 @@ def test_malformed_timezone_evidence_fails_closed_before_reader():
     def grant(scope):
         return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
                          datetime(2026, 11, 15, tzinfo=BrokenTimezone()), "proof-a",
-                         "core.run", "read")
+                         "policy-v1", "core.run", "read")
 
     with pytest.raises(UnqualifiedReadPermission):
         read_authorized_run(SCOPE, resolve_grant=grant,
@@ -156,7 +156,7 @@ def test_grant_for_other_resource_or_action_cannot_reach_owner_or_core():
                              ("core.run", "write")):
         def grant(scope):
             return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
-                             NOW + timedelta(minutes=1), "proof-a", resource, action)
+                             NOW + timedelta(minutes=1), "proof-a", "policy-v1", resource, action)
         with pytest.raises(UnqualifiedReadPermission):
             read_authorized_run(SCOPE, resolve_grant=grant,
                                 resolve_run_tenant=forbidden,
