@@ -93,3 +93,24 @@ def test_integrated_portal_http_e2e_offline_and_write_denial(monkeypatch):
     for route in ("/demo/aiops2-computed-noc", "/demo/api/aiops2-computed-noc"):
         for method in ("post", "put", "patch", "delete"):
             assert getattr(client, method)(route).status_code == 405
+
+
+def test_integrated_portal_protected_reads_and_commands_fail_closed(monkeypatch):
+    """Unconfigured portal must not expose protected runtime data or accept commands."""
+    for key in ("PORTAL_READ_TOKEN", "PORTAL_OPERATOR_TOKEN", "PORTAL_READ_TOKEN_SHA256",
+                "PORTAL_OPERATOR_TOKEN_SHA256"):
+        monkeypatch.delenv(key, raising=False)
+    def no_network(*args, **kwargs):
+        raise AssertionError("unexpected external network I/O")
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    monkeypatch.setattr(socket.socket, "connect_ex", no_network)
+    client = TestClient(app)
+    for path in ("/api/portal/bootstrap", "/api/portal/components",
+                 "/api/noc/runtime-state", "/api/noc/correlation"):
+        response = client.get(path)
+        assert response.status_code in (401, 403, 503), (path, response.text)
+        assert "tenant_acl_qualified" not in response.text
+    for path in ("/api/demo", "/api/copilot", "/api/demo/explore-story/control"):
+        response = client.post(path, json={})
+        assert response.status_code in (401, 403, 503), (path, response.text)
+        assert "DEMO_SUBMITTED" not in response.text
