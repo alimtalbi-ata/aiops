@@ -53,13 +53,21 @@ jobs:
           PY
       - name: Run deterministic synthetic contracts
         run: |
-          python -m pytest -q \
+          python -m pytest -q --junitxml=artifacts/pure-contracts.xml \
             tests/test_aiops2_event_correlation.py \
             tests/test_aiops2_digital_twin_impact.py \
             tests/test_aiops2_analyst_critic.py \
             tests/test_aiops2_noc_decision.py \
             tests/test_aiops2_noc_decision_html.py
       - name: Run isolated computed NOC route tests
-        run: python -m pytest -q tests/test_aiops2_computed_noc_portal.py
+        run: python -m pytest -q --junitxml=artifacts/isolated-portal.xml tests/test_aiops2_computed_noc_portal.py
       - name: Run integrated portal navigation tests
-        run: python -m pytest -q tests/test_aiops2_computed_noc_navigation.py
+        run: python -m pytest -q --junitxml=artifacts/integrated-portal.xml tests/test_aiops2_computed_noc_navigation.py
+      - name: Preserve synthetic test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-synthetic-test-evidence
+          path: artifacts/*.xml
+          if-no-files-found: warn
+          retention-days: 14
