@@ -6,7 +6,13 @@ import copy
 import unittest
 
 from scripts.aiops2_signal_envelope_guard_20261115 import normalize, deduplicate
-from tests.test_aiops2_signal_envelope_guard_20261115 import BASE, NOW
+from scripts.aiops2_signal_envelope_guard_20261115 import SCHEMA
+
+NOW = "2026-11-15T20:00:00Z"
+BASE = dict(schema=SCHEMA, mode="DEMO", tenant="acme-demo", source="prometheus",
+            source_instance="synthetic-1", event_id="evt-1",
+            observed_at="2026-11-15T19:59:00Z", kind="metric", state="FIRING",
+            metric=dict(name="synthetic_latency", value=4.0, unit="seconds", window_seconds=60))
 
 
 class EnvelopeBoundaryRegression(unittest.TestCase):
