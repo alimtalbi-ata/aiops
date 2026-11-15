@@ -53,6 +53,9 @@ def render_computed_noc_html(projection: object) -> str:
                 or not all(isinstance(ci, str) and 0 < len(ci) <= 256 for ci in origins)
                 or len(set(origins)) != len(origins)):
             raise ValueError("invalid_noc_incident_origins")
+        event_count = item.get("event_count")
+        if (type(event_count) is not int or event_count < len(origins)):
+            raise ValueError("invalid_noc_event_count")
         paths = item["impact_paths"]
         if len(paths) > 100:
             raise ValueError("noc_projection_path_budget_exceeded")
