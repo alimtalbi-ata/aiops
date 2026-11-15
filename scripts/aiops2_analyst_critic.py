@@ -23,7 +23,8 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         raise InvalidEvent("incident and impact must be objects")
     tenant, incident_id, service = (
         incident.get("tenant_id"), incident.get("incident_id"), incident.get("service_id"))
-    if any(not isinstance(x, str) or not x for x in (tenant, incident_id, service)):
+    if any(not isinstance(x, str) or not x or len(x) > 256
+           for x in (tenant, incident_id, service)):
         raise InvalidEvent("invalid incident identity")
     if (impact.get("tenant_id") != tenant or impact.get("incident_id") != incident_id
             or impact.get("service_id") != service):
@@ -46,7 +47,7 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
             raise InvalidEvent("invalid event evidence")
         evidence.add(digest)
         ci = event.get("ci_id")
-        if not isinstance(ci, str) or not ci:
+        if not isinstance(ci, str) or not ci or len(ci) > 256:
             raise InvalidEvent("invalid incident CI")
         incident_cis.add(ci)
     if type(impact.get("resource_budget_exhausted")) is not bool:
@@ -67,7 +68,7 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
             raise InvalidEvent("invalid impact path")
         nodes, hashes = path.get("nodes"), path.get("evidence_sha256")
         if (not isinstance(nodes, list) or len(nodes) < 2 or
-                not all(isinstance(n, str) and n for n in nodes) or
+                not all(isinstance(n, str) and n and len(n) <= 256 for n in nodes) or
                 nodes[0] not in incident_cis or nodes[-1] != service or
                 len(set(nodes)) != len(nodes) or not isinstance(hashes, list) or
                 len(hashes) != len(nodes) - 1 or
