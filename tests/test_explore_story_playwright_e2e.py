@@ -482,6 +482,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "route": "/demo/acme-incident-cockpit",
             "screenshot_file": "acme-cockpit-mobile-ci-simulated.png",
             "screenshot_sha256": hashlib.sha256(screenshot).hexdigest(),
+            "desktop_screenshot_file": "acme-cockpit-desktop-ci-simulated.png",
+            "desktop_screenshot_sha256": hashlib.sha256(desktop_png).hexdigest(),
             "fixture_sha256": re.search(
                 r"[a-f0-9]{64}", self.page.locator("main").inner_text()
             ).group(0),
