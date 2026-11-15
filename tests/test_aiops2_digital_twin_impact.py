@@ -13,7 +13,7 @@ NOW = "2026-11-15T12:00:00Z"
 
 def incident(tenant="acme"):
     return {"incident_id": "SYN-1", "tenant_id": tenant, "service_id": "payments",
-            "events": [{"tenant_id": tenant, "ci_id": "san-01"}]}
+            "events": [{"tenant_id": tenant, "service_id": "payments", "ci_id": "san-01"}]}
 
 
 def edge(src, dst, **kw):
