@@ -137,3 +137,31 @@ def test_deduplication_is_permutation_invariant_for_identical_receipts():
     assert a["rejected"] == b["rejected"] == []
     assert a["incidents"][0]["event_count"] == 2
     assert a["live_remediation_authorized"] is False
+
+
+def test_untrusted_authority_and_twin_claims_cannot_escalate_live():
+    forged = sample(
+        runtime_attested=True, live_remediation_authorized=True,
+        impact_state="CONFIRMED", causal_link="san-01->payments",
+        twin_edge={"source": "san-01", "target": "payments", "verified": True},
+        policy_decision="ALLOW", hitl_approved=True,
+    )
+    result = correlate_events([forged], as_of=NOW)
+    incident, = result["incidents"]
+    assert incident["impact_state"] == "UNKNOWN"
+    assert incident["runtime_attested"] is False
+    assert incident["live_remediation_authorized"] is False
+    assert result["runtime_attested"] is False
+    assert result["live_remediation_authorized"] is False
+    for untrusted in ("causal_link", "twin_edge", "policy_decision", "hitl_approved"):
+        assert untrusted not in incident
+        assert untrusted not in incident["events"][0]
+
+
+def test_invalid_freshness_configuration_is_rejected_not_bypassed():
+    from aiops2_event_correlation import InvalidEvent
+    import pytest
+
+    for invalid in (-1, True, 1.5, "900", None):
+        with pytest.raises(InvalidEvent, match="invalid max age"):
+            correlate_events([sample()], as_of=NOW, max_age_seconds=invalid)
