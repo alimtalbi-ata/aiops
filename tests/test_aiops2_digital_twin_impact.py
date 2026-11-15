@@ -69,3 +69,26 @@ def test_invalid_incident_cross_tenant_fails_closed():
     with pytest.raises(InvalidEvent):
         resolve_impact({"tenant_id": "acme", "service_id": "payments",
                         "events": [{"tenant_id": "other", "ci_id": "san-01"}]}, [], as_of=NOW)
+
+
+
+def test_path_budget_exhaustion_fails_closed_without_partial_proofs():
+    graph = [edge("san-01", "storage"), edge("storage", "payments")]
+    result = resolve_impact(incident(), graph, as_of=NOW, max_path_expansions=1)
+    assert result["resource_budget_exhausted"] is True
+    assert result["impact_state"] == "UNKNOWN"
+    assert result["paths"] == []
+    assert result["live_remediation_authorized"] is False
+
+
+def test_path_budget_sufficient_for_sourced_path():
+    graph = [edge("san-01", "storage"), edge("storage", "payments")]
+    result = resolve_impact(incident(), graph, as_of=NOW, max_path_expansions=3)
+    assert result["resource_budget_exhausted"] is False
+    assert result["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+
+
+@pytest.mark.parametrize("budget", [0, -1, True, 1.5])
+def test_invalid_path_budget_rejected(budget):
+    with pytest.raises(InvalidEvent):
+        resolve_impact(incident(), [], as_of=NOW, max_path_expansions=budget)
