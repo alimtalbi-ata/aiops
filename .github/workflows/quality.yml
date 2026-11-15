@@ -38,6 +38,8 @@ jobs:
         run: node --check app/portal/portal_navigation_client.js
       - name: Portal navigation DOM contract regression (unit-only)
         run: node --test tests/test_portal_navigation_client.mjs
+      - name: V30 six-domain safe navigation and LIVE fail-closed contract (unit-only)
+        run: node --test app/portal/components/v30_safe_navigation.test.mjs
       - name: Portal authenticated integration navigation tests
         run: python -m unittest discover -s tests -p "test_portal_navigation_auth.py" -v
       - name: Portal Core and Twin read model failure tests
