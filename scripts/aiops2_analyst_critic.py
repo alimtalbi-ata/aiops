@@ -26,6 +26,11 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
     if (impact.get("tenant_id") != tenant or impact.get("incident_id") != incident_id
             or impact.get("service_id") != service):
         raise InvalidEvent("impact identity mismatch")
+    # Upstream synthetic evidence cannot be promoted into a LIVE attestation.
+    for upstream in (incident, impact):
+        if (upstream.get("runtime_attested") is not False
+                or upstream.get("live_remediation_authorized") is not False):
+            raise InvalidEvent("unqualified upstream runtime or live claim")
     events = incident.get("events")
     if not isinstance(events, list) or not events:
         raise InvalidEvent("missing incident events")
