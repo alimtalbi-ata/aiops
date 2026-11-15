@@ -36,6 +36,7 @@ def test_unknown_path_is_explicit():
     p["decisions"][0]["impact_paths"] = []
     p["decisions"][0]["analyst"]["impact_state"] = "UNKNOWN"
     p["decisions"][0]["critic"]["disposition"] = "NEEDS_MORE_EVIDENCE"
+    p["decisions"][0]["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
     assert "UNKNOWN" in render_computed_noc_html(p)
 
 
@@ -77,4 +78,15 @@ def test_renderer_rejects_contradictory_or_malformed_evidence(mutation):
     p = projection()
     mutation(p["decisions"][0])
     with pytest.raises(ValueError):
+        render_computed_noc_html(p)
+
+
+
+@pytest.mark.parametrize("action", [
+    "EXECUTE_REMEDIATION", "ALLOW_LIVE", "COLLECT_MISSING_DEPENDENCY_EVIDENCE", None
+])
+def test_renderer_refuses_action_inconsistent_with_sourced_impact(action):
+    p = projection()
+    p["decisions"][0]["next_noc_action"] = action
+    with pytest.raises(ValueError, match="contradictory_noc_next_action"):
         render_computed_noc_html(p)
