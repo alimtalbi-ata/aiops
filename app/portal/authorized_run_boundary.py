@@ -24,6 +24,7 @@ class ReadGrant:
     run_id: str
     expires_at: datetime
     evidence_id: str
+    policy_version: str
     resource: str
     action: str
 
@@ -74,7 +75,8 @@ def read_authorized_run(
     if (grant.subject_id, grant.tenant_id, grant.run_id) != (
             scope.subject_id, scope.tenant_id, scope.run_id):
         raise denied
-    if not isinstance(grant.evidence_id, str) or not grant.evidence_id.strip():
+    if any(not isinstance(value, str) or not value.strip()
+           for value in (grant.evidence_id, grant.policy_version)):
         raise denied
     # A grant for another API, a DEMO command, or a different action cannot
     # authorize this exact-Run Core read.
