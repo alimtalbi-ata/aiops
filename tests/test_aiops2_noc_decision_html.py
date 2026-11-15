@@ -106,3 +106,28 @@ def test_renderer_refuses_unsourced_or_forged_path_provenance(mutation):
     mutation(p["decisions"][0]["impact_paths"][0])
     with pytest.raises(ValueError, match="invalid_noc_path"):
         render_computed_noc_html(p)
+
+
+
+def test_renderer_rejects_excessive_decision_count():
+    p = projection()
+    p["decisions"] = p["decisions"] * 101
+    with pytest.raises(ValueError, match="decision_budget_exceeded"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_excessive_path_count():
+    p = projection()
+    item = p["decisions"][0]
+    item["impact_paths"] = item["impact_paths"] * 101
+    with pytest.raises(ValueError, match="path_budget_exceeded"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_excessive_path_depth():
+    p = projection()
+    path = p["decisions"][0]["impact_paths"][0]
+    path["nodes"] = ["san-01"] + [f"hop-{i}" for i in range(100)] + ["payments"]
+    path["evidence_sha256"] = ["b" * 64] * (len(path["nodes"]) - 1)
+    with pytest.raises(ValueError, match="invalid_noc_path"):
+        render_computed_noc_html(p)
