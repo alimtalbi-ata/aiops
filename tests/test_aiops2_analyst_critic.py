@@ -88,3 +88,20 @@ def test_cyclic_forged_path_is_rejected():
     forged["paths"][0]["evidence_sha256"] = ["b" * 64, "b" * 64]
     with pytest.raises(InvalidEvent, match="invalid impact path provenance"):
         analyze_and_critique(incident, forged)
+
+
+
+@pytest.mark.parametrize("which,field,value", [
+    ("incident", "runtime_attested", True),
+    ("impact", "runtime_attested", True),
+    ("incident", "live_remediation_authorized", True),
+    ("impact", "live_remediation_authorized", True),
+    ("incident", "runtime_attested", None),
+    ("impact", "live_remediation_authorized", None),
+])
+def test_upstream_live_claims_and_missing_guards_fail_closed(which, field, value):
+    incident, impact = inputs()
+    forged_incident, forged_impact = copy.deepcopy(incident), copy.deepcopy(impact)
+    (forged_incident if which == "incident" else forged_impact)[field] = value
+    with pytest.raises(InvalidEvent, match="unqualified upstream"):
+        analyze_and_critique(forged_incident, forged_impact)
