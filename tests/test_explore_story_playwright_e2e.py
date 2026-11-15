@@ -405,6 +405,13 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertIn("UNKNOWN — preuves runtime", self.page.locator("body").inner_text())
         self.assertIn("NO-GO LIVE", self.page.locator("body").inner_text())
         self.assertEqual(self.page.locator("table").count(), 4)
+        # Check each semantic table independently, not just the total number
+        # of rows; a missing lifecycle stage cannot hide behind another table.
+        self.assertEqual(
+            [table.locator("tbody tr").count()
+             for table in self.page.locator("table").all()],
+            [9, 9, 9, 8],
+        )
         self.assertEqual(self.page.locator("form").count(), 0)
         self.assertEqual(self.page.locator("script").count(), 0)
 
@@ -413,6 +420,12 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.page.reload()
         self.assertEqual(self.page.locator("div.table-scroll table").count(), 4)
         self.assertEqual(self.page.locator(".demo-card").count(), 3)
+        self.assertEqual(
+            [table.locator("tbody tr").count()
+             for table in self.page.locator("table").all()],
+            [9, 9, 9, 8],
+        )
+        self.assertIn("NO-GO LIVE", self.page.locator("#verdict").inner_text())
         self.assertTrue(self.page.locator("body").evaluate(
             "el => el.scrollWidth <= window.innerWidth"
         ), "cockpit creates page-level horizontal overflow on mobile")
