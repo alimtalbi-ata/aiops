@@ -74,6 +74,14 @@ def render_computed_noc_html(projection: object) -> str:
                            else "COLLECT_MISSING_DEPENDENCY_EVIDENCE")
         if item.get("next_noc_action") != expected_action:
             raise ValueError("contradictory_noc_next_action")
+        citations = item["analyst"].get("evidence_sha256")
+        if (not isinstance(citations, list) or not citations
+                or len(citations) > 10000
+                or not all(isinstance(digest, str) and _DIGEST.fullmatch(digest)
+                           for digest in citations)
+                or citations != sorted(set(citations))):
+            raise ValueError("invalid_noc_analyst_citations")
+        citation_set = set(citations)
         path_labels = []
         for path in paths:
             if (not isinstance(path, dict) or not isinstance(path.get("nodes"), list)
@@ -89,6 +97,8 @@ def render_computed_noc_html(projection: object) -> str:
                     or not all(isinstance(digest, str) and _DIGEST.fullmatch(digest)
                                for digest in path["evidence_sha256"])):
                 raise ValueError("invalid_noc_path")
+            if not set(path["evidence_sha256"]).issubset(citation_set):
+                raise ValueError("uncited_noc_dependency_path")
             path_labels.append(" → ".join(safe(node) for node in path["nodes"]))
         path_html = "; ".join(path_labels) if path_labels else "UNKNOWN — preuve de dépendance manquante"
         rows.append(
