@@ -60,13 +60,15 @@ def authorize(
         request.resource, request.action
     )):
         return denied
-    if request.action not in ("read", "simulate"):
-        return denied
-    if request.resource not in (
-        "core.run", "twin.impact", "copilot.context", "demo.command"
-    ):
-        return denied
-    if request.resource == "demo.command" and request.action != "simulate":
+    # Explicit resource/action matrix: read-only data can never be simulated
+    # as a command, and the DEMO command cannot be read as a data resource.
+    permitted_actions = {
+        "core.run": "read",
+        "twin.impact": "read",
+        "copilot.context": "read",
+        "demo.command": "simulate",
+    }
+    if permitted_actions.get(request.resource) != request.action:
         return denied
     try:
         grant = resolve_grant(request)
