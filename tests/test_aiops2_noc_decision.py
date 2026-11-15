@@ -271,3 +271,21 @@ def test_cross_source_agreement_renders_single_noc_path():
     assert len(result["decisions"][0]["impact_paths"]) == 1
     assert "san-01 → payments" in render_computed_noc_html(result)
     assert result["decisions"][0]["live_remediation_authorized"] is False
+
+
+
+def test_quarantined_source_conflict_cannot_be_masked_in_noc_projection():
+    from aiops2_noc_decision_html import render_computed_noc_html
+    a = edge("san-01", "payments", source_id="cmdb-a")
+    b = dict(a, evidence_sha256="c" * 64)
+    c = edge("san-01", "payments", source_id="cmdb-b")
+    for receipts in ([a, b, c], [c, b, a]):
+        result = build_noc_decision([event()], receipts, as_of=NOW)
+        decision = result["decisions"][0]
+        assert decision["impact_state"] == "UNKNOWN"
+        assert decision["impact_paths"] == []
+        assert decision["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
+        assert decision["next_noc_action"] == "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+        assert "UNKNOWN" in render_computed_noc_html(result)
+        assert decision["policy_disposition"] == "DENY_LIVE"
+        assert decision["live_remediation_authorized"] is False
