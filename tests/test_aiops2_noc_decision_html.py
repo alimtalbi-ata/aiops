@@ -259,3 +259,17 @@ def test_renderer_accepts_one_of_multiple_incident_origins():
     p = projection()
     p["decisions"][0]["incident_ci_ids"] = ["payments-api", "san-01"]
     assert "san-01 → payments" in render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda d: d["critic"].update(citations_valid=False),
+    lambda d: d["critic"].update(citations_valid=None),
+    lambda d: d["critic"].pop("citations_valid"),
+    lambda d: d["analyst"].update(kind="CONFIRMED_ROOT_CAUSE"),
+    lambda d: d["analyst"].pop("kind"),
+])
+def test_renderer_rejects_unqualified_citations_or_promoted_analyst_claim(mutation):
+    p = projection()
+    mutation(p["decisions"][0])
+    with pytest.raises(ValueError, match="unqualified_noc_decision"):
+        render_computed_noc_html(p)
