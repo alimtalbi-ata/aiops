@@ -46,6 +46,11 @@ def render_computed_noc_html(projection: object) -> str:
         if not all(isinstance(item.get(field), str) and 0 < len(item[field]) <= 256
                    for field in ("incident_id", "tenant_id", "service_id", "priority")):
             raise ValueError("invalid_noc_display_metadata")
+        origins = item.get("incident_ci_ids")
+        if (not isinstance(origins, list) or not origins or len(origins) > 100
+                or not all(isinstance(ci, str) and 0 < len(ci) <= 256 for ci in origins)
+                or len(set(origins)) != len(origins)):
+            raise ValueError("invalid_noc_incident_origins")
         paths = item["impact_paths"]
         if len(paths) > 100:
             raise ValueError("noc_projection_path_budget_exceeded")
@@ -71,6 +76,7 @@ def render_computed_noc_html(projection: object) -> str:
                     or not all(isinstance(node, str) and node and len(node) <= 256
                                for node in path["nodes"])
                     or len(set(path["nodes"])) != len(path["nodes"])
+                    or path["nodes"][0] not in origins
                     or path["nodes"][-1] != item.get("service_id")
                     or not isinstance(path.get("evidence_sha256"), list)
                     or len(path["evidence_sha256"]) != len(path["nodes"]) - 1
