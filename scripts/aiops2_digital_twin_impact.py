@@ -92,6 +92,22 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
             e = min((edge for _, edge in claims),
                     key=lambda edge: _timestamp(edge["observed_at"]))
             graph.setdefault(e["from_id"], []).append(e)
+    # The route identity is (from_id, to_id), irrespective of source.
+    # Competing digests quarantine the entire relation; identical digests
+    # collapse to one deterministic representative.
+    for origin, neighbors in list(graph.items()):
+        by_destination = {}
+        for edge in neighbors:
+            by_destination.setdefault(edge["to_id"], []).append(edge)
+        graph[origin] = []
+        for candidates in by_destination.values():
+            if len({edge["evidence_sha256"] for edge in candidates}) > 1:
+                rejected.extend({"index": i, "reason": "conflicting relation evidence"}
+                                for candidate in candidates
+                                for i, raw in enumerate(edges) if raw is candidate)
+            else:
+                graph[origin].append(min(candidates, key=lambda edge: (
+                    edge["source_id"], _timestamp(edge["observed_at"]))))
     rejected.sort(key=lambda entry: entry["index"])
     for neighbors in graph.values():
         neighbors.sort(key=lambda e: (e["to_id"], e["source_id"], e["evidence_sha256"]))
