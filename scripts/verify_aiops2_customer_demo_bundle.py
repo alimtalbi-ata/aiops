@@ -91,7 +91,11 @@ def main() -> int:
                                         repository=args.repository, head_sha=args.head_sha,
                                         run_id=args.run_id, run_attempt=args.run_attempt)
     if args.report is not None:
-        args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        try:
+            args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        except OSError as exc:
+            print(f"BLOCKED: cannot write qualification report: {exc.__class__.__name__}", file=sys.stderr)
+            return 1
     if report["artifact_consistency"] != "PASS":
         print("BLOCKED: customer package and Docker smoke do not share a qualified synthetic fixture/run", file=sys.stderr)
         return 1
