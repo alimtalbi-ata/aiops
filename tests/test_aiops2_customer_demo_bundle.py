@@ -247,3 +247,21 @@ def test_bundle_rejects_equally_invalid_shared_identifiers_even_if_subvalidators
             pkg, smoke_dir, repository="alimtalbi-ata/aiops",
             head_sha="a" * 40, run_id="123", run_attempt="1",
         )
+
+
+def test_qualification_cli_fails_closed_if_report_destination_is_unwritable(
+    tmp_path, monkeypatch, capsys,
+):
+    from verify_aiops2_customer_demo_bundle import main
+    missing_parent = tmp_path / "nonexistent" / "qualification.json"
+    monkeypatch.setattr(sys, "argv", [
+        "verify_aiops2_customer_demo_bundle.py", str(tmp_path / "package"),
+        str(tmp_path / "smoke"), "--repository", "alimtalbi-ata/aiops",
+        "--head-sha", "a" * 40, "--run-id", "123", "--run-attempt", "1",
+        "--report", str(missing_parent),
+    ])
+    with patch("verify_aiops2_customer_demo_bundle.verify_bundle",
+               return_value=True):
+        assert main() == 1
+    assert "BLOCKED: cannot write qualification report" in capsys.readouterr().err
+    assert not missing_parent.exists()
