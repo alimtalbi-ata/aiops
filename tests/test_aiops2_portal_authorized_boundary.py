@@ -73,3 +73,41 @@ def test_real_portal_boundary_rejects_unqualified_upstream_payload():
             read_authorized_run(SCOPE, resolve_grant=grant,
                                 resolve_run_tenant=lambda _: "tenant-a",
                                 read_run=lambda _tenant, _run, p=payload: p, now=NOW)
+
+
+def test_resolver_failures_and_malformed_scope_never_reach_reader():
+    calls = []
+
+    def forbidden(*args):
+        calls.append("unexpected")
+        raise AssertionError("reader or resolver should not be called")
+
+    for scope in (None, ReadScope("", "tenant-a", "run-a"),
+                  ReadScope("actor-a", "", "run-a"),
+                  ReadScope("actor-a", "tenant-a", "")):
+        with pytest.raises(UnqualifiedReadPermission):
+            read_authorized_run(scope, resolve_grant=forbidden,
+                                resolve_run_tenant=forbidden,
+                                read_run=forbidden, now=NOW)
+    assert calls == []
+
+    def unavailable(_):
+        raise RuntimeError("authority unavailable")
+
+    for grant_resolver in (lambda _: None, lambda _: object(), unavailable):
+        with pytest.raises(UnqualifiedReadPermission):
+            read_authorized_run(SCOPE, resolve_grant=grant_resolver,
+                                resolve_run_tenant=forbidden,
+                                read_run=forbidden, now=NOW)
+    assert calls == []
+
+    def valid(scope):
+        return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
+                         NOW + timedelta(minutes=1), "proof-a")
+
+    for owner_resolver in (lambda _: None, lambda _: "tenant-b", unavailable):
+        with pytest.raises(UnqualifiedReadPermission):
+            read_authorized_run(SCOPE, resolve_grant=valid,
+                                resolve_run_tenant=owner_resolver,
+                                read_run=forbidden, now=NOW)
+    assert calls == []
