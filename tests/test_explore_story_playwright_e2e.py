@@ -452,6 +452,14 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             json.dumps(receipt, sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
         )
+        stored = json.loads((output / "acme-cockpit-mobile-metadata.json").read_text())
+        self.assertEqual(
+            hashlib.sha256((output / stored["screenshot_file"]).read_bytes()).hexdigest(),
+            stored["screenshot_sha256"],
+        )
+        self.assertFalse(stored["runtime_authenticated"])
+        self.assertFalse(stored["browser_rehearsal_independently_reviewed"])
+        self.assertFalse(stored["live_remediation_authorized"])
 
 
 
