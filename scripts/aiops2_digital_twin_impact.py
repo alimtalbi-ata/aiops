@@ -88,8 +88,10 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
             rejected.extend({"index": i, "reason": "conflicting edge evidence"}
                             for i, _ in claims)
         else:
-            for _, e in claims:
-                graph.setdefault(e["from_id"], []).append(e)
+            # Repeated observations of the same claim remain one graph edge.
+            e = min((edge for _, edge in claims),
+                    key=lambda edge: _timestamp(edge["observed_at"]))
+            graph.setdefault(e["from_id"], []).append(e)
     rejected.sort(key=lambda entry: entry["index"])
     for neighbors in graph.values():
         neighbors.sort(key=lambda e: (e["to_id"], e["source_id"], e["evidence_sha256"]))
