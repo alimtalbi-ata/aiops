@@ -90,3 +90,19 @@ def test_renderer_refuses_action_inconsistent_with_sourced_impact(action):
     p["decisions"][0]["next_noc_action"] = action
     with pytest.raises(ValueError, match="contradictory_noc_next_action"):
         render_computed_noc_html(p)
+
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda path: path.update(nodes=["san-01", "unrelated-service"]),
+    lambda path: path.update(nodes=["san-01", "san-01", "payments"],
+                             evidence_sha256=["b" * 64, "b" * 64]),
+    lambda path: path.update(evidence_sha256=[]),
+    lambda path: path.update(evidence_sha256=["not-a-digest"]),
+    lambda path: path.update(evidence_sha256=[None]),
+])
+def test_renderer_refuses_unsourced_or_forged_path_provenance(mutation):
+    p = projection()
+    mutation(p["decisions"][0]["impact_paths"][0])
+    with pytest.raises(ValueError, match="invalid_noc_path"):
+        render_computed_noc_html(p)
