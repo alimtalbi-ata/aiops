@@ -190,3 +190,11 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 ### 2026-10-30 — ADR delta: one main-based candidate, fail-closed source transport
 
 **Decision:** retain #201 as the only release integration candidate; port six exact source blobs from #198/#202 without merging stacked/divergent PRs or replacing Portal main/Compose/Core. Canonical Evidence UTC must be bounded and Portal must refuse unqualified authority claims, expose 401/403/503 without navigation, and never persist bearer credentials. **Rationale:** preserve Core authority and operator-visible UNKNOWN, prevent false customer evidence. **Qualification:** [new exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) queued; T0 not yet passed, T4/T5 NO-GO. No merge, Debian or LIVE.
+
+## 2026-11-14 — ACME synthetic incident readiness must remain unattested
+
+- **Status:** Proposed in draft PR #710.
+- **Decision:** Expose an additive `incident_readiness` read-model and portal explanation for the existing SAN P1 → Payments P2 synthetic scenario. Mark all nine runtime checkpoints missing and keep `BLOCKED_UNATTESTED`, `SYNTHETIC_ONLY` and `live_action_allowed=false`.
+- **Reason:** An AIOps operator needs to distinguish calculated business impact from independently verified evidence before any incident decision or action.
+- **Boundaries:** No inferred LIVE state from synthetic fixture, no backend write, no GLPI ticket claim, no new orchestrator, no bypass of Policy/HITL/fencing, and no production promotion.
+- **Next gate:** Exact-head CI and contract review; any future transition requires authenticated canonical incident/Run identity and fresh evidence from real services.
