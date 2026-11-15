@@ -406,3 +406,24 @@ def test_renderer_accepts_same_incident_id_in_distinct_tenants():
     p["decisions"].append(separate_tenant)
     html = render_computed_noc_html(p)
     assert html.count("<tr><th scope='row'>") == 2
+
+
+
+def test_renderer_rejects_duplicate_dependency_path():
+    p = projection()
+    decision = p["decisions"][0]
+    decision["impact_paths"].append(dict(decision["impact_paths"][0]))
+    with pytest.raises(ValueError, match="duplicate_noc_dependency_path"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_same_route_with_different_evidence():
+    p = projection()
+    decision = p["decisions"][0]
+    second = dict(decision["impact_paths"][0])
+    second["evidence_sha256"] = ["c" * 64]
+    decision["analyst"]["evidence_sha256"] = sorted(
+        set(decision["analyst"]["evidence_sha256"] + ["c" * 64]))
+    decision["impact_paths"].append(second)
+    with pytest.raises(ValueError, match="duplicate_noc_dependency_path"):
+        render_computed_noc_html(p)
