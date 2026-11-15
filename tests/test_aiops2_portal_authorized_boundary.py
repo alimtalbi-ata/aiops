@@ -162,3 +162,20 @@ def test_grant_for_other_resource_or_action_cannot_reach_owner_or_core():
                                 resolve_run_tenant=forbidden,
                                 read_run=forbidden, now=NOW)
     assert calls == []
+
+
+def test_missing_policy_version_rejected_before_run_lookup():
+    calls = []
+    def forbidden(*args):
+        calls.append("unexpected")
+        raise AssertionError("must not reach owner or Core")
+    for version in ("", "   ", None):
+        def grant(scope):
+            return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
+                             NOW + timedelta(minutes=1), "proof-a", version,
+                             "core.run", "read")
+        with pytest.raises(UnqualifiedReadPermission):
+            read_authorized_run(SCOPE, resolve_grant=grant,
+                                resolve_run_tenant=forbidden,
+                                read_run=forbidden, now=NOW)
+    assert calls == []
