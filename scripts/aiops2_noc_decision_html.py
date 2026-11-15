@@ -79,6 +79,8 @@ def render_computed_noc_html(projection: object) -> str:
             raise ValueError("contradictory_noc_missing_evidence")
         expected_action = ("REVIEW_SYNTHETIC_EVIDENCE"
                            if item["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+                           else "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH"
+                           if item["resource_budget_exhausted"]
                            else "COLLECT_MISSING_DEPENDENCY_EVIDENCE")
         if item.get("next_noc_action") != expected_action:
             raise ValueError("contradictory_noc_next_action")
