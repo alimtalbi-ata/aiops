@@ -98,6 +98,7 @@ def render_computed_noc_html(projection: object) -> str:
             raise ValueError("invalid_noc_analyst_citations")
         citation_set = set(citations)
         path_labels = []
+        seen_paths = set()
         for path in paths:
             if (not isinstance(path, dict) or not isinstance(path.get("nodes"), list)
                     or len(path["nodes"]) > 100
@@ -114,6 +115,10 @@ def render_computed_noc_html(projection: object) -> str:
                 raise ValueError("invalid_noc_path")
             if not set(path["evidence_sha256"]).issubset(citation_set):
                 raise ValueError("uncited_noc_dependency_path")
+            path_key = tuple(path["nodes"])
+            if path_key in seen_paths:
+                raise ValueError("duplicate_noc_dependency_path")
+            seen_paths.add(path_key)
             path_labels.append(" → ".join(safe(node) for node in path["nodes"]))
         path_html = ("; ".join(path_labels) if path_labels else
                      "UNKNOWN — budget de calcul épuisé" if item["resource_budget_exhausted"] else
