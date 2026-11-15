@@ -66,8 +66,13 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         neighbors.sort(key=lambda e: (e["to_id"], e["source_id"], e["evidence_sha256"]))
     paths = []
     expansions = 0
+    queued = 0
     exhausted = False
     for start in sorted(sources):
+        queued += 1
+        if queued > max_path_expansions:
+            exhausted = True
+            break
         queue = deque([(start, [start], [])])
         while queue:
             expansions += 1
@@ -81,7 +86,13 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
             for edge in graph.get(node, []):
                 nxt = edge["to_id"]
                 if nxt not in nodes:
+                    queued += 1
+                    if queued > max_path_expansions:
+                        exhausted = True
+                        break
                     queue.append((nxt, nodes + [nxt], proof + [edge["evidence_sha256"]]))
+            if exhausted:
+                break
         if exhausted:
             break
     # Never return a partially enumerated proof set after resource exhaustion.
