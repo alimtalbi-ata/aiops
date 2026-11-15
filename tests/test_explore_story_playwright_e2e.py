@@ -422,6 +422,38 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                 wrapper.evaluate("el => el.clientWidth"),
             )
 
+        # Preserve a customer-reviewable *synthetic* mobile browser observation.
+        # It is never an authenticated runtime receipt or an approval to act.
+        output = Path(os.environ.get(
+            "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")
+        ))
+        output.mkdir(parents=True, exist_ok=True)
+        screenshot = self.page.screenshot(
+            path=str(output / "acme-cockpit-mobile-ci-simulated.png"),
+            full_page=True, animations="disabled",
+        )
+        receipt = {
+            "schema": "aiops.customer-cockpit-browser-observation.v1",
+            "provenance": "CI_SIMULATED_EPHEMERAL_PORTAL",
+            "viewport": {"width": 390, "height": 844},
+            "route": "/demo/acme-incident-cockpit",
+            "screenshot_file": "acme-cockpit-mobile-ci-simulated.png",
+            "screenshot_sha256": hashlib.sha256(screenshot).hexdigest(),
+            "fixture_sha256": re.search(
+                r"[a-f0-9]{64}", self.page.locator("main").inner_text()
+            ).group(0),
+            "table_count": 4,
+            "runtime_authenticated": False,
+            "browser_rehearsal_independently_reviewed": False,
+            "production_qualified": False,
+            "live_remediation_authorized": False,
+        }
+        (output / "acme-cockpit-mobile-metadata.json").write_text(
+            json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
