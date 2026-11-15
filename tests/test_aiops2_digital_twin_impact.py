@@ -159,3 +159,24 @@ def test_twin_accepts_path_depth_at_100_node_boundary():
     assert result["impact_state"] == "SOURCED_SYNTHETIC_PATH"
     assert result["paths"][0]["nodes"] == nodes
     assert result["live_remediation_authorized"] is False
+
+
+
+def test_twin_depth_boundary_ignores_cycle_only_outgoing_edges():
+    nodes = ["san-01"] + [f"hop-{i}" for i in range(99)]
+    graph = [edge(src, dst) for src, dst in zip(nodes, nodes[1:])]
+    graph.append(edge(nodes[-1], nodes[0]))
+    result = resolve_impact(incident(), graph, as_of=NOW)
+    assert result["resource_budget_exhausted"] is False
+    assert result["impact_state"] == "UNKNOWN"
+    assert result["paths"] == []
+
+
+def test_twin_depth_boundary_exhausts_on_unvisited_neighbor():
+    nodes = ["san-01"] + [f"hop-{i}" for i in range(99)]
+    graph = [edge(src, dst) for src, dst in zip(nodes, nodes[1:])]
+    graph.extend([edge(nodes[-1], nodes[0]), edge(nodes[-1], "new-hop")])
+    result = resolve_impact(incident(), graph, as_of=NOW)
+    assert result["resource_budget_exhausted"] is True
+    assert result["impact_state"] == "UNKNOWN"
+    assert result["paths"] == []
