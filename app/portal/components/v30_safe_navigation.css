@@ -1,0 +1,12 @@
+/* V30 navigation candidate: no dependency on V1 styles or external assets. */
+.v30-nav { color: inherit; max-width: 100%; }
+.v30-mode { font-weight: 700; margin: 0 0 .75rem; }
+.v30-nav-list { display: flex; flex-wrap: wrap; gap: .5rem; padding: 0; margin: 0; list-style: none; }
+.v30-nav-list a { display: inline-block; padding: .65rem .85rem; border: 1px solid currentColor; border-radius: .5rem; color: inherit; text-decoration: none; }
+.v30-nav-list a[aria-current="page"] { text-decoration: underline; text-underline-offset: .2em; font-weight: 700; }
+.v30-nav-list a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+@media (max-width: 640px) {
+  .v30-nav-list { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .v30-nav-list a { display: block; overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) { .v30-nav *, .v30-nav *::before, .v30-nav *::after { transition: none !important; animation: none !important; } }
