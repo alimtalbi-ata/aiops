@@ -39,6 +39,8 @@ app.include_router(acme_impact_router)
 app.include_router(acme_explore_story_router)
 app.include_router(acme_run_detail_router)
 app.include_router(glpi_operator_view_router)
+from portal.aiops2_computed_noc_demo import router as aiops2_computed_noc_router
+app.include_router(aiops2_computed_noc_router)
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}
