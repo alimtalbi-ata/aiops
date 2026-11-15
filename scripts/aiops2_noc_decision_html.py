@@ -27,6 +27,7 @@ def render_computed_noc_html(projection: object) -> str:
     if len(projection["decisions"]) > 100:
         raise ValueError("noc_projection_decision_budget_exceeded")
     rows = []
+    seen_incidents = set()
     for item in projection["decisions"]:
         if (not isinstance(item, dict)
                 or item.get("runtime_attested") is not False
@@ -48,6 +49,10 @@ def render_computed_noc_html(projection: object) -> str:
         if not all(isinstance(item.get(field), str) and 0 < len(item[field]) <= 256
                    for field in ("incident_id", "tenant_id", "service_id", "priority")):
             raise ValueError("invalid_noc_display_metadata")
+        incident_key = (item["tenant_id"], item["incident_id"])
+        if incident_key in seen_incidents:
+            raise ValueError("duplicate_noc_incident")
+        seen_incidents.add(incident_key)
         origins = item.get("incident_ci_ids")
         if (not isinstance(origins, list) or not origins or len(origins) > 100
                 or not all(isinstance(ci, str) and 0 < len(ci) <= 256 for ci in origins)
