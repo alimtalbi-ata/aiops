@@ -46,6 +46,7 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
             raise InvalidEvent("incident CI origin budget exceeded")
     graph = {}
     rejected = []
+    seen_edges = set()
     for index, edge in enumerate(edges):
         if not isinstance(edge, dict):
             rejected.append({"index": index, "reason": "invalid edge"})
@@ -71,6 +72,12 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         if age < 0 or age > max_age_seconds:
             rejected.append({"index": index, "reason": "stale or future edge"})
             continue
+        edge_key = (edge["tenant_id"], edge["from_id"], edge["to_id"],
+                    edge["source_id"], edge["evidence_sha256"],
+                    _timestamp(edge["observed_at"]).isoformat())
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
         graph.setdefault(edge["from_id"], []).append(edge)
     for neighbors in graph.values():
         neighbors.sort(key=lambda e: (e["to_id"], e["source_id"], e["evidence_sha256"]))
