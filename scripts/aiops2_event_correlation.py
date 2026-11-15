@@ -68,6 +68,7 @@ def correlate_events(events: list, *, as_of: str, max_age_seconds: int = 900) ->
         raise InvalidEvent("invalid max age")
     now = _timestamp(as_of)
     unique = {}
+    first_indices = {}
     conflicted = set()
     rejected = []
     for index, raw in enumerate(events):
@@ -86,10 +87,12 @@ def correlate_events(events: list, *, as_of: str, max_age_seconds: int = 900) ->
                     # An identity conflict invalidates BOTH receipts; selecting the
                     # first observation would make replay order security-relevant.
                     del unique[key]
+                    rejected.append({"index": first_indices.pop(key), "reason": "conflicting duplicate event identity"})
                     conflicted.add(key)
                     raise InvalidEvent("conflicting duplicate event identity")
                 continue
             unique[key] = event
+            first_indices[key] = index
         except InvalidEvent as exc:
             rejected.append({"index": index, "reason": str(exc)})
     groups = {}
