@@ -81,3 +81,30 @@ def test_stale_event_does_not_enter_decision():
     result = build_noc_decision([stale], [edge("san-01", "payments")], as_of=NOW)
     assert result["decisions"] == []
     assert len(result["rejected_events"]) == 1
+
+
+
+def test_conflicting_source_identity_cannot_create_noc_decision():
+    first = event()
+    conflicting = event(ci="different-ci")
+    for receipts in ([first, conflicting], [conflicting, first]):
+        result = build_noc_decision(receipts, [edge("san-01", "payments")], as_of=NOW)
+        assert result["decisions"] == []
+        assert any("conflicting duplicate event identity" in rejected["reason"]
+                   for rejected in result["rejected_events"])
+        assert result["live_remediation_authorized"] is False
+
+
+def test_one_tenant_conflict_does_not_discard_other_tenant_incident():
+    first = event()
+    conflicting = event(ci="different-ci")
+    independent = event(tenant="other")
+    result = build_noc_decision(
+        [first, independent, conflicting],
+        [edge("san-01", "payments", tenant="other")],
+        as_of=NOW,
+    )
+    assert len(result["decisions"]) == 1
+    assert result["decisions"][0]["tenant_id"] == "other"
+    assert result["decisions"][0]["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+    assert result["decisions"][0]["policy_disposition"] == "DENY_LIVE"
