@@ -84,33 +84,27 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         relation_digests.setdefault(relation_key, set()).add(edge["evidence_sha256"])
         claim_key = (edge["from_id"], edge["to_id"], edge["source_id"])
         edge_claims.setdefault(claim_key, []).append((index, edge))
-    # A single source cannot substantiate competing digests for one relation.
-    # Quarantine every version, independent of receipt order.
+    # Preserve every distinct receipt index for audit, even when repeated
+    # observations of a source claim collapse to one graph relation.
+    relation_claims = {}
     for claims in edge_claims.values():
         if len({e["evidence_sha256"] for _, e in claims}) > 1:
             rejected.extend({"index": i, "reason": "conflicting edge evidence"}
                             for i, _ in claims)
         else:
-            # Repeated observations of the same claim remain one graph edge.
-            e = min((edge for _, edge in claims),
-                    key=lambda edge: _timestamp(edge["observed_at"]))
-            graph.setdefault(e["from_id"], []).append(e)
-    # The route identity is (from_id, to_id), irrespective of source.
-    # Competing digests quarantine the entire relation; identical digests
-    # collapse to one deterministic representative.
-    for origin, neighbors in list(graph.items()):
-        by_destination = {}
-        for edge in neighbors:
-            by_destination.setdefault(edge["to_id"], []).append(edge)
-        graph[origin] = []
-        for destination, candidates in by_destination.items():
-            if len(relation_digests[(origin, destination)]) > 1:
-                rejected.extend({"index": i, "reason": "conflicting relation evidence"}
-                                for candidate in candidates
-                                for i, raw in enumerate(edges) if raw is candidate)
-            else:
-                graph[origin].append(min(candidates, key=lambda edge: (
-                    edge["source_id"], _timestamp(edge["observed_at"]))))
+            e = claims[0][1]
+            relation_claims.setdefault((e["from_id"], e["to_id"]), []).extend(claims)
+    # A relation tainted by any conflicting digest cannot be proven by
+    # another source. Quarantine all remaining receipts of that relation.
+    for (origin, destination), claims in relation_claims.items():
+        if len(relation_digests[(origin, destination)]) > 1:
+            rejected.extend({"index": i, "reason": "conflicting relation evidence"}
+                            for i, _ in claims)
+        else:
+            representative = min(
+                (e for _, e in claims),
+                key=lambda e: (e["source_id"], _timestamp(e["observed_at"])))
+            graph.setdefault(origin, []).append(representative)
     rejected.sort(key=lambda entry: entry["index"])
     for neighbors in graph.values():
         neighbors.sort(key=lambda e: (e["to_id"], e["source_id"], e["evidence_sha256"]))
