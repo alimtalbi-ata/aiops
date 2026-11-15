@@ -1,7 +1,12 @@
 """E2E security boundary: malformed requests and credential collisions never reach Core."""
 import socket
+import sys
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+# Standalone pytest invocation must resolve the portal without another test's imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from portal.main import app
 
 
