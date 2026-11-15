@@ -1,6 +1,7 @@
 name: AIOps2 synthetic NOC tests
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "scripts/aiops2_*.py"
