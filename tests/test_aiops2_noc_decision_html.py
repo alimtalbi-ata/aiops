@@ -273,3 +273,26 @@ def test_renderer_rejects_unqualified_citations_or_promoted_analyst_claim(mutati
     mutation(p["decisions"][0])
     with pytest.raises(ValueError, match="unqualified_noc_decision"):
         render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("missing", [[], None, ["UNRELATED_EVIDENCE"],
+                                     ["SOURCED_DEPENDENCY_PATH", "EXTRA"]])
+def test_renderer_rejects_unknown_impact_with_contradictory_missing_evidence(missing):
+    p = projection()
+    decision = p["decisions"][0]
+    decision["impact_state"] = "UNKNOWN"
+    decision["impact_paths"] = []
+    decision["analyst"]["impact_state"] = "UNKNOWN"
+    decision["analyst"]["missing_evidence"] = missing
+    decision["critic"]["disposition"] = "NEEDS_MORE_EVIDENCE"
+    decision["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    with pytest.raises(ValueError, match="contradictory_noc_missing_evidence"):
+        render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("missing", [None, ["SOURCED_DEPENDENCY_PATH"], ["EXTRA"]])
+def test_renderer_rejects_sourced_impact_with_missing_evidence(missing):
+    p = projection()
+    p["decisions"][0]["analyst"]["missing_evidence"] = missing
+    with pytest.raises(ValueError, match="contradictory_noc_missing_evidence"):
+        render_computed_noc_html(p)
