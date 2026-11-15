@@ -66,3 +66,16 @@ def test_server_authority_failure_denied_without_live_authorization():
                            resolve_run_tenant=owner_resolver, now=NOW)
         assert result.allowed is False
         assert result.live_remediation_authorized is False
+
+
+def test_malformed_authority_payload_fails_closed_without_exception():
+    for invalid in (
+        replace(grant_for(), expires_at="not-a-datetime"),
+        replace(grant_for(), expires_at=None),
+        replace(grant_for(), policy_version=None),
+        replace(grant_for(), evidence_id=123),
+    ):
+        result = decide(grant=invalid)
+        assert result.allowed is False
+        assert result.live_remediation_authorized is False
+    assert decide(now=None).allowed is False
