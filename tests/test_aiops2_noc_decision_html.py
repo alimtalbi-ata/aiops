@@ -376,3 +376,33 @@ def test_renderer_rejects_missing_evidence_action_after_budget_exhaustion():
     decision["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
     with pytest.raises(ValueError, match="contradictory_noc_next_action"):
         render_computed_noc_html(p)
+
+
+
+def test_renderer_rejects_duplicate_incident_within_tenant():
+    p = projection()
+    p["decisions"].append(dict(p["decisions"][0]))
+    with pytest.raises(ValueError, match="duplicate_noc_incident"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_duplicate_incident_even_with_distinct_paths():
+    p = projection()
+    duplicate = dict(p["decisions"][0])
+    duplicate["impact_paths"] = []
+    duplicate["impact_state"] = "UNKNOWN"
+    duplicate["analyst"] = dict(duplicate["analyst"], impact_state="UNKNOWN",
+                                missing_evidence=["SOURCED_DEPENDENCY_PATH"])
+    duplicate["critic"] = dict(duplicate["critic"], disposition="NEEDS_MORE_EVIDENCE")
+    duplicate["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    p["decisions"].append(duplicate)
+    with pytest.raises(ValueError, match="duplicate_noc_incident"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_accepts_same_incident_id_in_distinct_tenants():
+    p = projection()
+    separate_tenant = dict(p["decisions"][0], tenant_id="other-synthetic-tenant")
+    p["decisions"].append(separate_tenant)
+    html = render_computed_noc_html(p)
+    assert html.count("<tr><th scope='row'>") == 2
