@@ -195,3 +195,18 @@ def test_twin_rejects_oversized_incident_ci():
     sample["events"][0]["ci_id"] = "x" * 257
     with pytest.raises(InvalidEvent, match="invalid incident CI"):
         resolve_impact(sample, [], as_of=NOW)
+
+
+@pytest.mark.parametrize("incident_id", [None, "", "x" * 257, 42])
+def test_twin_rejects_invalid_incident_id(incident_id):
+    sample = incident()
+    sample["incident_id"] = incident_id
+    with pytest.raises(InvalidEvent, match="invalid incident id"):
+        resolve_impact(sample, [edge("san-01", "payments")], as_of=NOW)
+
+
+def test_twin_rejects_event_service_mismatch():
+    sample = incident()
+    sample["events"][0]["service_id"] = "other-service"
+    with pytest.raises(InvalidEvent, match="cross-tenant or invalid incident event"):
+        resolve_impact(sample, [edge("san-01", "payments")], as_of=NOW)
