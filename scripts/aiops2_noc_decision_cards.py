@@ -35,14 +35,27 @@ def render_decision_cards(projection: dict) -> str:
             decision["impact_state"] == "SOURCED_SYNTHETIC_PATH" and not paths
         ):
             raise ValueError("inconsistent_impact")
+        count = decision.get("event_count")
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            raise ValueError("invalid_correlated_alert_count")
+        if not isinstance(decision.get("incident_id"), str) or not decision["incident_id"].strip():
+            raise ValueError("missing_incident_id")
+        analyst = decision["analyst"]
+        critic = decision["critic"]
+        if (not isinstance(analyst.get("hypothesis"), str)
+            or not analyst["hypothesis"].strip()
+            or not isinstance(critic.get("disposition"), str)
+            or not critic["disposition"].strip()):
+            raise ValueError("missing_analyst_critic_assessment")
         labels = []
         for path in paths:
             if not isinstance(path, dict) or not isinstance(path.get("nodes"), list):
                 raise ValueError("invalid_path")
-            labels.append(" → ".join(e(n) for n in path["nodes"]))
+            nodes = path["nodes"]
+            if len(nodes) < 2 or any(not isinstance(n, str) or not n.strip() for n in nodes):
+                raise ValueError("invalid_path_nodes")
+            labels.append(" → ".join(e(n) for n in nodes))
         impact = "; ".join(labels) if labels else "UNKNOWN — dépendance non prouvée"
-        analyst = decision["analyst"]
-        critic = decision["critic"]
         cards.append(
             "<article aria-label='Incident " + e(decision.get("incident_id", "UNKNOWN")) + "'>"
             "<h2>" + e(decision.get("incident_id", "UNKNOWN")) + "</h2>"
@@ -50,8 +63,9 @@ def render_decision_cards(projection: dict) -> str:
             "<dt>Service</dt><dd>" + e(decision.get("service_id", "UNKNOWN")) + "</dd>"
             "<dt>Alertes corrélées</dt><dd>" + e(decision.get("event_count", "UNKNOWN")) + "</dd>"
             "<dt>Impact SAN → Payments (simulation)</dt><dd>" + impact + "</dd>"
-            "<dt>Hypothèse Analyst</dt><dd>" + e(analyst) + "</dd>"
-            "<dt>Réserve Critic</dt><dd>" + e(critic) + "</dd>"
+            "<dt>Hypothèse Analyst</dt><dd>" + e(analyst["hypothesis"]) + "</dd>"
+            "<dt>Réserve Critic</dt><dd>" + e(critic["disposition"]) + " — cause racine non confirmée</dd>"
+            "<dt>Incertitude</dt><dd>Cause racine non confirmée ; données synthétiques uniquement</dd>"
             "<dt>Prochaine action NOC</dt><dd>" + e(decision.get("next_noc_action", "UNKNOWN")) + "</dd>"
             "<dt>Décision Policy</dt><dd>DENY_LIVE</dd></dl></article>"
         )
