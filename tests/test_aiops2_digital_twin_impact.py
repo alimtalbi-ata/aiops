@@ -301,3 +301,20 @@ def test_quarantined_source_conflict_cannot_be_overridden_by_third_source():
         assert result["live_remediation_authorized"] is False
         assert any(r["reason"] == "conflicting relation evidence"
                    for r in result["rejected_edges"])
+
+
+
+def test_cross_source_conflict_audits_every_distinct_observation():
+    a_early = edge("san-01", "payments", source_id="cmdb-a",
+                   evidence_sha256="a" * 64,
+                   observed_at="2026-11-15T10:00:00Z")
+    a_late = dict(a_early, observed_at="2026-11-15T11:00:00Z")
+    b = edge("san-01", "payments", source_id="cmdb-b",
+             evidence_sha256="b" * 64)
+    for receipts in ([a_early, a_late, b], [b, a_late, a_early]):
+        result = resolve_impact(incident(), receipts, as_of=NOW)
+        assert result["impact_state"] == "UNKNOWN"
+        assert result["paths"] == []
+        assert sorted(r["index"] for r in result["rejected_edges"]
+                      if r["reason"] == "conflicting relation evidence") == [0, 1, 2]
+        assert result["live_remediation_authorized"] is False
