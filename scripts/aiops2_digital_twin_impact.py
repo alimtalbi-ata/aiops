@@ -48,6 +48,7 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
     rejected = []
     seen_edges = set()
     edge_claims = {}
+    relation_digests = {}
     for index, edge in enumerate(edges):
         if not isinstance(edge, dict):
             rejected.append({"index": index, "reason": "invalid edge"})
@@ -79,6 +80,8 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         if edge_key in seen_edges:
             continue
         seen_edges.add(edge_key)
+        relation_key = (edge["from_id"], edge["to_id"])
+        relation_digests.setdefault(relation_key, set()).add(edge["evidence_sha256"])
         claim_key = (edge["from_id"], edge["to_id"], edge["source_id"])
         edge_claims.setdefault(claim_key, []).append((index, edge))
     # A single source cannot substantiate competing digests for one relation.
@@ -100,8 +103,8 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         for edge in neighbors:
             by_destination.setdefault(edge["to_id"], []).append(edge)
         graph[origin] = []
-        for candidates in by_destination.values():
-            if len({edge["evidence_sha256"] for edge in candidates}) > 1:
+        for destination, candidates in by_destination.items():
+            if len(relation_digests[(origin, destination)]) > 1:
                 rejected.extend({"index": i, "reason": "conflicting relation evidence"}
                                 for candidate in candidates
                                 for i, raw in enumerate(edges) if raw is candidate)
