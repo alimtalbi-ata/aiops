@@ -67,6 +67,7 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
     if impact["impact_state"] == "UNKNOWN" and paths:
         raise InvalidEvent("UNKNOWN impact cannot have verified paths")
     path_evidence = set()
+    seen_routes = set()
     for path in paths:
         if not isinstance(path, dict):
             raise InvalidEvent("invalid impact path")
@@ -78,6 +79,10 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
                 len(hashes) != len(nodes) - 1 or
                 not all(isinstance(h, str) and DIGEST.fullmatch(h) for h in hashes)):
             raise InvalidEvent("invalid impact path provenance")
+        route = tuple(nodes)
+        if route in seen_routes:
+            raise InvalidEvent("duplicate impact route")
+        seen_routes.add(route)
         path_evidence.update(hashes)
     if impact["impact_state"] == "SOURCED_SYNTHETIC_PATH" and not paths:
         raise InvalidEvent("sourced impact requires a path")
