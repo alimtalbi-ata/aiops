@@ -236,3 +236,26 @@ def test_renderer_accepts_projected_incident_origin():
     p = projection()
     assert p["decisions"][0]["incident_ci_ids"] == ["san-01"]
     assert "san-01 → payments" in render_computed_noc_html(p)
+
+
+
+def test_renderer_rejects_missing_incident_origin_field():
+    p = projection()
+    del p["decisions"][0]["incident_ci_ids"]
+    with pytest.raises(ValueError, match="invalid_noc_incident_origins"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_unrelated_origin_even_with_valid_digest():
+    p = projection()
+    path = p["decisions"][0]["impact_paths"][0]
+    path["nodes"] = ["unrelated-ci", "payments"]
+    path["evidence_sha256"] = ["b" * 64]
+    with pytest.raises(ValueError, match="invalid_noc_path"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_accepts_one_of_multiple_incident_origins():
+    p = projection()
+    p["decisions"][0]["incident_ci_ids"] = ["payments-api", "san-01"]
+    assert "san-01 → payments" in render_computed_noc_html(p)
