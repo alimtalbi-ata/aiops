@@ -47,6 +47,7 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
     graph = {}
     rejected = []
     seen_edges = set()
+    edge_claims = {}
     for index, edge in enumerate(edges):
         if not isinstance(edge, dict):
             rejected.append({"index": index, "reason": "invalid edge"})
@@ -78,7 +79,18 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         if edge_key in seen_edges:
             continue
         seen_edges.add(edge_key)
-        graph.setdefault(edge["from_id"], []).append(edge)
+        claim_key = (edge["from_id"], edge["to_id"], edge["source_id"])
+        edge_claims.setdefault(claim_key, []).append((index, edge))
+    # A single source cannot substantiate competing digests for one relation.
+    # Quarantine every version, independent of receipt order.
+    for claims in edge_claims.values():
+        if len({e["evidence_sha256"] for _, e in claims}) > 1:
+            rejected.extend({"index": i, "reason": "conflicting edge evidence"}
+                            for i, _ in claims)
+        else:
+            for _, e in claims:
+                graph.setdefault(e["from_id"], []).append(e)
+    rejected.sort(key=lambda entry: entry["index"])
     for neighbors in graph.values():
         neighbors.sort(key=lambda e: (e["to_id"], e["source_id"], e["evidence_sha256"]))
     paths = []
