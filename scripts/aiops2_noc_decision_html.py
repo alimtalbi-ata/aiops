@@ -6,6 +6,9 @@ as authenticated production telemetry.
 from __future__ import annotations
 
 from html import escape
+import re
+
+_DIGEST = re.compile(r"[0-9a-f]{64}\\Z")
 
 
 def render_computed_noc_html(projection: object) -> str:
@@ -56,7 +59,13 @@ def render_computed_noc_html(projection: object) -> str:
         for path in paths:
             if (not isinstance(path, dict) or not isinstance(path.get("nodes"), list)
                     or len(path["nodes"]) < 2
-                    or not all(isinstance(node, str) and node for node in path["nodes"])):
+                    or not all(isinstance(node, str) and node for node in path["nodes"])
+                    or len(set(path["nodes"])) != len(path["nodes"])
+                    or path["nodes"][-1] != item.get("service_id")
+                    or not isinstance(path.get("evidence_sha256"), list)
+                    or len(path["evidence_sha256"]) != len(path["nodes"]) - 1
+                    or not all(isinstance(digest, str) and _DIGEST.fullmatch(digest)
+                               for digest in path["evidence_sha256"])):
                 raise ValueError("invalid_noc_path")
             path_labels.append(" → ".join(safe(node) for node in path["nodes"]))
         path_html = "; ".join(path_labels) if path_labels else "UNKNOWN — preuve de dépendance manquante"
