@@ -6,7 +6,7 @@ The caller must supply server-derived identity and resolvers, never browser
 headers, request JSON, shared tokens or unverified claims.
 """
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 
@@ -27,6 +27,9 @@ class ReadGrant:
     policy_version: str
     resource: str
     action: str
+
+
+MAX_GRANT_LIFETIME = timedelta(minutes=5)
 
 
 class UnqualifiedReadPermission(Exception):
@@ -68,7 +71,8 @@ def read_authorized_run(
         if (not isinstance(grant.expires_at, datetime)
                 or grant.expires_at.tzinfo is None
                 or grant.expires_at.utcoffset() is None
-                or grant.expires_at.astimezone(timezone.utc) <= utc_now):
+                or grant.expires_at.astimezone(timezone.utc) <= utc_now
+                or grant.expires_at.astimezone(timezone.utc) - utc_now > MAX_GRANT_LIFETIME):
             raise denied
     except (ValueError, OverflowError, TypeError):
         raise denied from None
