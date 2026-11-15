@@ -108,3 +108,20 @@ def test_one_tenant_conflict_does_not_discard_other_tenant_incident():
     assert result["decisions"][0]["tenant_id"] == "other"
     assert result["decisions"][0]["impact_state"] == "SOURCED_SYNTHETIC_PATH"
     assert result["decisions"][0]["policy_disposition"] == "DENY_LIVE"
+
+
+
+def test_high_fanout_twin_budget_exhaustion_never_promotes_impact():
+    # The Twin's fixed path-state budget is exhausted by a synthetic fanout.
+    # Even if a dependency path exists, partial traversal cannot prove impact.
+    edges = [edge("san-01", f"node-{i:05d}") for i in range(10001)]
+    edges.append(edge("san-01", "payments"))
+    result = build_noc_decision([event()], edges, as_of=NOW)
+    decision = result["decisions"][0]
+    assert decision["impact_state"] == "UNKNOWN"
+    assert decision["impact_paths"] == []
+    assert decision["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
+    assert decision["next_noc_action"] == "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    assert decision["policy_disposition"] == "DENY_LIVE"
+    assert decision["runtime_attested"] is False
+    assert decision["live_remediation_authorized"] is False
