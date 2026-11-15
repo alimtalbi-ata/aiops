@@ -64,7 +64,7 @@ def render_computed_noc_html(projection: object) -> str:
             if (not isinstance(path, dict) or not isinstance(path.get("nodes"), list)
                     or len(path["nodes"]) > 100
                     or len(path["nodes"]) < 2
-                    or not all(isinstance(node, str) and node for node in path["nodes"])
+                    or not all(isinstance(node, str) and node and len(node) <= 256\n                               for node in path["nodes"])
                     or len(set(path["nodes"])) != len(path["nodes"])
                     or path["nodes"][-1] != item.get("service_id")
                     or not isinstance(path.get("evidence_sha256"), list)
