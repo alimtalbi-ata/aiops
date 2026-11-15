@@ -131,3 +131,29 @@ def test_renderer_rejects_excessive_path_depth():
     path["evidence_sha256"] = ["b" * 64] * (len(path["nodes"]) - 1)
     with pytest.raises(ValueError, match="invalid_noc_path"):
         render_computed_noc_html(p)
+
+
+
+@pytest.mark.parametrize("field", ["runtime_attested", "live_remediation_authorized"])
+def test_renderer_fails_closed_when_projection_guard_is_missing(field):
+    p = projection()
+    del p[field]
+    with pytest.raises(ValueError, match="unqualified_noc_projection"):
+        render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("field", ["runtime_attested", "live_remediation_authorized"])
+def test_renderer_fails_closed_when_decision_guard_is_missing(field):
+    p = projection()
+    del p["decisions"][0][field]
+    with pytest.raises(ValueError, match="unqualified_noc_decision"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_escapes_untrusted_path_nodes():
+    p = projection()
+    path = p["decisions"][0]["impact_paths"][0]
+    path["nodes"] = ["<img src=x onerror=alert(1)>", "payments"]
+    html = render_computed_noc_html(p)
+    assert "<img" not in html
+    assert "&lt;img" in html
