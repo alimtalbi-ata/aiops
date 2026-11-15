@@ -31,16 +31,27 @@ def render_computed_noc_html(projection: object) -> str:
                 or not isinstance(item.get("impact_paths"), list)
                 or not isinstance(item.get("analyst"), dict)
                 or not isinstance(item.get("critic"), dict)
-                or item["critic"].get("root_cause_confirmed") is not False):
+                or item["critic"].get("root_cause_confirmed") is not False
+                or item["critic"].get("runtime_attested") is not False
+                or item["critic"].get("disposition") not in (
+                    "SUPPORTED_SYNTHETIC_HYPOTHESIS", "NEEDS_MORE_EVIDENCE")
+                or item["analyst"].get("impact_state") != item["impact_state"]):
             raise ValueError("unqualified_noc_decision")
         paths = item["impact_paths"]
         if item["impact_state"] == "UNKNOWN" and paths:
             raise ValueError("unknown_impact_with_paths")
         if item["impact_state"] == "SOURCED_SYNTHETIC_PATH" and not paths:
             raise ValueError("missing_sourced_path")
+        if ((item["impact_state"] == "UNKNOWN"
+                and item["critic"]["disposition"] != "NEEDS_MORE_EVIDENCE")
+                or (item["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+                    and item["critic"]["disposition"] != "SUPPORTED_SYNTHETIC_HYPOTHESIS")):
+            raise ValueError("contradictory_noc_critic")
         path_labels = []
         for path in paths:
-            if not isinstance(path, dict) or not isinstance(path.get("nodes"), list):
+            if (not isinstance(path, dict) or not isinstance(path.get("nodes"), list)
+                    or len(path["nodes"]) < 2
+                    or not all(isinstance(node, str) and node for node in path["nodes"])):
                 raise ValueError("invalid_noc_path")
             path_labels.append(" → ".join(safe(node) for node in path["nodes"]))
         path_html = "; ".join(path_labels) if path_labels else "UNKNOWN — preuve de dépendance manquante"
