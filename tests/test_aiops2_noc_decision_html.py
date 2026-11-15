@@ -173,3 +173,17 @@ def test_renderer_rejects_sha256_with_trailing_backslash_z():
     p["decisions"][0]["impact_paths"][0]["evidence_sha256"] = ["a" * 64 + r"\Z"]
     with pytest.raises(ValueError, match="invalid_noc_path"):
         render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("node", ["x" * 257, "é" * 257])
+def test_renderer_rejects_oversized_path_node(node):
+    p = projection()
+    p["decisions"][0]["impact_paths"][0]["nodes"] = [node, "payments"]
+    with pytest.raises(ValueError, match="invalid_noc_path"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_accepts_path_node_at_length_boundary():
+    p = projection()
+    p["decisions"][0]["impact_paths"][0]["nodes"] = ["x" * 256, "payments"]
+    assert "x" * 256 in render_computed_noc_html(p)
