@@ -37,3 +37,26 @@ def test_no_write_methods():
     for method in ("post", "put", "patch", "delete"):
         response = getattr(client, method)("/demo/aiops2-computed-noc")
         assert response.status_code == 405
+
+
+
+def test_computed_demo_does_not_open_network_connections(monkeypatch):
+    import socket
+
+    def deny_network(*args, **kwargs):
+        raise AssertionError("synthetic NOC demo attempted network I/O")
+
+    monkeypatch.setattr(socket.socket, "connect", deny_network)
+    monkeypatch.setattr(socket.socket, "connect_ex", deny_network)
+    for path in ("/demo/aiops2-computed-noc", "/demo/api/aiops2-computed-noc"):
+        response = client.get(path)
+        assert response.status_code == 200
+
+
+def test_computed_demo_has_scriptless_no_cache_headers():
+    for path in ("/demo/aiops2-computed-noc", "/demo/api/aiops2-computed-noc"):
+        response = client.get(path)
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert "default-src 'none'" in response.headers["content-security-policy"]
+        assert "script-src" not in response.headers["content-security-policy"]
