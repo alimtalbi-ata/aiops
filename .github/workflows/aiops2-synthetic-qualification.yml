@@ -1,6 +1,15 @@
 name: AIOps2 synthetic qualification
 
 on:
+  push:
+    branches:
+      - 'integration/aiops2-convergence-20261114'
+    paths:
+      - 'scripts/aiops2_*.py'
+      - 'tests/test_aiops2_*.py'
+      - 'app/portal/aiops2_computed_noc_demo.py'
+      - 'app/portal/main.py'
+      - '.github/workflows/aiops2-synthetic-qualification.yml'
   pull_request:
     paths:
       - 'scripts/aiops2_*.py'
