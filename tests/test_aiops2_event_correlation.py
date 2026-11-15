@@ -47,10 +47,16 @@ def test_cross_service_isolation():
 def test_conflicting_duplicate_rejected_without_overwrite():
     result = correlate_events([event(), event(ci_id="other-ci")], as_of=NOW)
     assert result["incidents"] == []
-    assert result["rejected"] == [{"index": 1, "reason": "conflicting duplicate event identity"}]
+    assert result["rejected"] == [
+        {"index": 0, "reason": "conflicting duplicate event identity"},
+        {"index": 1, "reason": "conflicting duplicate event identity"},
+    ]
     reversed_result = correlate_events([event(ci_id="other-ci"), event()], as_of=NOW)
     assert reversed_result["incidents"] == []
-    assert reversed_result["rejected"] == [{"index": 1, "reason": "conflicting duplicate event identity"}]
+    assert reversed_result["rejected"] == [
+        {"index": 0, "reason": "conflicting duplicate event identity"},
+        {"index": 1, "reason": "conflicting duplicate event identity"},
+    ]
 
 
 @pytest.mark.parametrize("override", [
@@ -104,3 +110,19 @@ def test_oversized_event_identifiers_fail_closed(field):
 def test_event_identifier_256_character_boundary(field):
     normalized = normalize_event(event(**{field: "x" * 256}))
     assert normalized[field] == "x" * 256
+
+
+def test_conflicting_event_identity_audits_first_and_all_later_receipts():
+    result = correlate_events([
+        event(),
+        event(source_event_id="unrelated"),
+        event(ci_id="other-ci"),
+        event(ci_id="third-ci"),
+    ], as_of=NOW)
+    assert len(result["incidents"]) == 1
+    assert result["incidents"][0]["event_count"] == 1
+    assert result["rejected"] == [
+        {"index": 0, "reason": "conflicting duplicate event identity"},
+        {"index": 2, "reason": "conflicting duplicate event identity"},
+        {"index": 3, "reason": "conflicting duplicate event identity"},
+    ]
