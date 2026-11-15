@@ -102,3 +102,20 @@ def test_high_fanout_cannot_overfill_path_queue():
     assert result["resource_budget_exhausted"] is True
     assert result["impact_state"] == "UNKNOWN"
     assert result["paths"] == []
+
+
+@pytest.mark.parametrize("field", ["from_id", "to_id", "source_id"])
+def test_oversized_twin_edge_identity_rejected(field):
+    result = resolve_impact(incident(), [edge("san-01", "payments", **{field: "x" * 257})], as_of=NOW)
+    assert result["impact_state"] == "UNKNOWN"
+    assert result["paths"] == []
+    assert result["rejected_edges"][0]["reason"] == "oversized edge identity"
+    assert result["live_remediation_authorized"] is False
+
+
+@pytest.mark.parametrize("field", ["from_id", "to_id", "source_id"])
+def test_twin_edge_identity_boundary_accepted(field):
+    e = edge("san-01", "payments", **{field: "x" * 256})
+    result = resolve_impact(incident(), [e], as_of=NOW)
+    assert result["rejected_edges"] == []
+    assert result["live_remediation_authorized"] is False
