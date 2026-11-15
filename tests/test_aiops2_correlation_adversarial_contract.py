@@ -99,3 +99,41 @@ def test_tenant_boundaries_do_not_merge_same_service_or_source_event_id():
     assert all(incident["event_count"] == 1 for incident in result["incidents"])
     assert all(incident["impact_state"] == "UNKNOWN" for incident in result["incidents"])
     assert all(incident["live_remediation_authorized"] is False for incident in result["incidents"])
+
+
+def test_all_rejected_events_keep_unknown_and_policy_closed():
+    result = correlate_events([
+        sample(source_event_id="stale", observed_at="2026-11-15T11:44:59Z"),
+        sample(source_event_id="future", known_at="2026-11-15T12:00:01Z"),
+    ], as_of=NOW)
+    assert result["incidents"] == []
+    assert len(result["rejected"]) == 2
+    assert result["scope"] == "ISOLATED_DETERMINISTIC_NO_LIVE_EFFECTS"
+    assert result["runtime_attested"] is False
+    assert result["live_remediation_authorized"] is False
+
+
+def test_cross_service_san_payments_is_not_causal_or_authorized():
+    san = sample(service_id="storage", ci_id="san-01", severity="P1")
+    payments = sample(source="prometheus", source_event_id="pay-1",
+                      service_id="payments", ci_id="payments-api",
+                      evidence_sha256="b" * 64)
+    result = correlate_events([san, payments], as_of=NOW)
+    assert len(result["incidents"]) == 2
+    assert {x["service_id"] for x in result["incidents"]} == {"storage", "payments"}
+    assert all(x["impact_state"] == "UNKNOWN" for x in result["incidents"])
+    assert all("causal_link" not in x and "twin_edge" not in x for x in result["incidents"])
+    assert all(x["live_remediation_authorized"] is False for x in result["incidents"])
+    assert result["live_remediation_authorized"] is False
+
+
+def test_deduplication_is_permutation_invariant_for_identical_receipts():
+    first = sample()
+    second = sample(source="grafana", source_event_id="dashboard-1",
+                    evidence_sha256="c" * 64)
+    a = correlate_events([first, second, copy.deepcopy(first)], as_of=NOW)
+    b = correlate_events([second, copy.deepcopy(first), first], as_of=NOW)
+    assert a["incidents"] == b["incidents"]
+    assert a["rejected"] == b["rejected"] == []
+    assert a["incidents"][0]["event_count"] == 2
+    assert a["live_remediation_authorized"] is False
