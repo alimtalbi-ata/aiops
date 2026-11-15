@@ -238,12 +238,12 @@ jobs:
           AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/acme-browser
         run: python -m unittest discover -s tests -p "test_explore_story_playwright_e2e.py" -v
       - name: Upload unreviewed CI-simulated portal browser observation
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: acme-explore-story-ci-simulated
           path: ${{ runner.temp }}/acme-browser/
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 7
       - name: Worker simulation Policy contract and safety regression tests
         run: python -m unittest discover -s tests -p "test_simulation_policy_contract.py" -v
