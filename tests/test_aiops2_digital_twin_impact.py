@@ -287,3 +287,17 @@ def test_cross_source_conflict_preserves_unrelated_route():
     result = resolve_impact(incident(), [a, b, independent], as_of=NOW)
     assert [p["nodes"] for p in result["paths"]] == [["san-01", "payments"]]
     assert len(result["rejected_edges"]) == 2
+
+
+
+def test_quarantined_source_conflict_cannot_be_overridden_by_third_source():
+    a = edge("san-01", "payments", source_id="cmdb-a", evidence_sha256="a" * 64)
+    b = edge("san-01", "payments", source_id="cmdb-a", evidence_sha256="b" * 64)
+    c = edge("san-01", "payments", source_id="cmdb-b", evidence_sha256="a" * 64)
+    for receipts in ([a, b, c], [c, b, a]):
+        result = resolve_impact(incident(), receipts, as_of=NOW)
+        assert result["impact_state"] == "UNKNOWN"
+        assert result["paths"] == []
+        assert result["live_remediation_authorized"] is False
+        assert any(r["reason"] == "conflicting relation evidence"
+                   for r in result["rejected_edges"])
