@@ -382,6 +382,23 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
 
     def test_08_customer_incident_cockpit_real_chromium_walkthrough_and_mobile(self):
         """Real browser checks the actual customer-facing SAN -> Payments page."""
+        # addCleanup runs even when an assertion fails, before tearDown closes
+        # the browser context. A diagnostic screenshot is not a PASS receipt.
+        def retain_last_browser_state():
+            output = Path(os.environ.get(
+                "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")
+            ))
+            try:
+                output.mkdir(parents=True, exist_ok=True)
+                if not self.page.is_closed():
+                    self.page.screenshot(
+                        path=str(output / "acme-cockpit-debug-last-state.png"),
+                        full_page=True, timeout=5000, animations="disabled",
+                    )
+            except Exception:
+                # Never replace the original browser assertion failure.
+                pass
+        self.addCleanup(retain_last_browser_state)
         response = self.page.goto(self.base + "/demo/acme-incident-cockpit")
         self.assertEqual(response.status, 200)
         expect(self.page.get_by_role("heading", name=re.compile("Parcours démontrable"))).to_be_visible()
