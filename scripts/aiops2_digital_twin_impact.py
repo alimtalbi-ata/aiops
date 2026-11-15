@@ -85,7 +85,14 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
             node, nodes, proof = queue.popleft()
             if node == service and proof:
                 paths.append({"nodes": nodes, "evidence_sha256": proof})
+                if len(paths) > 100:
+                    exhausted = True
+                    break
                 continue
+            # The downstream Analyst/Critic and HTML contracts cap path depth at 100.
+            if len(nodes) >= 100 and graph.get(node):
+                exhausted = True
+                break
             for edge in graph.get(node, []):
                 nxt = edge["to_id"]
                 if nxt not in nodes:
