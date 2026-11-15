@@ -105,3 +105,24 @@ def test_upstream_live_claims_and_missing_guards_fail_closed(which, field, value
     (forged_incident if which == "incident" else forged_impact)[field] = value
     with pytest.raises(InvalidEvent, match="unqualified upstream"):
         analyze_and_critique(forged_incident, forged_impact)
+
+
+
+@pytest.mark.parametrize("budget_value", [True, None, "false", 0])
+def test_twin_budget_cannot_support_sourced_path_or_be_ambiguous(budget_value):
+    incident, impact = inputs()
+    forged = copy.deepcopy(impact)
+    forged["resource_budget_exhausted"] = budget_value
+    with pytest.raises(InvalidEvent, match="resource budget|exhausted impact budget"):
+        analyze_and_critique(incident, forged)
+
+
+def test_exhausted_twin_budget_keeps_unknown_and_requests_evidence():
+    incident, impact = inputs()
+    impact["resource_budget_exhausted"] = True
+    impact["impact_state"] = "UNKNOWN"
+    impact["paths"] = []
+    result = analyze_and_critique(incident, impact)
+    assert result["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
+    assert result["critic"]["root_cause_confirmed"] is False
+    assert result["policy_disposition"] == "DENY_LIVE"
