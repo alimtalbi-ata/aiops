@@ -125,3 +125,26 @@ def test_high_fanout_twin_budget_exhaustion_never_promotes_impact():
     assert decision["policy_disposition"] == "DENY_LIVE"
     assert decision["runtime_attested"] is False
     assert decision["live_remediation_authorized"] is False
+
+
+
+def test_oversized_twin_edge_never_promotes_end_to_end_impact():
+    oversized = edge("san-01", "payments")
+    oversized["source_id"] = "synthetic-" + "x" * 257
+    result = build_noc_decision([event()], [oversized], as_of=NOW)
+    decision = result["decisions"][0]
+    assert decision["impact_state"] == "UNKNOWN"
+    assert decision["impact_paths"] == []
+    assert decision["rejected_edges"][0]["reason"] == "oversized edge identity"
+    assert decision["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
+    assert decision["policy_disposition"] == "DENY_LIVE"
+    assert decision["live_remediation_authorized"] is False
+
+
+def test_oversized_event_identity_never_creates_end_to_end_decision():
+    oversized = event()
+    oversized["ci_id"] = "x" * 257
+    result = build_noc_decision([oversized], [edge("san-01", "payments")], as_of=NOW)
+    assert result["decisions"] == []
+    assert len(result["rejected_events"]) == 1
+    assert result["live_remediation_authorized"] is False
