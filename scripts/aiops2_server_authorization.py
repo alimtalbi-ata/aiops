@@ -51,7 +51,7 @@ def authorize(
     resolver to request JSON, client headers or unverified bearer claims.
     """
     denied = Decision(False, "AUTHORIZATION_NOT_QUALIFIED")
-    if now.tzinfo is None or now.utcoffset() is None:
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
         return denied
     if any(not isinstance(v, str) or not v.strip() for v in (
         request.subject_id, request.tenant_id, request.run_id,
@@ -73,11 +73,13 @@ def authorize(
         return denied
     if not isinstance(grant, ServerGrant) or not owner_tenant:
         return denied
-    if grant.expires_at.tzinfo is None or grant.expires_at.utcoffset() is None:
+    if (not isinstance(grant.expires_at, datetime) or grant.expires_at.tzinfo is None
+            or grant.expires_at.utcoffset() is None):
         return denied
     if grant.expires_at.astimezone(timezone.utc) <= now.astimezone(timezone.utc):
         return denied
-    if not grant.policy_version.strip() or not grant.evidence_id.strip():
+    if any(not isinstance(value, str) or not value.strip()
+           for value in (grant.policy_version, grant.evidence_id)):
         return denied
     if (
         grant.subject_id, grant.tenant_id, grant.run_id,
