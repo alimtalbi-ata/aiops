@@ -4,7 +4,7 @@ An authenticated bearer alone never supplies actor, tenant or Run authority.
 Only a trusted server resolver may populate the context below.
 """
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 
@@ -38,6 +38,9 @@ class Decision:
     live_remediation_authorized: bool = False
 
 
+MAX_GRANT_REMAINING = timedelta(minutes=5)
+
+
 def authorize(
     request: AccessRequest,
     *,
@@ -53,7 +56,11 @@ def authorize(
     denied = Decision(False, "AUTHORIZATION_NOT_QUALIFIED")
     if not isinstance(request, AccessRequest):
         return denied
-    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
+    try:
+        if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
+            return denied
+        utc_now = now.astimezone(timezone.utc)
+    except (ValueError, OverflowError, TypeError):
         return denied
     if any(not isinstance(v, str) or not v.strip() for v in (
         request.subject_id, request.tenant_id, request.run_id,
@@ -76,10 +83,14 @@ def authorize(
         return denied
     if not isinstance(grant, ServerGrant):
         return denied
-    if (not isinstance(grant.expires_at, datetime) or grant.expires_at.tzinfo is None
-            or grant.expires_at.utcoffset() is None):
-        return denied
-    if grant.expires_at.astimezone(timezone.utc) <= now.astimezone(timezone.utc):
+    try:
+        if (not isinstance(grant.expires_at, datetime) or grant.expires_at.tzinfo is None
+                or grant.expires_at.utcoffset() is None):
+            return denied
+        remaining = grant.expires_at.astimezone(timezone.utc) - utc_now
+        if remaining <= timedelta(0) or remaining > MAX_GRANT_REMAINING:
+            return denied
+    except (ValueError, OverflowError, TypeError):
         return denied
     if any(not isinstance(value, str) or not value.strip()
            for value in (grant.policy_version, grant.evidence_id)):
