@@ -65,6 +65,10 @@ def render_computed_noc_html(projection: object) -> str:
                 or (item["impact_state"] == "SOURCED_SYNTHETIC_PATH"
                     and item["critic"]["disposition"] != "SUPPORTED_SYNTHETIC_HYPOTHESIS")):
             raise ValueError("contradictory_noc_critic")
+        expected_missing = ([] if item["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+                            else ["SOURCED_DEPENDENCY_PATH"])
+        if item["analyst"].get("missing_evidence") != expected_missing:
+            raise ValueError("contradictory_noc_missing_evidence")
         expected_action = ("REVIEW_SYNTHETIC_EVIDENCE"
                            if item["impact_state"] == "SOURCED_SYNTHETIC_PATH"
                            else "COLLECT_MISSING_DEPENDENCY_EVIDENCE")
