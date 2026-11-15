@@ -157,3 +157,19 @@ def test_renderer_escapes_untrusted_path_nodes():
     html = render_computed_noc_html(p)
     assert "<img" not in html
     assert "&lt;img" in html
+
+
+def test_renderer_accepts_valid_sha256_evidence_on_synthetic_path():
+    """A well-formed SHA-256 must not be rejected by the end anchor."""
+    p = projection()
+    p["decisions"][0]["impact_paths"][0]["evidence_sha256"] = ["0123456789abcdef" * 4]
+    html = render_computed_noc_html(p)
+    assert "san-01 → payments" in html
+
+
+def test_renderer_rejects_sha256_with_trailing_backslash_z():
+    """The end anchor must not be interpreted as a literal backslash-Z."""
+    p = projection()
+    p["decisions"][0]["impact_paths"][0]["evidence_sha256"] = ["a" * 64 + r"\Z"]
+    with pytest.raises(ValueError, match="invalid_noc_path"):
+        render_computed_noc_html(p)
