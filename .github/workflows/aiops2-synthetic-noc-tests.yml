@@ -1,0 +1,38 @@
+name: AIOps2 synthetic NOC tests
+
+on:
+  pull_request:
+    paths:
+      - "scripts/aiops2_*.py"
+      - "tests/test_aiops2_*.py"
+      - ".github/workflows/aiops2-synthetic-noc-tests.yml"
+  push:
+    branches:
+      - integration/aiops2-convergence-20261114
+    paths:
+      - "scripts/aiops2_*.py"
+      - "tests/test_aiops2_*.py"
+      - ".github/workflows/aiops2-synthetic-noc-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-noc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test runner
+        run: python -m pip install pytest
+      - name: Verify offline synthetic contracts
+        run: |
+          python -m pytest -q \
+            tests/test_aiops2_event_correlation.py \
+            tests/test_aiops2_digital_twin_impact.py \
+            tests/test_aiops2_analyst_critic.py \
+            tests/test_aiops2_noc_decision.py \
+            tests/test_aiops2_noc_decision_html.py
