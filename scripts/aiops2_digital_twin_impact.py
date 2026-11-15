@@ -20,7 +20,8 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
     tenant = incident.get("tenant_id")
     service = incident.get("service_id")
     events = incident.get("events")
-    if not isinstance(tenant, str) or not tenant or not isinstance(service, str) or not service:
+    if (not isinstance(tenant, str) or not 1 <= len(tenant) <= 256
+            or not isinstance(service, str) or not 1 <= len(service) <= 256):
         raise InvalidEvent("invalid incident identity")
     if not isinstance(events, list) or not events:
         raise InvalidEvent("incident has no events")
@@ -34,7 +35,7 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         if not isinstance(event, dict) or event.get("tenant_id") != tenant:
             raise InvalidEvent("cross-tenant or invalid incident event")
         ci = event.get("ci_id")
-        if not isinstance(ci, str) or not ci:
+        if not isinstance(ci, str) or not 1 <= len(ci) <= 256:
             raise InvalidEvent("invalid incident CI")
         sources.add(ci)
     graph = {}
