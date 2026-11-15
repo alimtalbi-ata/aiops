@@ -1,0 +1,63 @@
+"""Script-free HTML for offline computed NOC projection."""
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from aiops2_noc_decision_html import render_computed_noc_html
+from aiops2_noc_decision import build_noc_decision
+
+NOW = "2026-11-15T12:00:00Z"
+
+
+def projection():
+    event = {"tenant_id": "acme", "source": "checkmk", "source_event_id": "san-1",
+             "ci_id": "san-01", "service_id": "payments", "severity": "P1",
+             "evidence_sha256": "a" * 64, "observed_at": "2026-11-15T11:59:00Z",
+             "known_at": "2026-11-15T11:59:05Z"}
+    edge = {"tenant_id": "acme", "from_id": "san-01", "to_id": "payments",
+            "source_id": "synthetic-cmdb", "evidence_sha256": "b" * 64,
+            "observed_at": "2026-11-15T11:59:00Z"}
+    return build_noc_decision([event], [edge], as_of=NOW)
+
+
+def test_computed_projection_renders_as_simulation():
+    html = render_computed_noc_html(projection())
+    assert "SIMULATION" in html
+    assert "DENY_LIVE" in html
+    assert "san-01 → payments" in html
+    assert "<script" not in html.lower()
+
+
+def test_unknown_path_is_explicit():
+    p = projection()
+    p["decisions"][0]["impact_state"] = "UNKNOWN"
+    p["decisions"][0]["impact_paths"] = []
+    assert "UNKNOWN" in render_computed_noc_html(p)
+
+
+def test_html_escapes_untrusted_identity():
+    p = projection()
+    p["decisions"][0]["incident_id"] = "<img src=x onerror=alert(1)>"
+    html = render_computed_noc_html(p)
+    assert "<img" not in html
+    assert "&lt;img" in html
+
+
+@pytest.mark.parametrize("key,value", [
+    ("mode", "LIVE"), ("runtime_attested", True),
+    ("live_remediation_authorized", True), ("schema", "unknown")
+])
+def test_unqualified_projection_rejected(key, value):
+    p = projection()
+    p[key] = value
+    with pytest.raises(ValueError):
+        render_computed_noc_html(p)
+
+
+def test_unqualified_decision_rejected():
+    p = projection()
+    p["decisions"][0]["policy_disposition"] = "ALLOW_LIVE"
+    with pytest.raises(ValueError):
+        render_computed_noc_html(p)
