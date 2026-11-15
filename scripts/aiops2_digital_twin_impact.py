@@ -42,6 +42,8 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
         if not isinstance(ci, str) or not 1 <= len(ci) <= 256:
             raise InvalidEvent("invalid incident CI")
         sources.add(ci)
+        if len(sources) > 100:
+            raise InvalidEvent("incident CI origin budget exceeded")
     graph = {}
     rejected = []
     for index, edge in enumerate(edges):
