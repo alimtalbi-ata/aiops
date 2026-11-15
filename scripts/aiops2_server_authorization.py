@@ -51,6 +51,8 @@ def authorize(
     resolver to request JSON, client headers or unverified bearer claims.
     """
     denied = Decision(False, "AUTHORIZATION_NOT_QUALIFIED")
+    if not isinstance(request, AccessRequest):
+        return denied
     if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
         return denied
     if any(not isinstance(v, str) or not v.strip() for v in (
@@ -68,10 +70,9 @@ def authorize(
         return denied
     try:
         grant = resolve_grant(request)
-        owner_tenant = resolve_run_tenant(request.run_id)
     except Exception:
         return denied
-    if not isinstance(grant, ServerGrant) or not owner_tenant:
+    if not isinstance(grant, ServerGrant):
         return denied
     if (not isinstance(grant.expires_at, datetime) or grant.expires_at.tzinfo is None
             or grant.expires_at.utcoffset() is None):
@@ -89,7 +90,13 @@ def authorize(
         request.resource, request.action
     ):
         return denied
-    if owner_tenant != request.tenant_id:
+    # Resolve Run ownership only after the grant is fully qualified: no
+    # unnecessary cross-tenant existence lookups for invalid credentials.
+    try:
+        owner_tenant = resolve_run_tenant(request.run_id)
+    except Exception:
+        return denied
+    if not isinstance(owner_tenant, str) or owner_tenant != request.tenant_id:
         return denied
     return Decision(True, "AUTHORIZED_SYNTHETIC_SERVER_GRANT",
                     grant.policy_version, grant.evidence_id)
