@@ -35,6 +35,7 @@ def test_unknown_path_is_explicit():
     p["decisions"][0]["impact_state"] = "UNKNOWN"
     p["decisions"][0]["impact_paths"] = []
     p["decisions"][0]["analyst"]["impact_state"] = "UNKNOWN"
+    p["decisions"][0]["analyst"]["missing_evidence"] = ["SOURCED_DEPENDENCY_PATH"]
     p["decisions"][0]["critic"]["disposition"] = "NEEDS_MORE_EVIDENCE"
     p["decisions"][0]["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
     assert "UNKNOWN" in render_computed_noc_html(p)
