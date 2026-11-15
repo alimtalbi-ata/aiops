@@ -50,6 +50,8 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         if not isinstance(ci, str) or not ci or len(ci) > 256:
             raise InvalidEvent("invalid incident CI")
         incident_cis.add(ci)
+    if len(incident_cis) > 100:
+        raise InvalidEvent("incident CI origin budget exceeded")
     if type(impact.get("resource_budget_exhausted")) is not bool:
         raise InvalidEvent("unqualified impact resource budget")
     if impact["resource_budget_exhausted"] and (
