@@ -58,6 +58,8 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
     paths = impact.get("paths")
     if not isinstance(paths, list):
         raise InvalidEvent("invalid impact paths")
+    if len(paths) > 100:
+        raise InvalidEvent("impact path budget exceeded")
     if impact.get("impact_state") not in ("UNKNOWN", "SOURCED_SYNTHETIC_PATH"):
         raise InvalidEvent("invalid impact state")
     if impact["impact_state"] == "UNKNOWN" and paths:
@@ -67,7 +69,7 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         if not isinstance(path, dict):
             raise InvalidEvent("invalid impact path")
         nodes, hashes = path.get("nodes"), path.get("evidence_sha256")
-        if (not isinstance(nodes, list) or len(nodes) < 2 or
+        if (not isinstance(nodes, list) or not 2 <= len(nodes) <= 100 or
                 not all(isinstance(n, str) and n and len(n) <= 256 for n in nodes) or
                 nodes[0] not in incident_cis or nodes[-1] != service or
                 len(set(nodes)) != len(nodes) or not isinstance(hashes, list) or
@@ -88,7 +90,8 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         "missing_evidence": [] if supported else ["SOURCED_DEPENDENCY_PATH"],
         "impact_state": impact["impact_state"],
     }
-    # This membership check is internal consistency only, not independent\n    # verification of source authenticity or path-edge correspondence.
+    # This membership check is internal consistency only, not independent
+    # verification of source authenticity or path-edge correspondence.
     available = evidence | path_evidence
     citations_valid = all(hash_ in available for hash_ in hypothesis["evidence_sha256"])
     critic = {
