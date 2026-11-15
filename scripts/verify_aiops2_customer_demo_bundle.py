@@ -4,6 +4,7 @@ This is consistency verification, not runtime attestation or artifact signing.
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,17 @@ def verify_bundle(package_dir: Path, smoke_dir: Path, *,
         if not verify_smoke(smoke, provenance, repository=repository,
                             head_sha=head_sha, run_id=run_id,
                             run_attempt=run_attempt):
+            return False
+        # Validate shared identifiers independently: equal missing/invalid fields
+        # must not pass even if a lower-level validator is accidentally bypassed.
+        incident = manifest.get("incident_id")
+        digest = manifest.get("source_sha256")
+        revision = manifest.get("git_revision")
+        if (not isinstance(incident, str) or not incident.strip()
+                or not isinstance(digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+                or not isinstance(revision, str)
+                or re.fullmatch(r"[0-9a-f]{40}", revision) is None):
             return False
         return (manifest.get("git_revision") == provenance.get("commit_sha")
                 and manifest.get("incident_id") == cockpit.get("incident_id")
