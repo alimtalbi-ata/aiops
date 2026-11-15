@@ -201,3 +201,13 @@ def test_analyst_enforces_incident_ci_origin_budget(count, accepted):
     else:
         with pytest.raises(InvalidEvent, match="incident CI origin budget exceeded"):
             analyze_and_critique(incident, impact)
+
+
+
+def test_analyst_rejects_duplicate_route_even_with_distinct_digests():
+    incident, impact = inputs()
+    duplicate = copy.deepcopy(impact["paths"][0])
+    duplicate["evidence_sha256"] = ["c" * 64]
+    impact["paths"].append(duplicate)
+    with pytest.raises(InvalidEvent, match="duplicate impact route"):
+        analyze_and_critique(incident, impact)
