@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/aiops2_*.py"
       - "app/portal/**"
+      - "app/core/portal_tenant_runs.py"
       - "app/shared/**"
       - "app/requirements.txt"
       - "tests/test_aiops2_*.py"
@@ -16,6 +17,7 @@ on:
     paths:
       - "scripts/aiops2_*.py"
       - "app/portal/**"
+      - "app/core/portal_tenant_runs.py"
       - "app/shared/**"
       - "app/requirements.txt"
       - "tests/test_aiops2_*.py"
@@ -58,4 +60,4 @@ jobs:
       - name: Install portal dependencies and E2E test runner
         run: python -m pip install -r app/requirements.txt pytest httpx
       - name: Verify cross-layer offline E2E and fail-closed portal
-        run: python -m pytest -q tests/test_aiops2_cross_layer_e2e.py tests/test_aiops2_auth_boundary_e2e.py tests/test_aiops2_http_tenant_spoof_e2e.py tests/test_aiops2_authorized_http_lab_e2e.py tests/test_aiops2_portal_policy_isolation_e2e.py tests/test_aiops2_portal_authorized_boundary.py tests/test_aiops2_portal_boundary_http_e2e.py tests/test_aiops2_authorization_parity_e2e.py tests/test_aiops2_server_identity_scope_e2e.py tests/test_aiops2_core_independent_acl_e2e.py
+        run: python -m pytest -q tests/test_aiops2_cross_layer_e2e.py tests/test_aiops2_auth_boundary_e2e.py tests/test_aiops2_http_tenant_spoof_e2e.py tests/test_aiops2_authorized_http_lab_e2e.py tests/test_aiops2_portal_policy_isolation_e2e.py tests/test_aiops2_portal_authorized_boundary.py tests/test_aiops2_portal_boundary_http_e2e.py tests/test_aiops2_authorization_parity_e2e.py tests/test_aiops2_server_identity_scope_e2e.py tests/test_aiops2_core_independent_acl_e2e.py tests/test_aiops2_core_exact_run_sql_e2e.py
