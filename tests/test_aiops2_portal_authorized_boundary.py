@@ -179,3 +179,20 @@ def test_missing_policy_version_rejected_before_run_lookup():
                                 resolve_run_tenant=forbidden,
                                 read_run=forbidden, now=NOW)
     assert calls == []
+
+
+def test_excessive_grant_lifetime_fails_before_run_lookup():
+    calls = []
+    def forbidden(*args):
+        calls.append("unexpected")
+        raise AssertionError("future-dated authority must not reach Core")
+    for lifetime in (timedelta(minutes=5, microseconds=1), timedelta(days=365)):
+        def grant(scope):
+            return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
+                             NOW + lifetime, "proof-a", "policy-v1",
+                             "core.run", "read")
+        with pytest.raises(UnqualifiedReadPermission):
+            read_authorized_run(SCOPE, resolve_grant=grant,
+                                resolve_run_tenant=forbidden,
+                                read_run=forbidden, now=NOW)
+    assert calls == []
