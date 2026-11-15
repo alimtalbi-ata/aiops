@@ -111,3 +111,34 @@ def test_resolver_failures_and_malformed_scope_never_reach_reader():
                                 resolve_run_tenant=owner_resolver,
                                 read_run=forbidden, now=NOW)
     assert calls == []
+
+
+def test_malformed_timezone_evidence_fails_closed_before_reader():
+    from datetime import tzinfo
+
+    class BrokenTimezone(tzinfo):
+        def utcoffset(self, dt):
+            raise ValueError("invalid timezone evidence")
+        def dst(self, dt):
+            return timedelta(0)
+
+    calls = []
+    def owner(_):
+        calls.append("owner")
+        return "tenant-a"
+    def reader(*_):
+        calls.append("reader")
+        return {}
+    def grant(scope):
+        return ReadGrant(scope.subject_id, scope.tenant_id, scope.run_id,
+                         datetime(2026, 11, 15, tzinfo=BrokenTimezone()), "proof-a")
+
+    with pytest.raises(UnqualifiedReadPermission):
+        read_authorized_run(SCOPE, resolve_grant=grant,
+                            resolve_run_tenant=owner, read_run=reader, now=NOW)
+    assert calls == []
+    with pytest.raises(UnqualifiedReadPermission):
+        read_authorized_run(SCOPE, resolve_grant=lambda _: None,
+                            resolve_run_tenant=owner, read_run=reader,
+                            now=datetime(2026, 11, 15, tzinfo=BrokenTimezone()))
+    assert calls == []
