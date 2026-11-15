@@ -47,6 +47,11 @@ def render_computed_noc_html(projection: object) -> str:
                 or (item["impact_state"] == "SOURCED_SYNTHETIC_PATH"
                     and item["critic"]["disposition"] != "SUPPORTED_SYNTHETIC_HYPOTHESIS")):
             raise ValueError("contradictory_noc_critic")
+        expected_action = ("REVIEW_SYNTHETIC_EVIDENCE"
+                           if item["impact_state"] == "SOURCED_SYNTHETIC_PATH"
+                           else "COLLECT_MISSING_DEPENDENCY_EVIDENCE")
+        if item.get("next_noc_action") != expected_action:
+            raise ValueError("contradictory_noc_next_action")
         path_labels = []
         for path in paths:
             if (not isinstance(path, dict) or not isinstance(path.get("nodes"), list)
