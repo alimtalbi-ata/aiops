@@ -42,7 +42,8 @@ jobs:
             tests/test_aiops2_digital_twin_impact.py \
             tests/test_aiops2_analyst_critic.py \
             tests/test_aiops2_noc_decision.py \
-            tests/test_aiops2_noc_decision_html.py
+            tests/test_aiops2_noc_decision_html.py \
+            tests/test_aiops2_server_authorization.py
 
   offline-e2e:
     runs-on: ubuntu-latest
