@@ -33,6 +33,7 @@ def build_noc_decision(events: list, edges: list, *, as_of: str) -> dict:
             "next_noc_action": (
                 "REVIEW_SYNTHETIC_EVIDENCE"
                 if intelligence["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
+                else "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH" if impact["resource_budget_exhausted"]
                 else "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
             ),
             "runtime_attested": False,
