@@ -328,3 +328,33 @@ def test_renderer_rejects_more_origins_than_events():
     p["decisions"][0]["incident_ci_ids"].append("san-02")
     with pytest.raises(ValueError, match="invalid_noc_event_count"):
         render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("budget", [None, 0, 1, "false"])
+def test_renderer_rejects_non_boolean_twin_budget(budget):
+    p = projection()
+    p["decisions"][0]["resource_budget_exhausted"] = budget
+    with pytest.raises(ValueError, match="invalid_noc_resource_budget"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_sourced_paths_with_exhausted_twin_budget():
+    p = projection()
+    p["decisions"][0]["resource_budget_exhausted"] = True
+    with pytest.raises(ValueError, match="contradictory_noc_resource_budget"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_labels_exhausted_twin_budget_without_claiming_missing_edge():
+    p = projection()
+    decision = p["decisions"][0]
+    decision["impact_state"] = "UNKNOWN"
+    decision["impact_paths"] = []
+    decision["resource_budget_exhausted"] = True
+    decision["analyst"]["impact_state"] = "UNKNOWN"
+    decision["analyst"]["missing_evidence"] = ["SOURCED_DEPENDENCY_PATH"]
+    decision["critic"]["disposition"] = "NEEDS_MORE_EVIDENCE"
+    decision["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    html = render_computed_noc_html(p)
+    assert "UNKNOWN — budget de calcul épuisé" in html
+    assert "UNKNOWN — preuve de dépendance manquante" not in html
