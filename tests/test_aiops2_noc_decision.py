@@ -148,3 +148,22 @@ def test_oversized_event_identity_never_creates_end_to_end_decision():
     assert result["decisions"] == []
     assert len(result["rejected_events"]) == 1
     assert result["live_remediation_authorized"] is False
+
+
+
+def test_decision_projects_deduplicated_incident_ci_origins():
+    receipts = [event(), event(source="prometheus", ident="p-2", ci="payments-api"),
+                event(source="grafana", ident="g-3", ci="san-01")]
+    result = build_noc_decision(receipts, [edge("san-01", "payments")], as_of=NOW)
+    decision = result["decisions"][0]
+    assert decision["incident_ci_ids"] == ["payments-api", "san-01"]
+    assert decision["impact_paths"][0]["nodes"][0] in decision["incident_ci_ids"]
+    assert decision["policy_disposition"] == "DENY_LIVE"
+
+
+def test_unknown_decision_still_projects_incident_ci_origins():
+    result = build_noc_decision([event()], [], as_of=NOW)
+    decision = result["decisions"][0]
+    assert decision["incident_ci_ids"] == ["san-01"]
+    assert decision["impact_paths"] == []
+    assert decision["live_remediation_authorized"] is False
