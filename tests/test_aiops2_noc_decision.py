@@ -194,3 +194,24 @@ def test_budget_exhaustion_next_action_is_distinct_from_missing_dependency():
     assert "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH" not in missing_html
     assert exhausted_decision["live_remediation_authorized"] is False
     assert missing_decision["live_remediation_authorized"] is False
+
+
+
+def test_repeated_identical_twin_edge_does_not_duplicate_noc_path():
+    from aiops2_noc_decision_html import render_computed_noc_html
+    repeated = edge("san-01", "payments")
+    result = build_noc_decision([event()], [repeated, dict(repeated)], as_of=NOW)
+    decision = result["decisions"][0]
+    assert len(decision["impact_paths"]) == 1
+    assert decision["impact_paths"][0]["nodes"] == ["san-01", "payments"]
+    assert "san-01 → payments" in render_computed_noc_html(result)
+    assert decision["live_remediation_authorized"] is False
+
+
+def test_duplicate_twin_edge_order_does_not_change_projection():
+    e = edge("san-01", "storage")
+    downstream = edge("storage", "payments")
+    first = build_noc_decision([event()], [e, downstream, dict(e)], as_of=NOW)
+    second = build_noc_decision([event()], [dict(e), e, downstream], as_of=NOW)
+    assert first["decisions"][0]["impact_paths"] == second["decisions"][0]["impact_paths"]
+    assert len(first["decisions"][0]["impact_paths"]) == 1
