@@ -46,8 +46,12 @@ def read_authorized_run(
     denied = UnqualifiedReadPermission("TENANT_ACL_NOT_QUALIFIED")
     if not isinstance(scope, ReadScope) or not isinstance(now, datetime):
         raise denied
-    if now.tzinfo is None or now.utcoffset() is None:
-        raise denied
+    try:
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise denied
+        utc_now = now.astimezone(timezone.utc)
+    except (ValueError, OverflowError, TypeError):
+        raise denied from None
     if any(not isinstance(x, str) or not x.strip()
            for x in (scope.subject_id, scope.tenant_id, scope.run_id)):
         raise denied
@@ -57,10 +61,14 @@ def read_authorized_run(
         raise denied from None
     if not isinstance(grant, ReadGrant):
         raise denied
-    if not isinstance(grant.expires_at, datetime) or grant.expires_at.tzinfo is None:
-        raise denied
-    if grant.expires_at.utcoffset() is None or grant.expires_at <= now.astimezone(grant.expires_at.tzinfo):
-        raise denied
+    try:
+        if (not isinstance(grant.expires_at, datetime)
+                or grant.expires_at.tzinfo is None
+                or grant.expires_at.utcoffset() is None
+                or grant.expires_at.astimezone(timezone.utc) <= utc_now):
+            raise denied
+    except (ValueError, OverflowError, TypeError):
+        raise denied from None
     if (grant.subject_id, grant.tenant_id, grant.run_id) != (
             scope.subject_id, scope.tenant_id, scope.run_id):
         raise denied
