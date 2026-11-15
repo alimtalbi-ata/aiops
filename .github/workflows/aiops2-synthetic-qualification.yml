@@ -58,6 +58,8 @@ jobs:
             tests/test_aiops2_digital_twin_impact.py \
             tests/test_aiops2_analyst_critic.py \
             tests/test_aiops2_noc_decision.py \
-            tests/test_aiops2_noc_decision_html.py \
-            tests/test_aiops2_computed_noc_portal.py \
-            tests/test_aiops2_computed_noc_navigation.py
+            tests/test_aiops2_noc_decision_html.py
+      - name: Run isolated computed NOC route tests
+        run: python -m pytest -q tests/test_aiops2_computed_noc_portal.py
+      - name: Run integrated portal navigation tests
+        run: python -m pytest -q tests/test_aiops2_computed_noc_navigation.py
