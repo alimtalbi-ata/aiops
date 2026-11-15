@@ -265,3 +265,44 @@ def test_qualification_cli_fails_closed_if_report_destination_is_unwritable(
         assert main() == 1
     assert "BLOCKED: cannot write qualification report" in capsys.readouterr().err
     assert not missing_parent.exists()
+
+
+@pytest.mark.parametrize("filename", [
+    "manifest.json",
+    "cockpit.json",
+    "aiops2-packaged-demo-smoke.json",
+    "aiops2-packaged-demo-smoke-provenance.json",
+])
+@pytest.mark.parametrize("bad_root", [None, [], "not-an-object", 42])
+def test_bundle_rejects_non_object_json_roots_without_crashing(
+    tmp_path, filename, bad_root,
+):
+    package_dir, smoke_dir = tmp_path / "package", tmp_path / "smoke"
+    package_dir.mkdir()
+    smoke_dir.mkdir()
+    manifest = {
+        "git_revision": "a" * 40,
+        "incident_id": "SAN-P1",
+        "source_sha256": "b" * 64,
+        "runtime_execution_attested": False,
+        "live_remediation_authorized": False,
+    }
+    cockpit = {"incident_id": "SAN-P1", "source_sha256": "b" * 64}
+    smoke = {"incident_id": "SAN-P1", "source_sha256": "b" * 64}
+    provenance = {"commit_sha": "a" * 40, "run_id": "123"}
+    for name, payload, directory in (
+        ("manifest.json", manifest, package_dir),
+        ("cockpit.json", cockpit, package_dir),
+        ("aiops2-packaged-demo-smoke.json", smoke, smoke_dir),
+        ("aiops2-packaged-demo-smoke-provenance.json", provenance, smoke_dir),
+    ):
+        (directory / name).write_text(
+            json.dumps(bad_root if name == filename else payload),
+            encoding="utf-8",
+        )
+    with patch("verify_aiops2_customer_demo_bundle.verify_package", return_value=True), (
+         patch("verify_aiops2_customer_demo_bundle.verify_smoke", return_value=True)):
+        assert verify_bundle(
+            package_dir, smoke_dir, repository="alimtalbi-ata/aiops",
+            head_sha="a" * 40, run_id="123", run_attempt="1",
+        ) is False
