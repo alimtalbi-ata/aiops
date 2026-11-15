@@ -56,6 +56,11 @@ def render_computed_noc_html(projection: object) -> str:
         event_count = item.get("event_count")
         if (type(event_count) is not int or event_count < len(origins)):
             raise ValueError("invalid_noc_event_count")
+        if type(item.get("resource_budget_exhausted")) is not bool:
+            raise ValueError("invalid_noc_resource_budget")
+        if item["resource_budget_exhausted"] and (
+                item["impact_state"] != "UNKNOWN" or item["impact_paths"]):
+            raise ValueError("contradictory_noc_resource_budget")
         paths = item["impact_paths"]
         if len(paths) > 100:
             raise ValueError("noc_projection_path_budget_exceeded")
@@ -103,7 +108,9 @@ def render_computed_noc_html(projection: object) -> str:
             if not set(path["evidence_sha256"]).issubset(citation_set):
                 raise ValueError("uncited_noc_dependency_path")
             path_labels.append(" → ".join(safe(node) for node in path["nodes"]))
-        path_html = "; ".join(path_labels) if path_labels else "UNKNOWN — preuve de dépendance manquante"
+        path_html = ("; ".join(path_labels) if path_labels else
+                     "UNKNOWN — budget de calcul épuisé" if item["resource_budget_exhausted"] else
+                     "UNKNOWN — preuve de dépendance manquante")
         rows.append(
             "<tr><th scope='row'>" + safe(item.get("incident_id", "")) + "</th>"
             "<td>" + safe(item.get("tenant_id", "")) + "</td>"
