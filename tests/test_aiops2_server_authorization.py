@@ -79,3 +79,36 @@ def test_malformed_authority_payload_fails_closed_without_exception():
         assert result.allowed is False
         assert result.live_remediation_authorized is False
     assert decide(now=None).allowed is False
+
+
+def test_offline_service_boundary_never_reads_upstream_on_denial():
+    """Laboratory boundary: authorization precedes the protected Core/Twin read."""
+    calls = []
+
+    def protected_read(request, grant_resolver, owner_resolver):
+        decision = authorize(request, resolve_grant=grant_resolver,
+                             resolve_run_tenant=owner_resolver, now=NOW)
+        if not decision.allowed:
+            return {"state": "UNKNOWN", "reason": decision.reason,
+                    "live_remediation_authorized": False}
+        calls.append((request.tenant_id, request.run_id))
+        return {"state": "SYNTHETIC", "run_id": request.run_id,
+                "live_remediation_authorized": False}
+
+    allowed = protected_read(REQUEST, lambda _: grant_for(), lambda _: "tenant-a")
+    assert allowed["state"] == "SYNTHETIC"
+    assert calls == [("tenant-a", "run-a")]
+
+    for request, grant_resolver, owner_resolver in (
+        (replace(REQUEST, tenant_id="tenant-b"), lambda _: grant_for(), lambda _: "tenant-a"),
+        (REQUEST, lambda _: grant_for(), lambda _: "tenant-b"),
+        (REQUEST, lambda _: None, lambda _: "tenant-a"),
+        (REQUEST, lambda _: replace(grant_for(), expires_at=NOW), lambda _: "tenant-a"),
+        (replace(REQUEST, action="execute_live"), lambda _: grant_for(), lambda _: "tenant-a"),
+    ):
+        denied = protected_read(request, grant_resolver, owner_resolver)
+        assert denied["state"] == "UNKNOWN"
+        assert denied["reason"] == "AUTHORIZATION_NOT_QUALIFIED"
+        assert denied["live_remediation_authorized"] is False
+        assert "run_id" not in denied
+    assert calls == [("tenant-a", "run-a")], "denied requests must not reach upstream"
