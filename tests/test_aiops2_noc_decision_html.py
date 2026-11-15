@@ -154,6 +154,7 @@ def test_renderer_escapes_untrusted_path_nodes():
     p = projection()
     path = p["decisions"][0]["impact_paths"][0]
     path["nodes"] = ["<img src=x onerror=alert(1)>", "payments"]
+    p["decisions"][0]["incident_ci_ids"] = [path["nodes"][0]]
     html = render_computed_noc_html(p)
     assert "<img" not in html
     assert "&lt;img" in html
@@ -186,6 +187,7 @@ def test_renderer_rejects_oversized_path_node(node):
 def test_renderer_accepts_path_node_at_length_boundary():
     p = projection()
     p["decisions"][0]["impact_paths"][0]["nodes"] = ["x" * 256, "payments"]
+    p["decisions"][0]["incident_ci_ids"] = ["x" * 256]
     assert "x" * 256 in render_computed_noc_html(p)
 
 
@@ -212,3 +214,25 @@ def test_renderer_rejects_nonstring_display_metadata(field):
     p["decisions"][0][field] = 123
     with pytest.raises(ValueError, match="invalid_noc_display_metadata"):
         render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("origins", [None, [], ["san-01", "san-01"],
+                                    ["x" * 257], [123], ["san-01"] * 101])
+def test_renderer_rejects_invalid_incident_ci_origins(origins):
+    p = projection()
+    p["decisions"][0]["incident_ci_ids"] = origins
+    with pytest.raises(ValueError, match="invalid_noc_incident_origins"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_path_with_unrelated_origin():
+    p = projection()
+    p["decisions"][0]["impact_paths"][0]["nodes"][0] = "unrelated-ci"
+    with pytest.raises(ValueError, match="invalid_noc_path"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_accepts_projected_incident_origin():
+    p = projection()
+    assert p["decisions"][0]["incident_ci_ids"] == ["san-01"]
+    assert "san-01 → payments" in render_computed_noc_html(p)
