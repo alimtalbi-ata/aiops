@@ -354,7 +354,22 @@ def test_renderer_labels_exhausted_twin_budget_without_claiming_missing_edge():
     decision["analyst"]["impact_state"] = "UNKNOWN"
     decision["analyst"]["missing_evidence"] = ["SOURCED_DEPENDENCY_PATH"]
     decision["critic"]["disposition"] = "NEEDS_MORE_EVIDENCE"
-    decision["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    decision["next_noc_action"] = "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH"
     html = render_computed_noc_html(p)
     assert "UNKNOWN — budget de calcul épuisé" in html
     assert "UNKNOWN — preuve de dépendance manquante" not in html
+
+
+
+def test_renderer_rejects_missing_evidence_action_after_budget_exhaustion():
+    p = projection()
+    decision = p["decisions"][0]
+    decision["impact_state"] = "UNKNOWN"
+    decision["impact_paths"] = []
+    decision["resource_budget_exhausted"] = True
+    decision["analyst"]["impact_state"] = "UNKNOWN"
+    decision["analyst"]["missing_evidence"] = ["SOURCED_DEPENDENCY_PATH"]
+    decision["critic"]["disposition"] = "NEEDS_MORE_EVIDENCE"
+    decision["next_noc_action"] = "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    with pytest.raises(ValueError, match="contradictory_noc_next_action"):
+        render_computed_noc_html(p)
