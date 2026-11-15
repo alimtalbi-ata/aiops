@@ -90,7 +90,8 @@ def resolve_impact(incident: object, edges: object, *, as_of: str, max_age_secon
                     break
                 continue
             # The downstream Analyst/Critic and HTML contracts cap path depth at 100.
-            if len(nodes) >= 100 and graph.get(node):
+            if len(nodes) >= 100 and any(
+                    edge["to_id"] not in nodes for edge in graph.get(node, [])):
                 exhausted = True
                 break
             for edge in graph.get(node, []):
