@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from scripts.aiops2_noc_decision_cards import render_decision_cards
-from tests.test_aiops2_noc_decision_cards_contract import projection
+from test_aiops2_noc_decision_cards_contract import projection
 
 
 @pytest.mark.parametrize("width", [320, 768, 1440])
