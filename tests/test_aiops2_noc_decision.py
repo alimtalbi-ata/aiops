@@ -246,3 +246,28 @@ def test_independent_twin_route_survives_conflict_end_to_end():
     assert decision["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
     assert "san-01 → payments" in render_computed_noc_html(result)
     assert decision["live_remediation_authorized"] is False
+
+
+
+def test_cross_source_conflict_stays_unknown_through_noc_html():
+    from aiops2_noc_decision_html import render_computed_noc_html
+    a = edge("san-01", "payments", source_id="cmdb-a")
+    b = edge("san-01", "payments", source_id="cmdb-b",
+             evidence_sha256="c" * 64)
+    result = build_noc_decision([event()], [a, b], as_of=NOW)
+    decision = result["decisions"][0]
+    assert decision["impact_state"] == "UNKNOWN"
+    assert decision["impact_paths"] == []
+    assert decision["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
+    assert decision["policy_disposition"] == "DENY_LIVE"
+    assert "UNKNOWN" in render_computed_noc_html(result)
+
+
+def test_cross_source_agreement_renders_single_noc_path():
+    from aiops2_noc_decision_html import render_computed_noc_html
+    a = edge("san-01", "payments", source_id="cmdb-a")
+    b = edge("san-01", "payments", source_id="cmdb-b")
+    result = build_noc_decision([event()], [a, b], as_of=NOW)
+    assert len(result["decisions"][0]["impact_paths"]) == 1
+    assert "san-01 → payments" in render_computed_noc_html(result)
+    assert result["decisions"][0]["live_remediation_authorized"] is False
