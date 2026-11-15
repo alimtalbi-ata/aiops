@@ -22,6 +22,7 @@ def build_noc_decision(events: list, edges: list, *, as_of: str) -> dict:
             "service_id": incident["service_id"],
             "priority": incident["priority"],
             "event_count": incident["event_count"],
+            "incident_ci_ids": sorted({event["ci_id"] for event in incident["events"]}),
             "impact_state": impact["impact_state"],
             "impact_paths": impact["paths"],
             "rejected_edges": impact["rejected_edges"],
