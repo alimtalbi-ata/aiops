@@ -23,6 +23,8 @@ def verify_bundle(package_dir: Path, smoke_dir: Path, *,
         smoke = json.loads((smoke_dir / "aiops2-packaged-demo-smoke.json").read_text("utf-8"))
         provenance = json.loads(
             (smoke_dir / "aiops2-packaged-demo-smoke-provenance.json").read_text("utf-8"))
+        if not all(isinstance(item, dict) for item in (manifest, cockpit, smoke, provenance)):
+            return False
         if not verify_smoke(smoke, provenance, repository=repository,
                             head_sha=head_sha, run_id=run_id,
                             run_attempt=run_attempt):
