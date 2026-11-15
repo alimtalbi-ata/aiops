@@ -150,3 +150,30 @@ def test_analyst_rejects_oversized_intermediate_path_node():
     impact["paths"][0]["evidence_sha256"] = ["b" * 64, "b" * 64]
     with pytest.raises(InvalidEvent, match="invalid impact path provenance"):
         analyze_and_critique(incident, impact)
+
+
+
+def test_analyst_rejects_excessive_path_count():
+    incident, impact = inputs()
+    impact["paths"] = impact["paths"] * 101
+    with pytest.raises(InvalidEvent, match="impact path budget exceeded"):
+        analyze_and_critique(incident, impact)
+
+
+def test_analyst_rejects_excessive_path_depth():
+    incident, impact = inputs()
+    path = impact["paths"][0]
+    path["nodes"] = ["san-01"] + [f"hop-{i}" for i in range(100)] + ["payments"]
+    path["evidence_sha256"] = ["b" * 64] * (len(path["nodes"]) - 1)
+    with pytest.raises(InvalidEvent, match="invalid impact path provenance"):
+        analyze_and_critique(incident, impact)
+
+
+def test_analyst_accepts_path_depth_at_boundary():
+    incident, impact = inputs()
+    path = impact["paths"][0]
+    path["nodes"] = ["san-01"] + [f"hop-{i}" for i in range(98)] + ["payments"]
+    path["evidence_sha256"] = ["b" * 64] * (len(path["nodes"]) - 1)
+    result = analyze_and_critique(incident, impact)
+    assert result["critic"]["disposition"] == "SUPPORTED_SYNTHETIC_HYPOTHESIS"
+    assert result["live_remediation_authorized"] is False
