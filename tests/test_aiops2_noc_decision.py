@@ -18,10 +18,12 @@ def event(tenant="acme", source="checkmk", ident="san-1", ci="san-01", severity=
             "known_at": "2026-11-15T11:59:05Z"}
 
 
-def edge(src, dst, tenant="acme"):
-    return {"tenant_id": tenant, "from_id": src, "to_id": dst,
-            "source_id": "synthetic-cmdb", "evidence_sha256": "b" * 64,
-            "observed_at": "2026-11-15T11:59:00Z"}
+def edge(src, dst, tenant="acme", **overrides):
+    receipt = {"tenant_id": tenant, "from_id": src, "to_id": dst,
+               "source_id": "synthetic-cmdb", "evidence_sha256": "b" * 64,
+               "observed_at": "2026-11-15T11:59:00Z"}
+    receipt.update(overrides)
+    return receipt
 
 
 def test_end_to_end_san_payments_computed_projection():
