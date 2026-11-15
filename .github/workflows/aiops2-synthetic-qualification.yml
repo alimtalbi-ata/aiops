@@ -51,6 +51,8 @@ jobs:
               ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
           print(f"Parsed {len(paths)} Python modules")
           PY
+      - name: Prepare test evidence directory
+        run: mkdir -p artifacts
       - name: Run deterministic synthetic contracts
         run: |
           python -m pytest -q --junitxml=artifacts/pure-contracts.xml \
@@ -69,5 +71,5 @@ jobs:
         with:
           name: aiops2-synthetic-test-evidence
           path: artifacts/*.xml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
