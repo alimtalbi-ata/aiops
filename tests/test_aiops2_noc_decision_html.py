@@ -297,3 +297,19 @@ def test_renderer_rejects_sourced_impact_with_missing_evidence(missing):
     p["decisions"][0]["analyst"]["missing_evidence"] = missing
     with pytest.raises(ValueError, match="contradictory_noc_missing_evidence"):
         render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("citations", [None, [], ["not-a-digest"],
+    ["a" * 64, "a" * 64], ["b" * 64, "a" * 64], ["a" * 64, 7]])
+def test_renderer_rejects_malformed_analyst_citations(citations):
+    p = projection()
+    p["decisions"][0]["analyst"]["evidence_sha256"] = citations
+    with pytest.raises(ValueError, match="invalid_noc_analyst_citations"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_dependency_path_without_analyst_citation():
+    p = projection()
+    p["decisions"][0]["analyst"]["evidence_sha256"] = ["a" * 64]
+    with pytest.raises(ValueError, match="uncited_noc_dependency_path"):
+        render_computed_noc_html(p)
