@@ -30,6 +30,7 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
     if not isinstance(events, list) or not events:
         raise InvalidEvent("missing incident events")
     evidence = set()
+    incident_cis = set()
     for event in events:
         if not isinstance(event, dict) or event.get("tenant_id") != tenant or event.get("service_id") != service:
             raise InvalidEvent("invalid or cross-tenant event")
@@ -37,6 +38,10 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
             raise InvalidEvent("invalid event evidence")
         evidence.add(digest)
+        ci = event.get("ci_id")
+        if not isinstance(ci, str) or not ci:
+            raise InvalidEvent("invalid incident CI")
+        incident_cis.add(ci)
     paths = impact.get("paths")
     if not isinstance(paths, list):
         raise InvalidEvent("invalid impact paths")
@@ -51,7 +56,8 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         nodes, hashes = path.get("nodes"), path.get("evidence_sha256")
         if (not isinstance(nodes, list) or len(nodes) < 2 or
                 not all(isinstance(n, str) and n for n in nodes) or
-                nodes[-1] != service or not isinstance(hashes, list) or
+                nodes[0] not in incident_cis or nodes[-1] != service or
+                len(set(nodes)) != len(nodes) or not isinstance(hashes, list) or
                 len(hashes) != len(nodes) - 1 or
                 not all(isinstance(h, str) and DIGEST.fullmatch(h) for h in hashes)):
             raise InvalidEvent("invalid impact path provenance")
