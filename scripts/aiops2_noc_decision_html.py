@@ -8,7 +8,7 @@ from __future__ import annotations
 from html import escape
 import re
 
-_DIGEST = re.compile(r"[0-9a-f]{64}\\Z")
+_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def render_computed_noc_html(projection: object) -> str:
