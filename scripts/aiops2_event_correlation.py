@@ -114,6 +114,7 @@ def correlate_events(events: list, *, as_of: str, max_age_seconds: int = 900) ->
             "runtime_attested": False,
             "live_remediation_authorized": False,
         })
+    rejected.sort(key=lambda receipt: receipt["index"])
     return {
         "schema": "aiops2.synthetic-event-correlation.v1",
         "scope": "ISOLATED_DETERMINISTIC_NO_LIVE_EFFECTS",
