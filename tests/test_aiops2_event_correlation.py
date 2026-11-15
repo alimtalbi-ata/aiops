@@ -88,3 +88,19 @@ def test_no_mutation_of_input():
     original = copy.deepcopy(raw)
     correlate_events([raw], as_of=NOW)
     assert raw == original
+
+
+@pytest.mark.parametrize("field", ["tenant_id", "source_event_id", "ci_id", "service_id"])
+def test_oversized_event_identifiers_fail_closed(field):
+    with pytest.raises(InvalidEvent, match="missing or invalid"):
+        normalize_event(event(**{field: "x" * 257}))
+    result = correlate_events([event(**{field: "x" * 257})], as_of=NOW)
+    assert result["incidents"] == []
+    assert len(result["rejected"]) == 1
+    assert result["live_remediation_authorized"] is False
+
+
+@pytest.mark.parametrize("field", ["tenant_id", "source_event_id", "ci_id", "service_id"])
+def test_event_identifier_256_character_boundary(field):
+    normalized = normalize_event(event(**{field: "x" * 256}))
+    assert normalized[field] == "x" * 256
