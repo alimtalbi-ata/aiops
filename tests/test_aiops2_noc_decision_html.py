@@ -313,3 +313,18 @@ def test_renderer_rejects_dependency_path_without_analyst_citation():
     p["decisions"][0]["analyst"]["evidence_sha256"] = ["a" * 64]
     with pytest.raises(ValueError, match="uncited_noc_dependency_path"):
         render_computed_noc_html(p)
+
+
+@pytest.mark.parametrize("count", [None, False, True, 0, -1, 1.5, "1"])
+def test_renderer_rejects_invalid_event_count(count):
+    p = projection()
+    p["decisions"][0]["event_count"] = count
+    with pytest.raises(ValueError, match="invalid_noc_event_count"):
+        render_computed_noc_html(p)
+
+
+def test_renderer_rejects_more_origins_than_events():
+    p = projection()
+    p["decisions"][0]["incident_ci_ids"].append("san-02")
+    with pytest.raises(ValueError, match="invalid_noc_event_count"):
+        render_computed_noc_html(p)
