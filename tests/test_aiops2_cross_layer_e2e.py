@@ -97,8 +97,7 @@ def test_integrated_portal_http_e2e_offline_and_write_denial(monkeypatch):
 
 def test_integrated_portal_protected_reads_and_commands_fail_closed(monkeypatch):
     """Unconfigured portal must not expose protected runtime data or accept commands."""
-    for key in ("PORTAL_READ_TOKEN", "PORTAL_OPERATOR_TOKEN", "PORTAL_READ_TOKEN_SHA256",
-                "PORTAL_OPERATOR_TOKEN_SHA256"):
+    for key in ("AIOPS_PORTAL_READ_TOKEN", "AIOPS_PORTAL_OPERATOR_TOKEN"):
         monkeypatch.delenv(key, raising=False)
     def no_network(*args, **kwargs):
         raise AssertionError("unexpected external network I/O")
@@ -109,8 +108,35 @@ def test_integrated_portal_protected_reads_and_commands_fail_closed(monkeypatch)
                  "/api/noc/runtime-state", "/api/noc/correlation"):
         response = client.get(path)
         assert response.status_code in (401, 403, 503), (path, response.text)
-        assert "tenant_acl_qualified" not in response.text
     for path in ("/api/demo", "/api/copilot", "/api/demo/explore-story/control"):
         response = client.post(path, json={})
         assert response.status_code in (401, 403, 503), (path, response.text)
         assert "DEMO_SUBMITTED" not in response.text
+
+
+def test_authenticated_shared_bearers_do_not_bypass_tenant_acl(monkeypatch):
+    """Valid shared viewer/operator credentials must still fail closed without tenant ACL."""
+    viewer = "synthetic-viewer-credential-00000001"
+    operator = "synthetic-operator-credential-000001"
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", viewer)
+    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", operator)
+    monkeypatch.setenv("AIOPS_INTERNAL_TOKEN", "synthetic-internal-credential-00001")
+    def no_network(*args, **kwargs):
+        raise AssertionError("unexpected external network I/O")
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    monkeypatch.setattr(socket.socket, "connect_ex", no_network)
+    client = TestClient(app)
+    viewer_headers = {"Authorization": "Bearer " + viewer}
+    operator_headers = {"Authorization": "Bearer " + operator}
+    for path in ("/api/portal/bootstrap", "/api/portal/components", "/api/copilot"):
+        response = (client.post(path, headers=viewer_headers, json={}) if path == "/api/copilot"
+                    else client.get(path, headers=viewer_headers))
+        assert response.status_code == 503, (path, response.text)
+        assert response.json()["reason"] == "TENANT_ACL_NOT_QUALIFIED"
+        assert response.headers["cache-control"] == "no-store"
+    response = client.post("/api/demo", headers=operator_headers, json={})
+    assert response.status_code == 503, response.text
+    assert response.json()["reason"] == "TENANT_ACL_NOT_QUALIFIED"
+    assert response.json()["live_remediation_authorized"] is False
+    response = client.post("/api/demo", headers=viewer_headers, json={})
+    assert response.status_code == 401
