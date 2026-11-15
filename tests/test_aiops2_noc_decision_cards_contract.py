@@ -1,7 +1,23 @@
 """Regression contracts for offline NOC decision-card safety."""
 from copy import deepcopy
 import pytest
-from tests.test_aiops2_noc_decision_cards import projection
+def projection():
+    return {
+        "schema": "aiops2.synthetic-noc-decision.v1",
+        "mode": "SIMULATION", "scope": "OFFLINE_NO_EXTERNAL_IO",
+        "runtime_attested": False, "live_remediation_authorized": False,
+        "decisions": [{
+            "incident_id": "INC-SIM-1", "priority": "P1", "service_id": "payments",
+            "event_count": 2, "impact_state": "SOURCED_SYNTHETIC_PATH",
+            "impact_paths": [{"nodes": ["san-01", "storage", "payments"]}],
+            "analyst": {"hypothesis": "storage"},
+            "critic": {"disposition": "REVIEW", "root_cause_confirmed": False},
+            "next_noc_action": "REVIEW_SYNTHETIC_EVIDENCE",
+            "policy_disposition": "DENY_LIVE", "runtime_attested": False,
+            "live_remediation_authorized": False,
+        }],
+    }
+
 from scripts.aiops2_noc_decision_cards import render_decision_cards
 
 
