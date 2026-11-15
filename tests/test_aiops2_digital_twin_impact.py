@@ -255,3 +255,35 @@ def test_repeated_same_digest_with_different_observation_time_is_one_path():
         result = resolve_impact(incident(), receipts, as_of=NOW)
         assert len(result["paths"]) == 1
         assert result["rejected_edges"] == []
+
+
+
+def test_cross_source_conflicting_relation_is_quarantined():
+    a = edge("san-01", "payments", source_id="cmdb-a", evidence_sha256="a" * 64)
+    b = edge("san-01", "payments", source_id="cmdb-b", evidence_sha256="b" * 64)
+    for receipts in ([a, b], [b, a]):
+        result = resolve_impact(incident(), receipts, as_of=NOW)
+        assert result["impact_state"] == "UNKNOWN"
+        assert result["paths"] == []
+        assert len([r for r in result["rejected_edges"]
+                    if r["reason"] == "conflicting relation evidence"]) == 2
+        assert result["live_remediation_authorized"] is False
+
+
+def test_cross_source_agreement_yields_one_route():
+    a = edge("san-01", "payments", source_id="cmdb-a")
+    b = edge("san-01", "payments", source_id="cmdb-b")
+    for receipts in ([a, b], [b, a]):
+        result = resolve_impact(incident(), receipts, as_of=NOW)
+        assert len(result["paths"]) == 1
+        assert result["paths"][0]["nodes"] == ["san-01", "payments"]
+        assert result["rejected_edges"] == []
+
+
+def test_cross_source_conflict_preserves_unrelated_route():
+    a = edge("san-01", "storage", source_id="cmdb-a", evidence_sha256="a" * 64)
+    b = edge("san-01", "storage", source_id="cmdb-b", evidence_sha256="b" * 64)
+    independent = edge("san-01", "payments", source_id="cmdb-c")
+    result = resolve_impact(incident(), [a, b, independent], as_of=NOW)
+    assert [p["nodes"] for p in result["paths"]] == [["san-01", "payments"]]
+    assert len(result["rejected_edges"]) == 2
