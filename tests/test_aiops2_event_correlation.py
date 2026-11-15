@@ -46,8 +46,11 @@ def test_cross_service_isolation():
 
 def test_conflicting_duplicate_rejected_without_overwrite():
     result = correlate_events([event(), event(ci_id="other-ci")], as_of=NOW)
-    assert result["incidents"][0]["event_count"] == 1
+    assert result["incidents"] == []
     assert result["rejected"] == [{"index": 1, "reason": "conflicting duplicate event identity"}]
+    reversed_result = correlate_events([event(ci_id="other-ci"), event()], as_of=NOW)
+    assert reversed_result["incidents"] == []
+    assert reversed_result["rejected"] == [{"index": 1, "reason": "conflicting duplicate event identity"}]
 
 
 @pytest.mark.parametrize("override", [
