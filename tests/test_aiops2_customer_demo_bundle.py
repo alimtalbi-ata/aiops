@@ -216,3 +216,34 @@ def test_bundle_fifty_fail_closed_mutation_checks(tmp_path, location, field, bad
             pkg, smoke_dir, repository="alimtalbi-ata/aiops",
             head_sha=sha, run_id="123", run_attempt="1",
         ), f"fail-open for {location}.{field}={bad_value!r}"
+
+
+@pytest.mark.parametrize("invalid", [None, "", "not-a-sha", 0, True])
+def test_bundle_rejects_equally_invalid_shared_identifiers_even_if_subvalidators_pass(
+    tmp_path, invalid,
+):
+    pkg, smoke_dir = tmp_path / "package", tmp_path / "smoke"
+    pkg.mkdir()
+    smoke_dir.mkdir()
+    manifest = {
+        "git_revision": invalid,
+        "incident_id": invalid,
+        "source_sha256": invalid,
+        "runtime_execution_attested": False,
+        "live_remediation_authorized": False,
+    }
+    for directory, filename, payload in (
+        (pkg, "manifest.json", manifest),
+        (pkg, "cockpit.json", {"incident_id": invalid, "source_sha256": invalid}),
+        (smoke_dir, "aiops2-packaged-demo-smoke.json",
+         {"incident_id": invalid, "source_sha256": invalid}),
+        (smoke_dir, "aiops2-packaged-demo-smoke-provenance.json",
+         {"commit_sha": invalid}),
+    ):
+        (directory / filename).write_text(json.dumps(payload), encoding="utf-8")
+    with patch("verify_aiops2_customer_demo_bundle.verify_package", return_value=True), (
+         patch("verify_aiops2_customer_demo_bundle.verify_smoke", return_value=True)):
+        assert not verify_bundle(
+            pkg, smoke_dir, repository="alimtalbi-ata/aiops",
+            head_sha="a" * 40, run_id="123", run_attempt="1",
+        )
