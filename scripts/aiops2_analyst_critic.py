@@ -47,6 +47,11 @@ def analyze_and_critique(incident: object, impact: object) -> dict:
         if not isinstance(ci, str) or not ci:
             raise InvalidEvent("invalid incident CI")
         incident_cis.add(ci)
+    if type(impact.get("resource_budget_exhausted")) is not bool:
+        raise InvalidEvent("unqualified impact resource budget")
+    if impact["resource_budget_exhausted"] and (
+            impact.get("impact_state") != "UNKNOWN" or impact.get("paths") != []):
+        raise InvalidEvent("exhausted impact budget cannot support paths")
     paths = impact.get("paths")
     if not isinstance(paths, list):
         raise InvalidEvent("invalid impact paths")
