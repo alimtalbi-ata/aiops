@@ -168,3 +168,29 @@ def test_unknown_decision_still_projects_incident_ci_origins():
     assert decision["incident_ci_ids"] == ["san-01"]
     assert decision["impact_paths"] == []
     assert decision["live_remediation_authorized"] is False
+
+
+
+def test_budget_exhaustion_next_action_is_distinct_from_missing_dependency():
+    from aiops2_noc_decision_html import render_computed_noc_html
+
+    edges = [edge("san-01", f"node-{i:05d}") for i in range(10001)]
+    edges.append(edge("san-01", "payments"))
+    exhausted = build_noc_decision([event()], edges, as_of=NOW)
+    exhausted_decision = exhausted["decisions"][0]
+    assert exhausted_decision["resource_budget_exhausted"] is True
+    assert exhausted_decision["impact_state"] == "UNKNOWN"
+    assert exhausted_decision["next_noc_action"] == "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH"
+    exhausted_html = render_computed_noc_html(exhausted)
+    assert "UNKNOWN — budget de calcul épuisé" in exhausted_html
+    assert "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH" in exhausted_html
+
+    missing = build_noc_decision([event()], [], as_of=NOW)
+    missing_decision = missing["decisions"][0]
+    assert missing_decision["resource_budget_exhausted"] is False
+    assert missing_decision["next_noc_action"] == "COLLECT_MISSING_DEPENDENCY_EVIDENCE"
+    missing_html = render_computed_noc_html(missing)
+    assert "UNKNOWN — preuve de dépendance manquante" in missing_html
+    assert "RETRY_WITH_BOUNDED_SYNTHETIC_GRAPH" not in missing_html
+    assert exhausted_decision["live_remediation_authorized"] is False
+    assert missing_decision["live_remediation_authorized"] is False
