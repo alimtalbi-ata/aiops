@@ -224,3 +224,34 @@ def test_twin_enforces_distinct_incident_ci_origin_budget(count, accepted):
     else:
         with pytest.raises(InvalidEvent, match="incident CI origin budget exceeded"):
             resolve_impact(sample, [], as_of=NOW)
+
+
+
+def test_conflicting_same_source_edge_proofs_are_quarantined():
+    a = edge("san-01", "payments", evidence_sha256="a" * 64)
+    b = edge("san-01", "payments", evidence_sha256="b" * 64)
+    for receipts in ([a, b], [b, a]):
+        result = resolve_impact(incident(), receipts, as_of=NOW)
+        assert result["impact_state"] == "UNKNOWN"
+        assert result["paths"] == []
+        assert len([r for r in result["rejected_edges"]
+                    if r["reason"] == "conflicting edge evidence"]) == 2
+        assert result["live_remediation_authorized"] is False
+
+
+def test_conflicting_edge_does_not_poison_independent_sourced_route():
+    a = edge("san-01", "storage", evidence_sha256="a" * 64)
+    b = edge("san-01", "storage", evidence_sha256="b" * 64)
+    independent = edge("san-01", "payments", source_id="other-source")
+    result = resolve_impact(incident(), [a, b, independent], as_of=NOW)
+    assert [p["nodes"] for p in result["paths"]] == [["san-01", "payments"]]
+    assert len(result["rejected_edges"]) == 2
+
+
+def test_repeated_same_digest_with_different_observation_time_is_one_path():
+    first = edge("san-01", "payments")
+    later = edge("san-01", "payments", observed_at="2026-11-15T11:30:00Z")
+    for receipts in ([first, later], [later, first]):
+        result = resolve_impact(incident(), receipts, as_of=NOW)
+        assert len(result["paths"]) == 1
+        assert result["rejected_edges"] == []
