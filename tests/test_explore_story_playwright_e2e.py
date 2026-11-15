@@ -192,6 +192,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "git_sha": os.environ.get("GITHUB_SHA"),
             "screenshot_file": "explore-story-ci-simulated.png",
             "screenshot_sha256": hashlib.sha256(screenshot).hexdigest(),
+            "desktop_screenshot_file": "acme-cockpit-desktop-ci-simulated.png",
+            "desktop_screenshot_sha256": hashlib.sha256(desktop_png).hexdigest(),
             "runtime_authenticated": False,
             "production_qualified": False,
             "live_remediation_authorized": False,
@@ -432,6 +434,17 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(self.page.locator("form").count(), 0)
         self.assertEqual(self.page.locator("script").count(), 0)
 
+        # Capture the verified desktop view before switching to the mobile viewport.
+        output = Path(os.environ.get(
+            "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")
+        ))
+        output.mkdir(parents=True, exist_ok=True)
+        desktop_png = self.page.screenshot(
+            path=str(output / "acme-cockpit-desktop-ci-simulated.png"),
+            full_page=True, animations="disabled",
+        )
+        self.assertTrue(desktop_png.startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+
         # Small viewport: tables remain inside scroll containers and summary cards stack.
         self.page.set_viewport_size({"width": 390, "height": 844})
         self.page.reload()
@@ -486,6 +499,10 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(
             hashlib.sha256((output / stored["screenshot_file"]).read_bytes()).hexdigest(),
             stored["screenshot_sha256"],
+        )
+        self.assertEqual(
+            hashlib.sha256((output / stored["desktop_screenshot_file"]).read_bytes()).hexdigest(),
+            stored["desktop_screenshot_sha256"],
         )
         self.assertFalse(stored["runtime_authenticated"])
         self.assertFalse(stored["browser_rehearsal_independently_reviewed"])
