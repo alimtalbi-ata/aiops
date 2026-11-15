@@ -126,3 +126,27 @@ def test_exhausted_twin_budget_keeps_unknown_and_requests_evidence():
     assert result["critic"]["disposition"] == "NEEDS_MORE_EVIDENCE"
     assert result["critic"]["root_cause_confirmed"] is False
     assert result["policy_disposition"] == "DENY_LIVE"
+
+
+@pytest.mark.parametrize("field", ["tenant_id", "incident_id", "service_id"])
+def test_analyst_rejects_oversized_incident_identity(field):
+    incident, impact = inputs()
+    incident[field] = "x" * 257
+    impact[field] = "x" * 257
+    with pytest.raises(InvalidEvent, match="invalid incident identity"):
+        analyze_and_critique(incident, impact)
+
+
+def test_analyst_rejects_oversized_incident_ci():
+    incident, impact = inputs()
+    incident["events"][0]["ci_id"] = "x" * 257
+    with pytest.raises(InvalidEvent, match="invalid incident CI"):
+        analyze_and_critique(incident, impact)
+
+
+def test_analyst_rejects_oversized_intermediate_path_node():
+    incident, impact = inputs()
+    impact["paths"][0]["nodes"] = ["san-01", "x" * 257, "payments"]
+    impact["paths"][0]["evidence_sha256"] = ["b" * 64, "b" * 64]
+    with pytest.raises(InvalidEvent, match="invalid impact path provenance"):
+        analyze_and_critique(incident, impact)
