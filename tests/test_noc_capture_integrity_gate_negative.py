@@ -25,7 +25,7 @@ class CaptureIntegrityTests(unittest.TestCase):
         }
         for width in WIDTHS:
             # Header-only synthetic bytes test the gate, not PNG decoding or Chromium.
-            raw = b"\\x89PNG\\r\\n\\x1a\\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", width, 700)
+            raw = bytes([137, 80, 78, 71, 13, 10, 26, 10]) + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", width, 700)
             name = f"noc-{width}.png"
             (self.root / name).write_bytes(raw)
             self.manifest["captures"].append({
