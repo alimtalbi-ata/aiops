@@ -30,13 +30,13 @@ def receipt(tenant_id, source_event_id):
 @pytest.mark.parametrize("tenant", [" acme", "acme ", " acme ", "acme\t"])
 @pytest.mark.xfail(
     strict=True,
-    raises=InvalidEvent,
     reason="KNOWN GAP #713: Core has not agreed canonical tenant identity; whitespace is accepted",
 )
 def test_noncanonical_tenant_identity_must_be_rejected_at_boundary(tenant):
     # Intentionally records the desired fail-closed contract as an expected failure.
     # Remove xfail only after Core agrees a canonical identity rule and code is fixed.
-    normalize_event(receipt(tenant, "san-1"))
+    with pytest.raises(InvalidEvent):
+        normalize_event(receipt(tenant, "san-1"))
 
 
 def test_untrusted_whitespace_variant_never_grants_live_authority():
