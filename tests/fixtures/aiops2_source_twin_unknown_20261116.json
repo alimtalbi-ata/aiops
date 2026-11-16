@@ -1,0 +1,61 @@
+{
+  "schema": "aiops2.source-twin-boundary-fixture.v1",
+  "mode": "SIMULATION",
+  "tenant": "acme-demo",
+  "signals": [
+    {
+      "provider": "Checkmk",
+      "instance": "cmk-demo",
+      "event_id": "evt-1",
+      "observed_at": "2026-11-16T04:00:00Z",
+      "ci": "san-1"
+    },
+    {
+      "provider": "Prometheus",
+      "instance": "prom-demo",
+      "event_id": "evt-1",
+      "observed_at": "2026-11-16T04:00:00Z",
+      "ci": "storage-1"
+    },
+    {
+      "provider": "Grafana",
+      "instance": "graf-demo",
+      "event_id": "evt-1",
+      "observed_at": "2026-11-16T04:00:00Z",
+      "ci": "payments-1"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "san-1",
+      "type": "SAN"
+    },
+    {
+      "id": "storage-1",
+      "type": "storage"
+    },
+    {
+      "id": "payments-1",
+      "type": "service"
+    }
+  ],
+  "relations": [
+    {
+      "from": "san-1",
+      "to": "storage-1",
+      "authority": "CMDB_SYNTHETIC",
+      "attested": false
+    },
+    {
+      "from": "storage-1",
+      "to": "payments-1",
+      "authority": "UNKNOWN",
+      "attested": false
+    }
+  ],
+  "expected_edges": [
+    "UNKNOWN",
+    "UNKNOWN"
+  ],
+  "expected_payments_impact": "UNKNOWN"
+}
