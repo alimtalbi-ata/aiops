@@ -83,7 +83,7 @@ def acme_receipt_status():
                 "schema_valid": schema_valid,
                 "sandbox_only": sandbox_only,
                 "note": "Metadata only; not a readiness verdict or deployed-SHA attestation"}
-    except (OSError, ValueError, TypeError, UnicodeError):
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
         return {"status": "NOT_AVAILABLE"}
 
 
