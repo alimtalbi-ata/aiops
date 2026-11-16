@@ -1,0 +1,11 @@
+{
+  "collected_file": "aiops2-autonomy-discovery-20261116T151905Z.txt",
+  "deployment": false,
+  "docker_mutations": 0,
+  "execution": "DIAGNOSTIC_PUBLICATION_ONLY",
+  "host": "SRV-DEB-05",
+  "published_at_utc": "2026-11-16T15:21:28.044937+00:00",
+  "schema": "aiops.debian-autonomy-discovery.v1",
+  "sha256": "50d2a19ea72cfec0d4fc945999424888bb89e874b708a9ff4802bc65ac1bcec5",
+  "size_bytes": 17655
+}

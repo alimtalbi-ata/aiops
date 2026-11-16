@@ -1,0 +1,299 @@
+
+========== IDENTITE ET ENVIRONNEMENT ==========
+UTC: 2026-11-16T15:19:05Z
+SRV-DEB-05
+uid=1001(aiops) gid=1001(aiops) groupes=1001(aiops),27(sudo),100(users),115(docker)
+Linux 6.12.107+deb13-amd64 x86_64 GNU/Linux
+/home/aiops/aiops2-debian-reconciliation/golden-demo-pr
+
+========== OUTILS DISPONIBLES ==========
+git: /usr/bin/git
+gh: /usr/bin/gh
+python3: /usr/bin/python3
+bash: /usr/bin/bash
+curl: /usr/bin/curl
+jq: /usr/bin/jq
+flock: /usr/bin/flock
+docker: /usr/bin/docker
+crontab: /usr/bin/crontab
+systemctl: /usr/bin/systemctl
+timeout: /usr/bin/timeout
+sha256sum: /usr/bin/sha256sum
+
+========== CRON UTILISATEUR ==========
+* * * * * /usr/bin/flock -n /home/aiops/.local/state/aiops-debian-agent/poll.lock /bin/bash /home/aiops/aiops2-auto-deploy/poll.sh >> /home/aiops/aiops2-auto-deploy/poll.log 2>&1
+* * * * * /usr/bin/flock -n /home/aiops/.local/state/aiops-debian-agent/cron.lock /usr/bin/python3 /home/aiops/.local/bin/aiops-debian-reporter >> /home/aiops/.local/state/aiops-debian-agent/cron.log 2>&1 # AIOPS2_DEBIAN_REPORTER_V1
+* * * * * /usr/bin/flock -n /home/aiops/.local/state/aiops-debian-agent/publish.lock /home/aiops/.local/bin/aiops-publish-report >> /home/aiops/.local/state/aiops-debian-agent/publish.log 2>&1 # AIOPS2_REPORT_SSH_PUBLISH
+*/10 * * * * /bin/bash "$HOME/aiops2-operations/fs-watch.sh"
+17 * * * * /home/aiops/aiops2-audit-tools/platform_hourly.sh # AIOPS2_PLATFORM_EVIDENCE_MANAGED
+2,14,26,38,50 * * * * /home/aiops/aiops2-audit-tools/live_usecase_12min.sh # AIOPS2_LIVE_USECASE_12MIN_MANAGED
+*/2 * * * * /home/aiops/.local/share/aiops2-codex-dispatch/run.sh >> /home/aiops/.local/state/aiops2-codex-dispatch/cron.log 2>&1 # AIOPS2_CODEX_DISPATCH_V1
+# BEGIN AIOPS2-PAYMENTS-COPILOT-V2
+* * * * * /usr/bin/python3 /home/aiops/aiops2-operations/payments-copilot-v2/runner.py --scan >> /home/aiops/aiops2-operations/payments-copilot-v2/poll.log 2>&1
+# END AIOPS2-PAYMENTS-COPILOT-V2
+*/2 * * * * /usr/bin/flock -n /home/aiops/.local/state/aiops2-payments-health/health.lock /bin/bash /home/aiops/aiops2-operations/payments-copilot-health-run.sh # AIOPS2_PAYMENTS_HEALTH_V1
+15 3 * * * /bin/bash /home/aiops/aiops2-operations/payments-copilot-logrotate-run.sh >> /home/aiops/.local/state/aiops2-payments-health/rotation.log 2>&1 # AIOPS2_PAYMENTS_ROTATION_V1
+
+========== SERVICES CRON ==========
+active
+enabled
+
+========== SCRIPTS EXISTANTS ==========
+
+SCRIPT: /home/aiops/aiops2-auto-deploy/poll.sh
+OWNER=aiops GROUP=aiops MODE=700 SIZE=2144 MODIFIED=2026-11-01 12:25:07.418451433 +0100
+ccfe96805977953bfd3380301800991635181ed8a2c73b9544c32a1b62b10511  /home/aiops/aiops2-auto-deploy/poll.sh
+REFERENCES TECHNIQUES (NUMEROS DE LIGNES):
+2:# Poll a reviewed deployment branch. No sudo, no broad compose operations.
+5:BASE="${AIOPS_AUTODEPLOY_HOME:-/home/aiops/aiops2-auto-deploy}"
+6:BRANCH="${AIOPS_DEPLOY_BRANCH:-deploy/aiops2-stable}"
+7:REMOTE="${AIOPS_DEPLOY_REMOTE:-https://github.com/alimtalbi-ata/aiops.git}"
+9:exec 9>"$BASE/poll.lock"
+10:flock -n 9 || exit 0
+12:if [[ -e "$BASE/DEPLOYMENT_BLOCKED" ]]; then
+13:  echo "CRITICAL: deployment blocked; manual intervention required" >&2
+18:if [[ ! -d repo/.git ]]; then
+19:  git clone --filter=blob:none "$REMOTE" repo
+22:git fetch --no-tags origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+23:target="$(git rev-parse "refs/remotes/origin/$BRANCH^{commit}")"
+27:# Quarantine a revision that previously failed deployment.
+36:  if ! git cat-file -e "$applied^{commit}" 2>/dev/null; then
+40:  if ! git merge-base --is-ancestor "$applied" "$target"; then
+46:if [[ -n "$(git status --porcelain)" ]]; then
+50:git checkout -B aiops2-approved-deployment "$target"
+51:# Approval is the protected branch itself, not a file inside an unreviewed PR.
+52:test -f deploy/deploy-demo-studio-v2.sh
+54:if ! bash deploy/deploy-demo-studio-v2.sh; then
+61:echo "Deployment successful: $target"
+
+SCRIPT: /home/aiops/.local/bin/aiops-debian-reporter
+OWNER=aiops GROUP=aiops MODE=700 SIZE=7680 MODIFIED=2026-11-02 12:03:32.365444072 +0100
+71246acf9b642fa18bfa4c19651c8e52ecc6fb7405ad3c4c4ef798adb12ad1f5  /home/aiops/.local/bin/aiops-debian-reporter
+REFERENCES TECHNIQUES (NUMEROS DE LIGNES):
+1:#!/usr/bin/env python3
+2:"""AIOps2 Debian read-only reporter. Fixed probes only; no remote command execution."""
+19:REPORT_BRANCH = "ops/debian-runtime-reports"
+20:REPORT_PATH = "ops/debian-reports/SRV-DEB-05/latest.json"
+21:TOKEN_PATH = Path.home() / ".config/aiops/github-token"
+25:MAX_REPORT_BYTES = 64 * 1024
+26:MAX_COMMAND_SECONDS = 8
+27:GITHUB_API = "https://api.github.com"
+30:def fixed_command(argv: list[str], timeout: int = MAX_COMMAND_SECONDS) -> dict:
+31:    """Run one hard-coded diagnostic command; never invoke a shell."""
+37:        return {"available": False, "reason": "command_not_installed"}
+63:    names = fixed_command(["docker", "ps", "--all", "--format", "{{.Names}}"])
+70:        inspected = fixed_command([
+100:    uptime = fixed_command(["uptime", "-p"])
+113:        "host": {"reported_name": os.environ.get("AIOPS_AGENT_HOST_LABEL", "SRV-DEB-05"),
+123:def github_request(method: str, path: str, token: str, payload: dict | None = None) -> dict:
+126:        GITHUB_API + path, data=data, method=method,
+128:                 "Accept": "application/vnd.github+json",
+129:                 "X-GitHub-Api-Version": "2022-11-28",
+133:        raw = response.read(MAX_REPORT_BYTES + 1)
+134:    if len(raw) > MAX_REPORT_BYTES:
+135:        raise RuntimeError("GitHub API response exceeded size limit")
+139:def publish(report: dict) -> None:
+141:        raise RuntimeError(f"GitHub token file missing or unsafe: {TOKEN_PATH}")
+144:        raise RuntimeError("GitHub token file must have permissions 0600")
+147:        raise RuntimeError("GitHub token file is empty or malformed")
+148:    api_path = f"/repos/{REPOSITORY}/contents/{REPORT_PATH}"
+150:        current = github_request("GET", api_path + "?ref=" + REPORT_BRANCH, token)
+156:    content = json.dumps(report, indent=2, sort_keys=True).encode()
+157:    if len(content) > MAX_REPORT_BYTES:
+158:        raise RuntimeError("Report exceeds size limit")
+160:    body = {"message": "ops(debian): refresh read-only host report",
+162:            "branch": REPORT_BRANCH}
+165:    github_request("PUT", api_path, token, body)
+173:            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+176:        report = collect()
+177:        encoded = json.dumps(report, indent=2, sort_keys=True)
+178:        if len(encoded.encode()) > MAX_REPORT_BYTES:
+179:            raise RuntimeError("Report exceeds size limit")
+184:        # Local collection every minute; SSH publisher runs separately.
+185:        print("AIOPS_DEBIAN_REPORT=COLLECTED_LOCAL")
+194:        print(f"AIOPS_DEBIAN_REPORT=FAILED error={type(exc).__name__}", file=sys.stderr)
+
+SCRIPT: /home/aiops/.local/bin/aiops-publish-report
+OWNER=aiops GROUP=aiops MODE=700 SIZE=1414 MODIFIED=2026-11-05 11:41:12.437533765 +0100
+cb500ddaf896070d5dccbd05996e8a7081f5788946743c25737debb8046b6355  /home/aiops/.local/bin/aiops-publish-report
+REFERENCES TECHNIQUES (NUMEROS DE LIGNES):
+5:REPO="git@github.com:alimtalbi-ata/aiops.git"
+6:BRANCH="ops/debian-runtime-reports"
+8:CHECKOUT="$STATE/report-git"
+10:TARGET="ops/debian-reports/SRV-DEB-05/latest.json"
+12:# Lock owned by the existing cron flock wrapper.
+15:  echo "REPORT_PUBLISH=FAILED reason=missing_local_report"
+19:export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10"
+22:  git clone --quiet --single-branch --branch "$BRANCH" \
+29:if [[ -n "$(git status --porcelain)" ]]; then
+30:  echo "REPORT_PUBLISH=FAILED reason=dirty_checkout"
+34:git fetch --quiet origin "$BRANCH"
+35:git checkout --quiet "$BRANCH"
+36:git merge --ff-only --quiet "origin/$BRANCH"
+41:git add -- "$TARGET"
+43:if git diff --cached --quiet; then
+44:  echo "REPORT_PUBLISH=UNCHANGED"
+48:git -c user.name="AIOps2 Debian Reporter" \
+49:    -c user.email="aiops2-reporter@users.noreply.github.com" \
+50:    commit --quiet -m "ops(debian): update SRV-DEB-05 report"
+52:if git push --quiet origin "HEAD:refs/heads/$BRANCH"; then
+53:  echo "REPORT_PUBLISH=PUBLISHED"
+55:  echo "REPORT_PUBLISH=FAILED reason=push_rejected"
+
+SCRIPT: /home/aiops/aiops2-operations/fs-watch.sh
+OWNER=aiops GROUP=aiops MODE=700 SIZE=1213 MODIFIED=2026-11-06 00:38:30.341409005 +0100
+eadf8e8046ce1f92828e8af6c0aed91762de11853b8694d1ebabbedef71f5107  /home/aiops/aiops2-operations/fs-watch.sh
+REFERENCES TECHNIQUES (NUMEROS DE LIGNES):
+8:flock -n 9 || exit 0
+
+========== REPERTOIRES POTENTIELS DE PASSERELLE ==========
+ROOT: /home/aiops/aiops2-operations
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.before-fs411-20261106T075725Z
+/home/aiops/aiops2-operations/glpi_copilot_bridge.fs501-candidate.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.pre-fs523-20261106T111850Z.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.fs493-candidate.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.fs367.bak
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.fs373.bak
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.fs372.bak
+/home/aiops/aiops2-operations/glpi_copilot_bridge.fs507-candidate.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.fs369.bak
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.before-fs401-20261106T074350Z
+/home/aiops/aiops2-operations/glpi_copilot_bridge.fs492-candidate.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.fs504-candidate.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.fs374.bak
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.before-fs411d-20261106T075904Z
+/home/aiops/aiops2-operations/payments-copilot-v2/poll.log
+/home/aiops/aiops2-operations/payments-copilot-v2/bridge.py
+/home/aiops/aiops2-operations/payments-copilot-v2/poll.lock
+/home/aiops/aiops2-operations/payments-copilot-v2/runner.py
+/home/aiops/aiops2-operations/__pycache__/glpi_copilot_bridge.fs492-candidate.cpython-313.pyc
+/home/aiops/aiops2-operations/__pycache__/glpi_copilot_bridge.cpython-313.pyc
+/home/aiops/aiops2-operations/__pycache__/glpi_copilot_bridge.fs504-candidate.cpython-313.pyc
+/home/aiops/aiops2-operations/__pycache__/glpi_copilot_bridge.fs520-candidate.cpython-313.pyc
+/home/aiops/aiops2-operations/__pycache__/glpi_copilot_bridge.fs501-candidate.cpython-313.pyc
+/home/aiops/aiops2-operations/__pycache__/glpi_copilot_bridge.fs507-candidate.cpython-313.pyc
+/home/aiops/aiops2-operations/__pycache__/glpi_copilot_bridge.fs493-candidate.cpython-313.pyc
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.fs370.bak
+/home/aiops/aiops2-operations/reports/fs380-20261106T072508Z/container-commands.txt
+/home/aiops/aiops2-operations/glpi_copilot_bridge.fs520-candidate.py
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.before-fs411-20261106T075707Z
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.before-fs411b-20261106T075822Z
+/home/aiops/aiops2-operations/glpi_copilot_bridge.py.before-fs411d-20261106T075856Z
+ROOT: /home/aiops/aiops2-auto-deploy
+/home/aiops/aiops2-auto-deploy/poll.sh.before-sync-20261028T194243Z
+/home/aiops/aiops2-auto-deploy/candidate-b51f6c1/tests/test_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/candidate-b51f6c1/tests/test_poll_approved_deploy.py
+/home/aiops/aiops2-auto-deploy/candidate-b51f6c1/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-auto-deploy/candidate-b51f6c1/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-auto-deploy/candidate-b51f6c1/deploy/poll-approved-deploy.sh
+/home/aiops/aiops2-auto-deploy/candidate-b51f6c1/scripts/check_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/candidate-b51f6c1/scripts/check_demo_release_receipts.py
+/home/aiops/aiops2-auto-deploy/repo/tests/test_debian_poller_qualification.py
+/home/aiops/aiops2-auto-deploy/repo/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-auto-deploy/repo/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-auto-deploy/repo/deploy/debian-poller-qualification.py
+/home/aiops/aiops2-auto-deploy/poll.sh
+/home/aiops/aiops2-auto-deploy/poll.log
+/home/aiops/aiops2-auto-deploy/release-checkout/tests/test_debian_poller_qualification.py
+/home/aiops/aiops2-auto-deploy/release-checkout/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-auto-deploy/release-checkout/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-auto-deploy/release-checkout/deploy/debian-poller-qualification.py
+/home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi/tests/test_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi/tests/test_poll_approved_deploy.py
+/home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi/deploy/poll-approved-deploy.sh
+/home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi/scripts/check_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi/scripts/check_demo_release_receipts.py
+/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/tests/test_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/tests/test_poll_approved_deploy.py
+/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/deploy/poll-approved-deploy.sh
+/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/scripts/check_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/scripts/check_demo_release_receipts.py
+/home/aiops/aiops2-auto-deploy/poll.lock
+/home/aiops/aiops2-auto-deploy/poll-before-block-guard.sh
+/home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath/tests/test_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath/tests/test_poll_approved_deploy.py
+/home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath/deploy/poll-approved-deploy.sh
+/home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath/scripts/check_demo_evidence_receipts.py
+/home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath/scripts/check_demo_release_receipts.py
+/home/aiops/aiops2-auto-deploy/poll.sh.backup-20261101-122507
+/home/aiops/aiops2-auto-deploy/poll.sh.backup-20261028T191232Z
+ROOT: /home/aiops/.local/bin
+ROOT: /home/aiops/aiops2-debian-reconciliation
+/home/aiops/aiops2-debian-reconciliation/golden-demo-pr/tests/test_debian_poller_qualification.py
+/home/aiops/aiops2-debian-reconciliation/golden-demo-pr/tests/test_portal_demo_command_auth.py
+/home/aiops/aiops2-debian-reconciliation/golden-demo-pr/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-debian-reconciliation/golden-demo-pr/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-debian-reconciliation/golden-demo-pr/deploy/debian-poller-qualification.py
+/home/aiops/aiops2-debian-reconciliation/pr-worktree/tests/test_debian_poller_qualification.py
+/home/aiops/aiops2-debian-reconciliation/pr-worktree/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-debian-reconciliation/pr-worktree/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-debian-reconciliation/pr-worktree/deploy/debian-poller-qualification.py
+/home/aiops/aiops2-debian-reconciliation/github-install-kit/tests/test_debian_poller_qualification.py
+/home/aiops/aiops2-debian-reconciliation/github-install-kit/tests/test_v28_command_receipts.py
+/home/aiops/aiops2-debian-reconciliation/github-install-kit/tests/test_v28_receipt_recovery.py
+/home/aiops/aiops2-debian-reconciliation/github-install-kit/deploy/debian-poller-qualification.py
+
+========== DEPOTS GIT ET BRANCHES ==========
+
+REPO: /home/aiops/aiops2-auto-deploy/repo
+aiops2-approved-deployment
+dcf7bcebabc880ee17b95b0e5901b4f4345339a3
+ M app/core/main.py
+ M app/evidence/main.py
+ M app/intelligence/main.py
+ M app/policy/main.py
+ M app/twin/main.py
+ M app/worker/main.py
+origin	https://github.com/alimtalbi-ata/aiops.git (fetch) [blob:none]
+origin	https://github.com/alimtalbi-ata/aiops.git (push)
+
+REPO: /home/aiops/aiops2-debian-reconciliation/golden-demo-pr
+integration/aiops2-golden-demo-install-kit-20261116
+2834158bfff6556673a8d993da9ee1b8e6f5f465
+ M app/portal/main.py
+origin	https://github.com/alimtalbi-ata/aiops.git (fetch) [blob:none]
+origin	https://github.com/alimtalbi-ata/aiops.git (push)
+
+REPO: /home/aiops/aiops2-debian-reconciliation/pr-worktree
+audit/debian-runtime-reference-20261116
+dcf7bcebabc880ee17b95b0e5901b4f4345339a3
+ M app/core/main.py
+ M app/evidence/main.py
+ M app/intelligence/main.py
+ M app/policy/main.py
+ M app/twin/main.py
+ M app/worker/main.py
+origin	https://github.com/alimtalbi-ata/aiops.git (fetch) [blob:none]
+origin	https://github.com/alimtalbi-ata/aiops.git (push)
+
+========== CONNECTIVITE GITHUB SANS AUTHENTIFICATION ==========
+GITHUB_API_HTTP=200
+
+========== GITHUB CLI ==========
+github.com
+  ✓ Logged in to github.com account alimtalbi-ata (/home/aiops/.config/gh/hosts.yml)
+  - Active account: true
+  - Git operations protocol: https
+  - Token: [REDACTED]
+  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+
+========== DOCKER - METADONNEES UNIQUEMENT ==========
+SERVER_VERSION=29.8.1 CONTAINERS=106 RUNNING=41
+
+========== RAPPORTS LOCAUX ==========
+
+========== AUTORISATIONS ET LIMITES ==========
+CRON_MODIFIE=NON
+GIT_PUSH=NON
+GIT_FETCH=NON
+DOCKER_MUTATION=NON
+SCRIPT_DISTANT_EXECUTE=NON
+BASE_DE_DONNEES_INTERROGEE=NON
+DEPLOIEMENT=NON
