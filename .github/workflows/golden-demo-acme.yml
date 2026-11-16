@@ -5,8 +5,19 @@ name: AIOPS2 Golden Demo ACME
 # - absence de connexion aux services de production
 # - fixtures et services de test isolés
 #
-# Exécution uniquement sur déclenchement manuel.
+# Exécution sur PR de la golden demo et déclenchement manuel.
 on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'deploy/debian-acme-sim-e2e.py'
+      - 'scripts/acme_demo_readiness.py'
+      - 'tests/test_acme_demo_readiness.py'
+      - 'tests/test_acme_sandbox_services.py'
+      - 'tests/test_policy_acme_sandbox.py'
+      - 'tests/test_worker_acme_simulated_hitl.py'
+      - 'tests/test_debian_portal_ux_contracts.py'
+      - '.github/workflows/golden-demo-acme.yml'
   workflow_dispatch:
 
 permissions:
@@ -41,3 +52,6 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
           python -m pytest -q --tb=short             tests/test_acme_sandbox_services.py             tests/test_policy_acme_sandbox.py             tests/test_worker_acme_simulated_hitl.py             tests/test_intelligence_contract.py             tests/test_evidence_contract.py             tests/test_debian_portal_ux_contracts.py
+
+      - name: Golden demo readiness safety contracts
+        run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
