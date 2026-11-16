@@ -28,6 +28,7 @@ def assess(value, now=None, max_age_minutes=60):
     for key, expected in (("schema", SCHEMA), ("tenant_id", "ACME-TEST"),
                           ("scenario_id", "ACME-SAN-PAYMENTS"),
                           ("mode", "SIMULATION"), ("status", "PASS"),
+                          ("reason", "SIMULATED_SANDBOX_ONLY"),
                           ("approval_issuer", "TWIN_ACME_SIMULATED"),
                           ("human_approval_claimed", False),
                           ("live_effects_allowed", False),
@@ -48,6 +49,11 @@ def assess(value, now=None, max_age_minutes=60):
     ids = value.get("ids")
     if not isinstance(ids, dict) or any(not isinstance(ids.get(k), str) or not ids[k].strip() for k in REQUIRED_IDS):
         reasons.append("MISSING_CORRELATED_IDS")
+    if isinstance(ids, dict):
+        if not str(ids.get("ticket_id", "")).startswith("SIM-GLPI-"):
+            reasons.append("INVALID_SIMULATED_TICKET_ID")
+        if not str(ids.get("approval_id", "")).startswith("SIM-APP-"):
+            reasons.append("INVALID_SIMULATED_APPROVAL_ID")
     return {"verdict": "GO_SIMULATION_ONLY" if not reasons else "NO_GO",
             "reasons": reasons, "live": "NO_GO"}
 
