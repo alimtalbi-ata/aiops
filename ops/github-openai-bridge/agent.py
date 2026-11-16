@@ -17,7 +17,7 @@ REPO = "alimtalbi-ata/aiops"
 ISSUE = int(os.environ.get("BRIDGE_ISSUE", "464"))
 LOGIN = os.environ.get("BRIDGE_AUTHORIZED_LOGIN", "alimtalbi-ata")
 PREFIX = "AIOPS2_BRIDGE_V1 "
-COMMAND = re.compile(r"^AIOPS2_BRIDGE_V1 (status) ([0-9a-f]{32}) ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)$")
+COMMAND = re.compile(r"^AIOPS2_BRIDGE_V1 (status|acme_receipt_status) ([0-9a-f]{32}) ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)$")
 STATE = Path(os.environ.get("BRIDGE_STATE_DIR", str(Path.home()/".local/state/aiops2-github-openai-bridge")))
 
 def gh(*args):
@@ -45,6 +45,29 @@ def parse(comment, now):
     if not now < deadline <= now + dt.timedelta(hours=2):
         return None
     return action, correlation
+
+def acme_receipt_status():
+    """Fixed-path, read-only metadata: never returns identifiers or receipt contents."""
+    path = Path("/home/aiops/.local/state/aiops-debian-agent/acme-sim-e2e.json")
+    try:
+        if not path.is_file() or path.stat().st_size > 65536:
+            return {"status": "NOT_AVAILABLE"}
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            return {"status": "INVALID"}
+        allowed = {"PASS", "FAIL", "BLOCKED"}
+        result = value.get("status")
+        if result not in allowed:
+            return {"status": "INVALID"}
+        return {"status": "OBSERVED", "e2e_status": result,
+                "schema_valid": value.get("schema") == "aiops.debian-acme-sim-e2e.v1",
+                "sandbox_only": value.get("mode") == "SIMULATION"
+                and value.get("live_effects_allowed") is False
+                and value.get("real_glpi_writes_allowed") is False,
+                "note": "Metadata only; not a readiness verdict or deployed-SHA attestation"}
+    except (OSError, ValueError, TypeError, UnicodeError):
+        return {"status": "NOT_AVAILABLE"}
+
 
 def main():
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -80,8 +103,9 @@ def main():
                 json.dump({"status": "STARTED", "comment_id": cid, "correlation_id": correlation}, f)
             os.chmod(receipt, 0o600)
             try:
-                result = {"status": "OK", "hostname": os.uname().nodename,
-                          "utc": now.isoformat()}
+                result = ({"status": "OK", "hostname": os.uname().nodename,
+                           "utc": now.isoformat()} if action == "status"
+                          else acme_receipt_status())
             except Exception as exc:
                 result = {"status": "FAILED", "error_type": type(exc).__name__}
             data = {"schema": "aiops2.github-openai-bridge.v1", "comment_id": cid,
