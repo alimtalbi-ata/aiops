@@ -4,7 +4,6 @@ import importlib.util
 import pathlib
 import tempfile
 import unittest
-from unittest.mock import patch
 
 FILE = pathlib.Path(__file__).with_name("agent.py")
 spec = importlib.util.spec_from_file_location("aiops_bridge_agent", FILE)
@@ -38,9 +37,8 @@ class BridgeContract(unittest.TestCase):
     def test_no_multiline_injection(self):
         self.assertIsNone(agent.parse(comment(body=VALID + "\\nrm -rf /"), NOW))
 
-    def test_openai_without_key(self):
-        with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(agent.openai_summary()["status"], "NOT_CONFIGURED")
+    def test_paid_api_action_rejected(self):
+        self.assertIsNone(agent.parse(comment(body=VALID.replace("status", "openai_summary")), NOW))
 
 if __name__ == "__main__":
     unittest.main()
