@@ -2,6 +2,8 @@
 import datetime as dt
 import importlib.util
 import pathlib
+import json
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -25,6 +27,46 @@ class BridgeContract(unittest.TestCase):
 
     def test_acme_receipt_status_untrusted_author(self):
         self.assertIsNone(agent.parse(comment(body=VALID.replace("status", "acme_receipt_status"), login="attacker"), NOW))
+
+    def test_acme_receipt_metadata_absent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(agent, "Path", wraps=pathlib.Path) as mock_path:
+                mock_path.return_value = pathlib.Path(directory) / "absent.json"
+                self.assertEqual(agent.acme_receipt_status()["status"], "NOT_AVAILABLE")
+
+    def test_acme_receipt_metadata_valid_and_redacted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text(json.dumps({
+                "schema": "aiops.debian-acme-sim-e2e.v1",
+                "status": "PASS", "mode": "SIMULATION",
+                "live_effects_allowed": False, "real_glpi_writes_allowed": False,
+                "ids": {"ticket_id": "SENSITIVE-TEST-IDENTIFIER"}}))
+            with patch.object(agent, "Path", return_value=path):
+                result = agent.acme_receipt_status()
+            self.assertEqual(result["status"], "OBSERVED")
+            self.assertEqual(result["e2e_status"], "PASS")
+            self.assertTrue(result["sandbox_only"])
+            self.assertNotIn("SENSITIVE-TEST-IDENTIFIER", json.dumps(result))
+            self.assertNotIn("ids", result)
+
+    def test_acme_receipt_metadata_live_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text(json.dumps({
+                "schema": "aiops.debian-acme-sim-e2e.v1",
+                "status": "PASS", "mode": "LIVE",
+                "live_effects_allowed": True, "real_glpi_writes_allowed": True}))
+            with patch.object(agent, "Path", return_value=path):
+                result = agent.acme_receipt_status()
+            self.assertFalse(result["sandbox_only"])
+
+    def test_acme_receipt_metadata_invalid_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text("{broken")
+            with patch.object(agent, "Path", return_value=path):
+                self.assertEqual(agent.acme_receipt_status()["status"], "NOT_AVAILABLE")
 
     def test_untrusted_author(self):
         self.assertIsNone(agent.parse(comment(login="attacker"), NOW))
