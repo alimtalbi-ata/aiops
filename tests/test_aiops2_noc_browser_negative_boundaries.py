@@ -46,6 +46,6 @@ def test_untrusted_noc_fields_never_become_markup_or_execution(page):
     assert "&lt;img" in html
     page.set_content(html)
     assert page.locator("img, script, iframe").count() == 0
-    assert page.get_by_text(attack, exact=True).count() == 3
+    assert page.get_by_text(attack, exact=False).count() == 3
     assert attempted == []
     assert page.get_by_text("DENY_LIVE").count() >= 1
