@@ -53,4 +53,19 @@ BEFORE="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 bash "$TMP/init/deploy/init-env.sh" >/dev/null
 AFTER="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 [[ "$BEFORE" == "$AFTER" ]]
+# Existing environment migration must repair only known bad defaults and preserve secrets.
+mkdir -p "$TMP/upgrade/config" "$TMP/upgrade/deploy"
+cp "$ROOT/config/.env.example" "$TMP/upgrade/config/.env.example"
+cp "$ROOT/deploy/init-env.sh" "$TMP/upgrade/deploy/init-env.sh"
+cp "$TMP/init/.env" "$TMP/upgrade/.env"
+sed -i 's|^TEMPORAL_IMAGE=.*|TEMPORAL_IMAGE=temporalio/auto-setup:1.32.1|' "$TMP/upgrade/.env"
+sed -i 's|^TEMPORAL_UI_IMAGE=.*|TEMPORAL_UI_IMAGE=temporalio/ui:2.56.0|' "$TMP/upgrade/.env"
+sed -i '/^TEMPORAL_ADMINTOOLS_IMAGE=/d' "$TMP/upgrade/.env"
+BEFORE_TOKEN="$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/upgrade/.env")"
+bash "$TMP/upgrade/deploy/init-env.sh" >/dev/null
+grep -Fxq 'TEMPORAL_IMAGE=temporalio/server:1.31.0' "$TMP/upgrade/.env"
+grep -Fxq 'TEMPORAL_ADMINTOOLS_IMAGE=temporalio/admin-tools:1.31.0' "$TMP/upgrade/.env"
+grep -Fxq 'TEMPORAL_UI_IMAGE=temporalio/ui:2.49.1' "$TMP/upgrade/.env"
+[[ "$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/upgrade/.env")" == "$BEFORE_TOKEN" ]]
+[[ "$(stat -c '%a' "$TMP/upgrade/.env")" == "600" ]]
 echo 'SECRET_PREFLIGHT_TEST=PASS'

@@ -1,0 +1,16 @@
+# PROTOTYPE DE CONCEPTION — NE PAS CONSTRUIRE
+# Images source identifiees sur SRV-DEB-05.
+#
+# L'image admin-tools contient les outils historiques de gestion du schema.
+# Leurs chemins et leurs dependances doivent etre verifies avant COPY.
+#
+# FROM temporalio/admin-tools:1.31.0 AS admin
+# FROM temporalio/server:1.31.0
+#
+# TODO: copier temporal-sql-tool et ses dependances depuis admin.
+# TODO: ajouter setup-postgres.sh.
+# TODO: integrer une initialisation idempotente avant le serveur.
+# TODO: preserver /etc/temporal/entrypoint.sh.
+# TODO: tester installation vierge et redemarrage sur volumes de test.
+#
+# Aucun ENTRYPOINT n'est redefini dans ce prototype.

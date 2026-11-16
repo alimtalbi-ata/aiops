@@ -1,0 +1,245 @@
+{
+  "uid": "aiops2-incident-chaos-smoke-v31",
+  "title": "AIOPS2 | Incident / Chaos / Smoke",
+  "description": "Verified baseline and instrumentation status; never invent incident/chaos/smoke metrics.",
+  "tags": [
+    "AIOPS2",
+    "verified-metrics",
+    "v31"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "editable": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Instrumentation contract",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 6
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Current status:** incident generator, chaos injection and smoke/E2E telemetry have **not yet been qualified**. The charts below are *real platform baselines*, **not** test results. Next: verify generator emitters, then instrument `scenario_id`, `run_id`, `incident_id`, `mode`, outcome, duration, and trace correlation. Do not label synthetic DEMO data as LIVE."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Core UP during tests",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"aiops2-core\"}",
+          "legendFormat": "{{job}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Worker UP during tests",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"aiops2-worker\"}",
+          "legendFormat": "{{job}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Blocked runs baseline",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aiops_runs_blocked",
+          "legendFormat": "{{job}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "title": "Running runs baseline",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aiops_runs_running",
+          "legendFormat": "{{job}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "title": "Resolved runs baseline",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aiops_runs_resolved",
+          "legendFormat": "{{job}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "title": "Evidence baseline",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "aiops_evidence_total",
+          "legendFormat": "{{job}}",
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "title": "Next instrumentation",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Logs:** structured event records with correlation IDs, central collection (Loki only if approved). **Traces:** OpenTelemetry propagation and trace spans (Tempo only if approved). **Performance:** measured test latency histogram, failure rate, recovery time, p50/p95/p99. **Proof:** correlate each generated incident to its real run, decision, GLPI ticket and evidence. No new services are deployed by this installer."
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Original ACME Command Center",
+      "type": "link",
+      "url": "/d/89870c3e-6583-4dee-a271-89433d6acad0",
+      "targetBlank": false
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /opt/aiops
+RUN pip install --no-cache-dir --disable-pip-version-check requests==2.32.4
+COPY tools/evaluate_ai_core.py /opt/aiops/tools/evaluate_ai_core.py
+COPY eval/ai-core-cases.json /opt/aiops/eval/ai-core-cases.json
+ENV AIOPS_INTELLIGENCE_URL=http://aiops2-intelligence:817
+ENV AIOPS_EVAL_DATASET=/opt/aiops/eval/ai-core-cases.json
+ENV AIOPS_EVAL_REPORT=/reports/ai-core-evaluation.json
+USER 10001:10001
+CMD ["python","/opt/aiops/tools/evaluate_ai_core.py"]

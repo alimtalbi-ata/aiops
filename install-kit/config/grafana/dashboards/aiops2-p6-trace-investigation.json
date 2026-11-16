@@ -1,0 +1,98 @@
+{
+  "uid": "aiops2-p6-trace-investigation",
+  "title": "AIOPS2 | Trace Investigation (DEMO)",
+  "description": "TraceQL query on verified run.id span attribute in Tempo.",
+  "tags": [
+    "AIOPS2",
+    "P6",
+    "DEMO",
+    "business-observability"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "label": "Run ID",
+        "type": "textbox",
+        "query": "acme-demo-8c327a673c51",
+        "current": {
+          "text": "acme-demo-8c327a673c51",
+          "value": "acme-demo-8c327a673c51"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Verified trace correlation",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**DEMO / synthetic spans.** TraceQL `{ span.run.id = \"acme-demo-8c327a673c51\" }` returned **12 trace IDs** in Tempo. Search results are live, not a static count."
+      }
+    },
+    {
+      "id": 2,
+      "title": "TraceQL by run",
+      "description": "Tempo TraceQL search. Open a returned trace in Grafana Explore for waterfall.",
+      "type": "traces",
+      "datasource": {
+        "type": "tempo",
+        "uid": "aiops2-tempo-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "expr": "{ span.run.id = \"$run_id\" }",
+          "limit": 100
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Limitations",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "These spans are **synthetic ACME events**, not distributed spans captured from a running Payments service. End-to-end application latency and p95/p99 remain unqualified."
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

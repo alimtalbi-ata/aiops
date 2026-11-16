@@ -7,18 +7,33 @@ if not INTERNAL_TOKEN:
 def _headers(token=None):
     return {'X-AIOPS-Request': 'internal', 'Authorization': f'Bearer {token or INTERNAL_TOKEN}'}
 
-def _request(method, base, path, payload=None, timeout=8, retries=2, token=None):
+def _request(method, base, path, payload=None, timeout=8, retries=0, token=None):
     url=base.rstrip('/')+path
     last=None
-    for n in range(retries+1):
+    for attempt in range(retries+1):
         try:
-            r=requests.request(method,url,json=payload,timeout=timeout,headers=_headers(token))
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            last=e
-            if n<retries: time.sleep(0.25*(n+1))
+            response=requests.request(method,url,json=payload,timeout=timeout,headers=_headers(token))
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            # Client errors are deterministic contract/auth failures; retrying them only adds load.
+            code=exc.response.status_code if exc.response is not None else None
+            if code is not None and code < 500 and code != 429:
+                raise
+            last=exc
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last=exc
+        except Exception:
+            # JSON decode/programming errors are not transient transport failures.
+            raise
+        if attempt < retries:
+            time.sleep(min(0.25*(attempt+1),1.0))
     raise last
 
-def get_json(base,path,timeout=8,token=None): return _request('GET',base,path,timeout=timeout,token=token)
-def post_json(base,path,payload,timeout=8,token=None): return _request('POST',base,path,payload,timeout=timeout,token=token)
+def get_json(base,path,timeout=8,token=None,retries=2):
+    return _request('GET',base,path,timeout=timeout,retries=retries,token=token)
+
+def post_json(base,path,payload,timeout=8,token=None,retries=0):
+    # POST is not retried at this layer by default: the caller/Temporal activity must
+    # own idempotency and retry policy, since a timeout may happen after the server commits.
+    return _request('POST',base,path,payload,timeout=timeout,retries=retries,token=token)

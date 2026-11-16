@@ -97,42 +97,48 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
 
-## ADR-0016 — Portage ACME synthetic impact sans autorité GLPI (2026-10-27)
 
-- **Statut:** Proposition en PR #50 ; non qualifiée LIVE.
-- **Décision:** Porter depuis PR #36 le validateur de graphe ACME et la vue de simulation en lecture seule, sans fusion massive et sans toucher au jumeau canonique en base.
-- **Sécurité:** Les identifiants `SIM-ACME-*` et `SIM-GLPI-*` proviennent du SHA-256 du fixture, et ne sont jamais des identifiants Core/Temporal/GLPI. `ticket_id=null`, `runtime_attested=false`, `live_remediation_authorized=false`.
-- **Qualification:** Tests unitaires du graphe, des modes interdits, des cycles, du montage portail et des erreurs ; CI GitHub Actions, sans services réels. Une vraie corrélation ITSM nécessitera un adaptateur authentifié et une attestation de ticket.
+## ADR-0013 — Qualify the analysis core before ACME twin and demo expansion
 
-
-## ADR-0017 — Synthetic RAG references are never runtime evidence (2026-10-27)
-
-- **Status:** Accepted for synthetic-only reference use; merged via PR #54 at `b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`, [CI 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546) green. Not qualified for live RAG.
-- **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
-- **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
-- **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
-
-## ADR-2026-10-28-P0 — Authenticate Core/Twin bootstrap before upstream reads
-
-- **Date:** 2026-10-28 10:04 Europe/Paris
-- **Status:** Accepted — merged PR #114 at cea1ed7b54ed34cf4b036b6d5f20bf968c9dac09
-- **Decision:** Reuse the merged NOC viewer token guard for the Core/Twin bootstrap and serve an anonymous UNKNOWN-only portal shell. The browser may fetch read models only after explicit one-shot Bearer entry, without cookies or persistent storage.
-- **Reason:** The existing public portal route contacted Core/Twin and exposed incident/run metadata without authorization. Shared auth avoids competing contracts.
-- **Limits:** Shared token does not establish tenant ACL, SSO, real upstream integration or LIVE attestation. DEMO/Copilot writes remain separate unmerged security work.
-
-## ADR-0018 — A caller-provided HITL boolean cannot authorize LIVE effects (2026-10-28)
-
-- **Status:** Accepted for deny-only source behavior; [PR #118](https://github.com/alimtalbi-ata/aiops/pull/118) merged at `b33f655695949d6fef9e7d72b537d9810859c494` with [post-merge CI #40664759313](https://github.com/alimtalbi-ata/aiops/actions/runs/40664759313) green. No LIVE qualification.
-- **Decision:** Policy must reject LIVE `EXECUTE`, `RESOLVE`, `REMEDIATE` and `CANCEL` even with `human_approved=true`. This field does not prove authenticated approver identity, distinct proposer, expiration, single-use consumption or immutable incident/Run/recipe/target/parameter binding.
-- **Reuse:** Selectively port the deny-only fence from draft #76 onto current `main`. PR #36's simulation-only `execution_fence.py` demonstrates that reservation is not permission; its missing `autonomy_store` is not bulk-imported.
-- **Preserve:** LIVE P1 escalation, missing-evidence UNKNOWN, DEMO/REPLAY/STORY SIMULATE, and non-mutating LIVE OBSERVE/ENRICH decisions. No command executor is enabled.
-- **Qualification:** Existing `quality.yml` runs Policy unit tests and in-process FastAPI request tests. Core/RBAC/Temporal/Evidence, real container E2E and LIVE remain NOT_TESTED; HTTP in-process is not integration with a real service.
-- **Rollback:** Never restore the unsafe boolean bypass; replace this fence only with a reviewed Core-owned, authenticated, expiring, one-use HITL proof validated atomically at the effect boundary.
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Make the Analyst/Critic/Evidence/Policy quality contract and offline qualification gates the immediate engineering priority. The ACME digital twin and demonstration/video phase starts only after core gates pass.
+- **Reason:** A convincing UI or simulation cannot compensate for ungrounded diagnoses, weak evidence provenance, unsafe decisions or non-reproducible learning.
+- **Controls:** Versioned analyst/critic schemas; evidence IDs for material claims; explicit unknowns and contradictions; independent deterministic policy; P1 escalation; fail-closed behavior on missing/stale evidence, invalid output or critic failure; approval bound to immutable action hash; separate proposed/approved/executed/verified states.
+- **Learning:** Store immutable linked analysis, critique, policy, human feedback and verified outcomes. Only reviewed provenance-complete cases enter the trusted gold set; no silent online learning from raw tickets.
+- **Qualification:** Use the new core analysis quality contract and qualification matrix. No status may be marked PASS without an executed test artifact. No production server testing in Phase A.
 
 
-## ADR-2026-10-28-P0 — Core synthetic NOC projection before tenant ACL
+## ADR-0014 — Persist every AI decision and make recovery/qualification repeatable
 
-- **Status:** Candidate on dedicated branch; not production qualified.
-- **Decision:** Add a dedicated internal-token authenticated, synthetic-only, allowlisted Core Run identity endpoint for the signed NOC join. Reuse the existing NOC tenant-scope refusal in a shared helper rather than silently accepting tenant claims. Require an actual synthetic Incident record in PostgreSQL. Keep the older Core endpoints unchanged in this small lot.
-- **Qualification gate:** Existing GitHub quality workflow with real ephemeral Core HTTP and PostgreSQL 16, plus negative and non-regression tests. An internal token is service authentication, **not** tenant-bound actor identity. No A/B authorized reads or LIVE evidence until Core-owned tenant RBAC is implemented.
-- **Rollback:** Revert the small Core/portal/shared/test/workflow patch together; do not restore anonymous NOC correlation or weaken the LIVE fence.
+- **Date:** 2026-10-19
+- **Status:** Accepted on feature branch; awaiting PR review and complete CI qualification.
+- **Decision:** Treat the repository as the continuity ledger and rebuild around verified outcomes. Additive SQL migration 009 stores analysis, critique, policy decision, proposal, approval, effect, verification, reconciliation, learning and evaluation records. Core endpoints persist and expose the analysis/critic/policy chain; action proposals must reference a valid analysis and clean validated critique.
+- **Safety:** Proposals are advisory-only. Approval binds the exact proposal hash, target and action scope. Synthetic modes cannot authorize real approvals. CRITICAL proposals require two distinct actors and roles. LIVE effect execution remains disabled. Gold-set eligibility requires a non-synthetic LIVE source, human review and a passed verification record.
+- **Operations:** Add a checksummed upgrade runner that verifies the legacy schema before adopting migrations 000–008; full-stack database/volume backup and explicitly guarded restore; redacted diagnostics; a cumulative ZIP and checksum; synthetic model-evaluation fixtures with NOT_RUN semantics if no provider is configured.
+- **Reliability:** Internal POST calls are not retried implicitly because a timeout may occur after commit; idempotency and Temporal retry policy own the retry boundary. GET calls may retry transient transport/server errors; client errors are not retried.
+- **Qualification:** CI builds all application images, runs unit/static/security contracts, applies the complete migration chain to disposable PostgreSQL, and exercises the upgrade runner on a legacy-only schema. Real-model inference, full Temporal E2E, host installation and live adapters remain unqualified.
+
+## ADR-0015 — Core owns durable terminal SIM-GLPI receipt (ACME-TEST only)
+
+- **Date:** 2026-11-02
+- **Status:** Proposed in Draft [#358](https://github.com/alimtalbi-ata/aiops/pull/358); **NO_GO for stable/host until exact-head CI and rollback qualify**.
+- **Context:** PREPARED→Twin simulated approval→Policy SIMULATE→Temporal Worker SIMULATED_NO_EFFECT→Core RESOLVED must be causal. Deriving a SIM-GLPI ticket's RESOLVED status from Run and not storing Worker receipt digest made independent verification impossible; a terminal retry also contacted an expired Twin approval.
+- **Options:** (A) infer ticket state from Run; (B) mutate existing immutable attempt ledger; (C) add an append-only Core terminal ticket ledger with a Worker SHA256 receipt and a uniquely consumed Twin nonce digest. **Choose C**. No new service or stack.
+- **Decision (RG-ACME-18):** migration 018 adds `aiops.acme_sandbox_terminal_tickets` keyed by ACME-TEST attempt, append-only, with separate ticket status, Worker receipt JSON+SHA256, nonce SHA256, approval validity window and canonical terminal ticket SHA256. Core alone atomically inserts the ticket record, marks Incident/Run RESOLVED and writes the terminal event, or commits none. Readback recomputes both digests, checks all IDs and SOURCE bindings, and fails 503 on missing/mismatched evidence. SHA256 establishes integrity, **not human authority**.
+- **Decision (RG-ACME-19):** an already committed terminal POST replays from persisted Core evidence before any external Twin/Policy/Worker GET. Unresolved attempts require fresh independent readbacks, PREPARED state, valid simulated issuer and no LIVE effect.
+- **Tests:** `test_10_core_only_finalization_after_independent_no_effect`, `test_12_reject_worker_receipt_digest_mismatch`, `test_13_terminal_ticket_is_independent_and_immutable`, `test_14_stale_twin_approval_denies_terminal_write`, `test_15_native_pg16_terminal_backup_restore`, `test_16_forged_worker_glpi_write_denied_even_with_valid_digest`. CI is disposable PG16, not joined Temporal or Debian.
+- **Decision (RG-ACME-21):** before host promotion, exercise the *production registered* Temporal `acme_simulated_no_effect` activity against a real disposable PG16 Core PREPARED Incident/Run, persist its canonical Worker receipt via Core-only RESOLVED and independently read back the terminal SIM-GLPI ticket. Twin and Policy readbacks in this CI test are explicitly synthetic fixtures; this does **not** qualify signed Twin HTTP, real host E2E, IdP/GLPI authority, or LIVE. Test: `test_17_registered_temporal_worker_same_pg16_run`; CI receipt `aiops.acme-pg16-temporal-joined-ci.v1` contains correlated IDs and no secrets. **Pending exact-head CI until a successful run is observed.**
+- **Security integration:** selective port of reviewed #356 Twin immutable signed `idempotency_key` (fixes real approval issuance) and Simulator service-specific origin allowlist (prevents internal bearer SSRF). Existing source test `test_twin_real_issue_persists_signed_idempotency_and_immutable_readback` and negative origin tests are required on the integrated SHA.
+- **Consequences:** additive 018 remains after application rollback; never delete immutable audit. Flag off + targeted image rollback preserve volumes/DB. Portal SIM-GLPI remains read-only and fail-closed without verified actor+tenant ACL; no fake IdP/GLPI ALLOW. Approval freshness and nonce consumption apply only to the isolated simulated scenario.
+
+## ADR-0016 — ACME-TEST SAN topology must be sourced, isolated and versioned
+
+- **Date/status:** 2026-11-02; proposed source-only after Debian five-service deployment, **NO_GO for E2E** until host requalification.
+- **Context:** The actual Debian 2026-11-02T22:26:30Z poller verified five new healthy images and PG16 scratch restore but sandbox E2E stopped at `SANDBOX_CAPABILITY_MISSING_TWIN` before POST. Twin capabilities require a persisted path `ACME-SAN-FABRIC-A → ACME-SVC-PAYMENTS`; no sandbox topology migration had seeded that path. No human GLPI or LIVE authority is involved.
+- **Options:** (A) fabricate a positive capability response; (B) bypass the Twin graph; (C) insert deterministic ACME-TEST synthetic nodes and edges in existing Twin PG16, reject mixed/live provenance and require real graph traversal. **Choose C**; never A/B.
+- **RG-ACME-22:** additive migration 019 creates nine strictly namespaced `ACME-TEST-*` synthetic nodes (Dell/Pure arrays, two FC fabrics, RHEL multipath, payments/ERP, replication/backup) and eight edges; idempotent inserts with provenance conflict checks, no real CMDB writes. Test `test_18_real_pg16_acme_twin_san_path_is_isolated`.
+- **RG-ACME-23:** Twin refuses any reachable node without `site=ACME-TEST-SIMULATION`, even if the graph reaches Payments. Test `test_19_mixed_live_twin_graph_refused_and_cleaned`. Source fixture topology is not evidence of actual SAN state.
+- **Deployment:** source PR and release intent separated; source merge keeps release disabled. A later reviewed immutable source pin may enable targeted Compose upgrade, native PG16 backup/scratch restore and host E2E. Rollback five images, retain additive 019 and immutable receipts; no `down -v`, prune or LIVE.
+
+- **CI conflict resolved (2026-11-02):** baseline `005_seed_acme.sql` already owns `ACME-SAN-FABRIC-A` and `ACME-SVC-PAYMENTS` with site PARIS, so initial 019 rightly failed `acme_sandbox_twin_node_provenance_conflict` in full migration CI. **Never relabel or overwrite existing demo/CMDB nodes.** Namespace new sandbox graph `ACME-TEST-SAN-FABRIC-A` → `ACME-TEST-HOST-RHEL-MPATH-01` → `ACME-TEST-SVC-PAYMENTS`; update Twin, Worker and E2E contracts/tests accordingly. The source conflict was caught before any host promotion.

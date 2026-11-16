@@ -3,7 +3,7 @@
 **Author:** Abdelhalim Talbi  
 **Repository:** https://github.com/alimtalbi-ata/aiops  
 **Default branch:** `main` (protected by workflow; work on branches and propose PRs)  
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-20
 
 ## Why this document exists
 
@@ -63,80 +63,139 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 - [ ] Add deterministic E2E and failure-injection qualification before enabling any new live action.
 - [ ] Produce cumulative deployment ZIP and updated docs/evidence for each version where a release is requested.
 
+## Core AI quality contract added (2026-10-19, branch feat/core-analysis-quality-v2)
+
+New documents on the working branch:
+- [Core analysis quality contract](CORE-ANALYSIS-QUALITY.md): analyst/critic schemas, evidence dimensions, prompt-injection boundary, deterministic gate, metrics and capitalization.
+- [Core implementation gap analysis](CORE-IMPLEMENTATION-GAP-ANALYSIS.md): source-confirmed finding that Copilot currently returns deterministic summaries rather than performing LLM diagnosis; prioritized work to implement real provider-backed Analyst/Critic.
+- [Decision, remediation and learning architecture](AI-DECISION-AND-LEARNING-ARCHITECTURE.md): canonical record separation, proposal/approval/effect/verification boundaries, PC11K5 invariant chain and staged roadmap.
+- [Core qualification matrix](CORE-QUALIFICATION-MATRIX.md): test scenarios for core, AI quality, policy, remediation, learning and deployment. All new rows remain NOT RUN until executed.
+- [Database schema catalog](DATABASE-SCHEMA-CATALOG.md): source-derived map of existing migrations and the proposed AI decision-ledger gap.
+- [Stack deployment inventory](STACK-DEPLOYMENT-INVENTORY.md): source-derived service/network responsibility and deployment-kit acceptance criteria.
+- [Accelerated rebuild plan](ACCELERATED-REBUILD-PLAN.md): prioritized build and release gates.
+- [Deployment and recovery runbook](DEPLOYMENT-AND-RECOVERY-RUNBOOK.md): install, migration, backup/restore, package and model evaluation.
+- [AI quality evaluation protocol](AI-QUALITY-EVALUATION.md): golden set, metrics and promotion gates.
+
+The branch now includes the initial provider-backed Analyst/Critic, Worker wiring, explicit AI decision-ledger migration and Core APIs for normalized persistence, hash-bound remediation proposals, role-scoped human approval and curated learning ingestion. The Copilot itself still constructs a fixed evidence summary and is not the LLM diagnostic engine. Full stack image builds and clean PostgreSQL migration execution pass in CI; the upgrade runner is being qualified against a legacy-only schema. Actual model inference, full Temporal E2E and production runtime remain unqualified. Keep ACME twin/demo expansion behind these gates.
+
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
 
 
-## 2026-10-27 — P0 portal integration/navigation increment (PR #46)
+## Core Analyst/Critic adapter increment (2026-10-19)
 
-- Ported only `app/portal/platform_registry.py` from PR #36 (source blob `969b5f7fdc4f654cca5f6d3b6ed6e2a004f5fd8d`), with separate operator-configured external navigation and `GET /api/portal/components`.
-- `GET /api/portal/bootstrap` and the portal homepage now treat failed/malformed Core dashboard, Run list and Twin summary reads as `UNKNOWN`/`null`, not fabricated empty healthy data. The response state `READABLE_UNVERIFIED` is not runtime attestation.
-- Compose external portal port defaults to `17777` (override `AIOPS_PORTAL_HOST_PORT`); qualification/static checks and synthetic E2E default were aligned. This is source configuration only, not a claim about Debian runtime.
-- External links to n8n, Thruk, Checkmk, Grafana, GLPI are disabled until explicitly configured. No proxy, RBAC qualification, live screenshots or service integration proof. Evidence/incident dedicated read models await access-control design.
-- Targeted tests are in `tests/test_portal_integrations.py` and `tests/test_portal_read_models.py`; quality workflow is reused. Initial PR head `dbdbfbe0113e862d9428c69af14ca278a84aa2e8` passed [GitHub Actions 40574864665](https://github.com/alimtalbi-ata/aiops/actions/runs/40574864665), including compilation, portal unit tests, static audit and Compose config. This is not container E2E or Debian qualification.
-- Full operator configuration, limitations and next steps: `docs/portal/INTEGRATION-NAVIGATION-P0.md`. Continue with authenticated RBAC read models and real ephemeral integration services; preserve UNKNOWN and LIVE fencing.
-
-
-## 2026-10-27 — NOC authenticated read-model seam (draft PR)
-
-A targeted port from PR #36 adds `app/portal/noc_runtime.py` with signed/HMAC-verified read-only NOC snapshots, operator Bearer auth and an explicitly UNKNOWN portal NOC panel. The source and tests are not runtime qualification. Full configuration, trust and multi-tenant limitations are documented in `docs/architecture/NOC-SIGNED-READMODEL-BRIDGE-20261027.md`. Next: real Checkmk/Thruk upstream provider and correlation to canonical Core Run/Incident, then evidence-grounded Analyst/Critic via NIM/Ollama adapter PR #44. No Debian or LIVE access performed.
-
-## 2026-10-27 — P1 ACME SAN → Payments synthetic impact (draft PR #50)
-
-A targeted port of PR #36's fixture, dependency DAG validator and read-only impact view adds `GET /api/demo/acme-impact` and `GET /demo/acme-impact` to the canonical portal, with a visible navigation link. Source SAN P1 incident `ACME-DEMO-SAN-001` and Payments P2 impact `ACME-DEMO-PAY-002` are stable synthetic fixture IDs; derived run and ticket labels are not Core/Temporal or GLPI IDs. No real GLPI ticket or runtime capture is claimed. Tests are wired into existing quality workflow; verify latest PR #50 check conclusion before merging. Next: authenticated correlation of real Core Run/Incident/GLPI IDs, preserving mode and evidence provenance. See `docs/demo/ACME-SAN-PAYMENTS-IMPACT-20261027.md`.
-
-## 2026-10-27 — NOC signed payload to canonical Run read-only correlation (candidate)
-
-The P0 NOC track adds `app/portal/noc_correlation.py` and a guarded portal drilldown in a dedicated draft PR. It reuses the PR #36 / merged PR #47 signed NOC read-model contract without importing synthetic RAG fixtures into the runtime. Exact Run/Incident identity is compared with the independently fetched Core Run; mismatches are UNKNOWN. A matching identity is explicitly MATCHED_UNATTESTED and does not establish live monitoring, Grafana or RAG quality. DEMO/REPLAY/STORY remain synthetic; LIVE is unqualified. No DB writes or remediation.
-
-**Known blockers:** no verified real Checkmk/Thruk or Grafana integration, no per-tenant Core/portal read ACL, no runtime attestation or actual model grounding. The inspected Core GET endpoint is unauthenticated; do not expose it publicly. See `docs/architecture/NOC-CANONICAL-RUN-CORRELATION-20261027.md` and the corresponding dated automation run log for tested scope and limitations.
+- Added a separate FastAPI service under app/intelligence with an OpenAI-compatible chat-completions adapter, strict top-level Pydantic contracts, required internal-token authentication, bounded provider timeout, provider-unavailable behavior, and evidence-ID reference checks.
+- Added the service to Compose on the internal control network and added optional LLM provider variables to the safe .env template.
+- Added deterministic contract tests and wired them into the quality workflow.
+- GitHub Actions run 39312217053 passed compileall, existing policy safety tests, new intelligence contract tests, secret preflight, static repository audit, and Compose configuration validation: https://github.com/alimtalbi-ata/aiops/actions/runs/39312217053
+- Worker integration: the Worker now calls Analyst/Critic for DGX_ANALYST/DGX_CRITIC, stores structured outputs in run-event payloads, blocks on provider/contract failure, and derives the policy input from the returned analysis/critique. The synthetic OBSERVE stage creates two explicitly synthetic twin-simulator evidence records; generic stage markers are filtered out of the AI evidence input.
+- The service remains unqualified against an actual local model endpoint. Runtime container build, model inference, Temporal E2E, persistence/replay behavior and the complete failure matrix remain untested. The latest GitHub Actions run 39313131331 passed compileall, policy tests, intelligence contract tests, secret preflight, static audit and Compose config: https://github.com/alimtalbi-ata/aiops/actions/runs/39313131331.
+- No Debian host, production containers or live infrastructure were accessed. LIVE execution remains blocked.
 
 
-## 2026-10-27 23:16 Europe/Paris — P0 NOC correlation merged, synthetic RAG fixture drilldown (PR #54)
 
-- PR #52 was reviewed against main SHA `b85383f201c976397a512c9beb31857ddf7c1638` and GitHub Actions quality run [40585273487](https://github.com/alimtalbi-ata/aiops/actions/runs/40585273487), which reported completed/success for the correlation test and existing quality gates. It was merged with squash commit `81ab8ae2bfae8f8b5767578b8fcd772f82fffe82`. This proves unit/static/Compose-config checks, **not real Checkmk/Thruk or Core integration**.
-- Merged [PR #54](https://github.com/alimtalbi-ata/aiops/pull/54) (squash SHA `b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`, verified green [CI run 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546)) ports only PR #36's six synthetic RAG reference cases into the canonical portal. `GET /api/noc/demo-rag` requires the operator read token and returns exact asset citations with SHA-256, `SYNTHETIC_REFERENCE_ONLY` or `UNKNOWN`; the NOC panel offers an explicit DEMO drilldown. There is no actual LLM inference, NIM/Ollama call, Grafana observation, source runtime attestation or LIVE action.
-- Security and qualification: no multi-tenant Core/portal ACL yet; the shared read token is **not tenant-scoped**. The synthetic endpoint must not be promoted to real RAG without pre/post-retrieval ACL, authoritative citations, source freshness and canonical Run binding. Existing `quality.yml` runs the new offline contract tests; PR #54 Actions are green for static/contract/Compose checks only; no real service integration is qualified. See `docs/architecture/NOC-SYNTHETIC-RAG-DRILLDOWN-20261027.md` and `docs/automation-runs/2026-10-27-2316-p0-noc-rag-fixture.md`.
+## Accelerated rebuild increment (2026-10-19, same PR #21)
 
-## 2026-10-28 07:09 Europe/Paris — NOC signed tenant-scope refusal (draft)
+### Implemented on branch
+- Added migration 009 for analysis, critique, policy decisions, proposals, approvals, effect receipts, verification, reconciliation, learning cases and model-evaluation runs.
+- Added an explicit checksummed migration runner for already-initialized PostgreSQL volumes. It verifies a legacy-schema signature, records a baseline for 000–008 and fails closed on schema drift/incomplete schema.
+- Added Core APIs to persist/query analysis, critique and policy records; proposal creation is bound to a validated analysis/critique and exact evidence IDs; approval is bound to immutable proposal hash and scope; CRITICAL approval requires two distinct actors/roles; synthetic runs cannot create real approvals.
+- Added learning ingestion with reviewer identity/rationale, verification reference and database/application checks that prohibit synthetic or unreviewed cases from gold-set eligibility.
+- Added repeatable synthetic model evaluation fixtures/runner, deployment/recovery runbook, full-stack database/volume backup and explicitly guarded restore scripts, diagnostic bundle, cumulative package manifest/checksums and CI artifact upload.
+- CI now builds every application image, runs static/unit/security contract tests, applies the full SQL chain to disposable PostgreSQL, and separately exercises the upgrade runner against a legacy-only schema. Do not infer model quality or live safety from those checks.
 
-On main starting SHA `88cb4ed01706ac09bb8e01fdceead422cab2590d`, a dedicated P0 draft adds a conservative tenant-scope fence to the existing signed NOC read-model bridge. HMAC verification authenticates bytes but cannot authorize cross-tenant reads with a shared operator token. Nested tenant/org/workspace/account/customer claims (including null, camelCase and Unicode compatibility spellings) now cause a redacted 503 instead of a silently unscoped projection. The scan is bounded. Unscoped signed DEMO read models remain read-only and unattested. Tests run via existing `quality.yml`; see `docs/automation-runs/2026-10-28-0709-p0-noc-signed-tenant-fence.md`. This is not a tenant ACL implementation, Checkmk/Thruk integration, Grafana observation or LIVE qualification. Next: authenticated tenant identity and Core ACL enforcement with real ephemeral services.
+### Current verified CI evidence
+- Clean migration chain and full image build/package passed in run 39315470210: https://github.com/alimtalbi-ata/aiops/actions/runs/39315470210
+- Upgrade runner initially exposed a CI startup race: PostgreSQL's temporary initdb socket reported ready before TCP startup. The workflow was changed to wait for TCP readiness; the new result must be checked before marking this gate PASS.
+- Latest cumulative artifact from earlier successful CI is only a previous snapshot and should not be treated as the newest branch release until the post-change workflow produces a fresh artifact.
 
-## 2026-10-28 08:16 Europe/Paris — NOC scope aliases after PR #99
+### Immediate next actions
+1. Confirm latest CI jobs, especially migration-runner-upgrade and core-ledger contract.
+2. Fix any remaining failures; regenerate the cumulative ZIP from the passing commit and verify SHA-256.
+3. Review the generated package contents and ensure no .env, backups or diagnostics are present.
+4. Add/execute disposable Temporal E2E with a deterministic fake provider and explicit provider timeout/malformed-output/retry tests.
+5. Keep LIVE execution disabled; only then progress toward real evidence adapters and ACME twin qualification.
 
-After merging [PR #99](https://github.com/alimtalbi-ata/aiops/pull/99) at `aae50b02557143ea5a7f0f2633271a0602de8800`, the signed NOC tenant fence receives a narrow follow-up for indirect scope names (`ownerTenantId`, `projectTenantID`, `orgRef`, `accountRef`, etc.) before any projection. Tests cover rejection of validly HMAC-signed nested claims and non-regression for unrelated metadata. No authenticated Core tenant ACL or Checkmk/Thruk integration is claimed; all observed/LLM/LIVE qualification remains blocked. See `docs/automation-runs/2026-10-28-0816-p0-noc-scope-aliases.md`.
+## RECONSTRUCTION MILESTONE — 2026-10-20 (supersedes earlier CI pending notes)
 
-## P0 portail — navigation intégrations authentifiée (2026-10-28 09:09 Europe/Paris)
+**Status:** latest verified release-producing commit `65ee946d31030c18ee554f572130295b9b82be46` on branch `feat/core-analysis-quality-v2`, draft PR #21. Do not interpret earlier “E2E not yet run” notes as current status.
 
-- [PR #103](https://github.com/alimtalbi-ata/aiops/pull/103) fusionnée par squash dans `main` au SHA `9ccbdd5a9e19826fd03f83bc071671473648c45a`, après tests GitHub Actions verts sur le dernier HEAD : [push 40654514583](https://github.com/alimtalbi-ata/aiops/actions/runs/40654514583), [PR 40654521757](https://github.com/alimtalbi-ata/aiops/actions/runs/40654521757) ; [CI post-fusion 40654630767](https://github.com/alimtalbi-ata/aiops/actions/runs/40654630767) également `completed/success`.
-- `GET /api/portal/components` est protégé par le Bearer viewer partagé NOC ; l'HTML anonyme ne divulgue plus les URLs d'intégration ; la navigation utilise un jeton à usage unique, une requête sans cookies et un rendu DOM fail-closed. Les 4 tests Node DOM couvrent faux état LIVE, URL script, identité dupliquée, HTTP refusé et réponse tardive après effacement. Reprise ciblée du contrat de PR #36, sans merge massif.
-- **Limites :** le portail historique lit toujours Core/Twin anonymement ; DEMO et Copilot ne sont pas encore protégés dans `main`. Les PR #74/#57/#70/#51 doivent être convergées, et #98 requalifiée comme chevauchement. Aucune qualification réelle des conteneurs, navigateur, Ollama/NGX, Debian, ni LIVE. Journal : [2026-10-28T0906-P0-portal-navigation-browser-contract.md](automation-runs/2026-10-28T0906-P0-portal-navigation-browser-contract.md).
+### Actual qualification evidence
+- **CI run 39371018120 PASS for all five jobs:** quality-build-package, database-migrations, migration-runner-upgrade, runtime-e2e and release-kit. https://github.com/alimtalbi-ata/aiops/actions/runs/39371018120
+- Cumulative kit artifact `aiops2-core-deployment-kit`, GitHub artifact id `12241690507`, release file `AIOps-2.0.0-core-qualification.1-Core-Deployment-Kit-20261020T044458Z.zip`.
+- Verified SHA-256 (actual ZIP) `145b31f3c26bc809df727b2d3b7f3ed2312658337692f6148a6d2abea11800e4`; outer checksum matches. ZIP CRC and all 146 manifest-listed payload files passed `tests/verify-package.py`.
+- Cumulative package includes source and infrastructure, 10 SQL migrations, 18 deployment Shell scripts, 28 test files, documentation and integrated reports under `09-Qualification/`.
+- Synthetic Temporal E2E run `RUN-A19102CAD44B972F`: run status RESOLVED, one persisted analysis, one persisted critique, one persisted policy decision, **zero actual effect receipts**; report PASS.
+- Deterministic synthetic Analyst/Critic evaluation: 5/5 scenario cases successfully assessed; severity accuracy 1.0, grounding 1.0, freshness accuracy 1.0, action safety 1.0, injection fixture resistance 1.0, contradiction detection 1.0. Four strictly advisory proposals checked; evaluation saved in immutable PostgreSQL ledger, `ledger_persistence.status=PASS`.
+- Docker Compose environment is configurable by `AIOPS_STACK_ID` and `COMPOSE_PROJECT_NAME`, distinct container/network/volume namespaces; host services default to loopback. Isolated deployment script `deploy/install-isolated.sh` configures `aiops2-rebuild` with separate ports and refuses unsafe clashes. Its `--configure-only` identity/port contract runs in CI without modifying a production host.
+- New runbook: [Isolated deployment](DEPLOYMENT-ISOLATED-REBUILD-RUNBOOK.md). Execution roadmap: [Reconstruction plan](RECONSTRUCTION-EXECUTION-PLAN.md).
 
-## 2026-10-28 10:04 Europe/Paris — P0 Core/Twin anonymous shell and read gate (merged #114)
+### Strict limitations, still unresolved
+- **Real inference quality NOT RUN:** the CI provider is a deterministic synthetic fixture, not an actual DGX/Mistral/Qwen/other local LLM. No real-model accuracy claim.
+- **Production Debian deployment NOT RUN:** CI tests use disposable GitHub runners. No production containers, databases or volumes altered.
+- **LIVE actions/remediation NOT QUALIFIED and disabled** pending safe adapters, independent verification, HITL, effect fencing and dedicated qualification.
+- The synthetic ACME fixture is not yet a fully calibrated, validated enterprise digital twin.
+- The release is a core integration qualification, **not** a production-ready release or the completed full autonomy objective.
 
-A small port from draft PR #74 replaces anonymous Core/Twin fetches with an UNKNOWN-only shell and adds explicit viewer Bearer bootstrap reads, reusing the merged PR #36 NOC token gate rather than duplicating auth. The one-shot browser view rejects malformed or falsely LIVE-attested envelopes. Tests are added to existing quality workflow. This is source/contract work only, not tenant ACL, container integration or Debian LIVE qualification. See `docs/portal/BOOTSTRAP-CONVERGENCE-P0.md` and the dated automation log. Next: converge DEMO/Copilot auth PR #57/#70, then tenant ACL and real container integration.
+### Next engineering batch
+1. Add nontrivial provider-fault fixtures and Temporal replay/retry/fencing/adversarial concurrency E2E; CI must report verified PASS/FAIL per case.
+2. Qualify Analyst/Critic with a **real model endpoint** against larger holdout sets, track calibrated evidence quality and critic defect catch rate. No model self-certification or direct execution.
+3. Implement read-only CMDB/monitoring/RAG adapters with source freshness, provenance, auth, timeouts, and integration tests.
+4. Wire HITL approvals, immutable action hashes, fencing, verification and reconciliation for optional guarded action proposals (keep LIVE blocked until certified).
+5. Expand ACME digital twin and produce an actual reproducible UI demonstration and video only after Core acceptance.
+6. Continue using GitHub PRs/CI release ZIPs as source of truth; minimize chat-to-Debian round trips.
 
-### P0 Core/Twin promotion — 2026-10-28 10:09 Europe/Paris
+## 2026-10-20 — Core functional deep audit and target-driven redevelopment
 
-[PR #114](https://github.com/alimtalbi-ata/aiops/pull/114) merged at `cea1ed7b54ed34cf4b036b6d5f20bf968c9dac09` after green [push CI 40661742307](https://github.com/alimtalbi-ata/aiops/actions/runs/40661742307), [PR CI 40661749480](https://github.com/alimtalbi-ata/aiops/actions/runs/40661749480), and [post-merge CI 40661890151](https://github.com/alimtalbi-ata/aiops/actions/runs/40661890151). Core/Twin bootstrap now requires the shared viewer token and anonymous home is UNKNOWN-only. Tests are in-process plus synthetic DOM; only Grafana is tested as a real ephemeral container. DEMO/Copilot remain unsecured in main, no LIVE qualification. See the 10:04 automation journal.
+**Active development:** branch `feat/core-analysis-quality-v2`, [PR #21](https://github.com/alimtalbi-ata/aiops/pull/21). Current source of truth: [target architecture deep audit](TARGET-ARCHITECTURE-DEEP-AUDIT-2026-10-20.md). An isolated synthetic Core workflow + model-fixture evaluation + cumulative ZIP had passed at commit `a739676bc44974be7ba52cd101ff716d6c497dfe` in [CI #39371406277](https://github.com/alimtalbi-ata/aiops/actions/runs/39371406277). Subsequent hardening modifications MUST pass new CI before receiving their own PASS status.
 
-## 2026-10-28 10:30 Europe/Paris — Policy LIVE HITL convergence (draft PR #118)
+**Confirmed improvements on the feature branch:** evidence freshness and duplicate/provenance guard; Analyst/Critic deterministic post-model quality checks; blind synthetic inference baseline not keyed to `case_id`; all-case denominators and separate critic/stale/contradiction scoring; synthetic Policy fail-closed; Evidence/Policy service authentication; Temporal workflow import isolation and non-blocking HTTP dispatch; semantic retry-safe event keys; removal of hardcoded secrets and destructive install defaults. Source existence is not qualification; inspect latest CI, exact SHA and artifacts.
 
-- `main` starting SHA `bb4665ab0eb41b43df43ea893e28ac86ef640863` still allowed LIVE mutating Policy `PASS/ALLOW` with a caller-controlled `human_approved=true`. The earlier draft #76 was conflicted with main. PR [#118](https://github.com/alimtalbi-ata/aiops/pull/118) ported only the two Policy code/test files from #76; merged at `b33f655695949d6fef9e7d72b537d9810859c494` after [PR CI #40664618475](https://github.com/alimtalbi-ata/aiops/actions/runs/40664618475) and [post-merge CI #40664759313](https://github.com/alimtalbi-ata/aiops/actions/runs/40664759313) succeeded. PR #76 was closed as superseded. No mass merge of #36 or #49.
-- Four LIVE effect commands are denied independently of the boolean. Added HTTP in-process negative tests for forged approvals, invalid modes/commands and synthetic SIMULATE behavior; the existing quality workflow is reused. Verify the exact latest GitHub Actions run before merging; no container integration or LIVE proof is claimed.
-- Remaining P0: Core-owned authenticated actor/RBAC, immutable incident/Run/recipe/target/params binding, expiring single-use approval consumption, append-only Evidence, Temporal resume and sandbox-only postchecks/rollback. Stack #49→#106 remains draft and must be reconciled selectively.
-- No Debian/NGX access, deploy, production secret or LIVE command. See `docs/automation-runs/20261028-1030-hitl-policy-convergence.md`.
+**Known unqualified gaps:** real inference accuracy/calibration on DGX, real RAG/CMDB/observability read-only connectors, full conversation Copilot, per-scenario ACME twin isolation, LIVE effect/fencing/HITL recovery, chaos/load tests and Debian production acceptance. Leave LIVE effects disabled. The tiny deterministic CI suite is not a real-model accuracy benchmark.
 
-## 2026-10-28 11:01 Europe/Paris — P0 Golden DEMO operator RBAC (merged #122)
+**Next acceptance sequence:** (1) latest green CI including runtime+model+package gates; (2) frozen external model and prompt version, adversarial/held-out evaluation; (3) real read-only evidence/CMDB/RAG qualification; (4) HITL/fencing and safe remediation simulation; (5) ACME twin/chaos, then demo/recordings.
 
-The legacy `POST /api/demo` no longer accepts anonymous writes. [PR #122](https://github.com/alimtalbi-ata/aiops/pull/122) was merged as `2253bd21bd948a349b9b7a4a941ecf1e3357d96c` after green [push CI](https://github.com/alimtalbi-ata/aiops/actions/runs/40668539080), [PR CI](https://github.com/alimtalbi-ata/aiops/actions/runs/40668555197), and [post-merge CI](https://github.com/alimtalbi-ata/aiops/actions/runs/40668685395). The operator token is separate from viewer/internal credentials, generated for new installs and passed explicitly via Compose. Upstream receipts are checked and projected as `DEMO_SUBMITTED_UNVERIFIED`, never LIVE. HTTP tests are in-process; only Grafana has a real ephemeral-container CI test. Existing `.env` files remain unchanged and must be configured manually. Core/Temporal, Copilot auth, browser captures and Debian/LIVE remain unqualified. See [automation journal](automation-runs/2026-10-28T1101-P0-golden-demo-operator-rbac.md).
+**Single-entry install:** `bash 00-Deployment/install.sh` delegates to `deploy/install-isolated.sh`; archives carry no shared development passwords. Never use legacy destructive Big Bang as the standard deployment path.
+
+## 2026-10-20 — Core RC1.2 isolated lifecycle, secure diagnostics
+
+- Release candidate: `2.1.0-core-rc1.2` on `feat/core-analysis-quality-v2`, PR #21. Do not merge to `main` or claim production qualification without explicit review.
+- Isolation is the supported first installation path (`bash deploy/install-isolated.sh`). The installer and big-bang wrapper now reject `RETIRE_LEGACY=1` *before* any other operation; retirement remains a separate, explicit post-qualification decision.
+- `tests/seed-demo.sh` verifies only the PostgreSQL service owned by the selected Compose project and requires populated topology.
+- `tests/qualification.sh` verifies Compose project identity and container ownership, not merely container names or healthy-looking unrelated processes.
+- `deploy/diagnose.sh` discovers containers by Compose service and project, sanitizes logs via `deploy/redact_logs.py` using known environment secret values and patterns, and writes a SHA-256 verification manifest. Bundles are private, not publication-ready.
+- CI additionally executes `tests/test_redact_logs.py` and `tests/lifecycle-safety-contract.sh`. A cumulative RC1.2 ZIP must be obtained from the successful release-kit GitHub Actions artifact and include runtime and model evaluation reports.
+- The verified CI for RC1.1 is GitHub Actions #39386565967, commit `4dc3032300452612f49e2ef98d44be29f835f9ca`. Its synthetic Temporal and model-fixture tests are PASS, **but it is not a real-model or server deployment acceptance result**.
+- Next: validate RC1.2 CI and packaging checksum, then qualify an actual OpenAI-compatible model offline; expand CMDB/RAG and eventually the ACME Twin, after core exit criteria are met.
+
+## 2026-10-20 — RC1.3 isolation, failure injection and distributable source kit
+
+- **Branch:** `feat/core-analysis-quality-v2`, **PR:** #21; `main` is unchanged. The candidate version is `2.1.0-core-rc1.3`.
+- `deploy/plan_isolation.py` validates the expected project name, container/network/volume prefixes, privileges, all published ports and loopback binding **before deployment**. It emits no secrets. The isolated installer invokes it before Compose operations. `tests/test_deployment_isolation.py` and `tests/isolated-deploy-contract.sh` exercise the contracts.
+- `deploy/status.py` offers a bounded, read-only operational status/health report with no commands, environment values, tokens or raw logs. `tests/test_stack_status.py` covers Docker output variants, project mixing and secret filtering.
+- `tests/test_ai_failure_injection.py` injects falsified evidence IDs, stale observations, client-controlled freshness, contradictory source reports and unauthorized requests; critical claims must fail closed.
+- `deploy/package_tree.py` adds a fallback for **rebuilding a cumulative ZIP from an extracted kit without a Git repository**. `tests/test_package_tree.py` checks source completeness and exclusion of secrets, backups, caches, credential files and symlinks.
+- `docs/CORE-RC13-QUALIFICATION-OPERATIONS.md` documents Windows-to-Debian transfer, isolated install, read-only status, model evaluation and dual SHA-256 verification.
+- **Qualification status:** the previous reconstruction baseline passed full synthetic CI at GitHub Actions #39390130618. The RC1.3 candidate has new tests and awaits a successful full CI execution before its new cumulative ZIP may be called qualified.
+- **Next decision:** inspect RC1.3 CI and artifact, qualify a real OpenAI-compatible model offline, then expand read-only context acquisition/RAG and human-approved guarded effects. LIVE remains disabled; no Debian production changes are authorized.
+
+## 2026-10-20 — RC1.4 Docker resource ownership and CI isolation guard
+
+- **Branch:** `feat/core-analysis-quality-v2`; **PR:** #21. `main` remains unmodified by this batch. Version advances from `2.1.0-core-rc1.3` to `2.1.0-core-rc1.4`.
+- **Verified previous baseline:** GitHub Actions run #39399054380 passed all five jobs (quality/build, fresh database migration, legacy upgrade, runtime Temporal E2E, release-kit) and published the RC1.3 cumulative ZIP with machine-readable synthetic-qualification reports. This is not a host-specific Debian or real-model acceptance test.
+- **New fence:** `deploy/check-docker-ownership.py` checks pre-existing containers, networks and volumes against `com.docker.compose.project`. It is called by `deploy/install-isolated.sh` after rendering the Compose model but before installation. Foreign-owned or unlabeled resources fail closed; no delete/retire/prune is attempted.
+- **Regression suite:** `tests/test_docker_ownership.py` checks ownership mismatch, correct owner, absent resources and unreadable inspection data. It is release-blocking in CI.
+- **Runbook:** `docs/CORE-RC14-RESOURCE-OWNERSHIP.md` specifies the fence, non-destructive installation and limitations.
+- **Pending gate:** RC1.4 full CI and cumulative artifact qualification. Do not describe RC1.4 as qualified until the `release-kit` job succeeds on the exact commit; keep RC1.3 as the last verified release candidate until then.
+- **Next priority:** run the isolated reconstruction from a fresh directory on the Debian host only after a qualified kit is available; check real inference service connectivity, Analyst/Critic grounding/abstention and policies, then advance read-only CMDB/RAG acquisition. Keep simulated evidence distinct from real evidence; do not enable LIVE remediation without independent end-to-end qualification.
 
 
-## 2026-10-28 11:08 Europe/Paris — P0 NOC authenticated Core synthetic projection (draft)
+## 2026-11-02 — V28 ACME-TEST terminal persistence and isolated delivery gate
 
-Dedicated P0 branch from main `723ca6458c722a1aa0e57ddb5eee3374d20cc830`: shared tenant-scope refusal logic extracted from the existing signed NOC adapter into `app/shared/tenant_scope.py`; new Core-only `GET /api/noc/runs/{rid}` requires the internal Bearer token, joins the actual Incident in PostgreSQL, denies LIVE/non-synthetic/missing/tenant-scoped records and returns only four Run fields. The portal's signed NOC correlation now calls this bounded Core endpoint rather than the legacy anonymous full Run endpoint. No tenant ACL, observed Checkmk, RAG diagnosis, Grafana metric or LIVE attestation is claimed. The existing `quality.yml` is extended with real Core HTTP and PostgreSQL 16 ephemeral integration; no mocks in that integration. Tests/CI outcome and PR link: see the dated journal `docs/automation-runs/2026-10-28-1108-p0-noc-core-read-auth.md`. Legacy Core read endpoints remain outside this incremental change and require a separate access-control design.
-
-## 2026-10-28 11:15 Europe/Paris — Worker simulation/Policy fence (draft)
-
-Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current main. The Worker rejects invalid execution modes before Temporal connection or stage effects; DEMO/REPLAY/STORY send OBSERVE to Policy, not EXECUTE. LIVE continues to hit the existing emergency stop and Policy HITL refusal. The helper and AST regression tests are reused without a mass merge. This is unit/static qualification only; no Core/Temporal/Twin/Evidence integration or HITL approval claimed. See `docs/automation-runs/2026-10-28-1115-p0-worker-policy-mode.md` for exact CI status and follow-up.
+- **Single candidate:** Draft [#358](https://github.com/alimtalbi-ata/aiops/pull/358) from protected `deploy/aiops2-stable` `d6a3458a04186dd3822bad3a13c85aed6c720565`. Source #344 Core, #348 Worker, #356 Twin, #359 Portal/GLPI remain independent Drafts; only reviewed Worker/Twin blobs were selectively ported. Exact current HEAD is in #358 and [issue #186](https://github.com/alimtalbi-ata/aiops/issues/186); do not infer a deployed SHA from this document.
+- **Architecture:** [ADR-0015](DECISION-LOG.md) makes Core the only terminal writer. Additive migration 018 stores a separate append-only `SIM-GLPI` terminal ticket, Worker `SIMULATED_NO_EFFECT` canonical receipt+SHA256 and uniquely consumed Twin nonce digest. Atomic Core terminal write also changes Incident/Run to RESOLVED. Independent GET validates ticket/Worker digests and causal SOURCE IDs; replay of committed terminal state does not request another expiring Policy/HITL decision. Rules RG-ACME-18/19/20 are named and tested.
+- **Source qualification:** Core PG16 tests 16 named cases incl. native scratch backup/restore, tamper, tenant, stale approval, forged GLPI write, immutable terminal and replay. Worker 28 no-effect tests, Twin SSRF/HMAC negative tests, Debian upgrade safety 5 tests. These are disposable CI, not real host or positive joined Temporal E2E. Verify all exact-head checks before promoting.
+- **Host release:** `deploy/debian-acme-sandbox-release.json` remains **enabled:false**. The existing poller is the only permitted executor. The five-service targeted Compose upgrade now requires a PG16 custom dump, checksum, scratch DB native restore with disk headroom and cleanup, then additive 011–018; never restore over live or touch portal :7777/GLPI/volumes. Rollback only previous five images + sandbox flag off, retain immutable audit and DB.
+- **Last Debian evidence consulted:** [poller receipt](https://github.com/alimtalbi-ata/aiops/blob/ops/debian-runtime-reports/ops/debian-reports/SRV-DEB-05/poller-qualification.json) collected 2026-11-02 16:30:04 UTC, **stale**; stable checkout `d6a3458a...`, portal image `sha256:16fe60c3...`, 9/9 anonymous read-only contracts, ACME blocked before POST. No new Docker/PG16 host mutation attested in this cycle.
+- **GO/NO_GO:** source integration candidate only. **NO_GO** stable merge, Debian upgrade, human GLPI authority and E2E RESOLVED until exact-head checks, positive joined PG16+Temporal test, host receipt with image/SHA/HTTP and independent final reads. Owners: Core P0 terminal, Worker P0 Temporal/digest, Twin P0 provenance/SSRF, Portal P1 actor+tenant ACL. Four existing schedules, no new schedule.

@@ -1,0 +1,41 @@
+# AIOps 2.0 — isolated Docker rootless connectivity override.
+# Opt-in: docker compose -f compose.yml -f deploy/compose.rootless-connectivity.override.yml ...
+# Preserve this file on ALL later compose operations, including targeted recreations.
+# Qualification snapshot: 2026-10-20; do not apply to legacy/rootful stacks.
+#
+# Rootless host-port publishing needs a non-internal network on the web services.
+# Public is also an egress path: preserve access controls and review exposure.
+# Intelligence uses public for DGX NIM; n8n uses data for internal PostgreSQL.
+# PostgreSQL itself remains data-only; do not attach it to public.
+services:
+  aiops2-intelligence:
+    networks:
+      aiops2-control: {}
+      aiops2-public: {}
+  aiops2-n8n:
+    networks:
+      aiops2-control: {}
+      aiops2-data: {}
+      aiops2-integration: {}
+      aiops2-public: {}
+  aiops2-portal:
+    networks:
+      aiops2-control: {}
+      aiops2-public: {}
+  aiops2-grafana:
+    networks:
+      aiops2-observability: {}
+      aiops2-public: {}
+  aiops2-glpi:
+    networks:
+      aiops2-integration: {}
+      aiops2-public: {}
+  aiops2-prometheus:
+    networks:
+      aiops2-control: {}
+      aiops2-observability: {}
+      aiops2-public: {}
+  aiops2-alertmanager:
+    networks:
+      aiops2-observability: {}
+      aiops2-public: {}

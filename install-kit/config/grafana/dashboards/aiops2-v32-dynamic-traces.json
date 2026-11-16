@@ -1,0 +1,89 @@
+{
+  "uid": "aiops2-traces-explorer-v32",
+  "title": "AIOPS2 | Dynamic Traces Explorer",
+  "description": "Tempo TraceQL search and trace correlation readiness.",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "refresh": "30s",
+  "editable": false,
+  "tags": [
+    "AIOPS2",
+    "observability",
+    "dynamic",
+    "v32"
+  ],
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Trace ingestion status",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Tempo is configured as a datasource. The TraceQL search below returns only **ingested spans**. No trace is synthesized. Use Grafana Explore for trace waterfall and span details."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Distributed trace search",
+      "type": "table",
+      "datasource": {
+        "type": "tempo",
+        "uid": "aiops2-tempo-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{ resource.service.name =~ \".*\" }",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "TraceQL search; Grafana Tempo datasource must be loaded and contain spans."
+    },
+    {
+      "id": 3,
+      "title": "Correlation",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "To filter by incident/run/scenario, instrument OpenTelemetry span attributes `incident.id`, `run.id`, `scenario.id`, `deployment.environment`, and `service.name`. Trace-to-logs needs matching trace IDs in Loki."
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "aiops.debian-acme-sandbox-release-intent.v1",
+  "enabled": false,
+  "candidate_sha": "e9a21e3e13f9c13bff461325426f12f171285b22",
+  "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; canonical portal TCP 7777 untouched",
+  "reason": "P0 #385/#386 portal-only release: five-service ACME sandbox already qualified at e9a21e3e and observed 17/17 on Debian 2026-11-03T08:23:33Z; prevent unnecessary Core/Twin/Policy/Worker/Simulator rebuild on portal UX release. Preserve existing containers; re-run independent ACME sandbox E2E without image mutation.",
+  "source_pr": 382
+}

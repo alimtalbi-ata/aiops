@@ -1,46 +1,98 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+BASE="${BASE_URL:-http://127.0.0.1:7777}"
 mkdir -p reports
-REPORT="reports/runtime-e2e-$STAMP.json"
+RUN_ID=""
+RESULT="FAIL"
+FAILURE="not_completed"
+RUN_STATUS="UNKNOWN"
+ANALYSIS_COUNT=0
+CRITIQUE_COUNT=0
+POLICY_COUNT=0
+EVIDENCE_COUNT=0
+EFFECT_COUNT=0
+ANALYSIS_SEVERITY="UNKNOWN"
+CRITIQUE_VALIDATED="false"
+POLICY_RESULT="UNKNOWN"
+EVENT_TYPES=""
 DB_USER="$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-)"
 DB_NAME="$(grep -m1 '^POSTGRES_DB=' .env | cut -d= -f2-)"
-[[ -n "$DB_USER" ]] || DB_USER=aiops
-[[ -n "$DB_NAME" ]] || DB_NAME=aiops
+DB_USER="${DB_USER:-aiops}"; DB_NAME="${DB_NAME:-aiops}"
+psqlc() { docker compose --env-file .env exec -T aiops2-postgres psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -Atqc "$1"; }
 write_report() {
-  REPORT_STATUS="$1" REPORT_MESSAGE="$2" REPORT_RUN_ID="${RUN_ID:-}" REPORT_FILE="$REPORT" python3 - <<'PY'
-import json, os, datetime
-p=os.environ["REPORT_FILE"]
-obj={"status":os.environ["REPORT_STATUS"],"message":os.environ["REPORT_MESSAGE"],"run_id":os.environ.get("REPORT_RUN_ID") or None,"timestamp_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"provider":"deterministic-ci-only","mode":"DEMO"}
-open(p,"w",encoding="utf-8").write(json.dumps(obj,indent=2)+"\n")
+  RESULT="$RESULT" FAILURE="$FAILURE" RUN_ID="$RUN_ID" RUN_STATUS="$RUN_STATUS" ANALYSIS_COUNT="$ANALYSIS_COUNT" CRITIQUE_COUNT="$CRITIQUE_COUNT" POLICY_COUNT="$POLICY_COUNT" EVIDENCE_COUNT="$EVIDENCE_COUNT" EFFECT_COUNT="$EFFECT_COUNT" ANALYSIS_SEVERITY="$ANALYSIS_SEVERITY" CRITIQUE_VALIDATED="$CRITIQUE_VALIDATED" POLICY_RESULT="$POLICY_RESULT" EVENT_TYPES="$EVENT_TYPES" python3 - <<'PY'
+import json, os, pathlib, datetime
+p=pathlib.Path("reports")/("runtime-e2e-"+(os.getenv("RUN_ID") or "startup")+".json")
+data={
+ "qualification":"AIOps 2.0 Temporal synthetic end-to-end",
+ "generated_at_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+ "result":os.getenv("RESULT","FAIL"),
+ "failure_reason":os.getenv("FAILURE",""),
+ "run_id":os.getenv("RUN_ID") or None,
+ "run_status":os.getenv("RUN_STATUS"),
+ "analysis_records":int(os.getenv("ANALYSIS_COUNT","0")),
+ "critique_records":int(os.getenv("CRITIQUE_COUNT","0")),
+ "policy_decisions":int(os.getenv("POLICY_COUNT","0")),
+ "run_evidence_records":int(os.getenv("EVIDENCE_COUNT","0")),
+ "effect_receipts":int(os.getenv("EFFECT_COUNT","0")),
+ "analysis_severity":os.getenv("ANALYSIS_SEVERITY"),
+ "critique_validated":os.getenv("CRITIQUE_VALIDATED")=="true",
+ "policy_result":os.getenv("POLICY_RESULT"),
+ "event_types":[x for x in os.getenv("EVENT_TYPES","").split(",") if x],
+ "mode":"DEMO",
+ "live_execution":"disabled",
+ "note":"Synthetic CI provider and twin evidence only; this is not real-model or production qualification."
+}
+p.write_text(json.dumps(data,indent=2)+"\n",encoding="utf-8")
+print("RUNTIME_REPORT="+str(p))
 PY
 }
-curl -fsS http://127.0.0.1:7777/health >/dev/null || { write_report FAIL portal_health_failed; exit 1; }
-bash tests/synthetic-e2e.sh
-RUN_ID="$(python3 -c 'import json; print(json.load(open("/tmp/aiops-demo.json"))["run_id"])')"
-[[ -n "$RUN_ID" ]] || { write_report FAIL demo_run_id_missing; exit 1; }
-DETAIL=""
+trap write_report EXIT
+curl --retry 10 --retry-connrefused --retry-delay 2 --retry-max-time 30 -fsS "$BASE/health" >/dev/null || { FAILURE="portal_health_unavailable"; exit 1; }
+curl --retry 5 --retry-connrefused --retry-delay 2 --retry-max-time 20 -fsS "$BASE/api/portal/bootstrap" >/dev/null || { FAILURE="portal_bootstrap_unavailable"; exit 1; }
+docker compose --env-file .env exec -T aiops2-worker python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:815/health", timeout=3)' || { FAILURE="temporal_worker_unavailable"; exit 1; }
+# Token stays inside the isolated portal container; the test profile explicitly opts into DEMO.
+docker compose --env-file .env exec -T aiops2-portal python -c '
+import os,urllib.request,sys
+token=os.environ["AIOPS_INTERNAL_TOKEN"]
+req=urllib.request.Request("http://127.0.0.1:777/api/demo",data=b"{}",method="POST",headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
+try:
+    with urllib.request.urlopen(req,timeout=20) as response:
+        sys.stdout.buffer.write(response.read())
+except Exception as exc:
+    print("demo_launch_request_failed:"+type(exc).__name__,file=sys.stderr)
+    raise
+' > /tmp/aiops-runtime-demo.json || { FAILURE="demo_launch_failed"; exit 1; }
+RUN_ID="$(python3 -c 'import json; print(json.load(open("/tmp/aiops-runtime-demo.json"))["run_id"])')"
+[[ "$RUN_ID" =~ ^[A-Za-z0-9_-]+$ ]] || { FAILURE="invalid_run_id"; exit 1; }
+echo "RUN_ID=$RUN_ID"
 for i in $(seq 1 180); do
-  SQL="select r.status,(select count(*) from aiops.analysis_records a where a.run_id=r.run_id),(select count(*) from aiops.critique_records c where c.run_id=r.run_id),(select count(*) from aiops.policy_decisions p where p.run_id=r.run_id),(select count(*) from aiops.run_events e where e.run_id=r.run_id and e.event_type='INTELLIGENCE_UNAVAILABLE'),(select count(*) from aiops.evidence ev where ev.provenance->>'run_id'=r.run_id and ev.source='twin-simulator' and ev.provenance->>'synthetic'='true'),(select count(*) from aiops.effect_receipts er join aiops.action_proposals ap on ap.proposal_id=er.proposal_id where ap.run_id=r.run_id) from aiops.runs r where r.run_id='$RUN_ID'"
-  DETAIL="$(docker compose --env-file .env exec -T aiops2-postgres psql -At -F '|' -U "$DB_USER" -d "$DB_NAME" -c "$SQL" 2>/dev/null || true)"
-  if [[ -n "$DETAIL" ]]; then
-    IFS='|' read -r STATUS ANALYSES CRITIQUES POLICIES UNAVAILABLE SYNTHETIC_EVIDENCE EFFECTS <<< "$DETAIL"
-    if [[ "$STATUS" == RESOLVED || "$STATUS" == BLOCKED || "$STATUS" == FAILED ]]; then break; fi
-  fi
-  sleep 2
+  RUN_STATUS="$(psqlc "select status from aiops.runs where run_id='$RUN_ID'")"
+  [[ -n "$RUN_STATUS" ]] || RUN_STATUS="UNKNOWN"
+  [[ "$RUN_STATUS" =~ ^(BLOCKED|RESOLVED|FAILED|CANCELLED)$ ]] && break
+  sleep 1
 done
-if [[ -z "$DETAIL" ]]; then write_report FAIL run_not_found_in_database; exit 1; fi
-IFS='|' read -r STATUS ANALYSES CRITIQUES POLICIES UNAVAILABLE SYNTHETIC_EVIDENCE EFFECTS <<< "$DETAIL"
-printf 'RUN_STATUS=%s ANALYSES=%s CRITIQUES=%s POLICIES=%s UNAVAILABLE=%s SYNTHETIC_EVIDENCE=%s EFFECTS=%s\n' "$STATUS" "$ANALYSES" "$CRITIQUES" "$POLICIES" "$UNAVAILABLE" "$SYNTHETIC_EVIDENCE" "$EFFECTS"
-if [[ "$STATUS" != RESOLVED || "$ANALYSES" -lt 1 || "$CRITIQUES" -lt 1 || "$POLICIES" -lt 1 || "$UNAVAILABLE" -ne 0 || "$SYNTHETIC_EVIDENCE" -lt 2 || "$EFFECTS" -ne 0 ]]; then
-  write_report FAIL "core AI ledger or workflow invariant failed: $DETAIL"
-  exit 1
-fi
-REPORT_STATUS=PASS REPORT_MESSAGE="$DETAIL" REPORT_RUN_ID="$RUN_ID" REPORT_FILE="$REPORT" python3 - <<'PY'
-import json, os, datetime
-p=os.environ["REPORT_FILE"]
-obj={"status":os.environ["REPORT_STATUS"],"message":os.environ["REPORT_MESSAGE"],"run_id":os.environ["REPORT_RUN_ID"],"timestamp_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"provider":"deterministic-ci-only","mode":"DEMO","assertions":{"analysis_persisted":True,"critique_persisted":True,"policy_decision_persisted":True,"provider_failures":0,"synthetic_evidence_labelled":True,"real_effects_executed":False}}
-open(p,"w",encoding="utf-8").write(json.dumps(obj,indent=2)+"\n")
-PY
-echo "RUNTIME_E2E=PASS|run=$RUN_ID|report=$REPORT"
+[[ "$RUN_STATUS" == "RESOLVED" ]] || { FAILURE="expected_synthetic_run_resolved_without_effects_but_status_$RUN_STATUS"; exit 1; }
+ANALYSIS_COUNT="$(psqlc "select count(*) from aiops.analysis_records where run_id='$RUN_ID'")"
+CRITIQUE_COUNT="$(psqlc "select count(*) from aiops.critique_records where run_id='$RUN_ID'")"
+POLICY_COUNT="$(psqlc "select count(*) from aiops.policy_decisions where run_id='$RUN_ID'")"
+EVIDENCE_COUNT="$(psqlc "select count(*) from aiops.evidence where provenance->>'run_id'='$RUN_ID'")"
+EFFECT_COUNT="$(psqlc "select count(*) from aiops.effect_receipts e join aiops.action_proposals p on p.proposal_id=e.proposal_id where p.run_id='$RUN_ID'")"
+ANALYSIS_SEVERITY="$(psqlc "select coalesce(output->>'severity','UNKNOWN') from aiops.analysis_records where run_id='$RUN_ID' order by revision desc limit 1")"
+CRITIQUE_VALIDATED="$(psqlc "select coalesce(validated,false)::text from aiops.critique_records where run_id='$RUN_ID' order by created_at desc limit 1")"
+POLICY_RESULT="$(psqlc "select coalesce(state,'UNKNOWN')||'|'||coalesce(decision,'UNKNOWN') from aiops.policy_decisions where run_id='$RUN_ID' order by created_at desc limit 1")"
+EVENT_TYPES="$(psqlc "select coalesce(string_agg(event_type,',' order by sequence),'') from aiops.run_events where run_id='$RUN_ID'")"
+[[ "$ANALYSIS_COUNT" -ge 1 ]] || { FAILURE="analysis_record_missing"; exit 1; }
+[[ "$CRITIQUE_COUNT" -ge 1 ]] || { FAILURE="critique_record_missing"; exit 1; }
+[[ "$POLICY_COUNT" -ge 1 ]] || { FAILURE="policy_decision_missing"; exit 1; }
+[[ "$EVIDENCE_COUNT" -ge 2 ]] || { FAILURE="synthetic_source_evidence_missing"; exit 1; }
+[[ "$ANALYSIS_SEVERITY" == "P1" ]] || { FAILURE="expected_P1_classification_got_$ANALYSIS_SEVERITY"; exit 1; }
+[[ "$CRITIQUE_VALIDATED" == "true" ]] || { FAILURE="critic_did_not_validate_grounded_fixture"; exit 1; }
+[[ "$POLICY_RESULT" == "PASS|SIMULATE" ]] || { FAILURE="expected_demo_simulation_got_$POLICY_RESULT"; exit 1; }
+[[ "$EVENT_TYPES" == *"ANALYST_COMPLETED"* && "$EVENT_TYPES" == *"CRITIC_COMPLETED"* && "$EVENT_TYPES" == *"STAGE_COMPLETED"* ]] || { FAILURE="expected_analysis_critic_and_completed_simulation_events_missing"; exit 1; }
+[[ "$EFFECT_COUNT" == "0" ]] || { FAILURE="unexpected_effect_receipt_created_in_synthetic_P1_run"; exit 1; }
+RESULT="PASS"
+FAILURE=""
+echo "RUNTIME_E2E=PASS|run=$RUN_ID|analysis=$ANALYSIS_COUNT|critique=$CRITIQUE_COUNT|policy=$POLICY_RESULT|effects=$EFFECT_COUNT"

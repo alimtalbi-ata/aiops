@@ -1,0 +1,122 @@
+{
+  "uid": "aiops2-p6-incident-ops",
+  "title": "AIOPS2 | Incident Operations (DEMO)",
+  "description": "Real Loki log streams from synthetic ACME V291; no claim of actual incidents.",
+  "tags": [
+    "AIOPS2",
+    "P6",
+    "DEMO",
+    "business-observability"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "label": "Run ID",
+        "type": "textbox",
+        "query": "acme-demo-8c327a673c51",
+        "current": {
+          "text": "acme-demo-8c327a673c51",
+          "value": "acme-demo-8c327a673c51"
+        }
+      },
+      {
+        "name": "text_filter",
+        "label": "Message regex",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Verified ACME demo events",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**DEMO / synthetic.** Run `acme-demo-8c327a673c51` was independently verified: **3 logs and 12 traces**. The panels below query Loki live. No real Incident/Chaos/Smoke generator is yet instrumented."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Event volume by severity",
+      "description": "Loki-derived event count. Severity labels depend on ingestion; if absent, series are ungrouped.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "aiops2-loki-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (detected_level) (count_over_time({service_name=\"aiops2-acme-v291-synthetic\"} |= \"$run_id\"[$__interval]))",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Incident and infrastructure log stream",
+      "description": "Run ID is searched in the log body; text_filter is an additional regex.",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "aiops2-loki-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"aiops2-acme-v291-synthetic\"} |= \"$run_id\" |~ \"$text_filter\"",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

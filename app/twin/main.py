@@ -3,6 +3,23 @@ from shared.db import db
 app=FastAPI(title='ACME Digital Twin',version='2.0.0')
 @app.get('/health')
 def health(): return {'status':'ok','component':'twin','authority':'canonical-topology'}
+@app.get('/api/twin/acme-quality')
+def acme_quality():
+    """Read-only topology integrity audit; findings aren't simulated asset states."""
+    with db() as c:
+        nodes=c.execute("select node_id,type,name,site,state from aiops.twin_nodes where node_id like 'ACME-%' order by node_id").fetchall()
+        edges=c.execute("select source_id,target_id,relation_type from aiops.twin_edges where source_id like 'ACME-%' or target_id like 'ACME-%'").fetchall()
+    ids={row[0] for row in nodes}
+    missing=sorted({end for a,b,_ in edges for end in (a,b) if end not in ids})
+    services=[row[0] for row in nodes if row[1]=='SERVICE']
+    links={a for a,b,_ in edges}
+    isolated=sorted(ci for ci in services if ci not in links)
+    return {'scope':'ACME','nodes':len(nodes),'relationships':len(edges),
+            'orphan_edge_endpoints':missing,'services_without_outgoing_relation':isolated,
+            'quality_status':'PASS' if not missing and not isolated else 'REVIEW',
+            'note':'Structural consistency only; does not prove live asset health.'}
+
+
 @app.get('/api/twin/summary')
 def summary():
     with db() as c:
@@ -27,7 +44,7 @@ def impact(node_id:str):
     k=['node_id','type','name','criticality','depth']; return {'root':node_id,'affected':[dict(zip(k,x)) for x in rows]}
 @app.get('/api/twin/at')
 def at(known_at:str):
-    with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
+    with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.attribute <> 'sandbox_simulated_approval' and f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
     k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']; return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r]}
 import os
 from pydantic import BaseModel
@@ -52,3 +69,7 @@ def metrics():
     with db() as c:
         n,d,f=c.execute("select count(*),count(*) filter(where state='DEGRADED'),count(*) filter(where state='FAILED') from aiops.twin_nodes").fetchone()
     return f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n'
+
+# Strict opt-in ACME-TEST synthetic approval only, no human IdP.
+from twin.acme_sandbox import router as acme_sandbox_router
+app.include_router(acme_sandbox_router)

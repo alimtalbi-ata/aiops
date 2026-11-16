@@ -1,0 +1,34 @@
+name: Portal P0 #385/#386 Debian UX route release gate
+on:
+  pull_request:
+    branches: [deploy/aiops2-stable]
+    paths:
+      - deploy/debian-portal-ux-contracts.py
+      - deploy/debian-portal-deploy.sh
+      - deploy/deploy-demo-studio-v2.sh
+      - deploy/debian-portal-release.json
+      - deploy/debian-acme-sandbox-release.json
+      - tests/test_debian_portal_ux_contracts.py
+      - .github/workflows/portal-ux-release-gate.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ux-release-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact HEAD
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Validate shell and Python
+        run: |
+          bash -n deploy/debian-portal-deploy.sh deploy/deploy-demo-studio-v2.sh
+          python -m py_compile deploy/debian-portal-ux-contracts.py tests/test_debian_portal_ux_contracts.py
+      - name: RG-UX-07 positive and negative gates (mocked host)
+        run: python -m unittest discover -s tests -p test_debian_portal_ux_contracts.py -v
