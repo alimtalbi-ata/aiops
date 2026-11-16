@@ -13,6 +13,7 @@ NOW = dt.datetime(2026, 11, 16, 17, 0, tzinfo=dt.timezone.utc)
 def receipt():
     return {"schema": "aiops.debian-acme-sim-e2e.v1",
             "collected_at": "2026-11-16T16:55:00+00:00",
+            "attempt_id": "ACME-SIM-0123456789ABCDEF",
             "tenant_id": "ACME-TEST", "scenario_id": "ACME-SAN-PAYMENTS",
             "mode": "SIMULATION", "status": "PASS",
             "reason": "SIMULATED_SANDBOX_ONLY",
@@ -39,6 +40,14 @@ class Readiness(unittest.TestCase):
 
     def test_non_simulated_approval_identifier_refused(self):
         r = receipt(); r["ids"]["approval_id"] = "HUMAN-APP-123"
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_missing_attempt_identifier(self):
+        r = receipt(); del r["attempt_id"]
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_malformed_attempt_identifier(self):
+        r = receipt(); r["attempt_id"] = "ACME-SIM-FAKE"
         self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
 
     def test_missing_receipt(self):
