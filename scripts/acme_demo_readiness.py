@@ -11,7 +11,14 @@ from pathlib import Path
 import sys
 
 SCHEMA = "aiops.debian-acme-sim-e2e.v1"
-REQUIRED_STAGES = (\n    "capability_simulator", "capability_core", "capability_twin",\n    "capability_policy", "capability_worker", "simulator_start",\n    "pre_resolution_core", "pre_resolution_twin", "pre_resolution_policy",\n    "pre_resolution_worker", "worker_no_effect", "core_finalization",\n    "post_resolution_core", "post_resolution_twin",\n    "post_resolution_policy", "post_resolution_worker", "resolved",\n)
+REQUIRED_STAGES = (
+    "capability_simulator", "capability_core", "capability_twin",
+    "capability_policy", "capability_worker", "simulator_start",
+    "pre_resolution_core", "pre_resolution_twin", "pre_resolution_policy",
+    "pre_resolution_worker", "worker_no_effect", "core_finalization",
+    "post_resolution_core", "post_resolution_twin",
+    "post_resolution_policy", "post_resolution_worker", "resolved",
+)
 REQUIRED_IDS = ("incident_id", "run_id", "ticket_id", "proposal_id", "approval_id")
 
 def assess(value, now=None, max_age_minutes=60):
