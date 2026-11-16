@@ -116,6 +116,20 @@ class BridgeContract(unittest.TestCase):
             with patch.object(agent, "Path", return_value=path):
                 self.assertEqual(agent.acme_receipt_status()["status"], "NOT_AVAILABLE")
 
+    def test_acme_receipt_metadata_deeply_nested_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text("[" * 1200 + "0" + "]" * 1200)
+            with patch.object(agent, "Path", return_value=path):
+                self.assertEqual(agent.acme_receipt_status()["status"], "NOT_AVAILABLE")
+
+    def test_acme_receipt_metadata_invalid_status_type(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text(json.dumps({"status": ["PASS"]}))
+            with patch.object(agent, "Path", return_value=path):
+                self.assertEqual(agent.acme_receipt_status()["status"], "INVALID")
+
     def test_acme_receipt_metadata_invalid_json(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "receipt.json"
