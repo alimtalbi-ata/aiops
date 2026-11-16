@@ -43,6 +43,7 @@ class BridgeContract(unittest.TestCase):
                 "tenant_id": "ACME-TEST", "scenario_id": "ACME-SAN-PAYMENTS",
                 "approval_issuer": "TWIN_ACME_SIMULATED",
                 "human_approval_claimed": False, "docker_mutations": 0,
+                "collected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 "live_effects_allowed": False, "real_glpi_writes_allowed": False,
                 "ids": {"ticket_id": "SENSITIVE-TEST-IDENTIFIER"}}))
             with patch.object(agent, "Path", return_value=path):
@@ -50,6 +51,7 @@ class BridgeContract(unittest.TestCase):
             self.assertEqual(result["status"], "OBSERVED")
             self.assertEqual(result["e2e_status"], "PASS")
             self.assertTrue(result["sandbox_only"])
+            self.assertTrue(result["fresh_60m"])
             self.assertNotIn("SENSITIVE-TEST-IDENTIFIER", json.dumps(result))
             self.assertNotIn("ids", result)
 
@@ -64,6 +66,28 @@ class BridgeContract(unittest.TestCase):
                 result = agent.acme_receipt_status()
             self.assertEqual(result["status"], "OBSERVED")
             self.assertFalse(result["sandbox_only"])
+
+    def test_acme_receipt_metadata_stale_is_not_fresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text(json.dumps({
+                "schema": "aiops.debian-acme-sim-e2e.v1",
+                "status": "PASS", "mode": "SIMULATION",
+                "collected_at": "2020-01-01T00:00:00+00:00"}))
+            with patch.object(agent, "Path", return_value=path):
+                result = agent.acme_receipt_status()
+            self.assertFalse(result["fresh_60m"])
+
+    def test_acme_receipt_metadata_future_is_not_fresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text(json.dumps({
+                "schema": "aiops.debian-acme-sim-e2e.v1",
+                "status": "PASS", "mode": "SIMULATION",
+                "collected_at": "2099-01-01T00:00:00+00:00"}))
+            with patch.object(agent, "Path", return_value=path):
+                result = agent.acme_receipt_status()
+            self.assertFalse(result["fresh_60m"])
 
     def test_acme_receipt_metadata_live_refused(self):
         with tempfile.TemporaryDirectory() as directory:
