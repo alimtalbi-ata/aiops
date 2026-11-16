@@ -15,16 +15,31 @@ def receipt():
             "collected_at": "2026-11-16T16:55:00+00:00",
             "tenant_id": "ACME-TEST", "scenario_id": "ACME-SAN-PAYMENTS",
             "mode": "SIMULATION", "status": "PASS",
+            "reason": "SIMULATED_SANDBOX_ONLY",
             "approval_issuer": "TWIN_ACME_SIMULATED",
             "human_approval_claimed": False, "live_effects_allowed": False,
             "real_glpi_writes_allowed": False, "docker_mutations": 0,
             "stages": {k: "PASS" for k in m.REQUIRED_STAGES},
-            "ids": {k: "SYNTHETIC-" + k for k in m.REQUIRED_IDS}}
+            "ids": {**{k: "SYNTHETIC-" + k for k in m.REQUIRED_IDS},
+                    "ticket_id": "SIM-GLPI-TEST-001",
+                    "approval_id": "SIM-APP-TEST-001"}}
 
 class Readiness(unittest.TestCase):
     def test_pass_is_simulation_only(self):
         self.assertEqual(m.assess(receipt(), NOW)["verdict"], "GO_SIMULATION_ONLY")
         self.assertEqual(m.assess(receipt(), NOW)["live"], "NO_GO")
+
+    def test_wrong_terminal_reason(self):
+        r = receipt(); r["reason"] = "UNVERIFIED"
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_real_ticket_identifier_refused(self):
+        r = receipt(); r["ids"]["ticket_id"] = "GLPI-123"
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_non_simulated_approval_identifier_refused(self):
+        r = receipt(); r["ids"]["approval_id"] = "HUMAN-APP-123"
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
 
     def test_missing_receipt(self):
         self.assertEqual(m.assess(None, NOW)["verdict"], "NO_GO")
