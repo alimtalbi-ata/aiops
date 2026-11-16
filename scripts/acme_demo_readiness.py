@@ -7,6 +7,7 @@ A simulation PASS is not a LIVE authorization.
 import argparse
 import datetime as dt
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -43,6 +44,9 @@ def assess(value, now=None, max_age_minutes=60):
             reasons.append("STALE_OR_FUTURE_RECEIPT")
     except (KeyError, TypeError, ValueError):
         reasons.append("INVALID_TIMESTAMP")
+    attempt_id = value.get("attempt_id")
+    if type(attempt_id) is not str or not re.fullmatch(r"ACME-SIM-[A-F0-9]{16}", attempt_id):
+        reasons.append("INVALID_ATTEMPT_ID")
     stages = value.get("stages")
     if not isinstance(stages, dict) or any(stages.get(k) != "PASS" for k in REQUIRED_STAGES):
         reasons.append("INCOMPLETE_E2E_STAGES")
