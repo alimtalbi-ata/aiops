@@ -50,7 +50,7 @@ def acme_receipt_status():
     """Fixed-path, read-only metadata: never returns identifiers or receipt contents."""
     path = Path("/home/aiops/.local/state/aiops-debian-agent/acme-sim-e2e.json")
     try:
-        if not path.is_file() or path.stat().st_size > 65536:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 65536:
             return {"status": "NOT_AVAILABLE"}
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
