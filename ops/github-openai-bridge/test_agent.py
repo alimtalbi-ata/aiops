@@ -61,6 +61,22 @@ class BridgeContract(unittest.TestCase):
                 result = agent.acme_receipt_status()
             self.assertFalse(result["sandbox_only"])
 
+    def test_acme_receipt_metadata_symlink_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = pathlib.Path(directory) / "private.json"
+            target.write_text(json.dumps({"status": "PASS"}))
+            link = pathlib.Path(directory) / "receipt.json"
+            link.symlink_to(target)
+            with patch.object(agent, "Path", return_value=link):
+                self.assertEqual(agent.acme_receipt_status()["status"], "NOT_AVAILABLE")
+
+    def test_acme_receipt_metadata_oversized_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text("x" * 65537)
+            with patch.object(agent, "Path", return_value=path):
+                self.assertEqual(agent.acme_receipt_status()["status"], "NOT_AVAILABLE")
+
     def test_acme_receipt_metadata_invalid_json(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "receipt.json"
