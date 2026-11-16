@@ -18,7 +18,7 @@ def receipt():
             "approval_issuer": "TWIN_ACME_SIMULATED",
             "human_approval_claimed": False, "live_effects_allowed": False,
             "real_glpi_writes_allowed": False, "docker_mutations": 0,
-            "stages": {"core_finalization": "PASS"},
+            "stages": {k: "PASS" for k in m.REQUIRED_STAGES},
             "ids": {k: "SYNTHETIC-" + k for k in m.REQUIRED_IDS}}
 
 class Readiness(unittest.TestCase):
@@ -43,6 +43,14 @@ class Readiness(unittest.TestCase):
 
     def test_no_host_mutation(self):
         r = receipt(); r["docker_mutations"] = 1
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_missing_twin_capability_blocks(self):
+        r = receipt(); del r["stages"]["capability_twin"]
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_failed_worker_receipt_blocks(self):
+        r = receipt(); r["stages"]["worker_no_effect"] = "FAIL"
         self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
 
     def test_missing_stage(self):
