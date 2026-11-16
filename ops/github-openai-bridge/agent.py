@@ -68,7 +68,18 @@ def acme_receipt_status():
                         and value.get("live_effects_allowed") is False
                         and value.get("real_glpi_writes_allowed") is False
                         and value.get("docker_mutations") == 0)
+        timestamp = value.get("collected_at")
+        fresh = False
+        if type(timestamp) is str:
+            try:
+                observed = dt.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                if observed.tzinfo is not None:
+                    age = dt.datetime.now(dt.timezone.utc) - observed.astimezone(dt.timezone.utc)
+                    fresh = dt.timedelta(0) <= age <= dt.timedelta(minutes=60)
+            except ValueError:
+                pass
         return {"status": "OBSERVED", "e2e_status": result,
+                "fresh_60m": fresh,
                 "schema_valid": schema_valid,
                 "sandbox_only": sandbox_only,
                 "note": "Metadata only; not a readiness verdict or deployed-SHA attestation"}
