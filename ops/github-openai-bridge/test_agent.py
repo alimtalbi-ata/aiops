@@ -40,6 +40,9 @@ class BridgeContract(unittest.TestCase):
             path.write_text(json.dumps({
                 "schema": "aiops.debian-acme-sim-e2e.v1",
                 "status": "PASS", "mode": "SIMULATION",
+                "tenant_id": "ACME-TEST", "scenario_id": "ACME-SAN-PAYMENTS",
+                "approval_issuer": "TWIN_ACME_SIMULATED",
+                "human_approval_claimed": False, "docker_mutations": 0,
                 "live_effects_allowed": False, "real_glpi_writes_allowed": False,
                 "ids": {"ticket_id": "SENSITIVE-TEST-IDENTIFIER"}}))
             with patch.object(agent, "Path", return_value=path):
@@ -49,6 +52,18 @@ class BridgeContract(unittest.TestCase):
             self.assertTrue(result["sandbox_only"])
             self.assertNotIn("SENSITIVE-TEST-IDENTIFIER", json.dumps(result))
             self.assertNotIn("ids", result)
+
+    def test_acme_receipt_metadata_incomplete_is_not_sandbox_safe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "receipt.json"
+            path.write_text(json.dumps({
+                "schema": "aiops.debian-acme-sim-e2e.v1",
+                "status": "PASS", "mode": "SIMULATION",
+                "live_effects_allowed": False, "real_glpi_writes_allowed": False}))
+            with patch.object(agent, "Path", return_value=path):
+                result = agent.acme_receipt_status()
+            self.assertEqual(result["status"], "OBSERVED")
+            self.assertFalse(result["sandbox_only"])
 
     def test_acme_receipt_metadata_live_refused(self):
         with tempfile.TemporaryDirectory() as directory:
