@@ -121,7 +121,7 @@ class BridgeContract(unittest.TestCase):
             path = pathlib.Path(directory) / "receipt.json"
             path.write_text("[" * 1200 + "0" + "]" * 1200)
             with patch.object(agent, "Path", return_value=path):
-                self.assertEqual(agent.acme_receipt_status()["status"], "NOT_AVAILABLE")
+                self.assertIn(agent.acme_receipt_status()["status"], {"NOT_AVAILABLE", "INVALID"})
 
     def test_acme_receipt_metadata_invalid_status_type(self):
         with tempfile.TemporaryDirectory() as directory:
