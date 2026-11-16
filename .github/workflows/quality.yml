@@ -179,7 +179,10 @@ jobs:
       - name: Rehearse isolated MariaDB backup and restore
         env:
           AIOPS_CI_DR: "YES"
-        run: bash tests/mariadb-dr-rehearsal.sh
+        run: |
+          # Ephemeral test-only credential, generated inside this disposable CI job.
+          # Never use repository secrets or production database credentials.
+          PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" bash tests/mariadb-dr-rehearsal.sh
       - name: Upload MariaDB disaster recovery evidence
         if: always()
         uses: actions/upload-artifact@v4
