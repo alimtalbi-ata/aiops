@@ -12,15 +12,13 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-import urllib.request
 
 REPO = "alimtalbi-ata/aiops"
 ISSUE = int(os.environ.get("BRIDGE_ISSUE", "464"))
 LOGIN = os.environ.get("BRIDGE_AUTHORIZED_LOGIN", "alimtalbi-ata")
 PREFIX = "AIOPS2_BRIDGE_V1 "
-COMMAND = re.compile(r"^AIOPS2_BRIDGE_V1 (status|openai_summary) ([0-9a-f]{32}) ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)$")
+COMMAND = re.compile(r"^AIOPS2_BRIDGE_V1 (status) ([0-9a-f]{32}) ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)$")
 STATE = Path(os.environ.get("BRIDGE_STATE_DIR", str(Path.home()/".local/state/aiops2-github-openai-bridge")))
-MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 
 def gh(*args):
     p = subprocess.run(["gh", "api", *args], capture_output=True, text=True, timeout=30)
@@ -47,20 +45,6 @@ def parse(comment, now):
     if not now < deadline <= now + dt.timedelta(hours=2):
         return None
     return action, correlation
-
-def openai_summary():
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        return {"status": "NOT_CONFIGURED", "reason": "OPENAI_API_KEY absent"}
-    payload = {"model": MODEL, "input": "Return exactly: AIOPS2_BRIDGE_API_OK",
-               "max_output_tokens": 50, "store": False}
-    req = urllib.request.Request("https://api.openai.com/v1/responses",
-        data=json.dumps(payload).encode(), method="POST",
-        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=45) as response:
-        result = json.load(response)
-    return {"status": "API_RESPONDED", "response_id": result.get("id"),
-            "model": result.get("model"), "response_status": result.get("status")}
 
 def main():
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -96,8 +80,8 @@ def main():
                 json.dump({"status": "STARTED", "comment_id": cid, "correlation_id": correlation}, f)
             os.chmod(receipt, 0o600)
             try:
-                result = ({"status": "OK", "hostname": os.uname().nodename,
-                           "utc": now.isoformat()} if action == "status" else openai_summary())
+                result = {"status": "OK", "hostname": os.uname().nodename,
+                          "utc": now.isoformat()}
             except Exception as exc:
                 result = {"status": "FAILED", "error_type": type(exc).__name__}
             data = {"schema": "aiops2.github-openai-bridge.v1", "comment_id": cid,
