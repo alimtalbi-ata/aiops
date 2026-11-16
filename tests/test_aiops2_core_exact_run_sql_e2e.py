@@ -54,3 +54,66 @@ def test_core_exact_run_rejects_client_scopes_before_sql():
             read_exact_run_for_verified_actor(
                 cursor, actor_id=actor, run_id=run)
     assert cursor.calls == []
+
+
+def test_exact_run_bearer_checks_revocation_before_opening_read_connection(monkeypatch):
+    import types
+    from core.portal_tenant_runs import read_exact_run_for_bearer
+
+    events = []
+    class Connection:
+        def __init__(self):
+            self.cursor_obj = Cursor(None)
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def cursor(self):
+            class CursorContext:
+                def __enter__(inner):
+                    return self.cursor_obj
+                def __exit__(inner, *args):
+                    return False
+            return CursorContext()
+        def close(self):
+            events.append("close")
+
+    def connect():
+        events.append("connect")
+        return Connection()
+
+    def store(factory):
+        assert factory is connect
+        events.append("store")
+        return (lambda **kwargs: False), None, None
+
+    def verified(token, *, is_revoked):
+        events.append("identity")
+        assert token == "synthetic-oidc-fixture"
+        assert is_revoked(issuer="https://issuer.example", jti="jti-a") is False
+        return types.SimpleNamespace(actor_id="oidc:alice")
+
+    import shared.oidc_jti_store as jti_module
+    import shared.verified_principal as principal_module
+    monkeypatch.setattr(jti_module, "make_oidc_jti_store", store)
+    monkeypatch.setattr(principal_module, "principal_from_bearer", verified)
+
+    assert read_exact_run_for_bearer(
+        connect, bearer_token="synthetic-oidc-fixture", run_id="RUN-A") is None
+    assert events == ["store", "identity", "connect", "close"]
+
+    events.clear()
+    def denied(token, *, is_revoked):
+        events.append("identity-denied")
+        raise ValueError("revoked or invalid identity")
+    monkeypatch.setattr(principal_module, "principal_from_bearer", denied)
+    with pytest.raises(ValueError):
+        read_exact_run_for_bearer(
+            connect, bearer_token="synthetic-oidc-fixture", run_id="RUN-A")
+    assert events == ["store", "identity-denied"]
+
+    events.clear()
+    with pytest.raises(ValueError):
+        read_exact_run_for_bearer(
+            connect, bearer_token="synthetic-oidc-fixture", run_id="bad-run")
+    assert events == []
