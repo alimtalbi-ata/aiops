@@ -97,3 +97,29 @@ def read_exact_run_for_verified_actor(cursor, *, actor_id: str, run_id: str) -> 
         raise ValueError("invalid exact Run scope")
     row = cursor.execute(EXACT_RUN_FOR_ACTOR_SQL, (run_id, actor_id)).fetchone()
     return dict(zip(RUN_FIELDS, row)) if row is not None else None
+
+
+def read_exact_run_for_bearer(connect, *, bearer_token: str, run_id: str) -> dict | None:
+    """Independently verify OIDC and durable JTI revocation before exact-Run SQL.
+
+    No HTTP route is mounted. The caller must not treat an internal shared
+    bearer as an OIDC token. Unauthorized and missing Runs both return None.
+    """
+    from shared.oidc_jti_store import make_oidc_jti_store
+    from shared.verified_principal import principal_from_bearer
+
+    if (not isinstance(run_id, str) or not run_id.startswith("RUN-")
+            or not ACTOR_ID.fullmatch(run_id)):
+        raise ValueError("invalid exact Run scope")
+    is_revoked, _, _ = make_oidc_jti_store(connect)
+    principal = principal_from_bearer(bearer_token, is_revoked=is_revoked)
+
+    connection = connect()
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                return read_exact_run_for_verified_actor(
+                    cursor, actor_id=principal.actor_id, run_id=run_id
+                )
+    finally:
+        connection.close()
