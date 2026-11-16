@@ -1,8 +1,11 @@
 """Offline synthetic trust-boundary regressions. No LLM, GLPI or Temporal."""
 import hashlib
 import unittest
-from scripts.aiops2_analyst_critic import analyze_and_critique
-from scripts.aiops2_event_correlation import InvalidEvent
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from aiops2_analyst_critic import analyze_and_critique
+from aiops2_event_correlation import InvalidEvent
 
 def sha(s):
     return hashlib.sha256(s.encode()).hexdigest()
