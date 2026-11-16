@@ -13,7 +13,14 @@ AIOPS2_BRIDGE_V1 status 0123456789abcdef0123456789abcdef 2026-11-16T18:00:00Z
 The third field is a fresh random 32-character lowercase hexadecimal correlation ID.
 The last field is an UTC expiry no more than 2 hours ahead.
 
-Only action: `status` (safe local status). Paid OpenAI API calls are deliberately unsupported.
+Actions in the proposed revision: `status` (safe local status), and
+`acme_receipt_status` (fixed-path, read-only inspection of the existing Debian
+ACME receipt, returning **only** status, schema and sandbox-safety booleans).
+The latter never executes the scenario, never reads Docker, never exposes
+incident/ticket IDs, and **does not** establish a readiness verdict or deployed SHA.
+The currently installed earlier pinned agent only supports `status`; a new
+pinned version requires explicit review and operator installation.
+ Paid OpenAI API calls are deliberately unsupported.
 The agent posts a structured receipt as another issue comment, and saves a local receipt.
 A request is attempted at most once. Failures require a new request.
 
