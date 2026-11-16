@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """GitHub issue command queue -> Debian -> GitHub receipt. No Codex dependency.
 
-Opt-in OpenAI Responses API via OPENAI_API_KEY. No shell execution, Docker or deploy.
+No OpenAI API, Codex, shell execution, Docker or deployment.
 Only comments by BRIDGE_AUTHORIZED_LOGIN on BRIDGE_ISSUE are considered.
 """
 import datetime as dt
