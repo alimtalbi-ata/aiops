@@ -57,13 +57,20 @@ def acme_receipt_status():
             return {"status": "INVALID"}
         allowed = {"PASS", "FAIL", "BLOCKED"}
         result = value.get("status")
-        if result not in allowed:
+        if type(result) is not str or result not in allowed:
             return {"status": "INVALID"}
+        schema_valid = value.get("schema") == "aiops.debian-acme-sim-e2e.v1"
+        sandbox_only = (value.get("tenant_id") == "ACME-TEST"
+                        and value.get("scenario_id") == "ACME-SAN-PAYMENTS"
+                        and value.get("mode") == "SIMULATION"
+                        and value.get("approval_issuer") == "TWIN_ACME_SIMULATED"
+                        and value.get("human_approval_claimed") is False
+                        and value.get("live_effects_allowed") is False
+                        and value.get("real_glpi_writes_allowed") is False
+                        and value.get("docker_mutations") == 0)
         return {"status": "OBSERVED", "e2e_status": result,
-                "schema_valid": value.get("schema") == "aiops.debian-acme-sim-e2e.v1",
-                "sandbox_only": value.get("mode") == "SIMULATION"
-                and value.get("live_effects_allowed") is False
-                and value.get("real_glpi_writes_allowed") is False,
+                "schema_valid": schema_valid,
+                "sandbox_only": sandbox_only,
                 "note": "Metadata only; not a readiness verdict or deployed-SHA attestation"}
     except (OSError, ValueError, TypeError, UnicodeError):
         return {"status": "NOT_AVAILABLE"}
