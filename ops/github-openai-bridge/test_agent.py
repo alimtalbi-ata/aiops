@@ -19,6 +19,13 @@ class BridgeContract(unittest.TestCase):
     def test_valid_status(self):
         self.assertEqual(agent.parse(comment(), NOW), ("status", "0123456789abcdef0123456789abcdef"))
 
+    def test_acme_receipt_status_authorized(self):
+        self.assertEqual(agent.parse(comment(body=VALID.replace("status", "acme_receipt_status")), NOW),
+                         ("acme_receipt_status", "0123456789abcdef0123456789abcdef"))
+
+    def test_acme_receipt_status_untrusted_author(self):
+        self.assertIsNone(agent.parse(comment(body=VALID.replace("status", "acme_receipt_status"), login="attacker"), NOW))
+
     def test_untrusted_author(self):
         self.assertIsNone(agent.parse(comment(login="attacker"), NOW))
 
