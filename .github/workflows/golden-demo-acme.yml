@@ -51,7 +51,12 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
-          python -m pytest -q --tb=short             tests/test_acme_sandbox_services.py             tests/test_policy_acme_sandbox.py             tests/test_worker_acme_simulated_hitl.py             tests/test_intelligence_contract.py             tests/test_evidence_contract.py             tests/test_debian_portal_ux_contracts.py
+          python -m pytest -q --tb=short tests/test_acme_sandbox_services.py tests/test_policy_acme_sandbox.py tests/test_worker_acme_simulated_hitl.py tests/test_debian_portal_ux_contracts.py
+          # Keep legacy unittest modules isolated from pytest's global module cache.
+          # Both import shared.* and may encounter a conflicting 'shared' package
+          # when collected together in one pytest process.
+          python -m unittest discover -s tests -p 'test_intelligence_contract.py' -v
+          python -m unittest discover -s tests -p 'test_evidence_contract.py' -v
 
       - name: Golden demo readiness safety contracts
         run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
