@@ -1,4 +1,5 @@
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -10,7 +11,9 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "acme"
 def load(name):
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
-P = Path(__file__).resolve().parents[1] / "scripts/acme_demo_readiness.py"
+ROOT = Path(__file__).resolve().parents[1]
+SCHEMA_SNAPSHOT = ROOT / "docs/contracts/acme-receipt.schema.json"
+P = ROOT / "scripts/acme_demo_readiness.py"
 spec = importlib.util.spec_from_file_location("acme_demo_readiness", P)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
@@ -93,6 +96,110 @@ class Readiness(unittest.TestCase):
         r = load("valid.json")
         r["collected_at"] = "2026-11-16T16:55:00"
         self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+
+class DirectReceiptModel(unittest.TestCase):
+    """Check the strict model directly, independent of assess() formatting."""
+
+    def test_valid_model(self):
+        value = m.AcmeReceipt.model_validate_json(
+            json.dumps(load("valid.json")), context={"now": NOW}
+        )
+        self.assertEqual(value.mode, "SIMULATION")
+        self.assertEqual(value.docker_mutations, 0)
+
+    def test_invalid_attempt_ids(self):
+        for attempt in ("ACME-SIM-FAKE", "ACME-SIM-0123456789abcdef", "", "RANDOM"):
+            with self.subTest(attempt_id=attempt):
+                value = load("valid.json")
+                value["attempt_id"] = attempt
+                with self.assertRaises(m.ValidationError):
+                    m.AcmeReceipt.model_validate_json(
+                        json.dumps(value), context={"now": NOW}
+                    )
+
+    def test_security_flags_and_types(self):
+        for key, invalid in (
+            ("mode", "LIVE"), ("live_effects_allowed", True),
+            ("human_approval_claimed", True), ("real_glpi_writes_allowed", True),
+            ("docker_mutations", False), ("docker_mutations", "0"),
+        ):
+            with self.subTest(field=key, value=invalid):
+                value = load("valid.json")
+                value[key] = invalid
+                with self.assertRaises(m.ValidationError):
+                    m.AcmeReceipt.model_validate_json(
+                        json.dumps(value), context={"now": NOW}
+                    )
+
+    def test_direct_model_negative_fixtures(self):
+        for path in sorted(FIXTURES.glob("*.json")):
+            if path.name == "valid.json":
+                continue
+            with self.subTest(fixture=path.name):
+                with self.assertRaises(m.ValidationError):
+                    m.AcmeReceipt.model_validate_json(
+                        path.read_text(encoding="utf-8"),
+                        context={"now": NOW},
+                    )
+
+    def test_all_negative_fixtures_via_assess(self):
+        expected = {
+            "wrong_reason", "real_ticket", "real_approval",
+            "missing_attempt_id", "malformed_attempt_id", "live_effects",
+            "real_glpi", "fake_human", "docker_mutation", "boolean_zero",
+            "missing_twin", "failed_worker", "empty_stages",
+            "missing_ticket_id", "stale", "future",
+        }
+        found = {path.stem for path in FIXTURES.glob("*.json")}
+        self.assertEqual(found, expected | {"valid"})
+        for name in sorted(expected):
+            with self.subTest(fixture=name):
+                self.assertEqual(m.assess(load(name + ".json"), NOW)["verdict"], "NO_GO")
+
+
+class JsonSchemaSnapshot(unittest.TestCase):
+    """Fail if the committed schema is absent or diverges from the model."""
+
+    def schema(self):
+        return m.AcmeReceipt.model_json_schema(mode="validation")
+
+    def test_schema_required_fields(self):
+        schema = self.schema()
+        self.assertEqual(schema["type"], "object")
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(set(schema["required"]), {
+            "schema", "collected_at", "attempt_id", "tenant_id",
+            "scenario_id", "mode", "status", "reason", "approval_issuer",
+            "human_approval_claimed", "live_effects_allowed",
+            "real_glpi_writes_allowed", "docker_mutations", "stages", "ids",
+        })
+
+    def test_schema_security_constraints(self):
+        props = self.schema()["properties"]
+        self.assertEqual(props["mode"]["const"], "SIMULATION")
+        self.assertIs(props["live_effects_allowed"]["const"], False)
+        self.assertEqual(props["attempt_id"]["pattern"], "^ACME-SIM-[A-F0-9]{16}$")
+        self.assertEqual(props["docker_mutations"]["minimum"], 0)
+        self.assertEqual(props["docker_mutations"]["maximum"], 0)
+
+    def test_snapshot_matches_committed_contract(self):
+        self.assertTrue(SCHEMA_SNAPSHOT.is_file(), "Versioned schema snapshot is required")
+        current = self.schema()
+        committed = json.loads(SCHEMA_SNAPSHOT.read_text(encoding="utf-8"))
+        canonical = lambda value: json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+        a, b = canonical(current), canonical(committed)
+        if a != b:
+            self.fail(
+                "ACME schema snapshot mismatch; regenerate and review. "
+                f"current={hashlib.sha256(a.encode()).hexdigest()[:12]} "
+                f"committed={hashlib.sha256(b.encode()).hexdigest()[:12]}"
+            )
+
+    def test_schema_generation_deterministic(self):
+        self.assertEqual(self.schema(), self.schema())
 
 if __name__ == "__main__":
     unittest.main()
