@@ -3,6 +3,9 @@
 Starts only a test-only ASGI app; no deployed host, secrets or mutations.
 """
 import os
+import hashlib
+import json
+from pathlib import Path
 import socket
 import subprocess
 import sys
@@ -36,6 +39,9 @@ def main():
                 time.sleep(0.1)
         else:
             raise AssertionError("isolated ASGI server did not start")
+        capture_dir = Path(os.environ.get("ACME_BROWSER_CAPTURE_DIR", "/tmp/acme-workbench-ci-captures"))
+        capture_dir.mkdir(parents=True, exist_ok=True)
+        captures = []
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
@@ -62,6 +68,17 @@ def main():
                     assert page.get_by_text("LEARN", exact=True).count() >= 1
                     assert not blocked, f"external request attempted: {blocked}"
                     assert page.locator("input[type=password]").count() == 0
+                    capture_path = capture_dir / f"workbench-{width}.png"
+                    page.screenshot(path=str(capture_path), full_page=True, animations="disabled")
+                    raw = capture_path.read_bytes()
+                    assert raw.startswith(bytes.fromhex("89504e470d0a1a0a"))
+                    captures.append({
+                        "viewport_width": width,
+                        "file": capture_path.name,
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "size_bytes": len(raw),
+                        "browser_status": "PASS_ISOLATED_BROWSER_ONLY",
+                    })
                     page.close()
             finally:
                 browser.close()
@@ -72,7 +89,20 @@ def main():
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.communicate(timeout=5)
-    print("PASS: isolated Chromium navigation at 375px and 1440px; no external requests")
+    manifest = {
+        "schema": "aiops.acme-isolated-browser-png-manifest.v1",
+        "authority": "CI_LOOPBACK_TEST_APP_NOT_DEPLOYED",
+        "status": "PASS_ISOLATED_BROWSER_ONLY",
+        "deployed_sha_attested": False,
+        "runtime_e2e_verified": False,
+        "viewer_acl_verified": False,
+        "remediation_effect_verified": False,
+        "learning_verified": False,
+        "captures": captures,
+    }
+    (capture_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    print("PASS: isolated Chromium navigation at 375px and 1440px; PNG captures hashed")
 
 
 if __name__ == "__main__":
