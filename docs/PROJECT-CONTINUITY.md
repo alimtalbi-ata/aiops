@@ -478,3 +478,12 @@ This review is a preservation/qualification decision only. No PR was merged, no 
 - Added `docs/ui/EXTERNAL-SERVICE-THEMES.md` with supported theming controls and explicit exceptions.
 - n8n theme remains a per-user preference and must be selected per operator account. Prometheus/Alertmanager native consoles do not expose a supported branded-theme setting in this deployment; do not patch vendor bundles or inject CSS through a reverse proxy.
 - Earlier Portal+Grafana implementation CI passed 3/3 in run #44188109053. New external-theme changes are on PR #809; exact-head CI for SHA `02d7046bb4cc919b4c71b78687e841f09339733e` is pending at handoff. No live service/host/production changes were made.
+
+
+### Observability UI extension — 2026-11-17
+
+- Added Grafana `AIOps Observability Control Plane` dashboard at `config/grafana/dashboards/observability-control-plane.json`, with Prometheus/Alertmanager target health and metrics panels.
+- Prometheus now scrapes its own metrics and Alertmanager; this enables the branded Grafana view while preserving native consoles for diagnostics.
+- Regression coverage extended in `tests/test_external_service_themes.py`; Quality workflow runs both external service theme tests and Portal theme tests.
+- Prometheus/Alertmanager native UIs remain unthemed because no supported branded theme surface is configured; do not vendor-patch or reverse-proxy inject CSS.
+- The latest exact-head workflow is pending; no live runtime/host/production deployment was performed.
