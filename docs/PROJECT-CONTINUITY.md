@@ -208,3 +208,11 @@ Every material change must update this record and the relevant architecture/deci
 - **Qualification:** Unit tests and CLI gate negative checks configured in CI; their results are **PENDING** until an exact-SHA GitHub Actions run is observed. No Debian sandbox or browser execution.
 - **Critical gap:** Gate #802 lacks executed-SHA and cross-stage identity/provenance checks. Do not equate fixture PASS with runtime proof. LIVE remains NO-GO.
 - **Handoff:** [Issue #804](https://github.com/alimtalbi-ata/aiops/issues/804). Convergence host / Golden selective imports remains L0 PROPOSED; no changes to Debian.
+
+
+## 2026-11-17 — Proposed strict Pydantic ACME receipt gate (PR #805)
+
+- `scripts/acme_receipt_model.py` declares strict synthetic receipt models; `scripts/acme_demo_readiness.py` preserves `assess(value, now=None, max_age_minutes=60)` and `GO_SIMULATION_ONLY` / `NO_GO` fail-closed outcomes.
+- `tests/fixtures/acme/` has 17 versioned JSON receipts; 18 prior tests plus four new negative tests check extra fields, blank IDs and timezone awareness. CLI fixture checks remain isolated from live services.
+- **Dependency:** `pydantic>=2.5,<3` required, installed in readiness CI; Golden Demo workflow already installs pinned Pydantic 2.11.7. An isolated Debian runner must bundle/verify the dependency before any qualification; no runtime change authorized.
+- **Evidence:** Exact-SHA CI pending. The model still does not verify executed SHA, cross-stage join or provenance. LIVE NO-GO. See #804 and draft PR #805.
