@@ -245,7 +245,8 @@ def demo_studio():
     body+=panel("Qualification et prochaines étapes",
       '<p>Le parcours connecté Core → Temporal → Analyst/Critic → Policy → Evidence reste à '
       'valider en stack V2.8 isolée avant de permettre le lancement depuis ce portail.</p>'
-      '<p><a href="/timeline">Consulter la timeline</a> · <a href="/qualification">Matrice de qualification</a></p>')
+      '<p><a href="/acme-workbench">Workbench ACME · état de preuve</a> · '
+      '<a href="/timeline">Consulter la timeline</a> · <a href="/qualification">Matrice de qualification</a></p>')
     return shell("/demo-studio","ACME Demo Studio",
       "Démonstration intégrée ACME — lecture des sources Core/Twin et lancement optionnel en mode développement.",
       body,mode="DEVELOPPEMENT DEMO" if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true" else "LECTURE SEULE")
