@@ -186,6 +186,13 @@ jobs:
         env:
           PYTHONPATH: 'tests:app:.'
         run: python tests/acme_workbench_browser_smoke.py
+      - name: Publish isolated Chromium screenshots and byte hashes
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-workbench-isolated-browser-pngs
+          path: /tmp/acme-workbench-ci-captures/
+          if-no-files-found: error
+          retention-days: 7
       - name: Validate isolated browser receipt contract
         run: python -m unittest discover -s tests -p 'test_acme_isolated_browser_receipt.py' -v
       - name: Write non-authoritative CI-only browser receipt
