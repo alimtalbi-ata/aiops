@@ -9,7 +9,7 @@ from __future__ import annotations
 from scripts.acme_core_worker_binding import inspect_core_worker_binding
 
 STAGES = ("OBSERVE", "CORRELATE", "DIAGNOSE", "POLICY", "SIMULATED_ACTION",
-          "VERIFY", "AUDIT")
+          "VERIFY", "AUDIT", "REMEDIATION_EFFECT", "LEARN")
 
 
 def assess_autonomous_loop(core: object, worker: object) -> dict:
@@ -30,4 +30,9 @@ def assess_autonomous_loop(core: object, worker: object) -> dict:
     # No trusted runtime identity, temporal provenance, browser or effect proof.
     return {**result, "status": "OFFLINE_CONSISTENT_ONLY",
             "reason": "NO_RUNTIME_ATTESTATION",
-            "stages": {stage: "OFFLINE_DECLARED_ONLY" for stage in STAGES}}
+            "stages": {stage: ("NOT_VERIFIED" if stage in
+                       ("REMEDIATION_EFFECT", "LEARN") else "OFFLINE_DECLARED_ONLY")
+                       for stage in STAGES},
+            "action_semantics": "WORKER_SIMULATED_NO_EFFECT_PRE_RESOLUTION",
+            "verification_semantics": "CORE_SYNTHETIC_RESOLUTION_DECLARED",
+            "audit_semantics": "WORKER_TEMPORAL_HISTORY_DECLARED_NOT_ATTESTED"}
