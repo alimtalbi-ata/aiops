@@ -106,6 +106,9 @@ class RuntimeRecipeTests(unittest.TestCase):
         self.assertFalse(result["viewer_acl_verified"])
         self.assertFalse(result["browser_verified"])
         self.assertFalse(result["real_execution_allowed"])
+        for claim in ("remediation_effect_verified", "autonomous_closed_loop_verified",
+                      "deployed_sha_attested", "learning_claim_verified"):
+            self.assertIs(result[claim], False)
         self.assertEqual(len(calls), 2)
         self.assertTrue(all("/api/sandbox/acme/e2e/" in url for url in calls))
 
