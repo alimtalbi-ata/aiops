@@ -487,3 +487,13 @@ This review is a preservation/qualification decision only. No PR was merged, no 
 - Regression coverage extended in `tests/test_external_service_themes.py`; Quality workflow runs both external service theme tests and Portal theme tests.
 - Prometheus/Alertmanager native UIs remain unthemed because no supported branded theme surface is configured; do not vendor-patch or reverse-proxy inject CSS.
 - The latest exact-head workflow is pending; no live runtime/host/production deployment was performed.
+
+
+## 2026-11-17 — Portal operator usability increment
+
+- Latest prior exact-head CI for the theme/observability work passed all three jobs in run [44188984273](https://github.com/alimtalbi-ata/aiops/actions/runs/44188984273).
+- Added same-origin progressive enhancement `app/portal/portal_usability.js`: skip-to-content, labelled sticky workspace navigation, quick-start entry points, local DOM-only Run filtering and polite live-region status semantics.
+- Added route `GET /assets/portal-usability.js`; homepage loads it with `defer`. Added responsive styles to the shared local design system.
+- Added `tests/test_portal_usability.py` and `tests/test_portal_usability_client.cjs`; CI now runs the HTTP contract, DOM behavior and JS syntax checks.
+- This is a usability enhancement only. It adds no API calls, browser storage, credentials, tenant claims, or changes to LIVE/DEMO execution. Existing UNKNOWN and authorization gates remain unchanged.
+- Current PR #809 is still draft. The new exact-head CI must pass before review/merge. No production host or runtime was modified.
