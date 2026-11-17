@@ -194,13 +194,6 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_acme_isolated_png_integrity.py' -v
       - name: Independently verify captured PNG bytes
         run: python scripts/acme_isolated_png_integrity.py --directory /tmp/acme-workbench-ci-captures
-      - name: Publish isolated Chromium screenshots and byte hashes
-        uses: actions/upload-artifact@v4
-        with:
-          name: acme-workbench-isolated-browser-pngs
-          path: /tmp/acme-workbench-ci-captures/
-          if-no-files-found: error
-          retention-days: 7
       - name: Validate isolated browser receipt contract
         run: python -m unittest discover -s tests -p 'test_acme_isolated_browser_receipt.py' -v
       - name: Write non-authoritative CI-only browser receipt
@@ -213,6 +206,13 @@ jobs:
         env:
           ACME_BROWSER_RECEIPT_PATH: ${{ runner.temp }}/acme-browser-receipt.json
         run: python scripts/acme_isolated_browser_bundle.py --captures-dir /tmp/acme-workbench-ci-captures --receipt "$ACME_BROWSER_RECEIPT_PATH" --expected-source-sha "$GITHUB_SHA"
+      - name: Publish isolated Chromium screenshots and byte hashes
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-workbench-isolated-browser-pngs
+          path: /tmp/acme-workbench-ci-captures/
+          if-no-files-found: error
+          retention-days: 7
       - name: Publish CI-only browser receipt
         uses: actions/upload-artifact@v4
         with:
