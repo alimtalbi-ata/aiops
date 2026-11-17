@@ -25,7 +25,11 @@ class OidcPreflightTests(unittest.TestCase):
         for issuer in ("http://identity.example.org", "https://localhost",
                        "https://user:pass@identity.example.org",
                        "https://identity.example.org?token=abc",
-                       "https://identity.example.org:8443", "https://[::1]"):
+                       "https://identity.example.org:8443", "https://[::1]",
+                       "https://10.1.2.3/realms/acme",
+                       "https://192.168.1.2", "https://identity.example.org\\\\@evil.example",
+                       "https://identity.example.org/path\\nnext",
+                       "https://identity..example.org"):
             with self.subTest(issuer=issuer):
                 self.assertEqual(
                     assess_oidc_integration({**VALID, "issuer": issuer})["reason"],
