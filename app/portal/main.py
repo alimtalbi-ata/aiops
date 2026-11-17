@@ -17,8 +17,8 @@ from portal.glpi_operator_view import router as glpi_operator_view_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 @app.middleware('http')
 async def portal_security_headers(request: Request, call_next):
-    # Cover framework-generated 404/405/422 errors as well as route responses.
-    # Preserve the stricter, route-specific CSP on HTML and authenticated APIs.
+    # Apply the same local design system to every Portal HTML route without
+    # changing route data, auth decisions, or API responses.
     response = await call_next(request)
     defaults = {
         'Cache-Control': 'no-store',
@@ -30,7 +30,37 @@ async def portal_security_headers(request: Request, call_next):
     }
     for key, value in defaults.items():
         response.headers.setdefault(key, value)
-    return response
+
+    if 'text/html' not in response.headers.get('content-type', '').lower():
+        return response
+    body = getattr(response, 'body', None)
+    if not isinstance(body, bytes):
+        return response
+    page = body.decode('utf-8')
+    if '</head>' in page.lower() and '/assets/aiops-theme.css' not in page:
+        marker = page.lower().rfind('</head>')
+        page = page[:marker] + '<link rel="stylesheet" href="/assets/aiops-theme.css">' + page[marker:]
+    csp = response.headers.get('content-security-policy', "default-src 'none'")
+    directives = [part.strip() for part in csp.split(';') if part.strip()]
+    style_index = next((i for i, item in enumerate(directives)
+                        if item.split(None, 1)[0].lower() == 'style-src'), None)
+    if style_index is None:
+        directives.append("style-src 'self' 'unsafe-inline'")
+    elif "'self'" not in directives[style_index].split():
+        directives[style_index] += " 'self'"
+    headers = dict(response.headers)
+    headers.pop('content-length', None)
+    headers['Content-Security-Policy'] = '; '.join(directives)
+    return Response(content=page.encode('utf-8'), status_code=response.status_code,
+                    headers=headers, background=response.background)
+
+@app.get('/assets/aiops-theme.css')
+def aiops_theme_stylesheet():
+    return FileResponse(Path(__file__).with_name('aiops_theme.css'),
+                        media_type='text/css',
+                        headers={'Cache-Control': 'no-store',
+                                 'X-Content-Type-Options': 'nosniff'})
+
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
 app.include_router(noc_demo_rag_router)
