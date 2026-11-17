@@ -17,6 +17,16 @@ class QualityScheduleContractTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read", WORKFLOW)
         self.assertNotIn("self-hosted", WORKFLOW)
 
+    def test_all_three_jobs_checkout_and_verify_exact_source_head(self):
+        # A green PR synthetic merge commit is not D0 exact-head evidence.
+        expr = 'ref: ${{ github.event.pull_request.head.sha || github.sha }}'
+        expected = 'AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}'
+        guard = 'run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"'
+        self.assertEqual(WORKFLOW.count(expr), 3)
+        self.assertEqual(WORKFLOW.count(expected), 3)
+        self.assertEqual(WORKFLOW.count(guard), 3)
+        self.assertEqual(WORKFLOW.count("persist-credentials: false"), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

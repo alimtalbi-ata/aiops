@@ -1,0 +1,114 @@
+name: Core PG16 native audit recovery (disposable only)
+
+on:
+  push:
+    branches:
+      - 'fix/core-pg16-native-recovery-*'
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - .github/workflows/core-pg16-native-recovery.yml
+      - tests/test_core_actor_pg16_native_sha_restore.py
+      - db/migrations/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-pg16-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The official PG16 image supplies same-major client binaries. No host
+    # PostgreSQL package installation, sudo, SSH, privileged Docker or LIVE.
+    container:
+      image: postgres:16-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-core-pg16-disposable-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-core-pg16-disposable-only@127.0.0.1:5432/aiops
+      AIOPS_XREF_CI_DISPOSABLE: "1"
+      AIOPS_PG16_RECOVERY_ARTIFACT_DIR: /tmp/core-pg16-native-recovery
+      PGPASSWORD: ci-core-pg16-disposable-only
+    steps:
+      - name: Install Python and loopback forwarder inside disposable container
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv socat git ca-certificates
+      - name: Checkout exact PR HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source SHA and native client major
+        shell: bash
+        env:
+          AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          /usr/lib/postgresql/16/bin/pg_dump --version | grep -F '(PostgreSQL) 16.'
+          /usr/lib/postgresql/16/bin/pg_restore --version | grep -F '(PostgreSQL) 16.'
+      - name: Establish disposable loopback-only PostgreSQL connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 > /tmp/core-pg16-socat.log 2>&1 < /dev/null &
+          for i in $(seq 1 30); do
+            if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -p 5432 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
+      - name: Install isolated Python PostgreSQL test dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/core-pg16-recovery-venv
+          /tmp/core-pg16-recovery-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13"
+      - name: Run populated 001/004/009-013 PG16 native SHA256 recovery (1/1, no skips)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-pg16-recovery-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_pg16_native_sha_restore.py' -v 2>&1 | tee /tmp/core-pg16-recovery-tests.log
+          grep -E '^Ran 1 test in ' /tmp/core-pg16-recovery-tests.log
+          grep -x 'OK' /tmp/core-pg16-recovery-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-pg16-recovery-tests.log
+      - name: Verify retained SHA256 and audit recovery manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$AIOPS_PG16_RECOVERY_ARTIFACT_DIR"
+          sha256sum --check core-audit.pgcustom.sha256
+          /tmp/core-pg16-recovery-venv/bin/python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          manifest = json.loads(Path("recovery-manifest.json").read_text())
+          digest = hashlib.sha256(Path("core-audit.pgcustom").read_bytes()).hexdigest()
+          assert digest == manifest["archive_sha256"]
+          assert manifest["server_major"] == manifest["client_major"] == 16
+          assert len(manifest["migrations"]) == 7
+          assert all(v == 1 for v in manifest["source_rows"].values())
+          assert manifest["authorization"] == "UNKNOWN"
+          assert manifest["rollback"] == "CODE_ONLY_AUDIT_013_PRESERVED"
+          print("VERIFIED_DISPOSABLE_PG16_SHA256=" + digest)
+          PY
+      - name: Upload synthetic native PG16 recovery evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-pg16-native-013-audit-recovery
+          path: /tmp/core-pg16-native-recovery/
+          if-no-files-found: error
+          retention-days: 7

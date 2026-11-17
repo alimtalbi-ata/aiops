@@ -1,0 +1,74 @@
+{
+  "schema": "aiops.acme.synthetic-governance-source-index.v1",
+  "provenance": "SYNTHETIC_FIXTURE",
+  "tenant_scope": "UNKNOWN",
+  "graph_git_blob": "67f0124a2c3b450e5249165e719a5d943fdd7237",
+  "catalog_git_blob": "78e749c623d7ee7ea1d33a74577b4f7b696f3207",
+  "fields": {
+    "site": {
+      "authority": "SYNTHETIC_NODE_ONLY",
+      "source": "db/migrations/005_seed_acme.sql",
+      "selector": "twin_nodes.site"
+    },
+    "service_criticality_synthetic_1_to_5": {
+      "authority": "SYNTHETIC_NODE_ONLY",
+      "source": "db/migrations/005_seed_acme.sql",
+      "selector": "twin_nodes.criticality"
+    },
+    "blast_radius_candidate_service_ids": {
+      "authority": "SYNTHETIC_CANDIDATE_ONLY",
+      "source": "db/migrations/005_seed_acme.sql",
+      "selector": "twin_edges.consumer_to_dependency_reverse_reachability"
+    },
+    "maintenance_window_synthetic": {
+      "authority": "SYNTHETIC_SCENARIO_ONLY",
+      "source": "tests/fixtures/acme_enterprise_incident_catalog_v1.json",
+      "selector": "scenarios[].maintenance_window"
+    },
+    "change_lookup": {
+      "authority": "PLANNED_STEP_ONLY",
+      "source": "db/migrations/005_seed_acme.sql",
+      "selector": "scenario_steps.CHANGE_LOOKUP"
+    },
+    "datacenter_id": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    },
+    "datacenter_relation": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    },
+    "service_owner_id": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    },
+    "service_team_id": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    },
+    "sla_id": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    },
+    "ola_id": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    },
+    "change_id": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    },
+    "maintenance_actual": {
+      "authority": "UNKNOWN",
+      "source": null,
+      "selector": null
+    }
+  }
+}

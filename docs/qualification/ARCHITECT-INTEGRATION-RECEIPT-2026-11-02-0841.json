@@ -1,0 +1,50 @@
+{
+  "schema": "aiops.architect.integration-cycle.v1",
+  "observed_local": "2026-11-02T08:41:00+01:00",
+  "main": "ae7c3e5102b99a66bd7806d602146f1309a9749d",
+  "candidate_pr": 234,
+  "candidate_code_commit": "ce558e9202da0e6cd3f87ec81ef73882fccdf2c3",
+  "source_prs": [
+    {
+      "pr": 340,
+      "sha": "823cef89d1a632fb33d0eddbf7e475aa2170dc04",
+      "files": 3,
+      "ci": {
+        "two_os": 1,
+        "combined": 10,
+        "dr": 5,
+        "quality": 3
+      }
+    },
+    {
+      "pr": 341,
+      "sha": "0695393c2f8a14ceaa644732c6a3ac45b0ee7675",
+      "files": 3,
+      "ci": {
+        "acme": 296,
+        "quality": 3
+      }
+    }
+  ],
+  "integrated_files": 6,
+  "candidate_exact_head_ci": "IN_PROGRESS",
+  "debian": {
+    "report_schema": 1,
+    "collected_at": "2026-11-02T07:39:01.625055+00:00",
+    "total": 61,
+    "running": 53,
+    "exited": 8,
+    "portal_healthy": true,
+    "port_7777_operator_local_historical": "VERIFIED_2026-11-01",
+    "port_7777_current_cron": "NOT_VERIFIED",
+    "v2_cron": "NOT_VERIFIED",
+    "checkout_sha": "NOT_VERIFIED",
+    "image_digest": "NOT_VERIFIED"
+  },
+  "itil_verified": 0,
+  "itil_total": 15,
+  "human_verified": 0,
+  "human_total": 6,
+  "release_stable": "NO_GO",
+  "rollback": "revert code commit ce558e9202da0e6cd3f87ec81ef73882fccdf2c3 and documentation commit through reviewed PR; no host mutations"
+}

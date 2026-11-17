@@ -1,0 +1,49 @@
+name: Portal #386 historical Demo Studio V2 exact-head gate
+on:
+  pull_request:
+    branches:
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/portal/demo_v2.py
+      - app/portal/ui_theme.py
+      - app/portal/demo_center.py
+      - tests/test_demo_v2.py
+      - tests/test_portal_demo_studio_v2_386.py
+      - .github/workflows/portal-386-historical-demo-v2.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historical-studio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact HEAD
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install disposable portal dependencies
+        run: python -m pip install --disable-pip-version-check -r app/requirements.txt 'cryptography==46.0.4' 'httpx==0.28.1'
+      - name: Compile historical renderer and mounted route
+        run: python -m py_compile app/portal/demo_v2.py app/portal/ui_theme.py app/portal/demo_center.py tests/test_demo_v2.py tests/test_portal_demo_studio_v2_386.py
+      - name: Legacy renderer contract
+        env:
+          PYTHONPATH: app
+        run: python -m unittest discover -s tests -p test_demo_v2.py -v
+      - name: Mounted UI and fail-closed source contract
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
+        run: python -m unittest discover -s tests -p test_portal_demo_studio_v2_386.py -v
+      - name: Existing DemoCenter no-effect contract
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
+        run: python -m unittest discover -s tests -p test_portal_demo_center_386.py -v

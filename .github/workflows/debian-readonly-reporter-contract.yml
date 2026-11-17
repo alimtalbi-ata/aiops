@@ -1,0 +1,38 @@
+name: Debian existing-host read-only reporter contract (CI disposable)
+on:
+  pull_request:
+    paths:
+      - scripts/debian_runtime_probe.py
+      - scripts/debian-readonly-reporter.py
+      - tests/test_debian_runtime_probe_contract.py
+      - .github/workflows/debian-readonly-reporter-contract.yml
+  workflow_dispatch:
+jobs:
+  probe-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact checkout and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          python -m py_compile scripts/debian_runtime_probe.py scripts/debian-readonly-reporter.py
+      - name: No-Docker read-only and secret redaction regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_debian_runtime_probe_contract.py -v 2>&1 | tee /tmp/debian-readonly-probe-tests.log
+          grep -q 'Ran 3 tests' /tmp/debian-readonly-probe-tests.log
+          grep -q '^OK$' /tmp/debian-readonly-probe-tests.log
+          ! grep -q 'skipped=' /tmp/debian-readonly-probe-tests.log
+      - name: Explicit scope
+        run: |
+          echo "CI_ONLY=TRUE; HOST_CRON_EXECUTION=NOT_ATTESTED; DEPLOYMENT=NONE"
