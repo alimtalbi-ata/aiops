@@ -57,13 +57,30 @@ def inspect_core_worker_binding(core, worker):
         if core.get(key) != expected:
             errors.append("CORE_" + key.upper() + "_INVALID")
     for key in ("worker_receipt_verified", "terminal_ticket_receipt_verified",
-                "resolution_after_worker_receipt", "approval_fresh_at_resolution"):
+                "resolution_after_worker_receipt", "approval_fresh_at_resolution",
+                "approval_nonce_consumed", "analysis_validated",
+                "critic_validated", "source_hashes_qualified"):
         if core.get(key) is not True:
             errors.append("CORE_" + key.upper() + "_NOT_VERIFIED")
-    for key in ("human_approved", "live_effects_allowed",
+    for key in ("human_approved", "human_approval_claimed",
+                "approval_nonce_revoked", "live_effects_allowed",
                 "real_glpi_writes_allowed", "execution_allowed", "effect_allowed"):
         if core.get(key) is not False:
             errors.append("CORE_" + key.upper() + "_UNSAFE")
+    for key, expected in (("source_event_count", 7),
+                          ("evidence_count", 2)):
+        if type(core.get(key)) is not int or core[key] != expected:
+            errors.append("CORE_" + key.upper() + "_INVALID")
+    for key, expected in (("analysis_kind", "SYNTHETIC_FIXTURE"),
+                          ("approval_issuer", "TWIN_ACME_SIMULATED")):
+        if core.get(key) != expected:
+            errors.append("CORE_" + key.upper() + "_INVALID")
+    terminal = core.get("terminal_ticket_sha256")
+    if type(terminal) is not str or not DIGEST.fullmatch(terminal):
+        errors.append("CORE_TERMINAL_TICKET_DIGEST_INVALID")
+    request = core.get("request_sha256")
+    if type(request) is not str or not DIGEST.fullmatch(request):
+        errors.append("CORE_REQUEST_DIGEST_INVALID")
     digest = core.get("worker_receipt_sha256")
     if (type(digest) is not str or not DIGEST.fullmatch(digest)
             or worker.get("receipt_sha256") != digest):
