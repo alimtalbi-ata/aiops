@@ -40,3 +40,8 @@ No merge into main, no LIVE authorization, no mutation of Debian or real GLPI. D
 ### Validation flow reference
 
 See [ACME Pydantic receipt validation flow](ACME-RECEIPT-PYDANTIC-VALIDATION-FLOW.md) for the actual model validators, the fail-closed decision diagram, and the explicit limits of synthetic receipt qualification.
+
+
+### Versioned JSON Schema (Pydantic v2)
+
+The static contract is [`docs/contracts/acme-receipt.schema.json`](../contracts/acme-receipt.schema.json), generated using `AcmeReceipt.model_json_schema(mode="validation")`. The readiness workflow fails if the checked-in schema differs from the model. **Important:** Pydantic's custom validators (simulated prefixes, whitespace-only IDs, all 17 required stage names, timezone-awareness and freshness) are **not fully represented in the static JSON Schema**. Runtime `assess()` remains authoritative. No endpoint is exposed and no Debian runtime is changed.
