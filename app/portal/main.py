@@ -508,20 +508,14 @@ def acme_workbench_qualification_page():
         "<p>Identité serveur et ACL exact-run, rattachement Core → Twin, "
         "attestation SHA déployé, recette sandbox isolée et parcours navigateur "
         "sept scènes : <strong>NON VÉRIFIÉS</strong>.</p>")
+    from portal.acme_milestones import public_milestone_contract
+    milestones = public_milestone_contract()["milestones"]
     body += panel("Parcours de qualification — ordre de déblocage",
         table(["Jalon", "État", "Preuve requise"], [
-            ("1 · Identité / ACL", "BLOQUÉ",
-             "OIDC BFF côté serveur, acteur → tenant → run exact, tests 401/403/404"),
-            ("2 · Traçabilité déployée", "NON VÉRIFIÉ",
-             "SHA du code et image réellement déployés, attestation indépendante"),
-            ("3 · Core / Twin", "NON VÉRIFIÉ",
-             "Jointure incident → run → service et lecture isolée autorisée"),
-            ("4 · Sept scènes", "NON VÉRIFIÉ",
-             "Parcours Chromium authentifié sur sandbox approuvée ; ITSM / Worker absent"),
-            ("5 · Remédiation / Verify", "NON VÉRIFIÉ",
-             "Effet observé après action autorisée, retour à un état sain mesuré"),
-            ("6 · Audit / Learn", "NON VÉRIFIÉ",
-             "Historique vérifiable, résultat et apprentissage réellement persistés"),
+            (f"{index} · {milestone['label']}",
+             "BLOQUÉ" if milestone["status"] == "BLOCKED" else "NON VÉRIFIÉ",
+             milestone["required_proof"])
+            for index, milestone in enumerate(milestones, 1)
         ]))
     body += panel("Ce que prouvent les tests CI",
         "<p>Les tests offline, HTTP en mémoire et Chromium sur boucle locale "
