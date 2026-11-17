@@ -126,3 +126,7 @@ Portal ACL preflight additionally inventories direct imports of the offline-only
 ## Architecture decision — identity and authorization
 
 [ADR: Keycloak sandbox OIDC + Portal BFF + server-owned tenant/exact-run ACL](ADR-ACME-SANDBOX-IDENTITY-KEYCLOAK-BFF.md) is the selected **target**. It does not imply that an IdP or grant store is deployed. Keep P0-3 **NO_GO** until actual runtime negative tests prove deny-before-read; the offline policy and evidence seam must not be exposed as HTTP authority.
+
+## Opt-in read-only runtime recipe (source-only)
+
+`scripts/acme_readonly_runtime_recipe.py` is a **manual** GET-only check of the existing sandbox Core and Worker readbacks on two distinct loopback endpoints. Its CLI requires **both** `ACME_READONLY_SANDBOX_APPROVED=YES` and `ACME_SANDBOX_ISOLATED=YES`; missing either returns `SANDBOX_EXECUTION_NOT_APPROVED` before network access. These flags are operator acknowledgements, **not** technical proof of isolation, authentication or authorization. Execution still requires separately approved isolated infrastructure and server-held service credentials supplied via environment (never commit or print them). The offline CI tests use injected fake responses and do **not** make HTTP requests. A successful runtime readback only establishes `RUNTIME_READBACK_CONSISTENT_ONLY`; browser, viewer ACL, Core→Twin join, deployed provenance, and real autonomy remain unverified. Never run this recipe on LIVE Debian.
