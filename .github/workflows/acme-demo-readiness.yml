@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'scripts/acme_demo_readiness.py'
+      - 'scripts/acme_receipt_model.py'
       - 'tests/test_acme_demo_readiness.py'
       - 'tests/fixtures/acme/**'
       - '.github/workflows/acme-demo-readiness.yml'
@@ -20,8 +21,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install Pydantic v2 validation dependency
+        run: python -m pip install 'pydantic>=2.5,<3'
       - name: Exact source compile
-        run: python -m py_compile scripts/acme_demo_readiness.py tests/test_acme_demo_readiness.py
+        run: python -m py_compile scripts/acme_receipt_model.py scripts/acme_demo_readiness.py tests/test_acme_demo_readiness.py
       - name: Validate all 17 versioned JSON fixtures
         run: |
           python - <<'PY'
