@@ -90,3 +90,11 @@ Inspected actual `app/portal/main.py` on PR #808 and `app/portal/acme_run_detail
 ## P0 identity anti-forgery hardening
 
 The offline Core↔Worker binding check now recomputes Core's actual deterministic `ident(prefix, attempt)` formula (`SHA256("ACME-TEST:" + attempt)`, uppercase truncated digest) for `incident_id`, `run_id`, `ticket_id`, `proposal_id` and all seven `SYN-EVT-` SOURCE IDs (suffix `":" + sequence`, length 20). It rejects even **coordinated forgery** where Core and Worker declarations agree on the same incorrect identifiers. Added two negative tests. This remains an offline consistency check: authenticated Core PG16 readback, Worker receipt digest and viewer ACL must still be qualified independently.
+
+## P0-3 viewer policy contract (offline, not integrated)
+
+Added `scripts/acme_viewer_access_policy.py` and seven tests. The pure function models the intended authorization decision over **server-derived** actor identity, tenant membership, exact run allowlist, requested tenant, attempt and run. It defaults to 503 `TENANT_ACL_NOT_QUALIFIED` unless both authority qualifications are explicitly supplied; rejects anonymous 401, cross-tenant 403, foreign run 404, and malformed claim containers 503.
+
+**Crucial limitation:** the function's two `*_authority_qualified` booleans and membership sets are ordinary caller arguments, not cryptographic proof. The 200 `POLICY_CONDITIONS_SATISFIED_ONLY` test is a **hypothetical pure-policy case**, not a runtime authorization success. This module is not imported by Portal and must **never** be wired to an HTTP route using browser-provided claims or arbitrary caller-supplied booleans.
+
+To qualify the actual Portal adapter: introduce a trusted server-side identity/session verifier, tenant membership and exact-run permission provider, check the canonical Core attempt→run binding, reject before any upstream Core/Worker fetch, and integration-test 401/403/404/503 with the real provider boundary. Until then the Portal scene stays unavailable and runtime ACL remains NO_GO.
