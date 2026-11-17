@@ -19,6 +19,8 @@ on:
       - 'tests/test_acme_workbench_portal_http.py'
       - 'tests/acme_workbench_browser_smoke.py'
       - 'tests/acme_workbench_browser_app.py'
+      - 'scripts/acme_isolated_browser_receipt.py'
+      - 'tests/test_acme_isolated_browser_receipt.py'
       - 'tests/test_acme_public_qualification_snapshot.py'
       - 'app/portal/acme_qualification_view.py'
       - 'tests/test_acme_readonly_runtime_recipe.py'
@@ -184,3 +186,16 @@ jobs:
         env:
           PYTHONPATH: 'tests:app:.'
         run: python tests/acme_workbench_browser_smoke.py
+      - name: Validate isolated browser receipt contract
+        run: python -m unittest discover -s tests -p 'test_acme_isolated_browser_receipt.py' -v
+      - name: Write non-authoritative CI-only browser receipt
+        env:
+          ACME_BROWSER_RECEIPT_PATH: ${{ runner.temp }}/acme-browser-receipt.json
+        run: python scripts/acme_isolated_browser_receipt.py
+      - name: Publish CI-only browser receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-workbench-isolated-browser-receipt
+          path: ${{ runner.temp }}/acme-browser-receipt.json
+          if-no-files-found: error
+          retention-days: 7
