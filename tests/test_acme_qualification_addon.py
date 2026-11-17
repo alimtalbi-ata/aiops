@@ -4,10 +4,12 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import struct
+import zlib
 import unittest
 
 from scripts.acme_qualification_addon import (
-    SCENES, inspect_host_receipt, inspect_scenes, qualify,
+    SCENES, inspect_host_receipt, inspect_scenes, png_structure_valid, qualify,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,8 +48,20 @@ class QualificationAddonTests(unittest.TestCase):
     def test_seven_scenes_integrity_and_rejection(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            # Header-only synthetic bytes are deliberately NOT browser evidence.
-            raw = b"\x89PNG\r\n\x1a\n" + (13).to_bytes(4, "big") + b"IHDR" + (1600).to_bytes(4, "big") + (900).to_bytes(4, "big")
+            # Complete synthetic PNG structure, not browser evidence.
+            def chunk(kind, payload):
+                return (struct.pack(">I", len(payload)) + kind + payload +
+                        struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF))
+            ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+            pixels = zlib.compress(b"\\x00\\x00\\x00\\x00")
+            raw = (b"\\x89PNG\\r\\n\\x1a\\n" +
+                   chunk(b"IHDR", ihdr) + chunk(b"IDAT", pixels) +
+                   chunk(b"IEND", b""))
+            self.assertTrue(png_structure_valid(raw))
+            self.assertFalse(png_structure_valid(raw[:-5]))
+            corrupt_crc = bytearray(raw)
+            corrupt_crc[29] ^= 1
+            self.assertFalse(png_structure_valid(bytes(corrupt_crc)))
             records = []
             for sid in SCENES:
                 name = sid + ".png"
