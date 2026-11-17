@@ -15,6 +15,18 @@ def assess_portal_acl(source: str, *, tenant_authority_attested: bool = False):
         tree = ast.parse(source)
     except SyntaxError:
         return {"status": "NO_GO", "reason": "PORTAL_SOURCE_INVALID"}
+    # Directly importing the offline-only policy/read seam into a Portal
+    # entrypoint is an unsafe integration signal, not ACL qualification.
+    offline_modules = ("scripts.acme_evidence_read_seam",
+                       "scripts.acme_viewer_access_policy")
+    unsafe_imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            unsafe_imports.update(alias.name for alias in node.names
+                                  if alias.name in offline_modules)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module in offline_modules:
+                unsafe_imports.add(node.module)
     get_routes = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -34,6 +46,7 @@ def assess_portal_acl(source: str, *, tenant_authority_attested: bool = False):
         "source_get_routes": sorted(set(get_routes)),
         "requirements": list(REQUIRED),
         "internal_bearer_is_viewer_acl": False,
+        "unsafe_offline_policy_imports": sorted(unsafe_imports),
         "attestation_claim_ignored": bool(tenant_authority_attested),
     }
 
