@@ -59,7 +59,14 @@ def pair():
             "human_approved": False, "live_effects_allowed": False,
             "real_glpi_writes_allowed": False, "execution_allowed": False,
             "effect_allowed": False, "worker_receipt_sha256": worker["receipt_sha256"],
-            "source_event_ids": EVENTS, "request_sha256": HASH}
+            "source_event_ids": EVENTS, "request_sha256": HASH,
+            "approval_nonce_consumed": True, "analysis_validated": True,
+            "critic_validated": True, "source_hashes_qualified": True,
+            "human_approval_claimed": False, "approval_nonce_revoked": False,
+            "source_event_count": 7, "evidence_count": 2,
+            "analysis_kind": "SYNTHETIC_FIXTURE",
+            "approval_issuer": "TWIN_ACME_SIMULATED",
+            "terminal_ticket_sha256": "b" * 64}
     return core, worker
 
 
@@ -96,6 +103,20 @@ class CoreWorkerBindingTests(unittest.TestCase):
             "SYN-EVT-FORGED" + str(i) for i in range(7)]
         self.assertIn("CORE_SOURCE_EVENTS_NONCANONICAL",
                       inspect_core_worker_binding(core, worker))
+
+    def test_resolved_missing_nonce_consumption_rejected(self):
+        core, worker = pair()
+        core["approval_nonce_consumed"] = False
+        self.assertIn("CORE_APPROVAL_NONCE_CONSUMED_NOT_VERIFIED",
+                      inspect_core_worker_binding(core, worker))
+
+    def test_resolved_evidence_count_and_terminal_digest_rejected(self):
+        core, worker = pair()
+        core["source_event_count"] = True
+        core["terminal_ticket_sha256"] = "INVALID"
+        errors = inspect_core_worker_binding(core, worker)
+        self.assertIn("CORE_SOURCE_EVENT_COUNT_INVALID", errors)
+        self.assertIn("CORE_TERMINAL_TICKET_DIGEST_INVALID", errors)
 
     def test_prepared_not_resolved(self):
         core, worker = pair()
