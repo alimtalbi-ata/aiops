@@ -40,7 +40,11 @@ def qualify_runtime_readback(*, attempt: str, core_base: str, worker_base: str,
     result = {"schema": "aiops.acme-readonly-runtime-recipe.v1",
               "status": "NO_GO", "reason": "PREFLIGHT_REJECTED",
               "runtime_evidence_consistent": False, "viewer_acl_verified": False,
-              "browser_verified": False, "real_execution_allowed": False}
+              "browser_verified": False, "real_execution_allowed": False,
+              "remediation_effect_verified": False,
+              "autonomous_closed_loop_verified": False,
+              "deployed_sha_attested": False,
+              "learning_claim_verified": False}
     if (type(attempt) is not str or ATTEMPT.fullmatch(attempt) is None
             or not loopback_url(core_base) or not loopback_url(worker_base)
             or core_base == worker_base
