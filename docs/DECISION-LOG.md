@@ -152,3 +152,12 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Rationale:** Single inspectable synthetic test data source, explicit negative-case enforcement, no external service dependencies.
 - **Boundary:** The gate still does not attest executed SHA or cross-stage identity/provenance. A GO_SIMULATION_ONLY offline verdict is **not** an E2E runtime or production approval.
 - **Tracking:** [#804](https://github.com/alimtalbi-ata/aiops/issues/804), `docs/architecture/ACME-DEPENDENCY-MATRIX-2026-11-17.md`. Convergence-as-host remains PROPOSED; this branch is based on #802 for a narrow review and does not authorize a merge.
+
+
+## ADR-PROPOSED-ACME-PYDANTIC-20261117 — Strict synthetic receipt validation
+
+- **Date:** 2026-11-17
+- **Status:** Proposed in draft PR #805, not an accepted deployment decision.
+- **Change:** Replace manual receipt checks with strict Pydantic v2 `AcmeReceipt` / `AcmeIds` models, preserving `assess()` signature and `NO_GO` fail-closed semantics.
+- **Dependency boundary:** Pydantic v2 is mandatory for gate execution; no silent stdlib fallback. CI installs `pydantic>=2.5,<3`; isolated runner packaging remains an open qualification. No external API calls occur during validation, but package installation may require network access.
+- **Limitations:** SHA of executed code and inter-stage identity/provenance are still not verified; no Debian/runtime/LIVE approval. Tracking #804.
