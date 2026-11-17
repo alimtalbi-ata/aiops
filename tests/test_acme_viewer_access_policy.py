@@ -1,8 +1,9 @@
 import unittest
+import hashlib
 from scripts.acme_viewer_access_policy import decide_viewer_access
 
 ATTEMPT = "ACME-SIM-" + "A" * 16
-RUN = "RUN-SIM-" + "B" * 24
+RUN = "RUN-SIM-" + hashlib.sha256(("ACME-TEST:" + ATTEMPT).encode("ascii")).hexdigest()[:24].upper()
 
 
 def check(**changes):
@@ -39,6 +40,14 @@ class ViewerPolicyTests(unittest.TestCase):
     def test_foreign_run_is_constant_denial(self):
         self.assertEqual(check(authorized_run_ids=frozenset()).status, 404)
         self.assertEqual(check(requested_run="RUN-SIM-" + "C" * 24).status, 404)
+
+    def test_jointly_allowed_but_wrong_attempt_run_mapping(self):
+        foreign_attempt = "ACME-SIM-" + "C" * 16
+        self.assertEqual(check(requested_attempt=foreign_attempt).status, 404)
+
+    def test_truthy_nonboolean_authority_rejected(self):
+        self.assertEqual(check(identity_authority_qualified=1).status, 503)
+        self.assertEqual(check(run_acl_authority_qualified="true").status, 503)
 
     def test_untrusted_claim_shapes(self):
         self.assertEqual(check(actor_tenants=["ACME-TEST"]).status, 503)
