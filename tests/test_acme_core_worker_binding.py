@@ -1,7 +1,16 @@
 """Negative-first offline binding checks; no network, DB, or Temporal."""
 import unittest
 from scripts.acme_core_worker_binding import inspect_core_worker_binding
-from tests.test_acme_worker_receipt_contract import sample
+from scripts.acme_worker_receipt_contract import CONSTANTS, FALSE_FLAGS, SCHEMA, TRANSITIONS, TRUE_FLAGS
+
+
+def sample():
+    result = {"schema": SCHEMA, "attempt_id": "ACME-SIM-" + "A" * 16,
+              **CONSTANTS, "effect_receipts": 0,
+              "audit_transitions": list(TRANSITIONS)}
+    result.update({key: False for key in FALSE_FLAGS})
+    result.update({key: True for key in TRUE_FLAGS})
+    return result
 
 ATTEMPT = "ACME-SIM-" + "A" * 16
 RUN = "RUN-SIM-AAAA"
