@@ -63,3 +63,15 @@ Inspected the actual `app/portal/main.py` on this branch:
 - **Important:** this is a no-effect sandbox **pre-resolution** receipt, **not** a GLPI ticket, a real human approval, a completed production remediation, or a Core run join.
 
 **Remaining P0-1 gap:** provide a secure, server-side, tenant-authorized read-only adapter from this Worker receipt to the Portal scene, with independent negative tests for 401/404/503 and disabled capability. The existing `/demo-studio/run/{rid}` uses a Core run ID, whereas the Worker readback uses a separate `attempt_id`. **Do not join these IDs by string guesswork.** Establish a source-backed mapping or show the Worker receipt as a separately scoped artifact; never claim a Core→Worker join without evidence.
+
+## P0-2 identity discovery: Core already owns canonical binding
+
+Source inspection of `app/core/acme_sandbox.py` establishes an **existing canonical mapping**, rather than a missing string-derived join:
+
+- `aiops.acme_sandbox_attempts` persists `tenant_id, attempt_id, incident_id, run_id, ticket_id, proposal_id` together; `read(c, attempt)` re-queries the canonical Incident/Run and source/evidence records and refuses inconsistent state.
+- `GET /api/sandbox/acme/e2e/{attempt_id}` (Core, lines 416–428) is a **service-bearer-protected** readback, disabled unless the sandbox capability is enabled. It exposes `aiops.core-acme-sandbox-readback.v1` with the canonical IDs. This is the proper mapping authority, not a string convention.
+- In the **RESOLVED** state, Core verifies an append-only terminal ticket ledger, the persisted Worker receipt digest, matching canonical ticket/run/incident/proposal/approval, seven SOURCE event IDs, and a resolution event. In **PREPARED** state the Worker receipt is not yet verified. These states must not be conflated.
+- `app/core/acme_sandbox.py` also exposes `POST /api/sandbox/acme/e2e` and `POST /api/sandbox/acme/resolve`; **do not call** either during read-only qualification.
+- Added `scripts/acme_core_worker_binding.py` and five offline negative tests to compare **Core and Worker readback declarations** (IDs, tenant, source events, request digest, receipt digest, resolved flags, no live effects). This is **not** a cryptographic verification of the Worker receipt and not proof of authenticated runtime calls. The existing Core and Worker authorities must independently validate their own data.
+
+**Remaining implementation gap:** an ACL-qualified, server-side Portal adapter must read the canonical Core and Worker endpoints using a fixed service allowlist and a secret that never reaches the browser. Before implementing, prove a user-facing tenant authorization mechanism exists; if absent, retain 503/NO_GO rather than expose the internal readbacks.
