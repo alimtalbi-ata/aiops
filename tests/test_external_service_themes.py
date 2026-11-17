@@ -25,6 +25,23 @@ class ExternalServiceThemeTests(unittest.TestCase):
         self.assertIn("--tblr-link-color-rgb: 56, 189, 248", palette)
         self.assertIn("--glpi-palette-color-4: #38bdf8", palette)
 
+    def test_prometheus_scrapes_its_own_and_alertmanager_metrics(self):
+        config = (ROOT / "config/prometheus/prometheus.yml").read_text(encoding="utf-8")
+        self.assertIn("job_name: prometheus", config)
+        self.assertIn("aiops2-prometheus:9090", config)
+        self.assertIn("job_name: alertmanager", config)
+        self.assertIn("aiops2-alertmanager:9093", config)
+
+    def test_observability_control_plane_dashboard_is_dark_and_valid(self):
+        path = ROOT / "config/grafana/dashboards/observability-control-plane.json"
+        dashboard = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(dashboard["style"], "dark")
+        self.assertEqual(dashboard["uid"], "aiops-observability-control")
+        expressions = [target["expr"] for panel in dashboard["panels"] for target in panel["targets"]]
+        self.assertIn('up{job="prometheus"}', expressions)
+        self.assertIn('up{job="alertmanager"}', expressions)
+        self.assertIn("sum(alertmanager_alerts)", expressions)
+
     def test_grafana_dashboard_remains_dark_and_valid_json(self):
         path = ROOT / "config/grafana/dashboards/acme-command-center.json"
         dashboard = json.loads(path.read_text(encoding="utf-8"))
