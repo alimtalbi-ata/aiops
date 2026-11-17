@@ -82,6 +82,16 @@ def qualify_runtime_readback(*, attempt: str, core_base: str, worker_base: str,
 
 
 def main() -> int:
+    # Explicit opt-in for a separately approved, isolated sandbox. Never infer
+    # approval from available service tokens or a loopback endpoint.
+    if (os.environ.get('ACME_READONLY_SANDBOX_APPROVED') != 'YES'
+            or os.environ.get('ACME_SANDBOX_ISOLATED') != 'YES'):
+        print(json.dumps({'schema': 'aiops.acme-readonly-runtime-recipe.v1',
+                          'status': 'NO_GO', 'reason': 'SANDBOX_EXECUTION_NOT_APPROVED',
+                          'runtime_evidence_consistent': False,
+                          'viewer_acl_verified': False, 'browser_verified': False,
+                          'real_execution_allowed': False}, sort_keys=True))
+        return 2
     # No command-line tokens; do not print response bodies or bearer values.
     result = qualify_runtime_readback(
         attempt=os.environ.get("ACME_ATTEMPT_ID", ""),
