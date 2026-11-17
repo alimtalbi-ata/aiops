@@ -31,12 +31,13 @@ class WorkbenchPortalPageTests(unittest.TestCase):
         self.assertTrue(calls)
         for call in calls:
             self.assertIsInstance(call.func, ast.Name)
-            self.assertIn(call.func.id, {"panel", "table", "shell", "public_qualification_snapshot"})
+            self.assertIn(call.func.id, {"panel", "table", "shell", "public_qualification_snapshot", "public_milestone_contract", "enumerate"})
         imports = [n for statement in self.fn.body for n in ast.walk(statement)
                    if isinstance(n, ast.ImportFrom)]
         self.assertEqual([(n.module, [a.name for a in n.names]) for n in imports],
                          [("portal.ui_theme", ["shell", "panel", "table"]),
-                          ("portal.acme_qualification_view", ["public_qualification_snapshot"])])
+                          ("portal.acme_qualification_view", ["public_qualification_snapshot"]),
+                          ("portal.acme_milestones", ["public_milestone_contract"])])
 
     def test_demo_studio_links_to_workbench_without_adding_api_calls(self):
         studio = next(node for node in self.tree.body
