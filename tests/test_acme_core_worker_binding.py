@@ -1,5 +1,6 @@
 """Negative-first offline binding checks; no network, DB, or Temporal."""
 import unittest
+import hashlib
 from scripts.acme_core_worker_binding import inspect_core_worker_binding
 from scripts.acme_worker_receipt_contract import CONSTANTS, FALSE_FLAGS, SCHEMA, TRANSITIONS, TRUE_FLAGS
 
@@ -13,13 +14,19 @@ def sample():
     return result
 
 ATTEMPT = "ACME-SIM-" + "A" * 16
-RUN = "RUN-SIM-AAAA"
-INC = "INC-SIM-AAAA"
-TICKET = "SIM-GLPI-AAAA"
-PROPOSAL = "PROP-SIM-AAAA"
+def canonical(prefix, suffix="", length=24):
+    return prefix + hashlib.sha256(
+        ("ACME-TEST:" + ATTEMPT + suffix).encode("ascii")
+    ).hexdigest()[:length].upper()
+
+
+RUN = canonical("RUN-SIM-")
+INC = canonical("INC-SIM-")
+TICKET = canonical("SIM-GLPI-")
+PROPOSAL = canonical("PROP-SIM-")
 APPROVAL = "SIM-APP-AAAA"
 HASH = "a" * 64
-EVENTS = ["SYN-EVT-" + str(i) for i in range(7)]
+EVENTS = [canonical("SYN-EVT-", ":" + str(i), 20) for i in range(1, 8)]
 
 
 def pair():
@@ -65,6 +72,19 @@ class CoreWorkerBindingTests(unittest.TestCase):
         self.assertIn("JOIN_WORKER_RECEIPT_DIGEST_MISMATCH",
                       inspect_core_worker_binding(core, worker))
         self.assertIn("JOIN_SOURCE_EVENTS_MISMATCH",
+                      inspect_core_worker_binding(core, worker))
+
+    def test_jointly_forged_matching_run_is_rejected(self):
+        core, worker = pair()
+        core["run_id"] = worker["run_id"] = "RUN-SIM-FORGED"
+        self.assertIn("CORE_RUN_ID_NONCANONICAL",
+                      inspect_core_worker_binding(core, worker))
+
+    def test_jointly_forged_matching_source_ids_rejected(self):
+        core, worker = pair()
+        core["source_event_ids"] = worker["core_source_event_ids"] = [
+            "SYN-EVT-FORGED" + str(i) for i in range(7)]
+        self.assertIn("CORE_SOURCE_EVENTS_NONCANONICAL",
                       inspect_core_worker_binding(core, worker))
 
     def test_prepared_not_resolved(self):
