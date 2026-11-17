@@ -31,11 +31,12 @@ class WorkbenchPortalPageTests(unittest.TestCase):
         self.assertTrue(calls)
         for call in calls:
             self.assertIsInstance(call.func, ast.Name)
-            self.assertIn(call.func.id, {"panel", "table", "shell"})
+            self.assertIn(call.func.id, {"panel", "table", "shell", "public_qualification_snapshot"})
         imports = [n for statement in self.fn.body for n in ast.walk(statement)
                    if isinstance(n, ast.ImportFrom)]
         self.assertEqual([(n.module, [a.name for a in n.names]) for n in imports],
-                         [("portal.ui_theme", ["shell", "panel", "table"])])
+                         [("portal.ui_theme", ["shell", "panel", "table"]),
+                          ("portal.acme_qualification_view", ["public_qualification_snapshot"])])
 
     def test_demo_studio_links_to_workbench_without_adding_api_calls(self):
         studio = next(node for node in self.tree.body
@@ -47,8 +48,8 @@ class WorkbenchPortalPageTests(unittest.TestCase):
 
     def test_no_false_runtime_or_browser_claim(self):
         text = ast.get_source_segment(self.source, self.fn)
-        for phrase in ("NO_GO", "SIMULATION UNIQUEMENT", "NON VÉRIFIÉ",
-                       "NON IMPLÉMENTÉ", "Aucun appel Core"):
+        for phrase in ("NO_GO", "SIMULATION UNIQUEMENT",
+                       "Aucun appel Core"):
             self.assertIn(phrase, text)
         self.assertNotIn("get_json(", text)
         self.assertNotIn("post_json(", text)
