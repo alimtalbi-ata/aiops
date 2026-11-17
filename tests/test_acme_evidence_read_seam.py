@@ -1,4 +1,6 @@
 import unittest
+import hashlib
+from scripts.acme_worker_receipt_contract import CONSTANTS, FALSE_FLAGS, SCHEMA, TRANSITIONS, TRUE_FLAGS
 from scripts.acme_evidence_read_seam import qualify_evidence_read
 from scripts.acme_viewer_access_policy import ViewerDecision
 
@@ -42,6 +44,55 @@ class EvidenceReadSeamTests(unittest.TestCase):
             "ACME-SIM-" + "A" * 16, core, worker)
         self.assertEqual(result["reason"], "CORE_BINDING_NOT_QUALIFIED")
         self.assertEqual(calls, ["core"])
+
+    def test_matching_offline_readbacks_never_disclose_tenant_data(self):
+        attempt = "ACME-SIM-" + "A" * 16
+        def ident(prefix, suffix="", length=24):
+            return prefix + hashlib.sha256(
+                ("ACME-TEST:" + attempt + suffix).encode("ascii")
+            ).hexdigest()[:length].upper()
+        ids = {"incident_id": ident("INC-SIM-"),
+               "run_id": ident("RUN-SIM-"),
+               "ticket_id": ident("SIM-GLPI-"),
+               "proposal_id": ident("PROP-SIM-"),
+               "approval_id": "SIM-APP-AAAA"}
+        events = [ident("SYN-EVT-", ":" + str(i), 20) for i in range(1, 8)]
+        digest = "a" * 64
+        core = {"schema": "aiops.core-acme-sandbox-readback.v1",
+                "attempt_id": attempt, "tenant_id": "ACME-TEST", **ids,
+                "scenario_id": "ACME-SAN-PAYMENTS", "mode": "SIMULATION",
+                "ticket_authority": "SIMULATED_ONLY",
+                "glpi_mode": "SIMULATED_ONLY", "incident_status": "RESOLVED",
+                "run_status": "RESOLVED", "ticket_status": "RESOLVED",
+                "worker_receipt_verified": True,
+                "terminal_ticket_receipt_verified": True,
+                "resolution_after_worker_receipt": True,
+                "approval_fresh_at_resolution": True,
+                "human_approved": False, "live_effects_allowed": False,
+                "real_glpi_writes_allowed": False, "execution_allowed": False,
+                "effect_allowed": False, "worker_receipt_sha256": digest,
+                "source_event_ids": events, "request_sha256": digest}
+        worker = {"schema": SCHEMA, "attempt_id": attempt,
+                  **CONSTANTS, **ids, "receipt_sha256": digest,
+                  "core_request_sha256": digest, "core_source_event_ids": events,
+                  "effect_receipts": 0, "audit_transitions": list(TRANSITIONS)}
+        worker.update({key: False for key in FALSE_FLAGS})
+        worker.update({key: True for key in TRUE_FLAGS})
+        calls = []
+        def read_core(value):
+            calls.append(("core", value))
+            return core
+        def read_worker(value):
+            calls.append(("worker", value))
+            return worker
+        result = qualify_evidence_read(
+            ViewerDecision(200, "POLICY_CONDITIONS_SATISFIED_ONLY"),
+            attempt, read_core, read_worker)
+        self.assertEqual(result, {
+            "status": "OFFLINE_CONSISTENT_ONLY",
+            "reason": "NO_RUNTIME_ATTESTATION"})
+        self.assertEqual(calls, [("core", attempt), ("worker", attempt)])
+        self.assertNotIn(ids["run_id"], repr(result))
 
     def test_no_data_disclosed_on_upstream_failure(self):
         def broken(_attempt):
