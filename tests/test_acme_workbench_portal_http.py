@@ -38,6 +38,20 @@ class WorkbenchPortalHttpTests(unittest.TestCase):
         self.assertIn("NO_GO", response.text)
         self.assertNotIn("<script>alert(1)</script>", response.text)
 
+    def test_static_workbench_response_is_not_cacheable_or_frameable(self):
+        with patch("portal.main.get_json", side_effect=AssertionError("service read")), \
+             patch("portal.main.post_json", side_effect=AssertionError("service write")), \
+             TestClient(app) as client:
+            response = client.get("/acme-workbench")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "no-store, max-age=0")
+        self.assertEqual(response.headers["pragma"], "no-cache")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertEqual(response.headers["referrer-policy"], "no-referrer")
+        self.assertIn("geolocation=()", response.headers["permissions-policy"])
+        self.assertNotIn("set-cookie", response.headers)
+
     def test_route_is_get_only(self):
         with TestClient(app) as client:
             response = client.post("/acme-workbench", json={"approve": True})
