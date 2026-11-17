@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import re
 import sys
+import struct
+import zlib
 
 SCENES = ("noc", "signals", "twin", "analyst_critic", "policy_hitl",
           "itsm_worker", "timeline")
@@ -20,6 +22,46 @@ DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 PNG = b"\x89PNG\r\n\x1a\n"
 MAX_JSON_BYTES = 65536
 MAX_PNG_BYTES = 10 * 1024 * 1024
+
+
+
+def png_structure_valid(raw: bytes) -> bool:
+    """Check complete PNG framing, CRCs, IHDR, IDAT and terminal IEND.
+
+    This is a structural integrity check, NOT a pixel decoder or browser proof.
+    """
+    if not raw.startswith(PNG) or len(raw) < 8 + 12 + 13 + 12:
+        return False
+    offset = 8
+    seen_ihdr = seen_idat = seen_iend = False
+    while offset + 12 <= len(raw):
+        length = struct.unpack(">I", raw[offset:offset + 4])[0]
+        kind = raw[offset + 4:offset + 8]
+        end = offset + 12 + length
+        if length > MAX_PNG_BYTES or end > len(raw):
+            return False
+        payload = raw[offset + 8:offset + 8 + length]
+        crc = struct.unpack(">I", raw[offset + 8 + length:end])[0]
+        if zlib.crc32(kind + payload) & 0xFFFFFFFF != crc:
+            return False
+        if not seen_ihdr:
+            if kind != b"IHDR" or length != 13:
+                return False
+            width, height = struct.unpack(">II", payload[:8])
+            if not (1 <= width <= 8192 and 1 <= height <= 8192):
+                return False
+            seen_ihdr = True
+        elif kind == b"IHDR":
+            return False
+        if kind == b"IDAT":
+            seen_idat = True
+        if kind == b"IEND":
+            if length != 0 or not seen_idat or end != len(raw):
+                return False
+            seen_iend = True
+            break
+        offset = end
+    return seen_ihdr and seen_idat and seen_iend
 
 
 def read_json(path: Path):
@@ -97,7 +139,7 @@ def inspect_scenes(manifest, root: Path, expected_sha: str):
             errors.append("SCENE_PNG_TOO_LARGE")
             continue
         raw = path.read_bytes()
-        if len(raw) < 24 or raw[:8] != PNG or raw[12:16] != b"IHDR":
+        if not png_structure_valid(raw):
             errors.append("SCENE_PNG_HEADER_INVALID")
         if not isinstance(item.get("sha256"), str) or not DIGEST.fullmatch(item["sha256"]) or hashlib.sha256(raw).hexdigest() != item["sha256"]:
             errors.append("SCENE_HASH_MISMATCH")
