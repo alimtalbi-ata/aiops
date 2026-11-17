@@ -21,6 +21,8 @@ on:
       - 'tests/acme_workbench_browser_app.py'
       - 'scripts/acme_isolated_browser_receipt.py'
       - 'tests/test_acme_isolated_browser_receipt.py'
+      - 'scripts/acme_isolated_png_integrity.py'
+      - 'tests/test_acme_isolated_png_integrity.py'
       - 'tests/test_acme_public_qualification_snapshot.py'
       - 'app/portal/acme_qualification_view.py'
       - 'tests/test_acme_readonly_runtime_recipe.py'
@@ -186,6 +188,10 @@ jobs:
         env:
           PYTHONPATH: 'tests:app:.'
         run: python tests/acme_workbench_browser_smoke.py
+      - name: Negative PNG integrity and forged authority tests
+        run: python -m unittest discover -s tests -p 'test_acme_isolated_png_integrity.py' -v
+      - name: Independently verify captured PNG bytes
+        run: python scripts/acme_isolated_png_integrity.py --directory /tmp/acme-workbench-ci-captures
       - name: Publish isolated Chromium screenshots and byte hashes
         uses: actions/upload-artifact@v4
         with:
