@@ -49,6 +49,8 @@ def verify_browser_bundle(*, captures_dir: Path, receipt_path: Path,
     if any(receipt.get(key) is not False for key in FALSE_KEYS):
         raise ValueError("forged runtime authority")
     manifest_bytes = (captures_dir / "manifest.json").read_bytes()
+    if len(manifest_bytes) > 16384:
+        raise ValueError("oversized manifest")
     return {
         "schema": "aiops.acme-isolated-browser-bundle-check.v1",
         "status": "CI_LOCAL_BUNDLE_CONSISTENT_ONLY",
