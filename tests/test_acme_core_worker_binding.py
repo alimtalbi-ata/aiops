@@ -1,6 +1,7 @@
 """Negative-first offline binding checks; no network, DB, or Temporal."""
 import unittest
 import hashlib
+import json
 from scripts.acme_core_worker_binding import inspect_core_worker_binding
 from scripts.acme_worker_receipt_contract import CONSTANTS, FALSE_FLAGS, SCHEMA, TRANSITIONS, TRUE_FLAGS
 
@@ -11,6 +12,11 @@ def sample():
               "audit_transitions": list(TRANSITIONS)}
     result.update({key: False for key in FALSE_FLAGS})
     result.update({key: True for key in TRUE_FLAGS})
+    result['core_request_sha256'] = 'a' * 64
+    result['twin_approval_nonce_sha256'] = 'b' * 64
+    result['core_source_event_ids'] = [
+        'SYN-EVT-' + hashlib.sha256(('ACME-TEST:' + result['attempt_id'] + ':' + str(i)).encode('ascii')).hexdigest()[:20].upper() for i in range(1, 8)]
+    result['receipt_sha256'] = hashlib.sha256(json.dumps(result, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode('ascii')).hexdigest()
     return result
 
 ATTEMPT = "ACME-SIM-" + "A" * 16
@@ -33,8 +39,12 @@ def pair():
     worker = sample()
     worker.update({"incident_id": INC, "run_id": RUN, "ticket_id": TICKET,
                    "proposal_id": PROPOSAL, "approval_id": APPROVAL,
-                   "receipt_sha256": HASH, "core_request_sha256": HASH,
+                   "core_request_sha256": HASH,
                    "core_source_event_ids": EVENTS})
+    worker["receipt_sha256"] = hashlib.sha256(json.dumps(
+        {k: v for k, v in worker.items() if k != "receipt_sha256"},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")).hexdigest()
     core = {"schema": "aiops.core-acme-sandbox-readback.v1",
             "attempt_id": ATTEMPT, "tenant_id": "ACME-TEST",
             "scenario_id": "ACME-SAN-PAYMENTS", "mode": "SIMULATION",
@@ -48,7 +58,7 @@ def pair():
             "approval_fresh_at_resolution": True,
             "human_approved": False, "live_effects_allowed": False,
             "real_glpi_writes_allowed": False, "execution_allowed": False,
-            "effect_allowed": False, "worker_receipt_sha256": HASH,
+            "effect_allowed": False, "worker_receipt_sha256": worker["receipt_sha256"],
             "source_event_ids": EVENTS, "request_sha256": HASH}
     return core, worker
 
