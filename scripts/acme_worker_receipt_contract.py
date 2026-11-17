@@ -45,6 +45,20 @@ def inspect_worker_receipt(value, expected_attempt_id: str | None = None):
     attempt = value.get("attempt_id")
     if type(attempt) is not str or not re.fullmatch(r"ACME-SIM-[A-F0-9]{16}", attempt):
         errors.append("WORKER_ATTEMPT_INVALID")
+    if type(attempt) is str and re.fullmatch(r"ACME-SIM-[A-F0-9]{16}", attempt):
+        for field, prefix in (("incident_id", "INC-SIM-"),
+                              ("run_id", "RUN-SIM-"),
+                              ("ticket_id", "SIM-GLPI-"),
+                              ("proposal_id", "PROP-SIM-")):
+            expected = prefix + hashlib.sha256(
+                ("ACME-TEST:" + attempt).encode("ascii")
+            ).hexdigest()[:24].upper()
+            if value.get(field) != expected:
+                errors.append("WORKER_" + field.upper() + "_NONCANONICAL")
+        approval = value.get("approval_id")
+        if type(approval) is not str or not re.fullmatch(
+                r"SIM-APP-[A-Za-z0-9_-]{3,92}", approval):
+            errors.append("WORKER_APPROVAL_ID_INVALID")
     if expected_attempt_id is not None and attempt != expected_attempt_id:
         errors.append("WORKER_ATTEMPT_MISMATCH")
     for field, expected in CONSTANTS.items():
