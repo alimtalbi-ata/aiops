@@ -190,3 +190,12 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 ### 2026-10-30 — ADR delta: one main-based candidate, fail-closed source transport
 
 **Decision:** retain #201 as the only release integration candidate; port six exact source blobs from #198/#202 without merging stacked/divergent PRs or replacing Portal main/Compose/Core. Canonical Evidence UTC must be bounded and Portal must refuse unqualified authority claims, expose 401/403/503 without navigation, and never persist bearer credentials. **Rationale:** preserve Core authority and operator-visible UNKNOWN, prevent false customer evidence. **Qualification:** [new exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) queued; T0 not yet passed, T4/T5 NO-GO. No merge, Debian or LIVE.
+
+
+### 2026-11-17 — ADR: shared Dark SaaS Premium Portal theme
+
+**Decision:** apply one local CSS design system to all first-party Portal HTML routes and configure the provisioned ACME Grafana dashboard for dark mode. Use midnight/slate surfaces with electric violet (`#8B5CF6`) and electric blue (`#38BDF8`) accents. Keep styling independent of read models and authorization.
+
+**Security constraints:** HTML-only transformation; API responses are not rewritten. Add only `style-src 'self'` to existing CSP; retain `default-src 'none'`, `frame-ancestors 'none'`, and all script/connect restrictions. No remote assets or fonts. UNKNOWN/SYNTHETIC/NOT_TESTED semantics remain visible.
+
+**Qualification:** regression tests authored but not yet executed on the exact branch SHA; GitHub Actions pending. No runtime/browser/host verification. Native Grafana chrome and external GLPI/n8n/Prometheus/Alertmanager UIs are explicitly outside this Portal/Grafana dashboard increment.
