@@ -146,8 +146,8 @@ class EvidenceReadSeamTests(unittest.TestCase):
         result = qualify_evidence_read(
             ViewerDecision(200, "POLICY_CONDITIONS_SATISFIED_ONLY"),
             attempt, core, worker)
-        self.assertEqual(calls, ["core", "worker"])
-        self.assertEqual(result["reason"], "CORE_WORKER_BINDING_NOT_QUALIFIED")
+        self.assertEqual(calls, ["core"])
+        self.assertEqual(result["reason"], "CORE_BINDING_NOT_QUALIFIED")
         self.assertNotIn("PRIVATE", repr(result))
 
     def test_no_data_disclosed_on_upstream_failure(self):
