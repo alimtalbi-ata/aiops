@@ -32,3 +32,7 @@ Positive receipt: `schema=aiops.debian-acme-sim-e2e.v1`, `attempt_id=ACME-SIM-[A
 | Capabilities / runner / demo_v2 | Golden #792 / #802 | — | — | — | DEFER |
 
 No merge into main, no LIVE authorization, no mutation of Debian or real GLPI. Decisions must be reconciled with `docs/DECISION-LOG.md` and `docs/PROJECT-CONTINUITY.md` in the same PR.
+
+## Pydantic v2 contract (proposed in PR #805)
+
+`scripts/acme_receipt_model.py` now declares strict `AcmeReceipt` and `AcmeIds` models with `extra="forbid"`, required stage PASS, timezone-aware freshness, synthetic IDs, and strict integer `docker_mutations=0` (rejects boolean `false`). `assess(value, now=None, max_age_minutes=60)` retains its signature and fail-closed `NO_GO` behavior. No silent fallback if Pydantic v2 is missing: CI must install `pydantic>=2.5,<3`; a future isolated runner image must explicitly bundle and verify this dependency before deployment. The gate does not access services but **dependency installation may access package registries**, so “offline” describes gate execution, not CI provisioning. Exact-SHA CI and E2E runtime remain unqualified.
