@@ -75,3 +75,14 @@ Source inspection of `app/core/acme_sandbox.py` establishes an **existing canoni
 - Added `scripts/acme_core_worker_binding.py` and five offline negative tests to compare **Core and Worker readback declarations** (IDs, tenant, source events, request digest, receipt digest, resolved flags, no live effects). This is **not** a cryptographic verification of the Worker receipt and not proof of authenticated runtime calls. The existing Core and Worker authorities must independently validate their own data.
 
 **Remaining implementation gap:** an ACL-qualified, server-side Portal adapter must read the canonical Core and Worker endpoints using a fixed service allowlist and a secret that never reaches the browser. Before implementing, prove a user-facing tenant authorization mechanism exists; if absent, retain 503/NO_GO rather than expose the internal readbacks.
+
+## P0-3 viewer ACL inspection — hard stop
+
+Inspected actual `app/portal/main.py` on PR #808 and `app/portal/acme_run_detail.py` on `main`:
+
+- `main.py` has public-looking GET pages and an **internal shared bearer** for POST demo launch, but no source-backed authenticated **viewer actor → tenant → exact Core run/attempt** authorization boundary for the proposed ACME Worker evidence view. The presence of GET pages is not ACL evidence.
+- The existing `main` branch `acme_run_detail.py` explicitly refuses to reveal even Run IDs/status until an independent server-side exact-run tenant ACL is available. Its shared read bearer and short-lived session mechanics do **not** confer viewer tenant authorization; it returns `TENANT_ACL_NOT_QUALIFIED` and HTTP 503.
+- Added `scripts/acme_portal_acl_preflight.py` with four offline tests. This is a **source-only readiness report**, deliberately returns `NO_GO` even when a caller asserts `tenant_authority_attested=True`. It must not be used as a security enforcement component.
+- **Acceptance required before implementation:** an independently authenticated viewer identity, server-derived tenant membership, explicit per-run/attempt authorization decision, 401 anonymous, 403 cross-tenant, 404/constant-denial unknown run, no internal bearer in HTML/JS, no Core/Worker fetch before authorization, and negative tests. An operator's shared internal token is never a viewer ACL.
+
+**Decision:** no new public Portal Worker evidence route until the above authorization contract is implemented and tested. The offline addon can show `NOT_QUALIFIED` safely, but it cannot declare a seven-scene browser demo PASS.
