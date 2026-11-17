@@ -216,3 +216,11 @@ Every material change must update this record and the relevant architecture/deci
 - `tests/fixtures/acme/` has 17 versioned JSON receipts; 18 prior tests plus four new negative tests check extra fields, blank IDs and timezone awareness. CLI fixture checks remain isolated from live services.
 - **Dependency:** `pydantic>=2.5,<3` required, installed in readiness CI; Golden Demo workflow already installs pinned Pydantic 2.11.7. An isolated Debian runner must bundle/verify the dependency before any qualification; no runtime change authorized.
 - **Evidence:** Exact-SHA CI pending. The model still does not verify executed SHA, cross-stage join or provenance. LIVE NO-GO. See #804 and draft PR #805.
+
+
+## 2026-11-17 — ACME receipt static JSON Schema (PR #805)
+
+- Versioned `docs/contracts/acme-receipt.schema.json` from Pydantic v2 `AcmeReceipt.model_json_schema(mode="validation")`.
+- `.github/workflows/acme-demo-readiness.yml` checks structural equality against the model; schema drift fails CI.
+- Static JSON Schema **does not encode all custom validators** (17 stage keys, freshness, timezone-awareness, synthetic prefixes). Continue using the Python gate for decisions. No runtime endpoint or Debian deployment.
+- Exact-SHA CI results must be checked after this commit; prior PASS runs do not qualify the updated HEAD.
