@@ -35,7 +35,15 @@ async def portal_security_headers(request: Request, call_next):
         return response
     body = getattr(response, 'body', None)
     if not isinstance(body, bytes):
-        return response
+        # BaseHTTPMiddleware wraps call_next responses as streaming responses.
+        # Consume only HTML bodies so the shared stylesheet is actually applied.
+        iterator = getattr(response, 'body_iterator', None)
+        if iterator is None:
+            return response
+        chunks = []
+        async for chunk in iterator:
+            chunks.append(chunk.encode('utf-8') if isinstance(chunk, str) else chunk)
+        body = b''.join(chunks)
     page = body.decode('utf-8')
     if '</head>' in page.lower() and '/assets/aiops-theme.css' not in page:
         marker = page.lower().rfind('</head>')
