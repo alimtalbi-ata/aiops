@@ -227,7 +227,7 @@ Every material change must update this record and the relevant architecture/deci
 
 ## 2026-11-17 — Direct model and schema snapshot unittest coverage (PR #805)
 
-- Added eight new unittest methods to `tests/test_acme_demo_readiness.py` covering Pydantic direct-model acceptance/rejection, strict flag types, all 16 negative fixtures via both model and `assess()`, and JSON Schema snapshot constraints, drift and determinism.
+- Added nine new unittest methods to `tests/test_acme_demo_readiness.py` covering Pydantic direct-model acceptance/rejection, strict flag types, all 16 negative fixtures via both model and `assess()`, and JSON Schema snapshot constraints, drift and determinism.
 - The 17 fixture files and versioned schema snapshot are **mandatory**: no conditional skips for missing contract assets.
 - Snapshot comparison is canonical JSON with SHA256 prefixes in failure diagnostics; it does not silently regenerate committed files.
 - The Pydantic model remains the authoritative validator for freshness, 17 named stages and simulated ID prefixes; JSON Schema is only the static published contract.
