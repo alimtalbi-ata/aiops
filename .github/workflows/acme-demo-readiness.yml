@@ -25,6 +25,8 @@ on:
       - 'tests/test_acme_isolated_png_integrity.py'
       - 'scripts/acme_isolated_browser_bundle.py'
       - 'tests/test_acme_isolated_browser_bundle.py'
+      - 'app/portal/acme_milestones.py'
+      - 'tests/test_acme_public_milestones.py'
       - 'tests/test_acme_public_qualification_snapshot.py'
       - 'app/portal/acme_qualification_view.py'
       - 'tests/test_acme_readonly_runtime_recipe.py'
@@ -129,6 +131,10 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_acme_workbench_portal_page.py' -v
       - name: ACME public Workbench snapshot fail-closed tests
         run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_acme_public_qualification_snapshot.py' -v
+      - name: ACME public milestone contract fail-closed tests
+        env:
+          PYTHONPATH: 'app:.'
+        run: python -m unittest discover -s tests -p 'test_acme_public_milestones.py' -v
       - name: ACME Workbench in-process HTTP read-only qualification
         env:
           AIOPS_INTERNAL_TOKEN: 'CI-ONLY-FAKE-TOKEN-NO-RUNTIME-AUTHORITY'
