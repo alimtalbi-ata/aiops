@@ -26,12 +26,14 @@ class WorkbenchPortalPageTests(unittest.TestCase):
 
     def test_page_contains_no_service_calls_or_runtime_evidence_reads(self):
         # Whitelist only local rendering imports and calls, not service access.
-        calls = [n for n in ast.walk(self.fn) if isinstance(n, ast.Call)]
+        calls = [n for statement in self.fn.body for n in ast.walk(statement)
+                 if isinstance(n, ast.Call)]
         self.assertTrue(calls)
         for call in calls:
             self.assertIsInstance(call.func, ast.Name)
             self.assertIn(call.func.id, {"panel", "table", "shell"})
-        imports = [n for n in ast.walk(self.fn) if isinstance(n, ast.ImportFrom)]
+        imports = [n for statement in self.fn.body for n in ast.walk(statement)
+                   if isinstance(n, ast.ImportFrom)]
         self.assertEqual([(n.module, [a.name for a in n.names]) for n in imports],
                          [("portal.ui_theme", ["shell", "panel", "table"])])
 
