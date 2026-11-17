@@ -6,6 +6,8 @@ on:
       - 'scripts/acme_receipt_model.py'
       - 'scripts/acme_qualification_addon.py'
       - 'scripts/acme_worker_receipt_contract.py'
+      - 'scripts/acme_core_worker_binding.py'
+      - 'tests/test_acme_core_worker_binding.py'
       - 'tests/test_acme_worker_receipt_contract.py'
       - 'tests/test_acme_qualification_addon.py'
       - 'scripts/acme_portal_route_inventory.py'
@@ -32,7 +34,7 @@ jobs:
       - name: Install Pydantic v2 validation dependency
         run: python -m pip install 'pydantic>=2.5,<3'
       - name: Exact source compile
-        run: python -m py_compile scripts/acme_receipt_model.py scripts/acme_demo_readiness.py scripts/acme_qualification_addon.py tests/test_acme_demo_readiness.py tests/test_acme_qualification_addon.py scripts/acme_portal_route_inventory.py tests/test_acme_portal_route_inventory.py scripts/acme_worker_receipt_contract.py tests/test_acme_worker_receipt_contract.py
+        run: python -m py_compile scripts/acme_receipt_model.py scripts/acme_demo_readiness.py scripts/acme_qualification_addon.py tests/test_acme_demo_readiness.py tests/test_acme_qualification_addon.py scripts/acme_portal_route_inventory.py tests/test_acme_portal_route_inventory.py scripts/acme_worker_receipt_contract.py tests/test_acme_worker_receipt_contract.py scripts/acme_core_worker_binding.py tests/test_acme_core_worker_binding.py
       - name: Validate all 17 versioned JSON fixtures
         run: |
           python - <<'PY'
@@ -74,6 +76,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_acme_portal_route_inventory.py' -v
       - name: ACME Worker no-effect receipt contract (offline, no Temporal)
         run: python -m unittest discover -s tests -p 'test_acme_worker_receipt_contract.py' -v
+      - name: ACME Core Worker identity binding tests (offline)
+        run: python -m unittest discover -s tests -p 'test_acme_core_worker_binding.py' -v
       - name: CLI gate self-check and negative receipts
         run: |
           set -eu
