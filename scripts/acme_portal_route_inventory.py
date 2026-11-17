@@ -62,6 +62,8 @@ def inventory(source: str):
         "source": str(SOURCE),
         "evidence_level": "STATIC_SOURCE_ONLY",
         "scenes": records,
+        "workbench_qualification_route_in_source": "/acme-workbench" in routes,
+        "workbench_qualification_browser_verified": False,
         "seven_scenes_browser_qualified": False,
         "live": "NO_GO",
     }
