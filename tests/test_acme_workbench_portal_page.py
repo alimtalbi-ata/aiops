@@ -37,6 +37,14 @@ class WorkbenchPortalPageTests(unittest.TestCase):
         self.assertEqual([(n.module, [a.name for a in n.names]) for n in imports],
                          [("portal.ui_theme", ["shell", "panel", "table"])])
 
+    def test_demo_studio_links_to_workbench_without_adding_api_calls(self):
+        studio = next(node for node in self.tree.body
+                      if isinstance(node, ast.FunctionDef)
+                      and node.name == "demo_studio")
+        source = ast.get_source_segment(self.source, studio)
+        self.assertIn('href="/acme-workbench"', source)
+        self.assertNotIn('fetch("/acme-workbench"', source)
+
     def test_no_false_runtime_or_browser_claim(self):
         text = ast.get_source_segment(self.source, self.fn)
         for phrase in ("NO_GO", "SIMULATION UNIQUEMENT", "NON VÉRIFIÉ",
