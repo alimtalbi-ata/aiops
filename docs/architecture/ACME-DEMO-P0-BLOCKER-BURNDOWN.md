@@ -50,3 +50,16 @@ Inspected the actual `app/portal/main.py` on this branch:
 - The `POST /api/demo` endpoint triggers incident/run execution when enabled and authorized. **Never invoke it from capture or preflight.**
 
 **Implementation decision:** do not add a generic ITSM route that guesses worker evidence or bypasses tenant ACL. First establish the canonical worker receipt shape and authorized read-only source; then add a tenant-scoped presentation with explicit `UNKNOWN` for missing fields and negative ACL tests. Until then, `itsm_worker` remains `NOT_IMPLEMENTED` in the static inventory and the seven-scene gate remains NO_GO.
+
+## P0-1 discovery: canonical Worker sandbox receipt found
+
+**Source-backed finding:** `app/worker/main.py` lines 406–527 implements a canonical **read-only, authenticated** endpoint `GET /api/sandbox/acme/e2e/{attempt_id}` on the **Worker service**, not on Portal. This supersedes the earlier wording "canonical worker receipt shape unknown" but **does not** qualify the missing Portal scene.
+
+- Requires `AIOPS_ACME_SANDBOX_ENABLED=true` and a configured internal token of at least 32 characters; otherwise 503.
+- Requires service bearer authentication; otherwise 401. **Never forward or expose this token in browser JavaScript.**
+- Restricts the attempt ID to `ACME-SIM-...` and the workflow lookup to `acme-simulated-ACME-TEST-{attempt_id}`; invalid attempt is 404.
+- Requires completed Temporal workflow and validates the returned `aiops.worker-acme-simulated-no-effect.v1` receipt, `tenant_id=ACME-TEST`, `approval_kind=SIMULATED`, `receipt_status=SIMULATED_NO_EFFECT`, `receipt_phase=PRE_RESOLUTION`, `execution_allowed=false`, `effect_allowed=false`, `effect_receipts=0`, `real_glpi_writes_allowed=false`, `live_effects_allowed=false`, `audit_authority=TEMPORAL_WORKFLOW_HISTORY_ONLY`, and `receipt_digest_valid(result)`. Incomplete or inconsistent evidence is 503.
+- `POST /api/sandbox/acme/e2e` is a **mutative workflow start** and is explicitly out of scope for Playwright read-only capture.
+- **Important:** this is a no-effect sandbox **pre-resolution** receipt, **not** a GLPI ticket, a real human approval, a completed production remediation, or a Core run join.
+
+**Remaining P0-1 gap:** provide a secure, server-side, tenant-authorized read-only adapter from this Worker receipt to the Portal scene, with independent negative tests for 401/404/503 and disabled capability. The existing `/demo-studio/run/{rid}` uses a Core run ID, whereas the Worker readback uses a separate `attempt_id`. **Do not join these IDs by string guesswork.** Establish a source-backed mapping or show the Worker receipt as a separately scoped artifact; never claim a Core→Worker join without evidence.
