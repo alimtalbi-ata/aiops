@@ -23,6 +23,8 @@ on:
       - 'tests/test_acme_isolated_browser_receipt.py'
       - 'scripts/acme_isolated_png_integrity.py'
       - 'tests/test_acme_isolated_png_integrity.py'
+      - 'scripts/acme_isolated_browser_bundle.py'
+      - 'tests/test_acme_isolated_browser_bundle.py'
       - 'tests/test_acme_public_qualification_snapshot.py'
       - 'app/portal/acme_qualification_view.py'
       - 'tests/test_acme_readonly_runtime_recipe.py'
@@ -205,6 +207,12 @@ jobs:
         env:
           ACME_BROWSER_RECEIPT_PATH: ${{ runner.temp }}/acme-browser-receipt.json
         run: python scripts/acme_isolated_browser_receipt.py
+      - name: Negative bundle and SHA binding tests
+        run: python -m unittest discover -s tests -p 'test_acme_isolated_browser_bundle.py' -v
+      - name: Cross-verify CI source SHA and browser evidence bundle
+        env:
+          ACME_BROWSER_RECEIPT_PATH: ${{ runner.temp }}/acme-browser-receipt.json
+        run: python scripts/acme_isolated_browser_bundle.py --captures-dir /tmp/acme-workbench-ci-captures --receipt "$ACME_BROWSER_RECEIPT_PATH" --expected-source-sha "$GITHUB_SHA"
       - name: Publish CI-only browser receipt
         uses: actions/upload-artifact@v4
         with:
