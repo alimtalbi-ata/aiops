@@ -36,7 +36,7 @@ def assess_oidc_integration(config: object) -> dict:
                  and re.fullmatch(r"[A-Za-z0-9.-]+", hostname) is not None
                  and "." in hostname and ".." not in hostname
                  and not any(ch.isspace() or ord(ch) < 33 for ch in issuer)
-                 and "\\\\" not in issuer
+                 and chr(92) not in issuer
                  and not parsed.username and not parsed.password
                  and not parsed.query and not parsed.fragment
                  and parsed.port in (None, 443)
