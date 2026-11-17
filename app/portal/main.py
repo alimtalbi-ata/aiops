@@ -245,7 +245,8 @@ def demo_studio():
     body+=panel("Qualification et prochaines étapes",
       '<p>Le parcours connecté Core → Temporal → Analyst/Critic → Policy → Evidence reste à '
       'valider en stack V2.8 isolée avant de permettre le lancement depuis ce portail.</p>'
-      '<p><a href="/timeline">Consulter la timeline</a> · <a href="/qualification">Matrice de qualification</a></p>')
+      '<p><a href="/acme-workbench">Workbench ACME · état de preuve</a> · '
+      '<a href="/timeline">Consulter la timeline</a> · <a href="/qualification">Matrice de qualification</a></p>')
     return shell("/demo-studio","ACME Demo Studio",
       "Démonstration intégrée ACME — lecture des sources Core/Twin et lancement optionnel en mode développement.",
       body,mode="DEVELOPPEMENT DEMO" if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true" else "LECTURE SEULE")
@@ -478,3 +479,69 @@ def policy_story():
         '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
     return shell("/demo-studio","ACME — Freeze Button Story",
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+
+@app.get("/acme-workbench", response_class=HTMLResponse)
+def acme_workbench_qualification_page():
+    """Safe public status only: no Core/Worker read or injected identity authority.
+
+    Deliberately does not consume local receipt files, service credentials,
+    viewer claims, or the offline evidence projection at request time.
+    """
+    from portal.ui_theme import shell, panel, table
+    from portal.acme_qualification_view import public_qualification_snapshot
+    snapshot = public_qualification_snapshot()
+    stages = snapshot["stages"]
+    scenes = snapshot["scenes"]
+    body = panel("Périmètre de confiance",
+        "<p><strong>NO_GO · ACME-TEST · SIMULATION UNIQUEMENT</strong></p>"
+        "<p>Cette page expose un état de qualification statique et prudent, "
+        "pas des reçus runtime. Aucun contrôle d’accès acteur → tenant → run "
+        "n’est qualifié. Aucun appel Core, Worker, Twin ou GLPI n’est effectué.</p>"
+        "<p>Les preuves hors ligne, même cohérentes, ne démontrent ni "
+        "l’autonomie, ni une remédiation effective, ni l’apprentissage.</p>")
+    body += panel("Boucle autonome — niveaux de preuve",
+                  table(["Étape", "Qualification"], stages))
+    body += panel("Sept scènes Workbench — état d’intégration",
+                  table(["Scène", "Qualification"], scenes))
+    body += panel("Jalons bloquants",
+        "<p>Identité serveur et ACL exact-run, rattachement Core → Twin, "
+        "attestation SHA déployé, recette sandbox isolée et parcours navigateur "
+        "sept scènes : <strong>NON VÉRIFIÉS</strong>.</p>")
+    from portal.acme_milestones import public_milestone_contract
+    milestones = public_milestone_contract()["milestones"]
+    body += panel("Parcours de qualification — ordre de déblocage",
+        table(["Jalon", "État", "Preuve requise"], [
+            (f"{index} · {milestone['label']}",
+             "BLOQUÉ" if milestone["status"] == "BLOCKED" else "NON VÉRIFIÉ",
+             milestone["required_proof"])
+            for index, milestone in enumerate(milestones, 1)
+        ]))
+    body += panel("Ce que prouvent les tests CI",
+        "<p>Les tests offline, HTTP en mémoire et Chromium sur boucle locale "
+        "vérifient le rendu et les garde-fous du code source. "
+        "<strong>Ils ne prouvent pas un déploiement, une ACL utilisateur, "
+        "une récupération du service ou une autonomie réelle.</strong></p>"
+        "<p>Les captures CI à 375 et 1440 px sont des preuves de rendu local "
+        "uniquement. Le parcours authentifié des sept scènes reste à réaliser.</p>")
+    return shell("/demo-studio", "ACME Workbench · qualification",
+                 "Addon de qualification intégré au Portal, lecture seule et sans autorité runtime.",
+                 body)
+
+
+@app.middleware("http")
+async def acme_workbench_public_response_boundary(request: Request, call_next):
+    """Harden only the static qualification view, not the wider Portal.
+
+    This is NOT an authentication or tenant ACL boundary; future evidence
+    routes must implement server-side OIDC and exact-run authorization.
+    """
+    response = await call_next(request)
+    if request.url.path == "/acme-workbench":
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
