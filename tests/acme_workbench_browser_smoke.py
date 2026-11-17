@@ -60,12 +60,13 @@ def main():
                     assert response.status == 200
                     link = page.get_by_role("link", name="Workbench ACME")
                     assert link.count() == 1
-                    link.click()
+                    with page.expect_navigation(url=base + "/acme-workbench") as navigation:
+                        link.click()
+                    workbench_response = navigation.value
                     assert page.url == base + "/acme-workbench"
                     # Inspect the actual Chromium navigation response, not only
                     # in-process ASGI TestClient assertions.
-                    assert response is not None
-                    workbench_response = page.request.get(base + "/acme-workbench")
+                    assert workbench_response is not None
                     assert workbench_response.status == 200
                     headers = workbench_response.headers
                     assert headers.get("cache-control") == "no-store, max-age=0"
