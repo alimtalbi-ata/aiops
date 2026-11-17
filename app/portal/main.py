@@ -508,6 +508,28 @@ def acme_workbench_qualification_page():
         "<p>Identité serveur et ACL exact-run, rattachement Core → Twin, "
         "attestation SHA déployé, recette sandbox isolée et parcours navigateur "
         "sept scènes : <strong>NON VÉRIFIÉS</strong>.</p>")
+    body += panel("Parcours de qualification — ordre de déblocage",
+        table(["Jalon", "État", "Preuve requise"], [
+            ("1 · Identité / ACL", "BLOQUÉ",
+             "OIDC BFF côté serveur, acteur → tenant → run exact, tests 401/403/404"),
+            ("2 · Traçabilité déployée", "NON VÉRIFIÉ",
+             "SHA du code et image réellement déployés, attestation indépendante"),
+            ("3 · Core / Twin", "NON VÉRIFIÉ",
+             "Jointure incident → run → service et lecture isolée autorisée"),
+            ("4 · Sept scènes", "NON VÉRIFIÉ",
+             "Parcours Chromium authentifié sur sandbox approuvée ; ITSM / Worker absent"),
+            ("5 · Remédiation / Verify", "NON VÉRIFIÉ",
+             "Effet observé après action autorisée, retour à un état sain mesuré"),
+            ("6 · Audit / Learn", "NON VÉRIFIÉ",
+             "Historique vérifiable, résultat et apprentissage réellement persistés"),
+        ]))
+    body += panel("Ce que prouvent les tests CI",
+        "<p>Les tests offline, HTTP en mémoire et Chromium sur boucle locale "
+        "vérifient le rendu et les garde-fous du code source. "
+        "<strong>Ils ne prouvent pas un déploiement, une ACL utilisateur, "
+        "une récupération du service ou une autonomie réelle.</strong></p>"
+        "<p>Les captures CI à 375 et 1440 px sont des preuves de rendu local "
+        "uniquement. Le parcours authentifié des sept scènes reste à réaliser.</p>")
     return shell("/demo-studio", "ACME Workbench · qualification",
                  "Addon de qualification intégré au Portal, lecture seule et sans autorité runtime.",
                  body)
