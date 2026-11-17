@@ -6,6 +6,9 @@ Not a Temporal attestation, tenant ACL check, or Core→Worker join. No HTTP.
 from __future__ import annotations
 
 import re
+import hashlib
+import hmac
+import json
 
 SCHEMA = "aiops.worker-acme-simulated-no-effect.v1"
 TRANSITIONS = [
@@ -26,13 +29,14 @@ CONSTANTS = {
 }
 FALSE_FLAGS = (
     "resolution_verified", "human_approved", "execution_allowed",
+    "core_014_015_written", "glpi_write",
     "effect_allowed", "real_glpi_writes_allowed", "live_effects_allowed",
 )
 TRUE_FLAGS = ("post_resolution_readback_required",)
 
 
 def inspect_worker_receipt(value, expected_attempt_id: str | None = None):
-    """Return explicit rejection reasons. Digest/authority must be checked by Worker."""
+    """Return explicit rejection reasons. Digest integrity checked offline; runtime authority must be checked by Worker/Core."""
     if type(value) is not dict:
         return ["WORKER_RECEIPT_INVALID"]
     errors = []
@@ -54,6 +58,32 @@ def inspect_worker_receipt(value, expected_attempt_id: str | None = None):
             errors.append("WORKER_" + field.upper() + "_INVALID")
     if type(value.get("effect_receipts")) is not int or value["effect_receipts"] != 0:
         errors.append("WORKER_EFFECT_RECEIPTS_INVALID")
+    if type(value.get("receipt_sha256")) is not str or not re.fullmatch(
+            r"[a-f0-9]{64}", value["receipt_sha256"]):
+        errors.append("WORKER_DIGEST_INVALID")
+    else:
+        try:
+            canonical = json.dumps(
+                {k: v for k, v in value.items() if k != "receipt_sha256"},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")
+            actual = hashlib.sha256(canonical).hexdigest()
+            if not hmac.compare_digest(actual, value["receipt_sha256"]):
+                errors.append("WORKER_DIGEST_MISMATCH")
+        except (TypeError, ValueError, UnicodeError, OverflowError):
+            errors.append("WORKER_DIGEST_INVALID")
+    for field in ("core_request_sha256", "twin_approval_nonce_sha256"):
+        if type(value.get(field)) is not str or not re.fullmatch(
+                r"[a-f0-9]{64}", value[field]):
+            errors.append("WORKER_" + field.upper() + "_INVALID")
+    if type(attempt) is str and re.fullmatch(r"ACME-SIM-[A-F0-9]{16}", attempt):
+        expected_events = [
+            "SYN-EVT-" + hashlib.sha256(
+                ("ACME-TEST:" + attempt + ":" + str(i)).encode("ascii")
+            ).hexdigest()[:20].upper() for i in range(1, 8)
+        ]
+        if value.get("core_source_event_ids") != expected_events:
+            errors.append("WORKER_SOURCE_IDS_NONCANONICAL")
     if value.get("audit_transitions") != TRANSITIONS:
         errors.append("WORKER_TRANSITIONS_INVALID")
     return errors
