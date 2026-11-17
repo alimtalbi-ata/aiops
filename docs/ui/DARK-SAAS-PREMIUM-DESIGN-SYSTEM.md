@@ -29,7 +29,9 @@ Give every first-party Portal screen and provisioned Grafana dashboard one coher
 - Portal middleware adds the stylesheet to HTML responses only and extends the existing CSP with `style-src 'self'`; API payloads and non-HTML responses are not rewritten.
 - Shared styling covers the Command Center, Run/Incident journey, ACME Impact, Explore/Story, and GLPI/ITSM HTML surfaces.
 - Responsive layouts, visible keyboard focus, reduced-motion handling, and no remote fonts/assets are part of the baseline.
-- Grafana's provisioned ACME Command Center dashboard declares dark mode and a six-hour default view. Dashboard data queries and panel identities remain unchanged.
+- Grafana's provisioned ACME Command Center dashboard declares dark mode and a six-hour default view. Compose sets `GF_USERS_DEFAULT_THEME=dark` for the native Grafana chrome. Dashboard data queries and panel identities remain unchanged.
+- GLPI 11 receives a scoped custom SCSS palette at `config/glpi/themes/aiops-premium.scss`, mounted read-only into its documented custom palette directory. An authorized GLPI administrator must select/force the palette for the intended user/entity scope.
+- n8n supports a per-user dark theme preference; managed operator accounts must select it in Personal settings. There is no server-wide branded CSS override in this patch.
 
 ## Safety and trust boundaries
 
@@ -49,4 +51,4 @@ Give every first-party Portal screen and provisioned Grafana dashboard one coher
 
 ## Scope still to audit
 
-This increment themes all first-party Portal HTML routes and the provisioned ACME Grafana dashboard. It does **not** recolor Grafana's global application chrome, GLPI's native UI, n8n, Prometheus, Alertmanager, or other externally owned interfaces; those require their own supported theming/provisioning surfaces and a separate compatibility review. No live external instance was modified or visually verified.
+This increment themes all first-party Portal HTML routes, the provisioned ACME Grafana dashboard and (through supported configuration) Grafana's default native theme plus a GLPI 11 custom palette. n8n dark mode is a per-user preference and needs operator-level selection. Prometheus and Alertmanager native consoles have no supported brand-theme setting in the deployed config; keep them as native diagnostic tools and use the Portal/Grafana as the branded operations surfaces. No live external instance was modified or visually verified.
