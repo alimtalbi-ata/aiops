@@ -489,26 +489,10 @@ def acme_workbench_qualification_page():
     viewer claims, or the offline evidence projection at request time.
     """
     from portal.ui_theme import shell, panel, table
-    stages = [
-        ("OBSERVE", "Déclaration synthétique uniquement"),
-        ("CORRELATE", "Déclaration synthétique uniquement"),
-        ("DIAGNOSE", "Déclaration synthétique uniquement"),
-        ("POLICY", "Déclaration synthétique uniquement"),
-        ("SIMULATED_ACTION", "Sans effet réel · pré-résolution"),
-        ("VERIFY", "Résolution Core synthétique · non attestée"),
-        ("AUDIT", "Historique Worker déclaré · non attesté"),
-        ("REMEDIATION_EFFECT", "NON VÉRIFIÉ"),
-        ("LEARN", "NON VÉRIFIÉ"),
-    ]
-    scenes = [
-        ("NOC", "Route source candidate · navigateur non qualifié"),
-        ("Signals", "Route source candidate · navigateur non qualifié"),
-        ("Twin", "Route source candidate · navigateur non qualifié"),
-        ("Analyst / Critic", "Route source candidate · navigateur non qualifié"),
-        ("Policy / HITL", "Route source candidate · navigateur non qualifié"),
-        ("ITSM / Worker", "NON IMPLÉMENTÉ"),
-        ("Timeline", "Route source candidate · navigateur non qualifié"),
-    ]
+    from portal.acme_qualification_view import public_qualification_snapshot
+    snapshot = public_qualification_snapshot()
+    stages = snapshot["stages"]
+    scenes = snapshot["scenes"]
     body = panel("Périmètre de confiance",
         "<p><strong>NO_GO · ACME-TEST · SIMULATION UNIQUEMENT</strong></p>"
         "<p>Cette page expose un état de qualification statique et prudent, "
