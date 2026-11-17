@@ -5,6 +5,7 @@ Core's PG16 read() verification, Worker's digest, or sandbox runtime E2E.
 """
 from __future__ import annotations
 import re
+import hashlib
 from scripts.acme_worker_receipt_contract import inspect_worker_receipt
 
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{2,99}\Z")
@@ -28,6 +29,23 @@ def inspect_core_worker_binding(core, worker):
         cv, wv = core.get(key), worker.get(key)
         if type(cv) is not str or not ID.fullmatch(cv) or cv != wv:
             errors.append("JOIN_" + key.upper() + "_MISMATCH")
+    # Core's existing ident(prefix, attempt) is deterministic. Matching two
+    # supplied documents alone must not legitimize a forged shared identity.
+    if type(attempt) is str and re.fullmatch(r"ACME-SIM-[A-F0-9]{16}", attempt):
+        def canonical(prefix, suffix="", length=24):
+            return prefix + hashlib.sha256(
+                ("ACME-TEST:" + attempt + suffix).encode("ascii")
+            ).hexdigest()[:length].upper()
+        for key, prefix in (("incident_id", "INC-SIM-"),
+                            ("run_id", "RUN-SIM-"),
+                            ("ticket_id", "SIM-GLPI-"),
+                            ("proposal_id", "PROP-SIM-")):
+            if core.get(key) != canonical(prefix):
+                errors.append("CORE_" + key.upper() + "_NONCANONICAL")
+        expected_events = [canonical("SYN-EVT-", ":" + str(i), 20)
+                           for i in range(1, 8)]
+        if core.get("source_event_ids") != expected_events:
+            errors.append("CORE_SOURCE_EVENTS_NONCANONICAL")
     for key, expected in (("tenant_id", "ACME-TEST"),
                           ("scenario_id", "ACME-SAN-PAYMENTS"),
                           ("mode", "SIMULATION"),
