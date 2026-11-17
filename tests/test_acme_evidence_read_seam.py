@@ -1,5 +1,6 @@
 import unittest
 import hashlib
+import json
 from scripts.acme_worker_receipt_contract import CONSTANTS, FALSE_FLAGS, SCHEMA, TRANSITIONS, TRUE_FLAGS
 from scripts.acme_evidence_read_seam import qualify_evidence_read
 from scripts.acme_viewer_access_policy import ViewerDecision
@@ -75,9 +76,15 @@ class EvidenceReadSeamTests(unittest.TestCase):
         worker = {"schema": SCHEMA, "attempt_id": attempt,
                   **CONSTANTS, **ids, "receipt_sha256": digest,
                   "core_request_sha256": digest, "core_source_event_ids": events,
+                  "twin_approval_nonce_sha256": "b" * 64,
                   "effect_receipts": 0, "audit_transitions": list(TRANSITIONS)}
         worker.update({key: False for key in FALSE_FLAGS})
         worker.update({key: True for key in TRUE_FLAGS})
+        worker["receipt_sha256"] = hashlib.sha256(json.dumps(
+            {k: v for k, v in worker.items() if k != "receipt_sha256"},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")).hexdigest()
+        core["worker_receipt_sha256"] = worker["receipt_sha256"]
         calls = []
         def read_core(value):
             calls.append(("core", value))
