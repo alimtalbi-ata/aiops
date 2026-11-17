@@ -478,3 +478,51 @@ def policy_story():
         '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
     return shell("/demo-studio","ACME — Freeze Button Story",
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+
+@app.get("/acme-workbench", response_class=HTMLResponse)
+def acme_workbench_qualification_page():
+    """Safe public status only: no Core/Worker read or injected identity authority.
+
+    Deliberately does not consume local receipt files, service credentials,
+    viewer claims, or the offline evidence projection at request time.
+    """
+    from portal.ui_theme import shell, panel, table
+    stages = [
+        ("OBSERVE", "Déclaration synthétique uniquement"),
+        ("CORRELATE", "Déclaration synthétique uniquement"),
+        ("DIAGNOSE", "Déclaration synthétique uniquement"),
+        ("POLICY", "Déclaration synthétique uniquement"),
+        ("SIMULATED_ACTION", "Sans effet réel · pré-résolution"),
+        ("VERIFY", "Résolution Core synthétique · non attestée"),
+        ("AUDIT", "Historique Worker déclaré · non attesté"),
+        ("REMEDIATION_EFFECT", "NON VÉRIFIÉ"),
+        ("LEARN", "NON VÉRIFIÉ"),
+    ]
+    scenes = [
+        ("NOC", "Route source candidate · navigateur non qualifié"),
+        ("Signals", "Route source candidate · navigateur non qualifié"),
+        ("Twin", "Route source candidate · navigateur non qualifié"),
+        ("Analyst / Critic", "Route source candidate · navigateur non qualifié"),
+        ("Policy / HITL", "Route source candidate · navigateur non qualifié"),
+        ("ITSM / Worker", "NON IMPLÉMENTÉ"),
+        ("Timeline", "Route source candidate · navigateur non qualifié"),
+    ]
+    body = panel("Périmètre de confiance",
+        "<p><strong>NO_GO · ACME-TEST · SIMULATION UNIQUEMENT</strong></p>"
+        "<p>Cette page expose un état de qualification statique et prudent, "
+        "pas des reçus runtime. Aucun contrôle d’accès acteur → tenant → run "
+        "n’est qualifié. Aucun appel Core, Worker, Twin ou GLPI n’est effectué.</p>"
+        "<p>Les preuves hors ligne, même cohérentes, ne démontrent ni "
+        "l’autonomie, ni une remédiation effective, ni l’apprentissage.</p>")
+    body += panel("Boucle autonome — niveaux de preuve",
+                  table(["Étape", "Qualification"], stages))
+    body += panel("Sept scènes Workbench — état d’intégration",
+                  table(["Scène", "Qualification"], scenes))
+    body += panel("Jalons bloquants",
+        "<p>Identité serveur et ACL exact-run, rattachement Core → Twin, "
+        "attestation SHA déployé, recette sandbox isolée et parcours navigateur "
+        "sept scènes : <strong>NON VÉRIFIÉS</strong>.</p>")
+    return shell("/demo-studio", "ACME Workbench · qualification",
+                 "Addon de qualification intégré au Portal, lecture seule et sans autorité runtime.",
+                 body)
