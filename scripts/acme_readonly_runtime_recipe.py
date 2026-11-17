@@ -12,7 +12,7 @@ import re
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from scripts.acme_core_worker_binding import inspect_core_worker_binding
 
@@ -52,12 +52,14 @@ def qualify_runtime_readback(*, attempt: str, core_base: str, worker_base: str,
         url = base.rstrip("/") + "/api/sandbox/acme/e2e/" + quote(attempt, safe="")
         if fetch is not None:
             return fetch(url, token)
-        opener = build_opener(NoRedirect())
+        opener = build_opener(ProxyHandler({}), NoRedirect())
         req = Request(url, headers={"Authorization": "Bearer " + token,
                                     "Accept": "application/json"}, method="GET")
         with opener.open(req, timeout=5) as response:
             if response.status != 200:
                 raise ValueError("upstream rejected")
+            if response.headers.get_content_type() != "application/json":
+                raise ValueError("unexpected content type")
             raw = response.read(262145)
         if len(raw) > 262144:
             raise ValueError("oversized receipt")
