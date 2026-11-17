@@ -134,6 +134,26 @@ class EvidenceReadSeamTests(unittest.TestCase):
         self.assertEqual(calls, [("core", attempt), ("worker", attempt)])
         self.assertNotIn(ids["run_id"], repr(result))
 
+    def test_worker_mismatch_after_canonical_core_preflight_is_redacted(self):
+        attempt = "ACME-SIM-" + "A" * 16
+        run = "RUN-SIM-" + hashlib.sha256(
+            ("ACME-TEST:" + attempt).encode("ascii")
+        ).hexdigest()[:24].upper()
+        calls = []
+        def core(value):
+            calls.append("core")
+            return {"attempt_id": value, "tenant_id": "ACME-TEST",
+                    "run_id": run, "secret": "CORE_PRIVATE"}
+        def worker(value):
+            calls.append("worker")
+            return {"attempt_id": value, "secret": "WORKER_PRIVATE"}
+        result = qualify_evidence_read(
+            ViewerDecision(200, "POLICY_CONDITIONS_SATISFIED_ONLY"),
+            attempt, core, worker)
+        self.assertEqual(calls, ["core", "worker"])
+        self.assertEqual(result["reason"], "CORE_WORKER_BINDING_NOT_QUALIFIED")
+        self.assertNotIn("PRIVATE", repr(result))
+
     def test_worker_mismatch_does_not_leak_worker_payload(self):
         attempt = "ACME-SIM-" + "A" * 16
         calls = []
