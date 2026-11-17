@@ -497,3 +497,5 @@ This review is a preservation/qualification decision only. No PR was merged, no 
 - Added `tests/test_portal_usability.py` and `tests/test_portal_usability_client.cjs`; CI now runs the HTTP contract, DOM behavior and JS syntax checks.
 - This is a usability enhancement only. It adds no API calls, browser storage, credentials, tenant claims, or changes to LIVE/DEMO execution. Existing UNKNOWN and authorization gates remain unchanged.
 - Current PR #809 is still draft. The new exact-head CI must pass before review/merge. No production host or runtime was modified.
+
+- Portal usability CI follow-up: corrected the JavaScript asset media-type assertion to accept the Starlette/FastAPI `application/javascript` response. The earlier test failure was assertion-only; implementation and route tests passed. Re-run exact-head CI on the latest branch SHA before considering the UX increment qualified.
