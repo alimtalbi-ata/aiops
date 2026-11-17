@@ -1,10 +1,13 @@
 """Shared Portal theme coverage: all HTML surfaces use the local design system."""
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
-from portal.main import app
+with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-only-theme-test-token"}):
+    from portal.main import app
 from fastapi.testclient import TestClient
 
 
