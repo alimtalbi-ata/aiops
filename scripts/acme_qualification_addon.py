@@ -85,7 +85,7 @@ def inspect_scenes(manifest, root: Path, expected_sha: str):
         if item.get("status") != "PASS":
             errors.append("SCENE_NOT_PASS")
         name = item.get("file")
-        if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9-]{3,64}\.png", name) or name in filenames:
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9_-]{3,64}\.png", name) or name in filenames:
             errors.append("SCENE_FILE_INVALID")
             continue
         filenames.add(name)
