@@ -38,3 +38,15 @@ The addon previously accepted a PNG signature plus IHDR header as `BYTES_CONSIST
 - [#807](https://github.com/alimtalbi-ata/aiops/pull/807): existing capture engine and incompatible manifest inventory
 - [#805](https://github.com/alimtalbi-ata/aiops/pull/805): Pydantic readiness gate
 - [#804](https://github.com/alimtalbi-ata/aiops/issues/804): central status and evidence tracker
+
+## Source-backed Portal investigation — 2026-11-17
+
+Inspected the actual `app/portal/main.py` on this branch:
+
+- `GET /demo-studio` reads Core `/api/dashboard`, Twin `/api/twin/graph` and `/api/twin/impact/ACME-SAN-FABRIC-A`, and lists DEMO/REPLAY/STORY runs. It does **not** establish a verified SAN→Payments join or worker receipt.
+- `GET /demo-studio/run/{rid}` validates run ID, restricts the selected run to a pre-existing DEMO/REPLAY/STORY record, and reads Core `/api/runs/{rid}`, `/ai-ledger`, `/gates`. It renders the canonical events and policy decisions. **A valid pre-existing run ID is required**; do not invent one.
+- `GET /evidence` explicitly says that a cross-cutting Evidence ledger still requires an adapter and rights controls; it does not display worker receipts.
+- `GET /policy` shows blocked/waiting runs and safety messaging; it does not constitute an approved HITL action.
+- The `POST /api/demo` endpoint triggers incident/run execution when enabled and authorized. **Never invoke it from capture or preflight.**
+
+**Implementation decision:** do not add a generic ITSM route that guesses worker evidence or bypasses tenant ACL. First establish the canonical worker receipt shape and authorized read-only source; then add a tenant-scoped presentation with explicit `UNKNOWN` for missing fields and negative ACL tests. Until then, `itsm_worker` remains `NOT_IMPLEMENTED` in the static inventory and the seven-scene gate remains NO_GO.
