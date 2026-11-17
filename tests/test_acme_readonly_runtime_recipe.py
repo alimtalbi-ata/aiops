@@ -1,7 +1,9 @@
 """Read-only recipe: deny unsafe destinations before any I/O."""
 import unittest
+import os
+from unittest.mock import patch
 
-from scripts.acme_readonly_runtime_recipe import loopback_url, qualify_runtime_readback
+from scripts.acme_readonly_runtime_recipe import loopback_url, qualify_runtime_readback, main
 from test_acme_core_worker_binding import pair, ATTEMPT
 
 
@@ -17,6 +19,23 @@ class RuntimeRecipeTests(unittest.TestCase):
                     worker_token="b" * 40, fetch=fetch)
         args.update(changes)
         return qualify_runtime_readback(**args)
+
+    def test_cli_requires_explicit_isolated_sandbox_opt_in(self):
+        with patch.dict(os.environ, {
+            "ACME_READONLY_SANDBOX_APPROVED": "",
+            "ACME_SANDBOX_ISOLATED": "",
+            "ACME_CORE_LOOPBACK_URL": self.core,
+            "ACME_WORKER_LOOPBACK_URL": self.worker,
+            "ACME_ATTEMPT_ID": ATTEMPT,
+            "ACME_CORE_SERVICE_TOKEN": self.token,
+            "ACME_WORKER_SERVICE_TOKEN": "b" * 40,
+        }):
+            self.assertEqual(main(), 2)
+        with patch.dict(os.environ, {
+            "ACME_READONLY_SANDBOX_APPROVED": "YES",
+            "ACME_SANDBOX_ISOLATED": "",
+        }):
+            self.assertEqual(main(), 2)
 
     def test_non_loopback_and_redirect_targets_rejected_before_io(self):
         def forbidden(*args):
