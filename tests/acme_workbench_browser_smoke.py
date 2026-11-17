@@ -62,6 +62,20 @@ def main():
                     assert link.count() == 1
                     link.click()
                     assert page.url == base + "/acme-workbench"
+                    # Inspect the actual Chromium navigation response, not only
+                    # in-process ASGI TestClient assertions.
+                    assert response is not None
+                    workbench_response = page.request.get(base + "/acme-workbench")
+                    assert workbench_response.status == 200
+                    headers = workbench_response.headers
+                    assert headers.get("cache-control") == "no-store, max-age=0"
+                    assert headers.get("pragma") == "no-cache"
+                    assert headers.get("x-content-type-options") == "nosniff"
+                    assert headers.get("x-frame-options") == "DENY"
+                    assert headers.get("referrer-policy") == "no-referrer"
+                    assert "geolocation=()" in headers.get("permissions-policy", "")
+                    assert "set-cookie" not in headers
+                    assert page.get_by_text("Parcours de qualification").count() >= 1
                     assert page.get_by_text("NO_GO").count() >= 1
                     assert page.get_by_text("NON IMPLÉMENTÉ").count() >= 1
                     assert page.get_by_text("REMEDIATION_EFFECT").count() >= 1
