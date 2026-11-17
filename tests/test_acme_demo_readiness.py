@@ -1,4 +1,3 @@
-import copy
 import datetime as dt
 import importlib.util
 import json
@@ -74,6 +73,26 @@ class Readiness(unittest.TestCase):
 
     def test_no_pass_on_boolean_zero(self):
         self.assertEqual(m.assess(load("boolean_zero.json"), NOW)["verdict"], "NO_GO")
+
+    def test_unknown_receipt_field_is_rejected(self):
+        r = load("valid.json")
+        r["unexpected_runtime_claim"] = "PASS"
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_unknown_identifier_field_is_rejected(self):
+        r = load("valid.json")
+        r["ids"]["unexpected"] = "OTHER"
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_whitespace_only_identifier_is_rejected(self):
+        r = load("valid.json")
+        r["ids"]["run_id"] = "  "
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
+
+    def test_timestamp_must_include_timezone(self):
+        r = load("valid.json")
+        r["collected_at"] = "2026-11-16T16:55:00"
+        self.assertEqual(m.assess(r, NOW)["verdict"], "NO_GO")
 
 if __name__ == "__main__":
     unittest.main()
