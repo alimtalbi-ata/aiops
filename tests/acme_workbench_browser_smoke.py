@@ -21,9 +21,9 @@ def main():
     env = dict(os.environ, AIOPS_INTERNAL_TOKEN="CI-ONLY-FAKE-TOKEN-NO-RUNTIME-AUTHORITY",
                AIOPS_DEMO_LAUNCH_ENABLED="false")
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "tests.acme_workbench_browser_app:app",
+        [sys.executable, "-m", "uvicorn", "acme_workbench_browser_app:app",
          "--host", "127.0.0.1", "--port", str(port), "--no-access-log"],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        env=dict(env, PYTHONPATH="tests:app:."), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         for _ in range(80):
             if proc.poll() is not None:
