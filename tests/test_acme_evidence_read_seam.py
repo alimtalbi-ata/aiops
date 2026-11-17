@@ -32,6 +32,32 @@ class EvidenceReadSeamTests(unittest.TestCase):
         self.assertEqual(result["status"], "NO_GO")
         self.assertEqual(calls, [])
 
+    def test_positive_policy_malformed_attempt_prevents_all_reads(self):
+        calls = []
+        def forbidden(_attempt):
+            calls.append("upstream")
+            return {}
+        result = qualify_evidence_read(
+            ViewerDecision(200, "POLICY_CONDITIONS_SATISFIED_ONLY"),
+            "../../secrets", forbidden, forbidden)
+        self.assertEqual(result["reason"], "ACME_ATTEMPT_INVALID")
+        self.assertEqual(calls, [])
+
+    def test_wrong_core_run_prevents_worker_read(self):
+        calls = []
+        def core(attempt):
+            calls.append("core")
+            return {"attempt_id": attempt, "tenant_id": "ACME-TEST",
+                    "run_id": "RUN-SIM-" + "F" * 24}
+        def worker(_attempt):
+            calls.append("worker")
+            return {}
+        result = qualify_evidence_read(
+            ViewerDecision(200, "POLICY_CONDITIONS_SATISFIED_ONLY"),
+            "ACME-SIM-" + "A" * 16, core, worker)
+        self.assertEqual(result["reason"], "CORE_BINDING_NOT_QUALIFIED")
+        self.assertEqual(calls, ["core"])
+
     def test_wrong_core_attempt_prevents_worker_read(self):
         calls = []
         def core(_attempt):
