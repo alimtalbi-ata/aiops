@@ -10,8 +10,13 @@ class AutonomousLoopTests(unittest.TestCase):
         result = assess_autonomous_loop(core, worker)
         self.assertEqual(result["status"], "OFFLINE_CONSISTENT_ONLY")
         self.assertEqual(result["reason"], "NO_RUNTIME_ATTESTATION")
-        self.assertTrue(all(value == "OFFLINE_DECLARED_ONLY"
-                            for value in result["stages"].values()))
+        self.assertTrue(all(result["stages"][stage] == "OFFLINE_DECLARED_ONLY"
+                            for stage in STAGES if stage not in ("REMEDIATION_EFFECT", "LEARN")))
+        self.assertEqual(result["stages"]["REMEDIATION_EFFECT"], "NOT_VERIFIED")
+        self.assertEqual(result["stages"]["LEARN"], "NOT_VERIFIED")
+        self.assertEqual(result["action_semantics"], "WORKER_SIMULATED_NO_EFFECT_PRE_RESOLUTION")
+        self.assertEqual(result["verification_semantics"], "CORE_SYNTHETIC_RESOLUTION_DECLARED")
+        self.assertEqual(result["audit_semantics"], "WORKER_TEMPORAL_HISTORY_DECLARED_NOT_ATTESTED")
         self.assertFalse(result["runtime_attested"])
         self.assertFalse(result["real_execution_allowed"])
         self.assertFalse(result["learning_claim_verified"])
