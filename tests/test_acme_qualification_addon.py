@@ -53,8 +53,8 @@ class QualificationAddonTests(unittest.TestCase):
                 return (struct.pack(">I", len(payload)) + kind + payload +
                         struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF))
             ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
-            pixels = zlib.compress(b"\\x00\\x00\\x00\\x00")
-            raw = (b"\\x89PNG\\r\\n\\x1a\\n" +
+            pixels = zlib.compress(bytes([0, 0, 0, 0]))
+            raw = (bytes([137, 80, 78, 71, 13, 10, 26, 10]) +
                    chunk(b"IHDR", ihdr) + chunk(b"IDAT", pixels) +
                    chunk(b"IEND", b""))
             self.assertTrue(png_structure_valid(raw))
