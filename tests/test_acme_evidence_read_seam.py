@@ -94,6 +94,22 @@ class EvidenceReadSeamTests(unittest.TestCase):
         self.assertEqual(calls, [("core", attempt), ("worker", attempt)])
         self.assertNotIn(ids["run_id"], repr(result))
 
+    def test_worker_mismatch_does_not_leak_worker_payload(self):
+        attempt = "ACME-SIM-" + "A" * 16
+        calls = []
+        def core(value):
+            calls.append("core")
+            return {"attempt_id": value, "secret": "CORE_PRIVATE"}
+        def worker(value):
+            calls.append("worker")
+            return {"attempt_id": value, "secret": "WORKER_PRIVATE"}
+        result = qualify_evidence_read(
+            ViewerDecision(200, "POLICY_CONDITIONS_SATISFIED_ONLY"),
+            attempt, core, worker)
+        self.assertEqual(calls, ["core", "worker"])
+        self.assertEqual(result["reason"], "CORE_WORKER_BINDING_NOT_QUALIFIED")
+        self.assertNotIn("PRIVATE", repr(result))
+
     def test_no_data_disclosed_on_upstream_failure(self):
         def broken(_attempt):
             raise RuntimeError("secret bearer must not leak")
