@@ -122,6 +122,8 @@ jobs:
       - name: ACME public Workbench snapshot fail-closed tests
         run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_acme_public_qualification_snapshot.py' -v
       - name: ACME Workbench in-process HTTP read-only qualification
+        env:
+          AIOPS_INTERNAL_TOKEN: 'CI-ONLY-FAKE-TOKEN-NO-RUNTIME-AUTHORITY'
         run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_acme_workbench_portal_http.py' -v
       - name: CLI gate self-check and negative receipts
         run: |
