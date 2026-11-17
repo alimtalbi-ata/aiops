@@ -98,3 +98,9 @@ Added `scripts/acme_viewer_access_policy.py` and seven tests. The pure function 
 **Crucial limitation:** the function's two `*_authority_qualified` booleans and membership sets are ordinary caller arguments, not cryptographic proof. The 200 `POLICY_CONDITIONS_SATISFIED_ONLY` test is a **hypothetical pure-policy case**, not a runtime authorization success. This module is not imported by Portal and must **never** be wired to an HTTP route using browser-provided claims or arbitrary caller-supplied booleans.
 
 To qualify the actual Portal adapter: introduce a trusted server-side identity/session verifier, tenant membership and exact-run permission provider, check the canonical Core attempt→run binding, reject before any upstream Core/Worker fetch, and integration-test 401/403/404/503 with the real provider boundary. Until then the Portal scene stays unavailable and runtime ACL remains NO_GO.
+
+## P0 viewer ACL + read ordering hardening
+
+- The pure viewer policy now verifies the exact deterministic `ACME-TEST:attempt_id` → `RUN-SIM-` binding, and requires `is True` (not truthy integers/strings) for both hypothetical authority flags. Two extra negative tests cover mismatched attempts and truthy fake flags.
+- New `scripts/acme_evidence_read_seam.py` is a **non-HTTP, non-integrated orchestration seam**: rejected decisions perform **zero** Core/Worker reads; mismatched Core attempt prevents Worker reads; source exceptions are redacted; even successful injected offline documents yield `OFFLINE_CONSISTENT_ONLY` rather than runtime PASS. Four tests cover deny-before-I/O and no leakage.
+- **Not an ACL implementation:** an untrusted caller could fabricate a positive `ViewerDecision`. Never expose this seam as a route or treat its positive decision as identity proof. Only a future trusted server-side verifier may create and enforce authenticated viewer decisions. No browser credentials or tenant data are exposed by this module.
