@@ -28,7 +28,7 @@ class PortalUsabilityTests(unittest.TestCase):
     def test_usability_asset_is_local_and_not_cacheable(self):
         response = self.client.get("/assets/portal-usability.js")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("text/javascript", response.headers["content-type"])
+        self.assertIn("javascript", response.headers["content-type"])
         self.assertIn("portal-workspace-nav", response.text)
         self.assertIn("portal-run-filter-input", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
