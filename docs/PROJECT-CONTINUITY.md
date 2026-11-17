@@ -199,3 +199,12 @@ Every material change must update this record and the relevant architecture/deci
 - **Host release:** `deploy/debian-acme-sandbox-release.json` remains **enabled:false**. The existing poller is the only permitted executor. The five-service targeted Compose upgrade now requires a PG16 custom dump, checksum, scratch DB native restore with disk headroom and cleanup, then additive 011–018; never restore over live or touch portal :7777/GLPI/volumes. Rollback only previous five images + sandbox flag off, retain immutable audit and DB.
 - **Last Debian evidence consulted:** [poller receipt](https://github.com/alimtalbi-ata/aiops/blob/ops/debian-runtime-reports/ops/debian-reports/SRV-DEB-05/poller-qualification.json) collected 2026-11-02 16:30:04 UTC, **stale**; stable checkout `d6a3458a...`, portal image `sha256:16fe60c3...`, 9/9 anonymous read-only contracts, ACME blocked before POST. No new Docker/PG16 host mutation attested in this cycle.
 - **GO/NO_GO:** source integration candidate only. **NO_GO** stable merge, Debian upgrade, human GLPI authority and E2E RESOLVED until exact-head checks, positive joined PG16+Temporal test, host receipt with image/SHA/HTTP and independent final reads. Owners: Core P0 terminal, Worker P0 Temporal/digest, Twin P0 provenance/SSRF, Portal P1 actor+tenant ACL. Four existing schedules, no new schedule.
+
+
+## 2026-11-17 — ACME readiness JSON fixture CI (proposed change)
+
+- **Source:** #802 `f594d04e02abde19b2299fbb523bf9d0d0e360b8`; narrow feature branch `integration/acme-readiness-json-fixtures-20261117`.
+- **Files:** `tests/fixtures/acme/*.json` (17 fixed-clock synthetic receipts), `tests/test_acme_demo_readiness.py`, `.github/workflows/acme-demo-readiness.yml`, `.github/workflows/golden-demo-acme.yml`, and `docs/architecture/ACME-DEPENDENCY-MATRIX-2026-11-17.md`.
+- **Qualification:** Unit tests and CLI gate negative checks configured in CI; their results are **PENDING** until an exact-SHA GitHub Actions run is observed. No Debian sandbox or browser execution.
+- **Critical gap:** Gate #802 lacks executed-SHA and cross-stage identity/provenance checks. Do not equate fixture PASS with runtime proof. LIVE remains NO-GO.
+- **Handoff:** [Issue #804](https://github.com/alimtalbi-ata/aiops/issues/804). Convergence host / Golden selective imports remains L0 PROPOSED; no changes to Debian.
