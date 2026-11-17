@@ -43,3 +43,21 @@ Scene IDs: `noc`, `signals`, `twin`, `analyst_critic`, `policy_hitl`, `itsm_work
 - Exact-SHA CI, negative tests, route/selector confirmation and separately authorized disposable sandbox browser run before asserting visual demo evidence.
 - No merges, Debian deployment, GLPI/Temporal/DB operations or LIVE effects without explicit approval.
 - Follow central issue [#804](https://github.com/alimtalbi-ata/aiops/issues/804).
+
+
+## Implemented in the existing Portal (CI-only qualification)
+
+- The existing `/demo-studio` links to `/acme-workbench`, a **static, public, fail-closed** 9-stage/7-scene qualification page. It renders `NO_GO` and cannot grant authorization or accept caller-supplied evidence.
+- In-process FastAPI HTTP tests check GET rendering, forged query parameters and POST 405. They use a **CI-only fake import token**, not a service credential.
+- A separate Chromium CI job runs the **existing Portal code in a test-only ASGI wrapper**, on a temporary `127.0.0.1` port. Core/Twin/Worker reads and mutations are disabled. It tests `/demo-studio` → `/acme-workbench` at 375px and 1440px, blocking non-loopback requests.
+- The browser job captures full-page PNGs, computes SHA256 hashes, and emits `aiops.acme-isolated-browser-png-manifest.v1`. A separate byte-integrity verifier checks exact filenames, viewport coverage, PNG signatures, byte lengths and hashes before artifact publication. CI artifacts are retained for 7 days.
+- A distinct `aiops.acme-isolated-browser-receipt.v1` identifies the tested **source checkout SHA** and `PASS_CI_LOOPBACK_BROWSER_ONLY`. It **does not attest the deployed image SHA** or prove that any real service was contacted.
+
+**Do not conflate these evidence types:** `PASS_CI_LOOPBACK_BROWSER_ONLY` is a local UI test; `BYTES_CONSISTENT_CI_LOOPBACK_ONLY` is PNG integrity; `OFFLINE_SIMULATION_GATE_PASS_ONLY` is a synthetic receipt gate. None imply tenant ACL, Keycloak/OIDC integration, Core→Twin runtime correlation, ITSM/Worker real effects, remediation recovery or learning.
+
+## Explicit remaining runtime blockers
+
+1. Implement and verify the **server-owned** Keycloak sandbox OIDC/BFF actor→tenant→exact-run ACL, before exposing any evidence reads. Offline `ViewerDecision` or caller booleans are **not authentication**.
+2. Establish a separately approved **disposable sandbox** with exact deployed SHA/image attestation and read-only Core↔Worker correlation. No LIVE Debian/GLPI/Temporal/DB actions.
+3. Verify the missing ITSM/Worker Portal scene and the full seven-scene **authenticated** browser journey on that approved sandbox. Two static Workbench screenshots are not seven-scene evidence.
+4. Distinguish Worker **simulated no-effect** from verified remediation effect; no autonomous closed-loop or LEARN claim until post-action recovery and audit/learning are independently observed.
