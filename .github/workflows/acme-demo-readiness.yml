@@ -6,6 +6,7 @@ on:
       - 'scripts/acme_receipt_model.py'
       - 'tests/test_acme_demo_readiness.py'
       - 'tests/fixtures/acme/**'
+      - 'docs/contracts/acme-receipt.schema.json'
       - '.github/workflows/acme-demo-readiness.yml'
   workflow_dispatch:
 permissions:
@@ -44,6 +45,19 @@ jobs:
               value = json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
               assert isinstance(value, dict), name
           print(f"Validated {len(required)} JSON fixtures")
+          PY
+      - name: Verify versioned ACME JSON Schema matches Pydantic model
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.acme_receipt_model import AcmeReceipt
+          path = Path("docs/contracts/acme-receipt.schema.json")
+          expected = AcmeReceipt.model_json_schema(mode="validation")
+          actual = json.loads(path.read_text(encoding="utf-8"))
+          if actual != expected:
+              raise SystemExit("ACME receipt JSON Schema drift: regenerate from AcmeReceipt.model_json_schema(mode='validation')")
+          print("ACME receipt JSON Schema matches Pydantic v2 model")
           PY
       - name: Contract tests (fixture driven, no external API)
         run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
