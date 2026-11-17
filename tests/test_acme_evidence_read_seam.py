@@ -72,7 +72,14 @@ class EvidenceReadSeamTests(unittest.TestCase):
                 "human_approved": False, "live_effects_allowed": False,
                 "real_glpi_writes_allowed": False, "execution_allowed": False,
                 "effect_allowed": False, "worker_receipt_sha256": digest,
-                "source_event_ids": events, "request_sha256": digest}
+                "source_event_ids": events, "request_sha256": digest,
+                "approval_nonce_consumed": True, "analysis_validated": True,
+                "critic_validated": True, "source_hashes_qualified": True,
+                "human_approval_claimed": False, "approval_nonce_revoked": False,
+                "source_event_count": 7, "evidence_count": 2,
+                "analysis_kind": "SYNTHETIC_FIXTURE",
+                "approval_issuer": "TWIN_ACME_SIMULATED",
+                "terminal_ticket_sha256": "b" * 64}
         worker = {"schema": SCHEMA, "attempt_id": attempt,
                   **CONSTANTS, **ids, "receipt_sha256": digest,
                   "core_request_sha256": digest, "core_source_event_ids": events,
