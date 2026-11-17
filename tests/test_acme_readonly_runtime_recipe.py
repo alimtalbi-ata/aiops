@@ -1,0 +1,77 @@
+"""Read-only recipe: deny unsafe destinations before any I/O."""
+import unittest
+
+from scripts.acme_readonly_runtime_recipe import loopback_url, qualify_runtime_readback
+from test_acme_core_worker_binding import pair, ATTEMPT
+
+
+class RuntimeRecipeTests(unittest.TestCase):
+    def setUp(self):
+        self.core = "http://127.0.0.1:17771"
+        self.worker = "http://127.0.0.1:17772"
+        self.token = "a" * 40
+
+    def check(self, fetch, **changes):
+        args = dict(attempt=ATTEMPT, core_base=self.core,
+                    worker_base=self.worker, core_token=self.token,
+                    worker_token="b" * 40, fetch=fetch)
+        args.update(changes)
+        return qualify_runtime_readback(**args)
+
+    def test_non_loopback_and_redirect_targets_rejected_before_io(self):
+        def forbidden(*args):
+            raise AssertionError("No I/O allowed")
+        for url in ("https://example.org", "http://example.org:7777",
+                    "http://127.0.0.1:17771/path", "http://localhost:7777",
+                    "http://user:pass@127.0.0.1:7777",
+                    "http://127.0.0.1:7777?x=1"):
+            with self.subTest(url=url):
+                self.assertFalse(loopback_url(url))
+                self.assertEqual(self.check(forbidden, core_base=url)["status"], "NO_GO")
+
+    def test_invalid_attempt_and_token_do_not_read(self):
+        def forbidden(*args):
+            raise AssertionError("No I/O allowed")
+        for changes in ({"attempt": "wrong"}, {"core_token": "short"},
+                        {"worker_base": self.core}):
+            self.assertEqual(self.check(forbidden, **changes)["status"], "NO_GO")
+
+    def test_canonical_pair_read_only_in_order(self):
+        core, worker = pair()
+        calls = []
+        def fetch(url, token):
+            calls.append(url)
+            return core if len(calls) == 1 else worker
+        result = self.check(fetch)
+        self.assertEqual(result["status"], "RUNTIME_READBACK_CONSISTENT_ONLY")
+        self.assertTrue(result["runtime_evidence_consistent"])
+        self.assertFalse(result["viewer_acl_verified"])
+        self.assertFalse(result["browser_verified"])
+        self.assertFalse(result["real_execution_allowed"])
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all("/api/sandbox/acme/e2e/" in url for url in calls))
+
+    def test_bad_core_stops_before_worker(self):
+        core, _ = pair()
+        core["tenant_id"] = "OTHER"
+        calls = []
+        def fetch(url, token):
+            calls.append(url)
+            return core
+        self.assertEqual(self.check(fetch)["reason"], "CORE_READBACK_REJECTED")
+        self.assertEqual(len(calls), 1)
+
+    def test_worker_mismatch_is_no_go(self):
+        core, worker = pair()
+        worker["effect_allowed"] = True
+        calls = []
+        def fetch(url, token):
+            calls.append(url)
+            return core if len(calls) == 1 else worker
+        result = self.check(fetch)
+        self.assertEqual(result["status"], "NO_GO")
+        self.assertIn("WORKER_EFFECT_ALLOWED_INVALID", result["rejection_codes"])
+
+
+if __name__ == "__main__":
+    unittest.main()
