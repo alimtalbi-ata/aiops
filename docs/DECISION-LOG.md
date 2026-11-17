@@ -142,3 +142,13 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Deployment:** source PR and release intent separated; source merge keeps release disabled. A later reviewed immutable source pin may enable targeted Compose upgrade, native PG16 backup/scratch restore and host E2E. Rollback five images, retain additive 019 and immutable receipts; no `down -v`, prune or LIVE.
 
 - **CI conflict resolved (2026-11-02):** baseline `005_seed_acme.sql` already owns `ACME-SAN-FABRIC-A` and `ACME-SVC-PAYMENTS` with site PARIS, so initial 019 rightly failed `acme_sandbox_twin_node_provenance_conflict` in full migration CI. **Never relabel or overwrite existing demo/CMDB nodes.** Namespace new sandbox graph `ACME-TEST-SAN-FABRIC-A` → `ACME-TEST-HOST-RHEL-MPATH-01` → `ACME-TEST-SVC-PAYMENTS`; update Twin, Worker and E2E contracts/tests accordingly. The source conflict was caught before any host promotion.
+
+
+## ADR-PROPOSED-ACME-20261117 — Versioned offline readiness fixtures
+
+- **Date:** 2026-11-17
+- **Status:** Proposed / PR review, **not accepted** as an L0 host decision.
+- **Scope:** Keep the existing #802 offline readiness gate unchanged; move its 17 synthetic positive/negative test inputs to versioned JSON files and check the same fixtures through unit tests and the CLI in GitHub Actions.
+- **Rationale:** Single inspectable synthetic test data source, explicit negative-case enforcement, no external service dependencies.
+- **Boundary:** The gate still does not attest executed SHA or cross-stage identity/provenance. A GO_SIMULATION_ONLY offline verdict is **not** an E2E runtime or production approval.
+- **Tracking:** [#804](https://github.com/alimtalbi-ata/aiops/issues/804), `docs/architecture/ACME-DEPENDENCY-MATRIX-2026-11-17.md`. Convergence-as-host remains PROPOSED; this branch is based on #802 for a narrow review and does not authorize a merge.
