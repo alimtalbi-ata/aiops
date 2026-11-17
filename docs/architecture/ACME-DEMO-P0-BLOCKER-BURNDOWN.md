@@ -86,3 +86,7 @@ Inspected actual `app/portal/main.py` on PR #808 and `app/portal/acme_run_detail
 - **Acceptance required before implementation:** an independently authenticated viewer identity, server-derived tenant membership, explicit per-run/attempt authorization decision, 401 anonymous, 403 cross-tenant, 404/constant-denial unknown run, no internal bearer in HTML/JS, no Core/Worker fetch before authorization, and negative tests. An operator's shared internal token is never a viewer ACL.
 
 **Decision:** no new public Portal Worker evidence route until the above authorization contract is implemented and tested. The offline addon can show `NOT_QUALIFIED` safely, but it cannot declare a seven-scene browser demo PASS.
+
+## P0 identity anti-forgery hardening
+
+The offline Core↔Worker binding check now recomputes Core's actual deterministic `ident(prefix, attempt)` formula (`SHA256("ACME-TEST:" + attempt)`, uppercase truncated digest) for `incident_id`, `run_id`, `ticket_id`, `proposal_id` and all seven `SYN-EVT-` SOURCE IDs (suffix `":" + sequence`, length 20). It rejects even **coordinated forgery** where Core and Worker declarations agree on the same incorrect identifiers. Added two negative tests. This remains an offline consistency check: authenticated Core PG16 readback, Worker receipt digest and viewer ACL must still be qualified independently.
