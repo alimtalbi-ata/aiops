@@ -36,3 +36,7 @@ No merge into main, no LIVE authorization, no mutation of Debian or real GLPI. D
 ## Pydantic v2 contract (proposed in PR #805)
 
 `scripts/acme_receipt_model.py` now declares strict `AcmeReceipt` and `AcmeIds` models with `extra="forbid"`, required stage PASS, timezone-aware freshness, synthetic IDs, and strict integer `docker_mutations=0` (rejects boolean `false`). `assess(value, now=None, max_age_minutes=60)` retains its signature and fail-closed `NO_GO` behavior. No silent fallback if Pydantic v2 is missing: CI must install `pydantic>=2.5,<3`; a future isolated runner image must explicitly bundle and verify this dependency before deployment. The gate does not access services but **dependency installation may access package registries**, so “offline” describes gate execution, not CI provisioning. Exact-SHA CI and E2E runtime remain unqualified.
+
+### Validation flow reference
+
+See [ACME Pydantic receipt validation flow](ACME-RECEIPT-PYDANTIC-VALIDATION-FLOW.md) for the actual model validators, the fail-closed decision diagram, and the explicit limits of synthetic receipt qualification.
