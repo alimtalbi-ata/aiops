@@ -25,7 +25,8 @@ Use the same palette wherever the product exposes a supported theme surface:
 - Compose sets `GF_USERS_DEFAULT_THEME=dark`, so users without a higher-priority personal/team preference receive dark UI.
 - The ACME Command Center dashboard remains provisioned in dark mode.
 - Grafana user preferences can override the server default; validate/standardize org and personal preferences during rollout.
-- Grafana's native chrome uses Grafana's supported dark theme. The violet/blue brand accents are guaranteed in the provisioned dashboard and AIOps Portal, not a wholesale replacement of Grafana's internal component CSS.
+- Grafana's native chrome uses Grafana's supported dark theme. The violet/blue brand accents are guaranteed in the provisioned dashboards and AIOps Portal, not a wholesale replacement of Grafana's internal component CSS.
+- A new **AIOps Observability Control Plane** dashboard presents Prometheus and Alertmanager scrape health, active-alert metric, Prometheus head-series count, rule-evaluation rate and failed-notification rate. Prometheus now scrapes its own metrics and Alertmanager. Missing metric series remain missing/UNKNOWN; do not interpret absence as zero.
 
 ### GLPI 11
 
@@ -43,7 +44,7 @@ n8n exposes a per-user theme preference under **Settings → Personal → Person
 
 ### Prometheus and Alertmanager
 
-Their bundled native consoles do not expose a supported brand-theme/palette setting in the deployed configuration. Do not patch vendor HTML/JS or use brittle reverse-proxy CSS injection. Keep them reachable for native diagnostics, but use the AIOps Portal and Grafana dashboards as the branded operational surfaces. A future replacement UI should consume their supported APIs and preserve authentication/authorization boundaries.
+Their bundled native consoles do not expose a supported brand-theme/palette setting in the deployed configuration. Do not patch vendor HTML/JS or use brittle reverse-proxy CSS injection. Keep them reachable for native diagnostics, but use the AIOps Portal and the new Grafana **AIOps Observability Control Plane** dashboard as the branded operational surfaces. The dashboard reads their metrics through Prometheus; it does not replace the native admin consoles or their auth/authorization boundaries.
 
 ## Deployment / acceptance checklist
 
@@ -52,9 +53,10 @@ Their bundled native consoles do not expose a supported brand-theme/palette sett
 3. Recreate/restart only Grafana and GLPI in a controlled DEV window after approval; verify Grafana's server default and GLPI's palette discovery.
 4. In GLPI 11, select/force the custom palette for the intended entity/user scope.
 5. Set dark theme in each managed n8n operator account.
-6. Verify Prometheus and Alertmanager remain functional; their native themes are intentionally not overridden.
-7. Capture screenshots of Portal, Grafana, GLPI and n8n at desktop and mobile widths; record any unsupported UI surfaces as exceptions.
-8. Confirm no auth, role, tenant, ticket, Run, workflow, alert, datasource or API behavior changed.
+6. Verify Prometheus scrapes itself and Alertmanager, and verify the new Grafana observability dashboard renders actual metric series; missing series remain UNKNOWN rather than being fabricated.
+7. Verify Prometheus and Alertmanager remain functional; their native themes are intentionally not overridden.
+8. Capture screenshots of Portal, Grafana, GLPI and n8n at desktop and mobile widths; record any unsupported UI surfaces as exceptions.
+9. Confirm no auth, role, tenant, ticket, Run, workflow, alert, datasource or API behavior changed.
 
 ## Scope / truthfulness
 
