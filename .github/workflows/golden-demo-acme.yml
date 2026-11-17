@@ -12,6 +12,7 @@ on:
       - 'app/**'
       - 'deploy/debian-acme-sim-e2e.py'
       - 'scripts/acme_demo_readiness.py'
+      - 'scripts/acme_receipt_model.py'
       - 'tests/test_acme_demo_readiness.py'
       - 'tests/fixtures/acme/**'
       - 'tests/test_acme_sandbox_services.py'
@@ -59,5 +60,5 @@ jobs:
           python -m unittest discover -s tests -p 'test_intelligence_contract.py' -v
           python -m unittest discover -s tests -p 'test_evidence_contract.py' -v
 
-      - name: Golden demo readiness safety contracts
+      - name: Golden demo readiness safety contracts (Pydantic v2)
         run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
