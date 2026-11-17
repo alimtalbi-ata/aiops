@@ -1,6 +1,7 @@
 """Read-only recipe: deny unsafe destinations before any I/O."""
 import unittest
 import os
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from scripts.acme_readonly_runtime_recipe import loopback_url, qualify_runtime_readback, main
@@ -36,6 +37,44 @@ class RuntimeRecipeTests(unittest.TestCase):
             "ACME_SANDBOX_ISOLATED": "",
         }):
             self.assertEqual(main(), 2)
+
+    def test_runtime_transport_ignores_proxy_env_and_requires_json(self):
+        from scripts.acme_readonly_runtime_recipe import NoRedirect
+        from urllib.request import ProxyHandler
+        core, worker = pair()
+        payloads = [core, worker]
+        calls = []
+        class Response:
+            status = 200
+            headers = MagicMock()
+            def __init__(self, data, content_type="application/json"):
+                self.data = data
+                self.headers.get_content_type.return_value = content_type
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self, size):
+                return self.data
+        import json
+        responses = [Response(json.dumps(x).encode("utf-8")) for x in payloads]
+        class Opener:
+            def open(self, request, timeout):
+                calls.append(request)
+                return responses[len(calls)-1]
+        with patch("scripts.acme_readonly_runtime_recipe.build_opener", return_value=Opener()) as build:
+            result = self.check(None)
+        self.assertEqual(result["status"], "RUNTIME_READBACK_CONSISTENT_ONLY")
+        self.assertIsInstance(build.call_args.args[0], ProxyHandler)
+        self.assertEqual(build.call_args.args[0].proxies, {})
+        self.assertIsInstance(build.call_args.args[1], NoRedirect)
+        self.assertEqual([r.get_method() for r in calls], ["GET", "GET"])
+        calls.clear()
+        responses[0] = Response(b"<html/>", "text/html")
+        with patch("scripts.acme_readonly_runtime_recipe.build_opener", return_value=Opener()):
+            result = self.check(None)
+        self.assertEqual(result["reason"], "READBACK_UNAVAILABLE_OR_INVALID")
+        self.assertEqual(len(calls), 1)
 
     def test_non_loopback_and_redirect_targets_rejected_before_io(self):
         def forbidden(*args):
