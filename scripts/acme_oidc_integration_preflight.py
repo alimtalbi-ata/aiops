@@ -6,6 +6,8 @@ JWTs, authenticates actors, or grants tenant/run access. No network or secrets.
 from __future__ import annotations
 
 from urllib.parse import urlsplit
+import ipaddress
+import re
 
 REQUIRED = ("issuer", "client_id", "audience", "tenant_acl_source", "run_acl_source")
 
@@ -23,7 +25,18 @@ def assess_oidc_integration(config: object) -> dict:
     issuer = config["issuer"]
     try:
         parsed = urlsplit(issuer)
-        valid = (parsed.scheme == "https" and bool(parsed.hostname)
+        hostname = parsed.hostname or ""
+        try:
+            ipaddress.ip_address(hostname)
+            is_ip_literal = True
+        except ValueError:
+            is_ip_literal = False
+        valid = (parsed.scheme == "https" and bool(hostname)
+                 and not is_ip_literal
+                 and re.fullmatch(r"[A-Za-z0-9.-]+", hostname) is not None
+                 and "." in hostname and ".." not in hostname
+                 and not any(ch.isspace() or ord(ch) < 33 for ch in issuer)
+                 and "\\\\" not in issuer
                  and not parsed.username and not parsed.password
                  and not parsed.query and not parsed.fragment
                  and parsed.port in (None, 443)
