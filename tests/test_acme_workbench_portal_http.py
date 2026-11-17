@@ -19,7 +19,10 @@ class WorkbenchPortalHttpTests(unittest.TestCase):
         self.assertIn("text/html", response.headers["content-type"])
         for expected in ("NO_GO", "SIMULATION UNIQUEMENT",
                          "REMEDIATION_EFFECT", "LEARN", "ITSM / Worker",
-                         "NON IMPLÉMENTÉ", "NON VÉRIFIÉ"):
+                         "NON IMPLÉMENTÉ", "NON VÉRIFIÉ",
+                         "Parcours de qualification", "Identité / ACL",
+                         "Core / Twin", "Audit / Learn",
+                         "Ce que prouvent les tests CI"):
             self.assertIn(expected, response.text)
         self.assertNotIn("Bearer ", response.text)
         self.assertNotIn("ACME_CORE_SERVICE_TOKEN", response.text)
