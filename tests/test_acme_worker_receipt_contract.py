@@ -15,6 +15,14 @@ def sample():
               "effect_receipts": 0, "audit_transitions": list(TRANSITIONS)}
     result.update({key: False for key in FALSE_FLAGS})
     result.update({key: True for key in TRUE_FLAGS})
+    for field, prefix in (("incident_id", "INC-SIM-"),
+                          ("run_id", "RUN-SIM-"),
+                          ("ticket_id", "SIM-GLPI-"),
+                          ("proposal_id", "PROP-SIM-")):
+        result[field] = prefix + hashlib.sha256(
+            ("ACME-TEST:" + ATTEMPT).encode("ascii")
+        ).hexdigest()[:24].upper()
+    result["approval_id"] = "SIM-APP-AAAA"
     result['core_request_sha256'] = 'a' * 64
     result['twin_approval_nonce_sha256'] = 'b' * 64
     result['core_source_event_ids'] = ['SYN-EVT-' + hashlib.sha256(
@@ -29,6 +37,22 @@ def sample():
 class WorkerReceiptContractTests(unittest.TestCase):
     def test_valid_structure_not_attestation(self):
         self.assertEqual(inspect_worker_receipt(sample(), ATTEMPT), [])
+
+    def test_rehashed_forged_canonical_run_rejected(self):
+        receipt = sample()
+        receipt["run_id"] = "RUN-SIM-" + "B" * 24
+        receipt["receipt_sha256"] = hashlib.sha256(json.dumps(
+            {k: v for k, v in receipt.items() if k != "receipt_sha256"},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")).hexdigest()
+        self.assertIn("WORKER_RUN_ID_NONCANONICAL",
+                      inspect_worker_receipt(receipt))
+
+    def test_missing_approval_identity_rejected(self):
+        receipt = sample()
+        del receipt["approval_id"]
+        self.assertIn("WORKER_APPROVAL_ID_INVALID",
+                      inspect_worker_receipt(receipt))
 
     def test_digest_tamper_is_rejected(self):
         receipt = sample()
