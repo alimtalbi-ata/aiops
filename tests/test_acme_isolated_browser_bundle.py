@@ -85,3 +85,28 @@ class BrowserBundleTests(unittest.TestCase):
         self.save()
         with self.assertRaises(ValueError):
             self.verify()
+
+    def test_oversized_receipt_rejected(self):
+        (self.root / "receipt.json").write_bytes(b" " * 16385)
+        with self.assertRaises(ValueError):
+            self.verify()
+
+    def test_oversized_manifest_rejected(self):
+        manifest_path = self.root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["padding"] = "x" * 17000
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaises(ValueError):
+            self.verify()
+
+    def test_missing_runtime_false_key_rejected(self):
+        self.receipt.pop("learning_verified")
+        self.save()
+        with self.assertRaises(ValueError):
+            self.verify()
+
+    def test_wrong_navigation_rejected(self):
+        self.receipt["navigation"] = ["/demo-studio", "/api/demo"]
+        self.save()
+        with self.assertRaises(ValueError):
+            self.verify()
