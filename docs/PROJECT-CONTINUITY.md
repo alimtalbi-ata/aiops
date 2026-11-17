@@ -468,3 +468,13 @@ This review is a preservation/qualification decision only. No PR was merged, no 
 - Full design specification: `docs/ui/DARK-SAAS-PREMIUM-DESIGN-SYSTEM.md`.
 - Scope is first-party Portal HTML plus the provisioned ACME Grafana dashboard. Native Grafana chrome, GLPI, n8n, Prometheus and Alertmanager are external UIs and remain outside this increment until their supported theming paths are separately reviewed.
 - Qualification at handoff: code changes committed to this branch; tests and exact-head GitHub Actions are **NOT YET VERIFIED**. No live service, browser, host, or production deployment was touched. LIVE remains NO-GO.
+
+
+## 2026-11-17 — External UI theme convergence increment
+
+- Extended the same DEV branch with Grafana server default dark theme via `GF_USERS_DEFAULT_THEME=dark`.
+- Added a GLPI 11 custom palette `config/glpi/themes/aiops-premium.scss` and read-only Compose mount at `/var/glpi/files/_themes` (GLPI image default `GLPI_VAR_DIR=/var/glpi/files`).
+- Added regression coverage for Grafana Compose default, GLPI mount/palette tokens, and the provisioned Grafana dashboard.
+- Added `docs/ui/EXTERNAL-SERVICE-THEMES.md` with supported theming controls and explicit exceptions.
+- n8n theme remains a per-user preference and must be selected per operator account. Prometheus/Alertmanager native consoles do not expose a supported branded-theme setting in this deployment; do not patch vendor bundles or inject CSS through a reverse proxy.
+- Earlier Portal+Grafana implementation CI passed 3/3 in run #44188109053. New external-theme changes are on PR #809; exact-head CI for SHA `02d7046bb4cc919b4c71b78687e841f09339733e` is pending at handoff. No live service/host/production changes were made.
