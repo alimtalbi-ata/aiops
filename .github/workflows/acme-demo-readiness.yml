@@ -205,7 +205,7 @@ jobs:
       - name: Cross-verify CI source SHA and browser evidence bundle
         env:
           ACME_BROWSER_RECEIPT_PATH: ${{ runner.temp }}/acme-browser-receipt.json
-        run: python scripts/acme_isolated_browser_bundle.py --captures-dir /tmp/acme-workbench-ci-captures --receipt "$ACME_BROWSER_RECEIPT_PATH" --expected-source-sha "$GITHUB_SHA"
+        run: PYTHONPATH=. python -m scripts.acme_isolated_browser_bundle --captures-dir /tmp/acme-workbench-ci-captures --receipt "$ACME_BROWSER_RECEIPT_PATH" --expected-source-sha "$GITHUB_SHA"
       - name: Publish isolated Chromium screenshots and byte hashes
         uses: actions/upload-artifact@v4
         with:
