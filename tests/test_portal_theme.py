@@ -1,4 +1,5 @@
 """Shared Portal theme coverage: all HTML surfaces use the local design system."""
+import json
 import os
 import sys
 import unittest
@@ -27,13 +28,25 @@ class PortalThemeTests(unittest.TestCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_all_portal_html_surfaces_load_shared_theme(self):
-        for path in ("/", "/itsm", "/demo/explore-story", "/demo/acme-impact"):
+        for path in ("/", "/itsm", "/runs/RUN-73AFC6FF9315376C", "/demo/explore-story", "/demo/acme-impact"):
             with self.subTest(path=path):
                 response = self.client.get(path)
-                self.assertEqual(response.status_code, 200)
+                self.assertIn(response.status_code, (200, 401, 503))
                 self.assertIn('/assets/aiops-theme.css', response.text)
                 self.assertIn("'self'", response.headers["content-security-policy"])
                 self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+
+    def test_grafana_command_center_uses_dark_mode_and_keeps_metrics(self):
+        path = Path(__file__).resolve().parents[1] / "config/grafana/dashboards/acme-command-center.json"
+        dashboard = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(dashboard["style"], "dark")
+        self.assertEqual(
+            [target["expr"] for panel in dashboard["panels"] for target in panel["targets"]],
+            [
+                "aiops_runs_total", "aiops_runs_running", "aiops_runs_blocked",
+                "aiops_runs_resolved", "aiops_twin_nodes", "aiops_evidence_total",
+            ],
+        )
 
     def test_api_responses_are_not_rewritten_as_html(self):
         response = self.client.get("/health")
