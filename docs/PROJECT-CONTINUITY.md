@@ -199,3 +199,36 @@ Every material change must update this record and the relevant architecture/deci
 - **Host release:** `deploy/debian-acme-sandbox-release.json` remains **enabled:false**. The existing poller is the only permitted executor. The five-service targeted Compose upgrade now requires a PG16 custom dump, checksum, scratch DB native restore with disk headroom and cleanup, then additive 011–018; never restore over live or touch portal :7777/GLPI/volumes. Rollback only previous five images + sandbox flag off, retain immutable audit and DB.
 - **Last Debian evidence consulted:** [poller receipt](https://github.com/alimtalbi-ata/aiops/blob/ops/debian-runtime-reports/ops/debian-reports/SRV-DEB-05/poller-qualification.json) collected 2026-11-02 16:30:04 UTC, **stale**; stable checkout `d6a3458a...`, portal image `sha256:16fe60c3...`, 9/9 anonymous read-only contracts, ACME blocked before POST. No new Docker/PG16 host mutation attested in this cycle.
 - **GO/NO_GO:** source integration candidate only. **NO_GO** stable merge, Debian upgrade, human GLPI authority and E2E RESOLVED until exact-head checks, positive joined PG16+Temporal test, host receipt with image/SHA/HTTP and independent final reads. Owners: Core P0 terminal, Worker P0 Temporal/digest, Twin P0 provenance/SSRF, Portal P1 actor+tenant ACL. Four existing schedules, no new schedule.
+
+
+## 2026-11-17 — ACME readiness JSON fixture CI (proposed change)
+
+- **Source:** #802 `f594d04e02abde19b2299fbb523bf9d0d0e360b8`; narrow feature branch `integration/acme-readiness-json-fixtures-20261117`.
+- **Files:** `tests/fixtures/acme/*.json` (17 fixed-clock synthetic receipts), `tests/test_acme_demo_readiness.py`, `.github/workflows/acme-demo-readiness.yml`, `.github/workflows/golden-demo-acme.yml`, and `docs/architecture/ACME-DEPENDENCY-MATRIX-2026-11-17.md`.
+- **Qualification:** Unit tests and CLI gate negative checks configured in CI; their results are **PENDING** until an exact-SHA GitHub Actions run is observed. No Debian sandbox or browser execution.
+- **Critical gap:** Gate #802 lacks executed-SHA and cross-stage identity/provenance checks. Do not equate fixture PASS with runtime proof. LIVE remains NO-GO.
+- **Handoff:** [Issue #804](https://github.com/alimtalbi-ata/aiops/issues/804). Convergence host / Golden selective imports remains L0 PROPOSED; no changes to Debian.
+
+
+## 2026-11-17 — Proposed strict Pydantic ACME receipt gate (PR #805)
+
+- `scripts/acme_receipt_model.py` declares strict synthetic receipt models; `scripts/acme_demo_readiness.py` preserves `assess(value, now=None, max_age_minutes=60)` and `GO_SIMULATION_ONLY` / `NO_GO` fail-closed outcomes.
+- `tests/fixtures/acme/` has 17 versioned JSON receipts; 18 prior tests plus four new negative tests check extra fields, blank IDs and timezone awareness. CLI fixture checks remain isolated from live services.
+- **Dependency:** `pydantic>=2.5,<3` required, installed in readiness CI; Golden Demo workflow already installs pinned Pydantic 2.11.7. An isolated Debian runner must bundle/verify the dependency before any qualification; no runtime change authorized.
+- **Evidence:** Exact-SHA CI pending. The model still does not verify executed SHA, cross-stage join or provenance. LIVE NO-GO. See #804 and draft PR #805.
+
+
+## 2026-11-17 — ACME receipt static JSON Schema (PR #805)
+
+- Versioned `docs/contracts/acme-receipt.schema.json` from Pydantic v2 `AcmeReceipt.model_json_schema(mode="validation")`.
+- `.github/workflows/acme-demo-readiness.yml` checks structural equality against the model; schema drift fails CI.
+- Static JSON Schema **does not encode all custom validators** (17 stage keys, freshness, timezone-awareness, synthetic prefixes). Continue using the Python gate for decisions. No runtime endpoint or Debian deployment.
+- Exact-SHA CI results must be checked after this commit; prior PASS runs do not qualify the updated HEAD.
+
+## 2026-11-17 — Direct model and schema snapshot unittest coverage (PR #805)
+
+- Added nine new unittest methods to `tests/test_acme_demo_readiness.py` covering Pydantic direct-model acceptance/rejection, strict flag types, all 16 negative fixtures via both model and `assess()`, and JSON Schema snapshot constraints, drift and determinism.
+- The 17 fixture files and versioned schema snapshot are **mandatory**: no conditional skips for missing contract assets.
+- Snapshot comparison is canonical JSON with SHA256 prefixes in failure diagnostics; it does not silently regenerate committed files.
+- The Pydantic model remains the authoritative validator for freshness, 17 named stages and simulated ID prefixes; JSON Schema is only the static published contract.
+- No runtime Debian, GLPI, external API or production changes. Exact-SHA CI must be rechecked after this commit.
