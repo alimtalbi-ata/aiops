@@ -4,6 +4,8 @@ on:
     paths:
       - 'scripts/acme_demo_readiness.py'
       - 'scripts/acme_receipt_model.py'
+      - 'scripts/acme_qualification_addon.py'
+      - 'tests/test_acme_qualification_addon.py'
       - 'tests/test_acme_demo_readiness.py'
       - 'tests/fixtures/acme/**'
       - 'docs/contracts/acme-receipt.schema.json'
@@ -25,7 +27,7 @@ jobs:
       - name: Install Pydantic v2 validation dependency
         run: python -m pip install 'pydantic>=2.5,<3'
       - name: Exact source compile
-        run: python -m py_compile scripts/acme_receipt_model.py scripts/acme_demo_readiness.py tests/test_acme_demo_readiness.py
+        run: python -m py_compile scripts/acme_receipt_model.py scripts/acme_demo_readiness.py scripts/acme_qualification_addon.py tests/test_acme_demo_readiness.py tests/test_acme_qualification_addon.py
       - name: Validate all 17 versioned JSON fixtures
         run: |
           python - <<'PY'
@@ -61,6 +63,8 @@ jobs:
           PY
       - name: Contract tests (fixture driven, no external API)
         run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
+      - name: ACME Workbench Demo addon tests (offline, fail-closed)
+        run: python -m unittest discover -s tests -p 'test_acme_qualification_addon.py' -v
       - name: CLI gate self-check and negative receipts
         run: |
           set -eu
