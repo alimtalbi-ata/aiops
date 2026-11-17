@@ -13,6 +13,7 @@ on:
       - 'deploy/debian-acme-sim-e2e.py'
       - 'scripts/acme_demo_readiness.py'
       - 'tests/test_acme_demo_readiness.py'
+      - 'tests/fixtures/acme/**'
       - 'tests/test_acme_sandbox_services.py'
       - 'tests/test_policy_acme_sandbox.py'
       - 'tests/test_worker_acme_simulated_hitl.py'
