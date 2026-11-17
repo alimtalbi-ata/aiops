@@ -24,9 +24,9 @@ class PortalAclPreflightTests(unittest.TestCase):
         self.assertTrue(result["attestation_claim_ignored"])
 
     def test_direct_offline_seam_import_is_flagged(self):
-        source = ('from scripts.acme_evidence_read_seam import qualify_evidence_read\\n'
-                  'import scripts.acme_viewer_access_policy\\n'
-                  '@app.get("/evidence")\\ndef evidence(): pass\\n')
+        source = ('from scripts.acme_evidence_read_seam import qualify_evidence_read\n'
+                  'import scripts.acme_viewer_access_policy\n'
+                  '@app.get("/evidence")\\ndef evidence(): pass\n')
         result = assess_portal_acl(source)
         self.assertEqual(result["status"], "NO_GO")
         self.assertEqual(result["unsafe_offline_policy_imports"], [
