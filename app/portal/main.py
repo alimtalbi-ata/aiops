@@ -527,3 +527,21 @@ def acme_workbench_qualification_page():
     return shell("/demo-studio", "ACME Workbench · qualification",
                  "Addon de qualification intégré au Portal, lecture seule et sans autorité runtime.",
                  body)
+
+
+@app.middleware("http")
+async def acme_workbench_public_response_boundary(request: Request, call_next):
+    """Harden only the static qualification view, not the wider Portal.
+
+    This is NOT an authentication or tenant ACL boundary; future evidence
+    routes must implement server-side OIDC and exact-run authorization.
+    """
+    response = await call_next(request)
+    if request.url.path == "/acme-workbench":
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
