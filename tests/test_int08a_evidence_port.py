@@ -57,3 +57,45 @@ class OfflineBoundaryTests(unittest.TestCase):
     def test_malformed(self):
         self.assertIn("UNKNOWN", evidence_catalog([{"evidence_id":[]}]))
         self.assertIn("Aucune donnée", event_facts(None))
+
+class MixedCatalogTests(unittest.TestCase):
+    def test_mixed_catalog(self):
+        rows = [
+            {"evidence_id":"OBS-1","provenance":{"record_type":"observation"},
+             "observed_at":"2026-10-21T12:00:00Z","known_at":"2026-10-21T12:01:00Z"},
+            {"evidence_id":"MARK-1","provenance":{"record_type":"stage_marker"}},
+            {"evidence_id":"OTHER-1","provenance":{}},
+        ]
+        html = evidence_catalog(rows)
+        for label in ("1 marqueur(s)", "1 observation(s)", "1 autre(s)",
+                      "Observation déclarée — non attestée", "non probant pour le diagnostic",
+                      "Enregistrement à qualifier", "2026-10-21T12:00:00Z", "2026-10-21T12:01:00Z"):
+            self.assertIn(label, html)
+        self.assertEqual(html.count('id="proof-'), 3)
+    def test_duplicate_identity_refused(self):
+        html = evidence_catalog([
+            {"evidence_id":"DUP","claim":"first-claim","provenance":{"record_type":"stage_marker"}},
+            {"evidence_id":"DUP","claim":"second-claim","provenance":{"record_type":"observation"}}])
+        self.assertIn("dupliqués — UNKNOWN", html)
+        self.assertNotIn("first-claim", html)
+        self.assertNotIn("second-claim", html)
+    def test_actual_cockpit_injected_offline(self):
+        from copy import deepcopy
+        from portal.acme_impact_read_model import build_acme_impact_read_model
+        from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+        from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
+        cockpit = project_synthetic_incident_cockpit(build_acme_impact_read_model())
+        before = deepcopy(cockpit)
+        html = render_synthetic_cockpit_html(cockpit,
+            offline_events=[{"evidence_ids":["OBS-1"],"payload":{"critique":{"issues":[{"code":"CAUSAL_LEAP","description":"Not proven"}]}}}],
+            offline_evidence=[{"evidence_id":"OBS-1","provenance":{"record_type":"observation"},
+                               "observed_at":"2026-10-21T12:00:00Z","known_at":"2026-10-21T12:01:00Z"}])
+        for label in ('id="proof-OBS-1"', "CAUSAL_LEAP", "observed_at", "known_at",
+                      "0 / 9 preuves vérifiées", "NO-GO LIVE", "UNKNOWN"):
+            self.assertIn(label, html)
+        self.assertEqual(html.count("Evidence Workbench — lecture seule"), 1)
+        self.assertEqual(html.count("<nav "), 1)
+        self.assertEqual(html.count("<table>"), 4)
+        self.assertNotIn("<script", html)
+        self.assertNotIn("<form", html)
+        self.assertEqual(cockpit, before)
