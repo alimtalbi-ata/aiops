@@ -20,6 +20,7 @@ def fixture():
     for role,content in fixtures().items():
         f.rows[role]["content"]={**content,**f.rows[role]["content"]}
     twin=f.rows["twin"]["content"]
+    twin["core_source_event_ids"]=deepcopy(f.rows["core"]["content"]["source_event_ids"])
     twin.update(issued_at="2026-11-18T08:59:50Z",expires_at="2026-11-18T09:02:00Z")
     for role in ("twin","policy"):
         f.rows[role]["content_sha256"]=digest(f.rows[role]["content"])
