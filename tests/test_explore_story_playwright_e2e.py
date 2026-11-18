@@ -411,7 +411,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(self.page.locator("nav[aria-label='Parcours guidé de démonstration'] a[href^='#']").count(), 5)
         for anchor, heading in (
             ("impact", "Incident et impact métier"),
-            ("evidence", "Cycle incident"),
+            ("workbench", "Evidence Workbench"),
             ("decision", "Analyst / Critic / Policy"),
             ("itil", "Transitions ITIL"),
             ("verdict", "Décision opérateur"),
@@ -423,6 +423,12 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             target = self.page.locator(f"#{anchor}")
             self.assertEqual(target.count(), 1)
             self.assertIn(heading, target.inner_text())
+        # Historical fragment remains a direct link to the same evidence register.
+        self.page.goto(self.base + "/demo/acme-incident-cockpit#evidence")
+        self.assertEqual(self.page.evaluate("location.hash"), "#evidence")
+        self.assertEqual(self.page.locator("#evidence").count(), 1)
+        self.assertEqual(self.page.locator("#evidence + #workbench").count(), 1)
+        expect(self.page.locator("#workbench")).to_be_visible()
         self.assertIn("GO — scénario synthétique", self.page.locator("body").inner_text())
         self.assertIn("UNKNOWN — preuves runtime", self.page.locator("body").inner_text())
         self.assertIn("NO-GO LIVE", self.page.locator("body").inner_text())
