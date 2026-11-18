@@ -84,12 +84,14 @@ def test_workflow_refusal_has_no_downstream_scheduling(case):
     context = f.qualify()
     if case == "BC07": context = None
     if case == "BC08": context["qualification"] = "PASS"
+    # Build the synchronous fixture before entering the workflow event loop.
+    terminal_fixture = manifest_fixture() if case in ("BC09","BC10","BC12") else None
     events = []
     refusals = []
     def gate(args):
         assert args["stage"] == "POLICY"
         if case in ("BC09","BC10","BC12"):
-            manifest, readback = manifest_fixture()
+            manifest, readback = terminal_fixture
             if case == "BC09":
                 readback.pop("terminal")
             elif case == "BC10":
