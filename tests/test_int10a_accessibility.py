@@ -82,9 +82,31 @@ class PopulatedAudit(unittest.TestCase):
                 ax_path=out/f"populated-ax-{width}-{repetition}.json"
                 ax_path.write_text(json.dumps(exposed,ensure_ascii=False,indent=2),encoding="utf-8")
                 page.evaluate("scrollTo(0,0)")
-                png=page.screenshot(path=str(out/f"populated-{width}-{repetition}.png"),full_page=True)
+                page.evaluate("() => document.fonts.ready")
+                metrics_js="""() => {
+                    const root=document.documentElement, body=document.body;
+                    const rects=[...document.querySelectorAll('body *')]
+                        .filter(e=>e.getClientRects().length && getComputedStyle(e).visibility==='visible')
+                        .map(e=>e.getBoundingClientRect().bottom+scrollY);
+                    return {scrollHeight:root.scrollHeight,bodyScrollHeight:body.scrollHeight,
+                        clientHeight:root.clientHeight,innerHeight,innerWidth,scrollY,
+                        devicePixelRatio,contentBottom:Math.max(0,...rects),
+                        visualHeight:visualViewport.height,visualScale:visualViewport.scale};
+                }"""
+                before=page.evaluate(metrics_js)
+                png=page.screenshot(path=str(out/f"populated-{width}-{repetition}.png"),full_page=True,scale="css")
+                after=page.evaluate(metrics_js)
+                self.assertEqual(png[:8],b"\\x89PNG\\r\\n\\x1a\\n")
+                png_width=int.from_bytes(png[16:20],"big")
+                png_height=int.from_bytes(png[20:24],"big")
+                self.assertEqual(png_width,width)
+                self.assertEqual(before,after)
+                # Geometric coverage of visible element bounds, not pixel-level inspection.
+                self.assertGreaterEqual(png_height+1,before["contentBottom"],(before,after,png_height))
                 records.append(dict(width=width,repetition=repetition,sha256=hashlib.sha256(png).hexdigest(),
-                    height=page.evaluate("document.documentElement.scrollHeight"),overflow=False,
+                    height=after["scrollHeight"],overflow=False,
+                    png_width=png_width,png_height=png_height,metrics_before=before,metrics_after=after,
+                    png_dom_delta=png_height-after["scrollHeight"],bottom_geometry_covered=True,
                     ax_sha256=hashlib.sha256(ax_path.read_bytes()).hexdigest(),
                     native_zoom="NOT_TESTED",real_assistive_technology="NOT_TESTED"))
             browser.close()
