@@ -16,13 +16,21 @@ def digest(body):
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")).hexdigest()
 
 def utc(value):
-    require(type(value) is str and value.endswith("Z"), "utc_required")
+    require(type(value) is str and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", value), "utc_required")
     return datetime.fromisoformat(value[:-1] + "+00:00")
 
 def sandbox_mode(core_mode, intent):
     validate_intent(intent)
     require(core_mode == "DEMO" and intent["mode"] == "SIMULATION", "mode_not_qualified")
     return "SIMULATION"  # contract mapping only, grants no permission
+
+def validate_postcheck(*, intent, independently_read):
+    validate_intent(intent)
+    identity = {k: intent[k] for k in IDENTITY}
+    require(type(independently_read) is dict and independently_read.get("identity") == identity, "missing_independent_read")
+    require(independently_read.get("critic_decision") == "ALLOW" and independently_read.get("twin_state") == "QUALIFIED" and independently_read.get("policy_decision") == "SIMULATE" and independently_read.get("hitl_valid") is True, "gate_unqualified")
+    require(type(independently_read.get("external_effect_count")) is int and independently_read["external_effect_count"] == 0 and independently_read.get("postcheck_verified") is True, "postcheck_unqualified")
+    return {"qualification": "CONTRACT_ONLY", "runtime_attested": False, "finish_authorized": False}
 
 def validate_manifest(manifest, *, expected_sha, intent, independently_read):
     """Compare to separately supplied observations, never trust manifest claims.

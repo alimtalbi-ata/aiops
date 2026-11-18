@@ -187,9 +187,10 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
   raise HTTPException(409,'workflow id already exists; reconcile with Core receipt')
 async def worker_main():
  from worker.int06a_registration import registered_activities
- namespace=os.getenv('TEMPORAL_NAMESPACE','default')
+ enabled=os.getenv('AIOPS_INT06_REGISTER_NO_EFFECT','0')
+ namespace=os.getenv('TEMPORAL_NAMESPACE','default') if enabled=='1' else 'default'
  activities=registered_activities([execute_stage,start_run,finish_run],
-     enabled=os.getenv('AIOPS_INT06_REGISTER_NO_EFFECT','0'),namespace=namespace,address=TEMP)
+     enabled=enabled,namespace=namespace,address=TEMP)
  while True:
   try:
    c=await Client.connect(TEMP,namespace=namespace)
