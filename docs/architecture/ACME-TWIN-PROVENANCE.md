@@ -1,0 +1,5 @@
+# ACME Twin provenance v1
+
+Proposed additive contract, STORY_OFFLINE only. Existing fixture and read model retained. `twin_evidence.nodes` and `.edges` carry individual provenance (source, JSON pointer source_ref, namespace, source_sha, source_sha256, observed_at, freshness, scope). SHA256 binds exact fixture bytes, not runtime observations; source_sha remains null. Edges are consumer to dependency; impact traverses reverse. Primary path deterministic; full graph preserves alternate paths. `impact.affected_ci_ids` includes root; downstream count excludes it. SAN-B availability UNKNOWN; no AND/OR failover semantics asserted. UX must render UNKNOWN neutrally, not healthy. E2E uses existing incident_id and SIM-ACME run label; tenant_id, resource_id, service_id, core_run_id and attempt_id null, binding UNBOUND. Analyst hypothesis only, Critic hold, Policy deny. No active source or production authorization.
+
+Reproduce: `python -m unittest discover -s tests -p 'test_acme_twin_provenance.py' -v`.
