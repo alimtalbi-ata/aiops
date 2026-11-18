@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-18T23:29:01.767718+00:00",
+  "collected_at": "2026-11-18T23:30:01.432008+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:a200775e701e8d0ffdee0b459178891532b511dc24afa7c919bd9e785d956ae3",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-core",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "aiops2-core:otel-health-qualified-20261118T230200Z",
@@ -144,8 +151,8 @@
         "health": "no-healthcheck",
         "image": "aiops2-core:metrics-plaintext-candidate-20261112",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-core",
-        "state": "running"
+        "name": "aiops2-rebuild-core-rollback-otel-lot7c3-fix30-20261118T232913Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -559,13 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-noc-rag-test",
         "state": "running"
-      },
-      {
-        "health": "no-healthcheck",
-        "image": "aiops2-noc-rag-copilot:v1",
-        "inspect_ok": true,
-        "name": "aiops2-noc-rag-copilot-test",
-        "state": "running"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 6 weeks, 13 hours, 40 minutes"
+    "uptime": "up 6 weeks, 13 hours, 41 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 137889869824,
+      "free_bytes": 137888010240,
       "total_bytes": 172898033664,
-      "used_bytes": 26150842368
+      "used_bytes": 26152701952
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.86279296875,
-      1.015625,
-      1.00244140625
+      0.98876953125,
+      1.07275390625,
+      1.02490234375
     ],
     "memory_bytes": {
-      "MemAvailable": 18399465472,
+      "MemAvailable": 18365038592,
       "MemTotal": 25205911552,
       "SwapFree": 10441560064,
       "SwapTotal": 10838077440
