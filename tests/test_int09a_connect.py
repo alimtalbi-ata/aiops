@@ -40,3 +40,18 @@ def test_actual_phase_refusals_connected():
     assert "projection incompatible" in render_collector_result(admission=p)
     a["execution_allowed"]=True
     assert "projection incompatible" in render_collector_result(admission=a)
+
+def test_san_actual_graph_connected():
+    from portal.acme_historical_san_offline import NODES,NODE_NAMES,NODE_CRITICALITY,EDGES,SITE,PAYMENTS
+    from portal.acme_impact_read_model import render_acme_impact_html
+    nodes=[(k,v,NODE_NAMES[k],SITE,"SIMULATED",NODE_CRITICALITY[k],1) for k,v in NODES.items()]
+    edges=[(k,*v,1,1) for k,v in EDGES.items()]
+    model=build_acme_impact_read_model()
+    html=render_acme_impact_html(model,offline_san=("FC_SFP_DEGRADATION",nodes,edges))
+    for label in (PAYMENTS,"Services candidats","Services observés","SYNTHETIC_FIXTURE_ONLY","ABSTAIN","UNBOUND","graph_sha256"):
+        assert label in html
+    assert "Services observés</dt><dd>MISSING" in html
+    assert html.count("<nav ")==1
+    bad=render_acme_impact_html(model,offline_san=("FC_SFP_DEGRADATION",nodes,edges[:-1]))
+    assert "entrée refusée" in bad
+    assert "Relations directes synthétiques" not in bad
