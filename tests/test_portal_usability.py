@@ -115,6 +115,29 @@ class PortalUsabilityTests(unittest.TestCase):
             sessions.issue(IncidentReadPrincipal("operator-1", "tenant-a", "UNKNOWN"))
 
 
+    def test_session_incident_authorization_rechecks_membership(self):
+        from portal.operator_access import authorize_incident_read
+        from portal.operator_session import OperatorSessions
+        from portal.incident_read_policy import IncidentReadPrincipal
+        sessions = OperatorSessions()
+        principal = IncidentReadPrincipal("operator-1", "tenant-a", "N1")
+        token = sessions.issue(principal)
+        current = lambda subject, tenant: principal
+        self.assertTrue(authorize_incident_read(sessions, token, "tenant-a", current))
+        self.assertFalse(authorize_incident_read(sessions, token, "tenant-b", current))
+        def unavailable(subject, tenant):
+            raise RuntimeError("authority unavailable")
+        self.assertFalse(authorize_incident_read(sessions, token, "tenant-a", unavailable))
+        self.assertFalse(authorize_incident_read(sessions, token, "tenant-a",
+                                                lambda subject, tenant: None))
+        self.assertIsNone(sessions.resolve(token))
+        token = sessions.issue(principal)
+        changed = IncidentReadPrincipal("operator-1", "tenant-a", "N2")
+        self.assertFalse(authorize_incident_read(sessions, token, "tenant-a",
+                                                lambda subject, tenant: changed))
+        self.assertIsNone(sessions.resolve(token))
+
+
 
 if __name__ == "__main__":
     unittest.main()
