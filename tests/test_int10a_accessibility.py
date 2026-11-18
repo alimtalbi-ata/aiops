@@ -117,8 +117,43 @@ class PopulatedAudit(unittest.TestCase):
                     self.assertTrue(summary.evaluate("e=>document.activeElement===e"))
                 finally:
                     trace_path.write_text(json.dumps(trace,ensure_ascii=False,indent=2),encoding="utf-8")
+                # Diagnose capture-induced reflow without modifying product styles.
+                snapshot_js="""() => [...document.querySelectorAll('html,body,body *')].map((e,i) => {
+                    const r=e.getBoundingClientRect(), c=getComputedStyle(e);
+                    return {i,tag:e.tagName,id:e.id,cls:e.getAttribute('class'),x:r.x,y:r.y,
+                        width:r.width,height:r.height,display:c.display,font:c.font,
+                        lineHeight:c.lineHeight,margin:c.margin,padding:c.padding,
+                        overflow:c.overflow,position:c.position,visibility:c.visibility,
+                        open:e.tagName==='DETAILS'?e.open:null};
+                })"""
+                page.evaluate("""() => {
+                    window.__captureEvents=[];
+                    const record=kind=>{
+                        if(window.__captureEvents.length<256)
+                            window.__captureEvents.push({kind,t:performance.now(),w:innerWidth,h:innerHeight,
+                                scrollY,rootHeight:document.documentElement.scrollHeight,
+                                active:document.activeElement?.tagName});
+                    };
+                    window.addEventListener('resize',()=>record('window.resize'));
+                    visualViewport.addEventListener('resize',()=>record('visual.resize'));
+                    window.addEventListener('scroll',()=>record('scroll'));
+                    window.addEventListener('focusin',()=>record('focusin'));
+                    window.__captureObserver=new ResizeObserver(()=>record('root/body.resize'));
+                    window.__captureObserver.observe(document.documentElement);
+                    window.__captureObserver.observe(document.body);
+                }""")
+                elements_before=page.evaluate(snapshot_js)
+                capture_path=out/f"populated-capture-{width}-{repetition}.json"
                 png=page.screenshot(path=str(out/f"populated-{width}-{repetition}.png"),full_page=True,scale="css")
                 after=page.evaluate(metrics_js)
+                elements_after=page.evaluate(snapshot_js)
+                events=page.evaluate("() => window.__captureEvents")
+                changes=[dict(before=a,after=b) for a,b in zip(elements_before,elements_after) if a!=b]
+                capture_path.write_text(json.dumps(dict(before=before,after=after,
+                    png_width=int.from_bytes(png[16:20],"big"),png_height=int.from_bytes(png[20:24],"big"),
+                    elements_before=len(elements_before),elements_after=len(elements_after),
+                    changes=changes,events=events),ensure_ascii=False,indent=2),encoding="utf-8")
+                self.assertEqual(len(elements_before),len(elements_after))
                 self.assertEqual(png[:8],bytes.fromhex("89504e470d0a1a0a"))
                 png_width=int.from_bytes(png[16:20],"big")
                 png_height=int.from_bytes(png[20:24],"big")
@@ -131,6 +166,7 @@ class PopulatedAudit(unittest.TestCase):
                     png_width=png_width,png_height=png_height,metrics_before=before,metrics_after=after,
                     png_dom_delta=png_height-after["scrollHeight"],bottom_geometry_covered=True,
                     settle_sha256=hashlib.sha256(trace_path.read_bytes()).hexdigest(),
+                    capture_sha256=hashlib.sha256(capture_path.read_bytes()).hexdigest(),
                     ax_sha256=hashlib.sha256(ax_path.read_bytes()).hexdigest(),
                     native_zoom="NOT_TESTED",real_assistive_technology="NOT_TESTED"))
             browser.close()
