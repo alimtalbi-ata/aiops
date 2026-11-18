@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from html import escape
-from portal.acme_workbench_presentation import render_story_context, render_runtime_refusals
+from portal.acme_workbench_presentation import render_story_context, render_runtime_refusals, render_offline_evidence
 from portal.acme_runtime_workbench import render_collector_result
 
 from portal.acme_evidence_collection_plan import EVIDENCE_REQUIREMENTS
 
 
-def render_synthetic_cockpit_html(cockpit: dict, *, offline_collector_result=None) -> str:
+def render_synthetic_cockpit_html(cockpit: dict, *, offline_collector_result=None, offline_events=None, offline_evidence=None) -> str:
     if (not isinstance(cockpit, dict)
             or cockpit.get("schema") != "aiops.synthetic-incident-cockpit.v1"
             or cockpit.get("mode") != "DEMO"
@@ -136,7 +136,7 @@ def render_synthetic_cockpit_html(cockpit: dict, *, offline_collector_result=Non
         "<a href='#decision'>3. Décision</a> · "
         "<a href='#itil'>4. ITIL</a> · "
         "<a href='#verdict'>5. Verdict</a></nav>"
-        "<details><summary>Parcours démontrable — SAN vers Payments</summary>"
+        "<h2>Parcours démontrable — SAN vers Payments</h2><details><summary>Explications du parcours</summary>"
         "<p>Signal SAN → incident P1 → impact Payments → hypothèses Analyst/Critic "
         "→ décision Policy/HITL → simulation isolée → vérification indépendante "
         "→ préparation ITIL.</p>"
@@ -166,7 +166,7 @@ def render_synthetic_cockpit_html(cockpit: dict, *, offline_collector_result=Non
         " <span id='evidence' aria-hidden='true'></span><h2 id='workbench' tabindex='-1'>Evidence Workbench — lecture seule</h2>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
-        + render_story_context(cockpit) + render_runtime_refusals() + render_collector_result(offline_collector_result) +
+        + render_story_context(cockpit) + render_runtime_refusals() + render_collector_result(offline_collector_result) + render_offline_evidence(offline_events, offline_evidence) +
         "<details><summary>Registre des preuves attendues — 9 MISSING</summary>"
         "<p>Chaque ligne est une demande de preuve, pas une pièce collectée. "
         "Les champs observed_at, source_id et content_sha256 doivent être "
