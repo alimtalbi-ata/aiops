@@ -1,0 +1,113 @@
+-- PROPOSED / NOT_TESTED / fresh-only, never active migration.
+-- Requires proposed minimal ledger and current 002. No grants or activation.
+-- Historical Golden f594d04e02abde19b2299fbb523bf9d0d0e360b8, 011 b096af57cb19b9618e3d7d4d68a8ef3d56890934, 014 bfaf0161ae3b4c315e09d9cd74d0b6b003d3e315.
+-- REJECT-only scope; independent ownership producer remains BLOCKED.
+begin;
+-- 011 — Transactional HITL decision delivery outbox.
+-- Decision persistence and outbox insertion share the approval transaction.
+-- Worker delivery is leased and at-least-once; Temporal signals remain notifications,
+-- never execution authorization.
+create table if not exists aiops.hitl_decision_outbox (
+    event_id text primary key,
+    proposal_id text not null references aiops.action_proposals(proposal_id),
+    run_id text not null references aiops.runs(run_id),
+    proposal_hash text not null,
+    proposal_revision integer not null check (proposal_revision >= 1),
+    decision text not null check (decision in ('APPROVE','REJECT')),
+    source_status text not null check (source_status in ('APPROVED','REJECTED','REVOKED')),
+    approval_id text not null references aiops.approval_records(approval_id),
+    status text not null default 'PENDING'
+        check (status in ('PENDING','LEASED','DELIVERED','DEAD')),
+    attempts integer not null default 0 check (attempts >= 0),
+    available_at timestamptz not null default now(),
+    lease_owner text,
+    lease_token text,
+    lease_until timestamptz,
+    created_at timestamptz not null default now(),
+    delivered_at timestamptz,
+    last_error text,
+    unique (proposal_id, proposal_hash, proposal_revision, decision)
+);
+create index if not exists ix_hitl_outbox_pending
+    on aiops.hitl_decision_outbox(status, available_at, created_at);
+create index if not exists ix_hitl_outbox_run
+    on aiops.hitl_decision_outbox(run_id, created_at);
+
+alter table aiops.action_proposals add unique (proposal_id,run_id,proposal_hash,proposal_revision);
+alter table aiops.approval_records add unique (approval_id,proposal_id,proposal_hash);
+alter table aiops.hitl_decision_outbox
+ add foreign key (proposal_id,run_id,proposal_hash,proposal_revision)
+ references aiops.action_proposals(proposal_id,run_id,proposal_hash,proposal_revision),
+ add foreign key (approval_id,proposal_id,proposal_hash)
+ references aiops.approval_records(approval_id,proposal_id,proposal_hash),
+ add check (decision='REJECT' and source_status in ('REJECTED','REVOKED')),
+ add check (attempts between 0 and 8),
+ add check ((status='PENDING' and attempts=0 and lease_owner is null and lease_token is null and lease_until is null)
+ or (status in ('LEASED','DELIVERED','DEAD') and attempts>=1 and lease_owner is not null and lease_token is not null and lease_until is not null)),
+ add check ((status='DELIVERED')=(delivered_at is not null)),
+ add check (status<>'DEAD' or attempts=8),
+ add unique(event_id,run_id,proposal_id,proposal_hash,proposal_revision);
+-- 014 Core-owned terminal REJECT audit. Strictly after installed 001/004/009-013.
+-- Never DROP 013 or delete any terminal audit rows on application rollback.
+-- This table is a permanent append-only record of notification exhaustion,
+-- not a human approval, delivery receipt, or authorization to execute.
+create table if not exists aiops.hitl_reject_terminal_receipts (
+ event_id text primary key references aiops.hitl_decision_outbox(event_id),
+ schema_version text not null default 'aiops.core-hitl-reject-terminal-receipt.v1'
+   check (schema_version='aiops.core-hitl-reject-terminal-receipt.v1'),
+ tenant_id text not null,
+ run_id text not null references aiops.runs(run_id),
+ proposal_id text not null references aiops.action_proposals(proposal_id),
+ proposal_hash char(64) not null check (proposal_hash ~ '^[0-9a-f]{64}$'),
+ proposal_revision integer not null check (proposal_revision >= 1),
+ actor_id text not null,
+ lease_owner text not null,
+ lease_token_sha256 char(64) not null check (lease_token_sha256 ~ '^[0-9a-f]{64}$'),
+ attempts integer not null check (attempts >= 8),
+ lease_expired_at timestamptz not null,
+ dead_at timestamptz not null,
+ receipt_payload jsonb not null,
+ receipt_sha256 char(64) not null check (receipt_sha256 ~ '^[0-9a-f]{64}$'),
+ check (lease_expired_at <= dead_at)
+);
+create index if not exists ix_hitl_reject_terminal_tenant_run
+ on aiops.hitl_reject_terminal_receipts(tenant_id,run_id,dead_at);
+-- Reuse current 002 immutable-audit trigger function.
+drop trigger if exists trg_hitl_reject_terminal_immutable
+ on aiops.hitl_reject_terminal_receipts;
+create trigger trg_hitl_reject_terminal_immutable before update or delete
+ on aiops.hitl_reject_terminal_receipts for each row
+ execute function aiops.prevent_append_only();
+
+-- Receipt identity must match the event. char(64) retained for wire compatibility;
+-- composite FK uses compatible text equality (PG16 verification required).
+alter table aiops.hitl_reject_terminal_receipts
+ add foreign key (event_id,run_id,proposal_id,proposal_hash,proposal_revision)
+ references aiops.hitl_decision_outbox(event_id,run_id,proposal_id,proposal_hash,proposal_revision),
+ add check (attempts=8);
+-- Guard terminal state and receipt pairing at commit, preserving atomic update + insert.
+create function aiops.int10b_check_dead_receipt() returns trigger language plpgsql as $$
+declare o record; t record;
+begin
+ select * into o from aiops.hitl_decision_outbox where event_id=NEW.event_id;
+ select * into t from aiops.hitl_reject_terminal_receipts where event_id=NEW.event_id;
+ if (o.status='DEAD') is distinct from (t.event_id is not null) then
+  raise exception 'DEAD and terminal receipt must commit together';
+ end if;
+ if t.event_id is not null and (t.attempts is distinct from o.attempts
+ or t.lease_owner is distinct from o.lease_owner
+ or t.lease_expired_at is distinct from o.lease_until
+ or t.actor_id is distinct from o.lease_owner) then
+  raise exception 'terminal receipt lease mismatch';
+ end if;
+ return null;
+end $$;
+create constraint trigger trg_int10b_outbox_dead after insert or update on aiops.hitl_decision_outbox
+ deferrable initially deferred for each row execute function aiops.int10b_check_dead_receipt();
+create constraint trigger trg_int10b_receipt_dead after insert on aiops.hitl_reject_terminal_receipts
+ deferrable initially deferred for each row execute function aiops.int10b_check_dead_receipt();
+create trigger trg_int10b_outbox_no_delete before delete on aiops.hitl_decision_outbox
+ for each row execute function aiops.prevent_append_only();
+-- This candidate does NOT establish actor authorization, token digest verification,
+-- ownership proof, safe DML role grants, or all allowed state transitions.
+commit;
