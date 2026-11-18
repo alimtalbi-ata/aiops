@@ -59,11 +59,7 @@ def test_actual_workflow_and_stage_activity_stop_before_resolve(mode):
             return {"ok": True}
         raise AssertionError("unexpected external call: " + path)
     async def execute_activity(fn, args, **kwargs):
-        result = await fn(args)
-        if fn.__name__ == "execute_stage" and result.get("status") != "BLOCKED":
-            result.setdefault("run_id", args["run_id"])
-            result.setdefault("stage", args["stage"])
-        return result
+        return await fn(args)
     namespace = {
         "workflow": SimpleNamespace(execute_activity=execute_activity),
         "activity": SimpleNamespace(info=lambda: SimpleNamespace(attempt=1)),
