@@ -19,6 +19,15 @@ class AccessibilityAudit(unittest.TestCase):
                 self.assertEqual(self.page.evaluate("document.activeElement.className"),"skip-link")
                 self.page.keyboard.press("Enter")
                 self.assertEqual(self.page.evaluate("document.activeElement.id"),"main-content")
+                if name=="acme-impact":
+                    links=self.page.get_by_role("navigation",name="Accès rapide aux preuves").get_by_role("link")
+                    self.assertEqual(links.count(),5)
+                    for link in links.all():
+                        target=link.get_attribute("href")[1:]
+                        link.focus()
+                        self.page.keyboard.press("Enter")
+                        self.assertEqual(self.page.evaluate("document.activeElement.id"),target)
+                    self.page.evaluate("scrollTo(0,0)")
                 if name=="explore-story":
                     self.page.locator("#story-token").fill(historical.VIEWER)
                     self.page.locator("#start").focus()
