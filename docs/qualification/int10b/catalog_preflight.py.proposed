@@ -46,6 +46,15 @@ FOREIGN_KEYS = (
      'int10b_ownership_observation','observation_id,resource_kind,resource_id,tenant_id,observation_version'),
 )
 
+FOREIGN_KEYS += (
+    ('hitl_decision_outbox','proposal_id,run_id,proposal_hash,proposal_revision',
+     'action_proposals','proposal_id,run_id,proposal_hash,proposal_revision'),
+    ('hitl_decision_outbox','approval_id,proposal_id,proposal_hash',
+     'approval_records','approval_id,proposal_id,proposal_hash'),
+    ('hitl_reject_terminal_receipts','event_id,run_id,proposal_id,proposal_hash,proposal_revision',
+     'hitl_decision_outbox','event_id,run_id,proposal_id,proposal_hash,proposal_revision'),
+)
+
 def preflight(c):
     version,replication=c.execute("select current_setting('server_version_num')::int,current_setting('session_replication_role')").fetchone()
     if not 160000 <= version < 170000 or replication!='origin':
