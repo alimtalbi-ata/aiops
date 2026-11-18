@@ -521,5 +521,86 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
 
 
 
+    def _responsive_showrun(self, width, repetition):
+        self.page.set_viewport_size({"width": width, "height": 900 if width >= 768 else 844})
+        output = Path(os.environ.get(
+            "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")
+        ))
+        output.mkdir(parents=True, exist_ok=True)
+        prefix = f"showrun-{width}-{repetition}"
+        captures = []
+        def capture(label):
+            self.assertTrue(self.page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), f"{prefix}: {label} horizontal overflow")
+            name = f"{prefix}-{label}.png"
+            png = self.page.screenshot(path=str(output / name), full_page=True, animations="disabled")
+            digest = hashlib.sha256(png).hexdigest()
+            self.assertEqual(hashlib.sha256((output / name).read_bytes()).hexdigest(), digest)
+            captures.append({"file": name, "sha256": digest})
+        self.page.goto(self.base + "/demo/explore-story")
+        self.page.locator("#story-token").fill(VIEWER)
+        self.page.locator("#start").click()
+        expect(self.page.locator("#story-status")).to_contain_text("PAUSE / EXPLORE")
+        scenario = self.page.locator("#scenario").inner_text()
+        run_id = scenario.split(" · ")[0]
+        self.assertRegex(run_id, r"^SIM-ACME-[A-F0-9]{16}$")
+        self.assertIn("ACME-DEMO-SAN-001", scenario)
+        self.assertIn("ACME-DEMO-PAY-002", scenario)
+        self.assertEqual(self.page.locator("#timeline li").count(), 9)
+        for cursor in range(2, 10):
+            self.page.locator("#advance").click()
+            expect(self.page.locator("#story-status")).to_contain_text(f"{cursor}/9")
+        self.assertTrue(all("MISSING" in t for t in self.page.locator("#timeline li").all_inner_texts()))
+        self.assertEqual(self.page.locator("#story-token").input_value(), "")
+        capture("story")
+        self.page.goto(self.base + "/demo/acme-impact")
+        expect(self.page.locator("body")).to_contain_text(run_id)
+        capture("impact")
+        self.page.goto(self.base + "/demo/acme-incident-cockpit")
+        for anchor in ("impact", "workbench", "decision", "itil", "verdict"):
+            self.page.locator(f"nav a[href='#{anchor}']").click()
+            self.assertEqual(self.page.evaluate("location.hash"), "#" + anchor)
+            expect(self.page.locator(f"#{anchor}")).to_be_visible()
+        body = self.page.locator("body").inner_text()
+        for verdict in ("GO — scénario synthétique", "UNKNOWN — preuves runtime", "NO-GO LIVE"):
+            self.assertIn(verdict, body)
+        self.assertEqual([t.locator("tbody tr").count() for t in self.page.locator("table").all()], [9, 9, 9, 8])
+        capture("cockpit")
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        receipt = {"schema": "aiops.responsive-showrun.v1", "executed_sha": sha,
+                   "width": width, "repetition": repetition, "run_id": run_id,
+                   "captures": captures, "scope": "STORY_OFFLINE",
+                   "runtime_authenticated": False, "production_qualified": False,
+                   "live_remediation_authorized": False}
+        (output / f"{prefix}.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+    def test_09_showrun_320_1(self):
+        self._responsive_showrun(320, 1)
+
+    def test_09_showrun_320_2(self):
+        self._responsive_showrun(320, 2)
+
+    def test_09_showrun_320_3(self):
+        self._responsive_showrun(320, 3)
+
+    def test_09_showrun_768_1(self):
+        self._responsive_showrun(768, 1)
+
+    def test_09_showrun_768_2(self):
+        self._responsive_showrun(768, 2)
+
+    def test_09_showrun_768_3(self):
+        self._responsive_showrun(768, 3)
+
+    def test_09_showrun_1440_1(self):
+        self._responsive_showrun(1440, 1)
+
+    def test_09_showrun_1440_2(self):
+        self._responsive_showrun(1440, 2)
+
+    def test_09_showrun_1440_3(self):
+        self._responsive_showrun(1440, 3)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
