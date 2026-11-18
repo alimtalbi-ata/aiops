@@ -55,3 +55,30 @@ def test_san_actual_graph_connected():
     bad=render_acme_impact_html(model,offline_san=("FC_SFP_DEGRADATION",nodes,edges[:-1]))
     assert "entrée refusée" in bad
     assert "Relations directes synthétiques" not in bad
+
+def test_golden_nominal_admission_in_cockpit():
+    from test_int09b_admission_nominal import fixture, call, assert_closed
+    f=fixture()
+    before=deepcopy(f)
+    result=call(f)
+    assert_closed(result)
+    assert result["contract_status"]=="CONTRACT_ONLY"
+    model=project_synthetic_incident_cockpit(build_acme_impact_read_model())
+    html=render_synthetic_cockpit_html(model,offline_admission=result)
+    for label in ("Admission : BLOCK — UNKNOWN", "ADMISSION_CONSISTENT_NOT_ATTESTED",
+                  "INC-IMPACT-001","RUN-SIM-001","SIM-GLPI-001","CONTRACT_ONLY",
+                  "core-source","twin-source","policy-source","critic-source","hitl-source",
+                  "Préterminal : MISSING","NO-GO LIVE"):
+        assert label in html
+    assert f==before
+    assert html.count("Evidence Workbench — lecture seule")==1
+    assert "public-test-fixture-not-a-credential" not in html
+    assert f[6]["signature"] not in html
+    assert f[6]["payload"]["approval_nonce"] not in html
+    f[6]["signature"]="0"*64
+    refused=call(f)
+    assert_closed(refused)
+    html=render_synthetic_cockpit_html(model,offline_admission=refused)
+    assert "Admission : REJECT — UNKNOWN" in html
+    assert "HISTORICAL_PREDICATE_REFUSED" in html
+    assert "core-source" not in html
