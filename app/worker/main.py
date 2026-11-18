@@ -186,10 +186,14 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
   # version or Core run ownership matches this request. Never attest replay.
   raise HTTPException(409,'workflow id already exists; reconcile with Core receipt')
 async def worker_main():
+ from worker.int06a_registration import registered_activities
+ namespace=os.getenv('TEMPORAL_NAMESPACE','default')
+ activities=registered_activities([execute_stage,start_run,finish_run],
+     enabled=os.getenv('AIOPS_INT06_REGISTER_NO_EFFECT','0'),namespace=namespace,address=TEMP)
  while True:
   try:
-   c=await Client.connect(TEMP)
-   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run]):await asyncio.Event().wait()
+   c=await Client.connect(TEMP,namespace=namespace)
+   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=activities):await asyncio.Event().wait()
   except Exception:await asyncio.sleep(5)
 @app.on_event('startup')
 async def startup():asyncio.create_task(worker_main())
