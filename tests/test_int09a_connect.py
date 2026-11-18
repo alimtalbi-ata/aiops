@@ -162,3 +162,12 @@ def test_historical_twin_consumer_connected_to_existing_impact():
     bad=render_acme_impact_html(build_acme_impact_read_model(),offline_twin=impact)
     assert "UNKNOWN — projection refusée" in bad
     assert "source_sha256" not in bad
+
+
+def test_existing_glpi_handoff_navigation():
+    model=project_synthetic_incident_cockpit(build_acme_impact_read_model())
+    html=render_synthetic_cockpit_html(model)
+    assert html.count("href='/itsm'")==1
+    assert "TENANT_ACL_NOT_QUALIFIED" in html
+    assert "Association ticket/Run : NOT_INSTALLED" in html
+    assert "Aucun ticket réel ni droit HITL déduit" in html
