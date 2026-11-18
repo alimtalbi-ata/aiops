@@ -1,0 +1,51 @@
+"""Inert admission contract; no driver connection, DSN, or gate override."""
+from dataclasses import dataclass
+from contextlib import contextmanager
+from time import monotonic
+from math import isfinite
+from psycopg.pq import TransactionStatus
+
+@dataclass(frozen=True)
+class LabIdentity:
+    reservation_id: str
+    instance_id: str
+    database: str
+    role: str
+
+def guarded_factory(*, identity, work_deadline, verify_reservation,
+                    open_reserved_connection, verify_session):
+    """Injected backend must enforce deadline externally and own cleanup.
+    Verifiers return literal True only after independent verification.
+    No credentials or endpoint selection here.
+    """
+    if not isinstance(identity, LabIdentity) or not all(
+        type(v) is str and v.strip() for v in (
+            identity.reservation_id, identity.instance_id,
+            identity.database, identity.role)):
+        raise AssertionError('invalid lab identity')
+    if not isfinite(work_deadline):
+        raise AssertionError('invalid work deadline')
+
+    @contextmanager
+    def connect():
+        if monotonic() >= work_deadline:
+            raise AssertionError('work deadline expired')
+        if verify_reservation(identity, work_deadline) is not True:
+            raise AssertionError('reservation not verified')
+        remaining=work_deadline-monotonic()
+        if remaining < 2:
+            raise AssertionError('insufficient connect budget')
+        timeout=min(5,int(remaining))
+        with open_reserved_connection(identity, timeout, work_deadline) as c:
+            if monotonic() >= work_deadline:
+                raise AssertionError('connection completed after deadline')
+            if c.closed or c.autocommit or c.info.transaction_status != TransactionStatus.IDLE:
+                raise AssertionError('fresh idle connection required')
+            if verify_session(c, identity, work_deadline) is not True:
+                raise AssertionError('session identity not verified')
+            if c.closed or c.autocommit or c.info.transaction_status != TransactionStatus.IDLE:
+                raise AssertionError('verification left non-idle connection')
+            if monotonic() >= work_deadline:
+                raise AssertionError('verification exceeded deadline')
+            yield c
+    return connect
