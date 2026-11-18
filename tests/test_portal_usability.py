@@ -67,6 +67,15 @@ class PortalUsabilityTests(unittest.TestCase):
         self.assertIn("NOT VERIFIED", page.text)
 
 
+    def test_incident_explorer_does_not_present_unqualified_inventory(self):
+        page = self.client.get("/")
+        self.assertIn('id="incident-explorer"', page.text)
+        self.assertIn("UNKNOWN — inventaire des incidents non autorisé", page.text)
+        self.assertIn("Ce statut ne signifie pas", page.text)
+        self.assertIn('placeholder="Identifiant, service ou équipement" disabled', page.text)
+        self.assertIn("<select disabled><option>Toutes les criticités", page.text)
+
+
 
 if __name__ == "__main__":
     unittest.main()
