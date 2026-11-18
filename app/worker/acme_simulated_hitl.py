@@ -362,3 +362,55 @@ def receipt_digest_valid(receipt):
     except (TypeError, ValueError, UnicodeError):
         return False
     return hmac.compare_digest(actual, expected)
+
+
+def verify_no_effect_receipt(receipt, expected_identity):
+    """Validate no-effect receipt structure and identity; digest is not authority."""
+    required = {
+        "schema", "attempt_id", "tenant_id", "incident_id", "run_id",
+        "proposal_id", "ticket_id", "approval_id", "action", "receipt_status",
+        "approval_issuer", "approval_kind", "human_approved", "execution_allowed",
+        "effect_allowed", "live_effects_allowed", "real_glpi_writes_allowed",
+        "effect_receipts", "audit_transitions", "audit_authority", "receipt_phase",
+        "core_status_at_validation", "resolution_verified",
+        "post_resolution_readback_required", "core_014_015_written", "glpi_write",
+        "core_request_sha256", "core_source_event_ids",
+        "twin_approval_nonce_sha256", "receipt_sha256",
+    }
+    identity_fields = ("attempt_id", "tenant_id", "incident_id", "run_id",
+                       "proposal_id", "ticket_id", "approval_id")
+    if (type(receipt) is not dict or set(receipt) != required
+            or type(expected_identity) is not dict
+            or set(expected_identity) != set(identity_fields)
+            or not receipt_digest_valid(receipt)):
+        return False
+    if any(type(expected_identity[k]) is not str or not expected_identity[k]
+           or receipt.get(k) != expected_identity[k] for k in identity_fields):
+        return False
+    return (
+        receipt.get("schema") == SCHEMA
+        and receipt.get("action") == "SIMULATE"
+        and receipt.get("receipt_status") == "SIMULATED_NO_EFFECT"
+        and receipt.get("approval_issuer") == ISSUER
+        and receipt.get("approval_kind") == "SIMULATED"
+        and all(receipt.get(k) is False for k in (
+            "human_approved", "execution_allowed", "effect_allowed",
+            "live_effects_allowed", "real_glpi_writes_allowed",
+            "resolution_verified", "core_014_015_written", "glpi_write"))
+        and receipt.get("effect_receipts") == 0
+        and receipt.get("audit_transitions") == [
+            "CORE_PREPARED_INDEPENDENTLY_VERIFIED",
+            "TWIN_SIMULATED_APPROVAL_VALIDATED",
+            "POLICY_SIMULATE_INDEPENDENTLY_VERIFIED",
+            "WORKER_NO_EFFECT",
+        ]
+        and receipt.get("audit_authority") == "TEMPORAL_WORKFLOW_HISTORY_ONLY"
+        and receipt.get("receipt_phase") == "PRE_RESOLUTION"
+        and receipt.get("core_status_at_validation") == "PREPARED"
+        and receipt.get("post_resolution_readback_required") is True
+        and type(receipt.get("core_request_sha256")) is str
+        and re.fullmatch(r"[0-9a-f]{64}", receipt["core_request_sha256"]) is not None
+        and receipt.get("core_source_event_ids") == canonical_source_ids(receipt["attempt_id"])
+        and type(receipt.get("twin_approval_nonce_sha256")) is str
+        and re.fullmatch(r"[0-9a-f]{64}", receipt["twin_approval_nonce_sha256"]) is not None
+    )

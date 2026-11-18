@@ -2,6 +2,14 @@ name: ACME golden demo readiness (offline)
 on:
   pull_request:
     paths:
+      - 'tests/test_acme_isolated_remediation_simulator.py'
+      - 'tests/test_acme_simulation_evidence_gate.py'
+      - 'tests/test_acme_demo_simulation_pipeline.py'
+      - 'app/portal/acme_incident_cockpit.py'
+      - 'app/portal/acme_lifecycle_read_model.py'
+      - 'app/portal/acme_isolated_remediation_simulator.py'
+      - 'app/portal/acme_simulation_evidence_gate.py'
+      - 'app/portal/acme_demo_simulation_pipeline.py'
       - 'app/worker/acme_simulated_hitl.py'
       - 'tests/test_worker_acme_simulated_hitl.py'
       - 'scripts/acme_demo_readiness.py'

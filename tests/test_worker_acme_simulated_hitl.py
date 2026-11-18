@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from worker.acme_simulated_hitl import (
     ISSUER, SandboxDenied, capability, canonical_source_ids, simulate_no_effect,
-    receipt_digest_valid, validated_service_origin, decode_authority_json,
+    receipt_digest_valid, verify_no_effect_receipt, validated_service_origin, decode_authority_json,
     validate_intent, validate_readbacks,
 )
 
@@ -469,6 +469,53 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertTrue(receipt_digest_valid(receipt))
 
 
+
+    def test_36_receipt_verifier_binds_all_runtime_identities_and_no_effect_flags(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        identity = {key: INTENT[key] for key in (
+            "attempt_id", "tenant_id", "incident_id", "run_id",
+            "proposal_id", "ticket_id", "approval_id")}
+        self.assertTrue(verify_no_effect_receipt(receipt, identity))
+
+    def test_37_receipt_verifier_rejects_rebound_identity_and_recomputed_live_claim(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        identity = {key: INTENT[key] for key in (
+            "attempt_id", "tenant_id", "incident_id", "run_id",
+            "proposal_id", "ticket_id", "approval_id")}
+        self.assertFalse(verify_no_effect_receipt(
+            receipt, dict(identity, tenant_id="OTHER-TENANT")))
+        forged = deepcopy(receipt)
+        forged["live_effects_allowed"] = True
+        body = {key: value for key, value in forged.items() if key != "receipt_sha256"}
+        forged["receipt_sha256"] = hashlib.sha256(json.dumps(
+            body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")).hexdigest()
+        self.assertTrue(receipt_digest_valid(forged))
+        self.assertFalse(verify_no_effect_receipt(forged, identity))
+
+    def test_38_receipt_verifier_rejects_unknown_fields_and_transition_reordering(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        identity = {key: INTENT[key] for key in (
+            "attempt_id", "tenant_id", "incident_id", "run_id",
+            "proposal_id", "ticket_id", "approval_id")}
+        for mutate in (lambda value: value.update(extra="unexpected"),
+                       lambda value: value["audit_transitions"].reverse()):
+            forged = deepcopy(receipt)
+            mutate(forged)
+            body = {key: value for key, value in forged.items() if key != "receipt_sha256"}
+            forged["receipt_sha256"] = hashlib.sha256(json.dumps(
+                body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")).hexdigest()
+            self.assertFalse(verify_no_effect_receipt(forged, identity))
 
 
 if __name__ == '__main__':
