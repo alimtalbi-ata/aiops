@@ -77,5 +77,20 @@ class PortalUsabilityTests(unittest.TestCase):
 
 
 
+    def test_future_incident_policy_denies_cross_tenant_and_unknown_roles(self):
+        from portal.incident_read_policy import IncidentReadPrincipal, may_read_incident
+        for role in ("N1", "N2", "N3", "MANAGER"):
+            principal = IncidentReadPrincipal("operator-1", "tenant-a", role)
+            self.assertTrue(may_read_incident(principal, "tenant-a"))
+            self.assertFalse(may_read_incident(principal, "tenant-b"))
+            self.assertFalse(may_read_incident(principal, None))
+        for principal in (None, {"tenant": "tenant-a"},
+                          IncidentReadPrincipal("", "tenant-a", "N1"),
+                          IncidentReadPrincipal("operator-1", "tenant-a", "ADMIN"),
+                          IncidentReadPrincipal("operator-1", "*", "N1")):
+            self.assertFalse(may_read_incident(principal, "tenant-a"))
+
+
+
 if __name__ == "__main__":
     unittest.main()
