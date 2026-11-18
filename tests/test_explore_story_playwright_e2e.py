@@ -602,5 +602,56 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
     def test_09_showrun_1440_3(self):
         self._responsive_showrun(1440, 3)
 
+    def test_10_interactive_run_selection_with_untrusted_dom_inventory(self):
+        """Real UI click; injected display rows are not Core or ACL evidence."""
+        self.page.goto(self.base + "/")
+        expect(self.page.locator("#run-detail-id")).to_be_visible()
+        expect(self.page.locator("#portal-run-filter")).to_be_visible()
+        self.page.evaluate("""() => {
+            const rows = document.getElementById('portal-runs');
+            rows.replaceChildren();
+            for (const id of ['RUN-CI-001', 'RUN-CI-002', 'SIM-ACME-INVALID']) {
+                const row = rows.insertRow();
+                for (const value of [id, 'TEST', 'UNKNOWN', '-', 'DOM fixture only'])
+                    row.insertCell().textContent = value;
+            }
+        }""")
+        rows = self.page.locator("#portal-runs tr")
+        first = rows.nth(0).locator("button[data-run-select]")
+        second = rows.nth(1).locator("button[data-run-select]")
+        expect(first).to_be_visible()
+        expect(second).to_be_visible()
+        expect(rows.nth(2).locator("button[data-run-select]")).to_have_count(0)
+        field = self.page.locator("#run-detail-id")
+        original_url = self.page.url
+        requests = []
+        self.page.on("request", lambda req: requests.append(req.url))
+        first.click()
+        expect(field).to_have_value("RUN-CI-001")
+        expect(field).to_be_focused()
+        expect(self.page.locator("#run-selection-status")).to_contain_text("ACL")
+        self.assertEqual(self.page.url, original_url)
+        self.assertFalse(any("/api/portal/runs/" in url for url in requests))
+        self.page.locator("#portal-run-filter-input").fill("RUN-CI-001")
+        expect(rows.nth(1)).to_be_hidden()
+        second.evaluate("el => el.click()")
+        expect(field).to_have_value("RUN-CI-001")
+        self.page.locator("#portal-run-filter-clear").click()
+        second.click()
+        expect(field).to_have_value("RUN-CI-002")
+        self.page.evaluate("document.getElementById('portal-runs').replaceChildren()")
+        expect(field).to_have_value("")
+        expect(self.page.locator("#run-selection-status")).to_contain_text("UNKNOWN")
+        self.assertEqual(self.page.url, original_url)
+        self.assertFalse(any("/api/portal/runs/" in url for url in requests))
+        response = self.context.request.get(
+            self.base + "/api/portal/runs/RUN-CI-002",
+            headers={"Authorization": "Bearer " + VIEWER},
+        )
+        self.assertEqual(response.status, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertNotIn("run_id", response.json())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
