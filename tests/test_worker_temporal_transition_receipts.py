@@ -135,3 +135,24 @@ def test_workflow_rejects_boolean_start_version():
         asyncio.run(namespace["IncidentWorkflow"]().run({
             "run_id": "demo-run", "mode": "DEMO", "scenario_id": "acme", "version": 0}))
     assert events == ["start_run"]
+
+
+@pytest.mark.parametrize("blocked_stage", ["DGX_CRITIC", "POLICY", "HITL", "REMEDIATE", "VERIFY"])
+@pytest.mark.parametrize("status", ["BLOCKED", "FAIL"])
+def test_no_downstream_action_after_denied_or_failed_stage(blocked_stage, status):
+    events = []
+    stages = ["DGX_CRITIC", "POLICY", "HITL", "REMEDIATE", "VERIFY"]
+    def result(args):
+        return {"run_id": args["run_id"], "stage": args["stage"],
+                "status": status if args["stage"] == blocked_stage else "PASS",
+                "version": args["version"] + 1}
+    instance = workflow_for(result, events)
+    instance.run.__func__.__globals__["STAGES"] = stages
+    args = {"run_id": "demo-run", "mode": "DEMO", "scenario_id": "acme", "version": 0}
+    if status == "FAIL":
+        with pytest.raises(ValueError, match="unqualified_stage_transition_receipt"):
+            asyncio.run(instance.run(args))
+    else:
+        assert asyncio.run(instance.run(args))["blocked_stage"] == blocked_stage
+    assert [a["stage"] for name,a in events if name == "execute_stage"] == stages[:stages.index(blocked_stage)+1]
+    assert not any(name == "finish_run" for name,_ in events)
