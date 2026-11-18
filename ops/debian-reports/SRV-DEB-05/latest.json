@@ -3,16 +3,23 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-18T21:25:01.550015+00:00",
+  "collected_at": "2026-11-18T21:26:01.179521+00:00",
   "docker": {
     "available": true,
     "containers": [
       {
         "health": "no-healthcheck",
-        "image": "sha256:3189cb7d62a5a660400e5b1eb5c4638f61367964565c563dce2478b2b43e9817",
+        "image": "sha256:8f1c18d40d2192a9f091e5f962f6c4a176eb9b0220a9560eea6aa3576a374003",
         "inspect_ok": true,
         "name": "aiops2-portal-v3-qual-exposed",
         "state": "running"
+      },
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:3189cb7d62a5a660400e5b1eb5c4638f61367964565c563dce2478b2b43e9817",
+        "inspect_ok": true,
+        "name": "aiops2-portal-v3-qual-exposed-rollback-explore-lot4a-20261118T212529Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -559,13 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-rebuild-temporal",
         "state": "running"
-      },
-      {
-        "health": "no-healthcheck",
-        "image": "temporalio/admin-tools:1.31.0",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-temporal-schema",
-        "state": "exited"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 6 weeks, 11 hours, 36 minutes"
+    "uptime": "up 6 weeks, 11 hours, 37 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 138011996160,
+      "free_bytes": 138010042368,
       "total_bytes": 172898033664,
-      "used_bytes": 26028716032
+      "used_bytes": 26030669824
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.54248046875,
-      0.69873046875,
-      0.75
+      0.4150390625,
+      0.6435546875,
+      0.72607421875
     ],
     "memory_bytes": {
-      "MemAvailable": 18704412672,
+      "MemAvailable": 18645336064,
       "MemTotal": 25205911552,
       "SwapFree": 10441560064,
       "SwapTotal": 10838077440
