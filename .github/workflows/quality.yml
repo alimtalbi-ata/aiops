@@ -110,7 +110,7 @@ jobs:
       - name: In-process Worker DEMO orchestration through VERIFY block
         run: python -m pytest -q tests/test_worker_orchestration_integrated_demo.py
       - name: Bound Temporal stage and terminal transition receipts (offline)
-        run: python -m pytest -q tests/test_worker_temporal_transition_receipts.py
+        run: python -m pytest -q tests/test_worker_temporal_transition_receipts.py tests/test_core_unqualified_resolve.py
       - name: Worker Policy gate refused decision persists Core BLOCK
         run: python -m pytest -q tests/test_worker_policy_gate_execution.py
       - name: Worker execution start request validation before Temporal connect

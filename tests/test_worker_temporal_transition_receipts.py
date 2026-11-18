@@ -10,6 +10,11 @@ import pytest
 SOURCE = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
 
 
+def start_run(): pass
+def execute_stage(): pass
+def finish_run(): pass
+
+
 def workflow_for(result_factory, events):
     module = ast.parse(SOURCE.read_text())
     cls = next(n for n in module.body if isinstance(n, ast.ClassDef)
@@ -29,8 +34,8 @@ def workflow_for(result_factory, events):
         raise AssertionError(activity.__name__)
     namespace = {
         "workflow": SimpleNamespace(execute_activity=execute_activity),
-        "start_run": lambda: None, "execute_stage": lambda: None,
-        "finish_run": lambda: None, "STAGES": ["POLICY", "HITL", "REMEDIATE", "VERIFY"],
+        "start_run": start_run, "execute_stage": execute_stage,
+        "finish_run": finish_run, "STAGES": ["POLICY", "HITL", "REMEDIATE", "VERIFY"],
         "RETRY": object(), "datetime": datetime,
     }
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(SOURCE), "exec"), namespace)
@@ -99,8 +104,8 @@ def test_workflow_rejects_unqualified_terminal_resolution():
                     "status": "PASS", "version": args["version"] + 1}
         return {"status": "UNKNOWN", "version": args["version"] + 1}
     namespace = {"workflow": SimpleNamespace(execute_activity=execute_activity),
-                 "start_run": lambda: None, "execute_stage": lambda: None,
-                 "finish_run": lambda: None, "STAGES": ["VERIFY"],
+                 "start_run": start_run, "execute_stage": execute_stage,
+                 "finish_run": finish_run, "STAGES": ["VERIFY"],
                  "RETRY": object(), "datetime": datetime}
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(SOURCE), "exec"), namespace)
     with pytest.raises(ValueError, match="unqualified_terminal_transition_receipt"):
@@ -122,8 +127,8 @@ def test_workflow_rejects_boolean_start_version():
         events.append(activity.__name__)
         return {"version": True}
     namespace = {"workflow": SimpleNamespace(execute_activity=execute_activity),
-                 "start_run": lambda: None, "execute_stage": lambda: None,
-                 "finish_run": lambda: None, "STAGES": ["VERIFY"],
+                 "start_run": start_run, "execute_stage": execute_stage,
+                 "finish_run": finish_run, "STAGES": ["VERIFY"],
                  "RETRY": object(), "datetime": datetime}
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(SOURCE), "exec"), namespace)
     with pytest.raises(ValueError, match="unqualified_start_run_version"):
