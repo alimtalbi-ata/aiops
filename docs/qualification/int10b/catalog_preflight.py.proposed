@@ -25,6 +25,27 @@ TRIGGERS = (
 ) + tuple((t,'trg_int10b_acme_chain','int10b_check_acme_chain',True)
           for t in ('incidents','runs','acme_sandbox_attempts','acme_sandbox_terminal_tickets','run_events'))
 
+TRIGGERS += tuple((t,'trg_immutable_'+t,'reject_immutable_mutation',False)
+                  for t in ('analysis_records','critique_records','policy_decisions','approval_records'))
+
+# Ordered column pairs; selected composite bindings, not full schema equivalence.
+FOREIGN_KEYS = (
+    ('critique_records','analysis_id,run_id','analysis_records','analysis_id,run_id'),
+    ('policy_decisions','analysis_id,run_id','analysis_records','analysis_id,run_id'),
+    ('policy_decisions','critique_id,analysis_id,run_id','critique_records','critique_id,analysis_id,run_id'),
+    ('action_proposals','critique_id,analysis_id,run_id','critique_records','critique_id,analysis_id,run_id'),
+    ('approval_records','proposal_id,proposal_hash','action_proposals','proposal_id,proposal_hash'),
+    ('acme_sandbox_attempts','run_id,incident_id','runs','run_id,incident_id'),
+    ('acme_sandbox_attempts','analysis_id,run_id,incident_id','analysis_records','analysis_id,run_id,incident_id'),
+    ('acme_sandbox_attempts','critique_id,analysis_id,run_id','critique_records','critique_id,analysis_id,run_id'),
+    ('acme_sandbox_terminal_tickets','tenant_id,attempt_id,incident_id,run_id,ticket_id,proposal_id',
+     'acme_sandbox_attempts','tenant_id,attempt_id,incident_id,run_id,ticket_id,proposal_id'),
+    ('int10b_ownership_observation','resource_kind,resource_id,tenant_id',
+     'int10b_ownership_identity','resource_kind,resource_id,tenant_id'),
+    ('int10b_ownership_observation','predecessor_id,resource_kind,resource_id,tenant_id,predecessor_version',
+     'int10b_ownership_observation','observation_id,resource_kind,resource_id,tenant_id,observation_version'),
+)
+
 def preflight(c):
     version,replication=c.execute("select current_setting('server_version_num')::int,current_setting('session_replication_role')").fetchone()
     if not 160000 <= version < 170000 or replication!='origin':
@@ -60,3 +81,24 @@ def preflight(c):
     """).fetchone()[0]
     if valid is not True:
         raise AssertionError('event key index missing or invalid')
+
+    rows=c.execute("""
+        select src.relname,
+          (select string_agg(a.attname, ',' order by k.ord)
+           from unnest(f.conkey) with ordinality k(num,ord)
+           join pg_attribute a on a.attrelid=f.conrelid and a.attnum=k.num),
+          dst.relname,
+          (select string_agg(a.attname, ',' order by k.ord)
+           from unnest(f.confkey) with ordinality k(num,ord)
+           join pg_attribute a on a.attrelid=f.confrelid and a.attnum=k.num)
+        from pg_constraint f join pg_class src on src.oid=f.conrelid
+        join pg_class dst on dst.oid=f.confrelid
+        join pg_namespace sn on sn.oid=src.relnamespace
+        join pg_namespace dn on dn.oid=dst.relnamespace
+        where f.contype='f' and f.convalidated and not f.condeferrable
+          and f.confupdtype='a' and f.confdeltype='a' and f.confmatchtype='s'
+          and sn.nspname='aiops' and dn.nspname='aiops'
+    """).fetchall()
+    missing=set(FOREIGN_KEYS)-{tuple(r) for r in rows}
+    if missing:
+        raise AssertionError('missing qualified composite FKs: '+repr(sorted(missing)))
