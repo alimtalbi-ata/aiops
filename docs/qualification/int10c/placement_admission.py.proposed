@@ -1,0 +1,49 @@
+"""Inert admission checks for a future trusted Linux supervisor.
+No process creation, cgroup writes, service activation or entrypoint.
+"""
+import os
+import stat
+import time
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class DomainIdentity:
+    reservation: str
+    device: int
+    inode: int
+
+def check_domain_fd(fd, identity, *, attest_reservation, deadline):
+    if type(identity) is not DomainIdentity or not identity.reservation:
+        return False
+    if time.monotonic() >= deadline:
+        return False
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISDIR(info.st_mode):
+            return False
+        if (info.st_dev,info.st_ino) != (identity.device,identity.inode):
+            return False
+        for name in ("cgroup.events","cgroup.kill","cgroup.procs"):
+            control = os.open(name,os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=fd)
+            try:
+                if not stat.S_ISREG(os.fstat(control).st_mode):
+                    return False
+            finally:
+                os.close(control)
+        # Must independently prove cgroup2 mount, exclusive delegation,
+        # no escape, reservation provenance and observer outside domain.
+        return (attest_reservation(fd,identity,deadline) is True
+                and time.monotonic() < deadline)
+    except (OSError,ValueError):
+        return False
+
+def admit_placement(fd, identity, *, attest_reservation, attest_atomic_backend,
+                    deadline):
+    if not check_domain_fd(fd,identity,attest_reservation=attest_reservation,
+                           deadline=deadline):
+        return "NOT_QUALIFIED"
+    if attest_atomic_backend(fd,identity,deadline) is not True:
+        return "NOT_QUALIFIED"
+    if time.monotonic() >= deadline:
+        return "NOT_QUALIFIED"
+    return "PLACEMENT_PRECONDITIONS_REPORTED"
