@@ -1,0 +1,94 @@
+{
+  "commit": "676d3315f6967d385d2856c6a7a3350b681e1453",
+  "blob": "b7fbdbf0b592e1342ecc396b0023d9d0a45968fc",
+  "sha256": "53fe4281eac68615c145983bc62e57521b8968b6fa1c909f534a27bc63f131eb",
+  "git_sha1_verified_in": "B19",
+  "sha256_recomputed": "B20",
+  "span_hash_convention": "UTF8 lines joined LF, no final LF; source line numbers inclusive",
+  "spans": [
+    {
+      "start": 47,
+      "end": 54,
+      "purpose": "disabled gates",
+      "sha256": "f3f99466d2275dd5a077aa67bec331ba8d4b934f4da3f2cdbc1e41a1a81ae5f7"
+    },
+    {
+      "start": 56,
+      "end": 71,
+      "purpose": "intent schema/validation",
+      "sha256": "5ad06eb4d03b3400ed3603c65a49ddf5dce533f5c7c2d2eb24267066ba0b292c"
+    },
+    {
+      "start": 73,
+      "end": 269,
+      "purpose": "schema/row/read helpers",
+      "sha256": "6d24dcfe86e0671796619b31aac31102c32fd687f760d24a7921605a6c55f705"
+    },
+    {
+      "start": 286,
+      "end": 289,
+      "purpose": "start gate and validate",
+      "sha256": "41ef1609fc3cfbff69cb73b2f3ded5261b4890cf2f1518a6f7320e4fe9ba6c14"
+    },
+    {
+      "start": 290,
+      "end": 400,
+      "purpose": "start transaction",
+      "sha256": "05f214570a5b4cfcb0832be9fc94968ce4f1f84f841820b67c66fc103721d5da"
+    },
+    {
+      "start": 402,
+      "end": 413,
+      "purpose": "readback gate/validation/response/error",
+      "sha256": "1c343c411a0db8af5e20fe7d55868b1ea8c0be70efacb146c73d573055513918"
+    },
+    {
+      "start": 415,
+      "end": 416,
+      "purpose": "disabled independent reader",
+      "sha256": "5a90c192128663afa555b11a909babd4f327d1cc8d0bfac684eda5c11b5649be"
+    },
+    {
+      "start": 418,
+      "end": 426,
+      "purpose": "UTC freshness",
+      "sha256": "46344fac8eefeb58055c4494c8d9dab1047febcc7c850e4d92684c146420f72a"
+    },
+    {
+      "start": 428,
+      "end": 432,
+      "purpose": "resolve gate/validation",
+      "sha256": "767569b1935a7489da8f139e0a9cc79fd0c33417c4effa3aadb74607a7628013"
+    },
+    {
+      "start": 433,
+      "end": 449,
+      "purpose": "first lock and durable replay",
+      "sha256": "96aaf587570b6412f90ce1b2d976a77e3150f6119896b942bd223f70682e5307"
+    },
+    {
+      "start": 450,
+      "end": 508,
+      "purpose": "independent documents and no-effect predicates",
+      "sha256": "a32aa7504bfd2ad7da50fb98f7f7a884cede6d2101390324490a16e3b6893611"
+    },
+    {
+      "start": 509,
+      "end": 541,
+      "purpose": "second lock identity and freshness",
+      "sha256": "ad69fbad0f3669a37605d9944356696e5b14c7f837033fdcb8cefcc4ededb85e"
+    },
+    {
+      "start": 542,
+      "end": 585,
+      "purpose": "atomic terminal transition",
+      "sha256": "5c3a90cbc960c26f4a6822ce23d340f5c6eb58dca923834ecf030f7f9407b2d8"
+    },
+    {
+      "start": 588,
+      "end": 589,
+      "purpose": "disabled db",
+      "sha256": "2d0afef08fdbe8d3b4262e78831c5519d548c52efa3031887490e3fd2689c551"
+    }
+  ]
+}
