@@ -71,3 +71,100 @@ def render_runtime_refusals(context=None):
             + " (non attesté runtime).</p>"
             "<p>Terminal C : MISSING — aucun reçu terminal indépendant qualifié.</p>"
             "<p>Qualification runtime : UNKNOWN · LIVE : NO-GO.</p>")
+
+# Selective port #192 (8488e64c), timeline_explain.py. Presentation only.
+def safe(x):
+    return escape(str(x)[:700]) if isinstance(x, (str, int, float, bool)) and x != "" else "MISSING"
+
+def event_facts(e):
+    """Render bounded injected event fields without asserting Core authority."""
+    e = e if isinstance(e, dict) else {}
+    payload = e.get("payload") if isinstance(e.get("payload"), dict) else {}
+    refs = e.get("evidence_ids") if isinstance(e.get("evidence_ids"), list) else []
+    parts = []
+    if refs:
+        parts.append("<p><strong>Preuves liées :</strong> " +
+                     ", ".join(safe(x) for x in refs[:30]) + "</p>")
+    if e.get("confidence") is not None:
+        parts.append("<p><strong>Confiance enregistrée :</strong> " +
+                     safe(e["confidence"]) + " (non calibrée)</p>")
+    analysis = payload.get("analysis")
+    if isinstance(analysis, dict):
+        parts.append("<p><strong>Résultat Analyst :</strong> sévérité " +
+                     safe(analysis.get("severity")) + ", confiance " +
+                     safe(analysis.get("confidence")) + "</p>")
+        hypotheses = analysis.get("hypotheses")
+        if isinstance(hypotheses, list):
+            for h in hypotheses[:5]:
+                if isinstance(h, dict):
+                    parts.append("<p><strong>Hypothèse :</strong> " +
+                                 safe(h.get("statement")) + " · preuves " +
+                                 ", ".join(safe(x) for x in (h["supporting_evidence_ids"][:10] if isinstance(h.get("supporting_evidence_ids"), list) else [])) +
+                                 "</p>")
+    critique = payload.get("critique")
+    if isinstance(critique, dict):
+        parts.append("<p><strong>Résultat Critic :</strong> validé=" +
+                     safe(critique.get("validated")) + " · recommandation " +
+                     safe(critique.get("final_recommendation")) + "</p>")
+        issues = critique.get("issues")
+        if isinstance(issues, list):
+            for issue in issues[:12]:
+                if isinstance(issue, dict):
+                    parts.append("<p><strong>Objection " + safe(issue.get("code")) +
+                                 " :</strong> " + safe(issue.get("description")) + "</p>")
+    for field in ("reason", "error", "failure_reason", "message"):
+        if isinstance(payload.get(field), (str, int, float)):
+            parts.append("<p><strong>" + safe(field) + " :</strong> " +
+                         safe(payload[field]) + "</p>")
+    return "".join(parts) or "<p>Aucune donnée détaillée enregistrée pour cet événement.</p>"
+
+
+
+
+def evidence_catalog(items):
+    """Distinguish stage receipts from actual technical observations, without fabrication."""
+    if not isinstance(items,list) or not items:
+        return '<p>Aucune preuve détaillée liée à ce run — MISSING.</p>'
+    valid = [e for e in items[:200] if isinstance(e,dict) and isinstance(e.get("evidence_id"), str) and 0 < len(e["evidence_id"]) <= 128 and all(c.isascii() and (c.isalnum() or c in "-_") for c in e["evidence_id"])]
+    if len({e["evidence_id"] for e in valid}) != len(valid):
+        return "<p>Identifiants de preuve dupliqués — UNKNOWN.</p>"
+    markers = [e for e in valid if isinstance(e.get("provenance"),dict) and
+               e["provenance"].get("record_type") == "stage_marker"]
+    observations = [e for e in valid if e not in markers]
+    technical = [e for e in observations if isinstance(e.get("provenance"), dict) and e["provenance"].get("record_type") == "observation"]
+    other = [e for e in observations if e not in technical]
+    if not valid:
+        return "<p>Aucune preuve exploitable — UNKNOWN.</p>"
+    parts=['<p><strong>Inventaire :</strong> '+str(len(markers))+
+           ' marqueur(s) d’exécution · '+str(len(technical))+
+           ' observation(s) déclarée(s) · '+str(len(other))+' autre(s) enregistrement(s) (nature à vérifier).</p>']
+    if markers and not observations:
+        parts.append('<p><strong>Attention :</strong> ces enregistrements déclarent uniquement le passage '+
+                     'des étapes. Ils ne démontrent pas une dégradation SAN ou son lien causal avec Payments.</p>')
+    parts.append('<p>Entrées offline non attestées. Les payloads bruts ne sont pas exposés.</p>')
+    for e in observations + markers:
+        eid=str(e["evidence_id"])
+        if len(eid)>128 or not all(c.isalnum() or c in "-_" for c in eid):
+            continue
+        prov=e.get("provenance") if isinstance(e.get("provenance"),dict) else {}
+        marker=prov.get("record_type") == "stage_marker"
+        kind="Marqueur d’exécution — non probant pour le diagnostic" if marker else ("Observation déclarée — non attestée" if e in technical else "Enregistrement à qualifier")
+        parts.append('<details id="proof-'+eid+'"><summary><strong>'+safe(kind)+'</strong> · '+
+                     safe(eid)+' · '+safe(e.get("source"))+' · '+safe(e.get("claim"))+'</summary>'+
+                     '<p><strong>observed_at — Observé :</strong> '+safe(e.get("observed_at"))+
+                     ' · <strong>known_at — Connu :</strong> '+safe(e.get("known_at"))+'</p>'+
+                     '<p><strong>Identifiant externe :</strong> '+safe(e.get("external_id"))+
+                     ' · <strong>Confiance déclarée :</strong> '+safe(e.get("confidence"))+'</p>'+
+                     '<p><strong>Hash enregistré :</strong> '+safe(e.get("payload_hash"))+'</p>'+
+                     '<p>Provenance déclarée : '+safe(prov.get("record_type"))+' · synthetic : '+safe(prov.get("synthetic"))+'</p></details>')
+    return "".join(parts)
+
+
+
+def render_offline_evidence(events=None, evidence=None):
+    """Optional injected presentation inputs, not a B/C projection or transport."""
+    return ("<details><summary>Observations et marqueurs — offline, non attestés</summary>"
+            "<p>UNKNOWN — aucune qualification runtime. NO-GO LIVE.</p>"
+            + evidence_catalog(evidence)
+            + "".join(event_facts(e) for e in (events[:60] if isinstance(events, list) else []))
+            + "</details>")

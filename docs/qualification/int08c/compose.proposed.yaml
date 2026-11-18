@@ -1,0 +1,92 @@
+# PROPOSITION NON EXECUTABLE: aucun lancement autorise.
+# Les images doivent etre des refs repo@sha256, les env/ACL/init sont a ratifier.
+name: int08c-proposed
+x-blocker: "NO_GO: missing authenticated adapters, approved init, image pins, ACL and namespace"
+services:
+  core:
+    image: ${INT08_CORE_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [control, appdata]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["810"]
+  twin:
+    image: ${INT08_TWIN_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [control, appdata]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["811"]
+  policy:
+    image: ${INT08_POLICY_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [control]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["813"]
+  evidence:
+    image: ${INT08_EVIDENCE_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [control, appdata]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["812"]
+  worker:
+    image: ${INT08_WORKER_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [control, execution]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["815"]
+  portal:
+    image: ${INT08_PORTAL_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [control]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["777"]
+  copilot:
+    image: ${INT08_COPILOT_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [control]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["814"]
+  temporal:
+    image: ${INT08_TEMPORAL_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [execution, temporaldata]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["7233"]
+  postgres:
+    image: ${INT08_POSTGRES_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [appdata]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["5432"]
+    volumes: [app-data:/var/lib/postgresql/data]
+  temporal-postgres:
+    image: ${INT08_TEMPORAL_POSTGRES_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [temporaldata]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+    expose: ["5432"]
+    volumes: [temporal-data:/var/lib/postgresql/data]
+  collector:
+    image: ${INT08_COLLECTOR_PIN:?NO_GO_missing_digest}
+    profiles: [never-authorized]
+    networks: [execution, observation]
+    restart: "no"
+    security_opt: [no-new-privileges:true]
+networks:
+  control: {internal: true}
+  execution: {internal: true}
+  appdata: {internal: true}
+  temporaldata: {internal: true}
+  observation: {internal: true}
+volumes:
+  app-data: {}
+  temporal-data: {}

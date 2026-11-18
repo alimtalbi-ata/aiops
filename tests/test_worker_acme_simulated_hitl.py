@@ -518,5 +518,137 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             self.assertFalse(verify_no_effect_receipt(forged, identity))
 
 
+    def test_33_independent_readback_rejects_typed_snapshot_drift(self):
+        # Both rounds are individually PASS/PREPARED/SIMULATED, yet the
+        # authority snapshot must not move between reads. Canonical JSON
+        # distinguishes 7 from 7.0 where Python dict equality does not.
+        for component, field, changed in (
+            ("core", "evidence_count", 3),
+            ("core", "source_event_count", 7.0),
+            ("twin", "impacted_cis", ["ACME-TEST-SVC-PAYMENTS", "ACME-TEST-SVC-ERP"]),
+            ("policy", "risk_level", "LOW"),
+        ):
+            docs = fixtures()
+            calls = 0
+
+            async def get(which, path):
+                nonlocal calls
+                calls += 1
+                result = deepcopy(docs[which])
+                if calls > 3 and which == component:
+                    result[field] = changed
+                return result
+
+            with self.subTest(component=component, field=field):
+                # An invalid SOURCE count is now rejected by Core authority
+                # validation before the cross-round snapshot comparison.
+                expected = ("^core_resolution_unqualified$"
+                            if component == "core" and field == "source_event_count"
+                            else "^sandbox_readback_snapshot_rotated$")
+                with self.assertRaisesRegex(SandboxDenied, expected):
+                    asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+                self.assertEqual(calls, 6)
+
+
+
+    def test_reuse_37_malformed_twin_impact_claim_denied_before_temporal_receipt(self):
+        # A signed, independently fetched Twin response is not a license to
+        # accept malformed topology data. Python membership checks alone
+        # would accept these as long as Payments was also present.
+        malformed = (
+            ["ACME-TEST-SVC-PAYMENTS", "ACME-TEST-SVC-PAYMENTS"],
+            ["ACME-TEST-SVC-PAYMENTS", True],
+            ["ACME-TEST-SVC-PAYMENTS", None],
+            ["ACME-TEST-SVC-PAYMENTS", 123],
+            ["ACME-TEST-SVC-PAYMENTS", {"ci": "ACME-TEST-SVC-ERP"}],
+            ["ACME-TEST-SVC-PAYMENTS", ""],
+        )
+        for impacted_cis in malformed:
+            docs = fixtures()
+            docs["twin"]["impacted_cis"] = impacted_cis
+            calls = []
+
+            async def get(component, path):
+                calls.append(component)
+                return deepcopy(docs[component])
+
+            with self.subTest(impacted_cis=repr(impacted_cis)):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^twin_simulated_approval_unqualified$"):
+                    asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+                self.assertEqual(calls, ["core", "twin", "policy"])
+
+        docs = fixtures()
+        docs["twin"]["impacted_cis"] = [
+            "ACME-TEST-SVC-PAYMENTS", "ACME-TEST-SVC-ERP"]
+        async def valid_get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=valid_get, now=NOW))
+        self.assertTrue(receipt_digest_valid(receipt))
+        self.assertEqual(receipt["receipt_status"], "SIMULATED_NO_EFFECT")
+        self.assertEqual(receipt["effect_receipts"], 0)
+
+
+
+    def test_reuse_38_unpaired_unicode_surrogates_denied_before_temporal_receipt(self):
+        # json.loads preserves lone escaped UTF-16 surrogates, although they
+        # are not valid Unicode scalars. Reject nested values and object keys.
+        for raw in (
+            b'{"state":"PASS","note":"\ud800"}',
+            b'{"state":"PASS","\udc00":"ambiguous"}',
+            b'{"state":"PASS","nested":{"issuer":"\udfff"}}',
+        ):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^sandbox_readback_json_unqualified$"):
+                    decode_authority_json(raw)
+        # Valid escaped surrogate pairs remain accepted.
+        self.assertEqual(
+            decode_authority_json(
+                b'{"state":"PASS","note":"\ud83d\ude80"}')["note"],
+            "\U0001f680")
+
+
+
+    def test_40_twin_expiry_after_second_policy_read_denied(self):
+        # Both independent snapshots are valid, but Twin expires before the
+        # Worker can construct its no-effect Temporal receipt.
+        docs = fixtures()
+        docs["twin"]["expires_at"] = (NOW + timedelta(seconds=2)).isoformat()
+        clock = iter((NOW, NOW + timedelta(seconds=1),
+                      NOW + timedelta(seconds=2)))
+        calls = []
+
+        async def get(component, path):
+            calls.append(component)
+            return deepcopy(docs[component])
+
+        with self.assertRaisesRegex(
+                SandboxDenied, "^twin_approval_expired_or_future$"):
+            asyncio.run(simulate_no_effect(
+                INTENT, get=get, now=lambda: next(clock)))
+        self.assertEqual(calls, ["core", "twin", "policy"] * 2)
+
+
+
+    def test_reuse_strict_effect_count(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        identity = {k: INTENT[k] for k in (
+            "attempt_id", "tenant_id", "incident_id", "run_id",
+            "proposal_id", "ticket_id", "approval_id")}
+        for value in (False, 0.0):
+            forged = dict(receipt, effect_receipts=value)
+            body = {k: v for k, v in forged.items() if k != "receipt_sha256"}
+            forged["receipt_sha256"] = hashlib.sha256(json.dumps(
+                body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")).hexdigest()
+            with self.subTest(value=value):
+                self.assertTrue(receipt_digest_valid(forged))
+                self.assertFalse(verify_no_effect_receipt(forged, identity))
+
+
 if __name__ == '__main__':
     unittest.main()

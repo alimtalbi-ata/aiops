@@ -116,7 +116,7 @@
       unknown("jeton viewer requis");
       return;
     }
-    byId("story-status").textContent = "UNKNOWN — contrôle authentifié en cours";
+    unknown("contrôle authentifié en cours");
     try {
       const response = await fetch("/api/demo/explore-story/control", {
         method: "POST", credentials: "omit", cache: "no-store", redirect: "error",

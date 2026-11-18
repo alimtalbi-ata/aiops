@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from html import escape
-from portal.acme_workbench_presentation import render_story_context, render_runtime_refusals
+from portal.acme_workbench_presentation import render_story_context, render_runtime_refusals, render_offline_evidence
+from portal.acme_runtime_workbench import render_collector_result
 
 from portal.acme_evidence_collection_plan import EVIDENCE_REQUIREMENTS
 
 
-def render_synthetic_cockpit_html(cockpit: dict) -> str:
+def render_synthetic_cockpit_html(cockpit: dict, *, offline_collector_result=None, offline_events=None, offline_evidence=None) -> str:
     if (not isinstance(cockpit, dict)
             or cockpit.get("schema") != "aiops.synthetic-incident-cockpit.v1"
             or cockpit.get("mode") != "DEMO"
@@ -116,7 +117,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "@media(max-width:700px){body{margin:1rem auto}.demo-cards{grid-template-columns:1fr}"
         "nav{align-items:stretch}nav a{flex:1 1 40%;text-align:center}}"
         "@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}"
-        "body{background:#080b14;color:#f4f7ff}a{color:#38bdf8}thead{background:#172136;color:#f4f7ff}nav{background:#111827}nav a{background:#172136;color:#38bdf8;border-color:#64748b}.demo-card{background:#111827}.warning{background:#31251b;color:#fff0cc;border-color:#fbbf24}a:focus-visible,summary:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}details{background:#111827;padding:1rem;border-radius:12px;margin:1rem 0}summary{cursor:pointer;font-weight:bold}.table-scroll:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}td,th{overflow-wrap:normal;word-break:normal}.story-context{background:#111827;padding:1rem;border-radius:12px}.story-context dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.35rem .8rem}.story-context dt,.story-context dd{margin:0;min-width:0}.story-context dd{overflow-wrap:anywhere;font-family:ui-monospace,monospace}@media(max-width:700px){.story-context dl{grid-template-columns:1fr}.story-context dt{font-weight:600}.story-context dd{margin-bottom:.35rem}}.scroll-hint{font-size:.875rem;color:#b8c7df}@media(max-width:700px){h1{font-size:1.55rem;margin:.5rem 0}.warning{padding:.65rem}.demo-cards{gap:.35rem;margin:.65rem 0}.demo-card{padding:.55rem}.demo-card strong{font-size:1rem}.demo-card p{font-size:.85rem;margin:.1rem 0}nav{padding:.5rem}} </style></head><body><main>"
+        "body{background:#080b14;color:#f4f7ff}a{color:#38bdf8}thead{background:#172136;color:#f4f7ff}nav{background:#111827}nav a{background:#172136;color:#38bdf8;border-color:#64748b}.demo-card{background:#111827}.warning{background:#31251b;color:#fff0cc;border-color:#fbbf24}a:focus-visible,summary:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}details{background:#111827;padding:1rem;border-radius:12px;margin:1rem 0}summary{cursor:pointer;font-weight:bold}.table-scroll:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}td,th{overflow-wrap:normal;word-break:normal}.story-context{background:#111827;padding:1rem;border-radius:12px}.story-context dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.35rem .8rem}.story-context dt,.story-context dd{margin:0;min-width:0}.story-context dd{overflow-wrap:anywhere;font-family:ui-monospace,monospace}@media(max-width:700px){.story-context dl{grid-template-columns:1fr}.story-context dt{font-weight:600}.story-context dd{margin-bottom:.35rem}}.scroll-hint{font-size:.875rem;color:#b8c7df}@media(max-width:700px){h1{font-size:1.55rem;margin:.5rem 0}.warning{padding:.65rem}.demo-cards{gap:.35rem;margin:.65rem 0}.demo-card{padding:.55rem}.demo-card strong{font-size:1rem}.demo-card p{font-size:.85rem;margin:.1rem 0}nav{padding:.5rem}}  .skip-link{position:absolute;left:1rem;top:-10rem;background:#111827;color:#38bdf8;padding:.5rem}.skip-link:focus{top:0;z-index:2}summary{min-height:24px;overflow-wrap:anywhere}main:focus{outline:3px solid #38bdf8;outline-offset:2px}.story-context{min-width:0;overflow-wrap:anywhere}@media(max-width:700px){details{padding:.65rem;margin:.65rem 0}.story-context{padding:.75rem}main>section{min-width:0}} h2[tabindex]:focus,div[tabindex]:focus{outline:3px solid #38bdf8;outline-offset:2px}</style></head><body><a class='skip-link' href='#main-content'>Aller au contenu</a><main id='main-content' tabindex='-1'>"
         "<header><a href='/#incidents'>Retour Incident Explorer</a> · <a href='/#runs'>Runs Core (ACL requise)</a></header><h1>AIOPS2 — Cockpit incident → ITIL</h1>"
         "<p class='warning'><strong>DEMO SYNTHÉTIQUE — NO-GO LIVE.</strong> "
         "Aucune preuve runtime authentifiée, aucun ticket GLPI modifié, "
@@ -135,7 +136,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<a href='#decision'>3. Décision</a> · "
         "<a href='#itil'>4. ITIL</a> · "
         "<a href='#verdict'>5. Verdict</a></nav>"
-        "<h2>Parcours démontrable — SAN vers Payments</h2>"
+        "<h2>Parcours démontrable — SAN vers Payments</h2><details><summary>Explications du parcours</summary>"
         "<p>Signal SAN → incident P1 → impact Payments → hypothèses Analyst/Critic "
         "→ décision Policy/HITL → simulation isolée → vérification indépendante "
         "→ préparation ITIL.</p>"
@@ -148,34 +149,34 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "python scripts/verify_aiops2_demo_acceptance.py</code> "
         "(rapport JSON hors ligne; pas une attestation de production).</p>"
         "<p><a href='/demo/acme-grafana-pilot-preview'>Voir l'observation Grafana synthétique non attestée</a> — "
-        "UNKNOWN / BLOCKED, sans accès réseau ni qualification runtime.</p>"
-        "<h2 id='impact'>Incident et impact métier</h2><p>SAN P1 : <code>"
+        "UNKNOWN / BLOCKED, sans accès réseau ni qualification runtime.</p></details>"
+        "<h2 id='impact' tabindex='-1'>Incident et impact métier</h2><p>SAN P1 : <code>"
         + safe(cockpit["incident_id"]) + "</code> · Payments P2 : <code>"
         + safe(cockpit["business_impact_incident_id"]) + "</code></p>"
         "<p>Chemin d'impact : " + safe(" → ".join(cockpit["business_impact_path"]))
         + "</p><details class='secondary-detail'><summary>Chronologie explicative — 9 étapes UNKNOWN, pas événements observés</summary>"
         "<p>Neuf étapes attendues, aucune horodatée ni attestée. "
         "La prochaine vérification ne constitue pas une action exécutée.</p>"
-        "<p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Chronologie métier' tabindex='0'><table><thead><tr><th>Étape métier</th><th>Source attendue</th>"
-        "<th>État de preuve</th><th>Prochaine vérification</th></tr></thead>"
+        "<p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Chronologie métier' tabindex='0'><table><thead><tr><th scope='col'>Étape métier</th><th scope='col'>Source attendue</th>"
+        "<th scope='col'>État de preuve</th><th scope='col'>Prochaine vérification</th></tr></thead>"
         "<tbody>" + timeline_rows + "</tbody></table></div></details>"
         "<details class='secondary-detail'><summary>Cycle incident — 9 étapes UNKNOWN</summary><p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Cycle incident' tabindex='0'><table><thead><tr>"
-        "<th>Étape</th><th>Source attendue</th><th>Preuve</th></tr></thead>"
+        "<th scope='col'>Étape</th><th scope='col'>Source attendue</th><th scope='col'>Preuve</th></tr></thead>"
         "<tbody>" + stage_rows + "</tbody></table></div></details>"
-        " <span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
+        " <span id='evidence' aria-hidden='true'></span><h2 id='workbench' tabindex='-1'>Evidence Workbench — lecture seule</h2>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
-        + render_story_context(cockpit) + render_runtime_refusals() +
+        + render_story_context(cockpit) + render_runtime_refusals() + render_collector_result(offline_collector_result) + render_offline_evidence(offline_events, offline_evidence) +
         "<details><summary>Registre des preuves attendues — 9 MISSING</summary>"
         "<p>Chaque ligne est une demande de preuve, pas une pièce collectée. "
         "Les champs observed_at, source_id et content_sha256 doivent être "
         "contrôlés indépendamment avant toute qualification. "
         "Aucun dépôt, appel sortant ou validation automatique ici.</p>"
-        "<div class='table-scroll' role='region' aria-label='Registre des preuves attendues' tabindex='0'><table><thead><tr><th>Point de contrôle</th><th>Preuve exigée</th>"
-        "<th>Source attendue</th><th>Métadonnées requises</th>"
-        "<th>État</th></tr></thead><tbody>" + evidence_rows + "</tbody></table></div></details>"
+        "<div class='table-scroll' role='region' aria-label='Registre des preuves attendues' tabindex='0'><table><thead><tr><th scope='col'>Point de contrôle</th><th scope='col'>Preuve exigée</th>"
+        "<th scope='col'>Source attendue</th><th scope='col'>Métadonnées requises</th>"
+        "<th scope='col'>État</th></tr></thead><tbody>" + evidence_rows + "</tbody></table></div></details>"
         "<section aria-label='Fiche de décision opérationnelle'>"
-        "<h2>Fiche de décision — que peut faire le NOC ?</h2>"
+        "<h2>Fiche de décision — que peut faire le NOC ?</h2><details><summary>Consulter les limites et la prochaine étape permise</summary>"
         "<dl><dt><strong>Ce que nous savons</strong></dt><dd>"
         "Le scénario synthétique relie le P1 SAN au P2 Payments par une "
         "fixture locale cohérente ; il ne prouve pas un incident réel.</dd>"
@@ -191,8 +192,8 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<dt><strong>Prochaine étape permise</strong></dt><dd>"
         "Collecter et examiner les preuves en lecture seule, puis demander "
         "une vérification indépendante. Pas d'exécution Temporal, de "
-        "remédiation LIVE ni de clôture GLPI.</dd></dl></section>"
-        "<h2 id='decision'>Analyst / Critic / Policy</h2><p>Analyst : hypothèse déterministe, "
+        "remédiation LIVE ni de clôture GLPI.</dd></dl></details></section>"
+        "<h2 id='decision' tabindex='-1'>Analyst / Critic / Policy</h2><p>Analyst : hypothèse déterministe, "
         "pas une conclusion LLM vérifiée. Critic : "
         + safe(review["critic_disposition"]) + ". Policy : "
         + safe(review["policy_disposition"]) + ".</p>"
@@ -200,10 +201,10 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(evidence["requested_count"]) + "</strong>. "
         "Prochaine action : collecte manuelle en lecture seule, "
         "puis vérification indépendante.</p>"
-        "<h2 id='itil'>Transitions ITIL (8)</h2><details><summary>8 transitions non autorisées — preuves manquantes</summary><p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Transitions ITIL' tabindex='0'><table><thead><tr>"
-        "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
+        "<h2 id='itil' tabindex='-1'>Transitions ITIL (8)</h2><details><summary>8 transitions non autorisées — preuves manquantes</summary><p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Transitions ITIL' tabindex='0'><table><thead><tr>"
+        "<th scope='col'>Transition</th><th scope='col'>Preuves manquantes</th><th scope='col'>Autorisée</th>"
         "</tr></thead><tbody>" + transition_rows + "</tbody></table></div></details>"
-        "<div id='verdict' class='warning'><strong>Décision opérateur :</strong> "
+        "<div id='verdict' tabindex='-1' class='warning'><strong>Décision opérateur :</strong> "
         "GO pour le scénario synthétique ; UNKNOWN pour les preuves runtime ; "
         "NO-GO LIVE pour toute action réelle ou clôture GLPI.</div>"
         "<p>SHA-256 de la fixture : <code>" + safe(cockpit["source_sha256"])
