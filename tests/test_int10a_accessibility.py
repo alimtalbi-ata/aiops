@@ -96,7 +96,7 @@ class PopulatedAudit(unittest.TestCase):
                 before=page.evaluate(metrics_js)
                 png=page.screenshot(path=str(out/f"populated-{width}-{repetition}.png"),full_page=True,scale="css")
                 after=page.evaluate(metrics_js)
-                self.assertEqual(png[:8],b"\\x89PNG\\r\\n\\x1a\\n")
+                self.assertEqual(png[:8],bytes.fromhex("89504e470d0a1a0a"))
                 png_width=int.from_bytes(png[16:20],"big")
                 png_height=int.from_bytes(png[20:24],"big")
                 self.assertEqual(png_width,width)
