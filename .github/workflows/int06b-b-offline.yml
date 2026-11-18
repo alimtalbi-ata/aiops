@@ -11,17 +11,24 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 3f68cfd81d2e75c27fc6d84c78c74c1a2297fd28
+          path: pinned-c
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Exact SHA and mandatory tests without skips
         env:
           PYTHONPATH: app
+          C_CONTRACT_PATH: pinned-c/app/worker/int06a_contract.py
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C pinned-c rev-parse HEAD)" = "3f68cfd81d2e75c27fc6d84c78c74c1a2297fd28"
           python - <<'PY'
           import unittest
-          for pattern, minimum in [('test_acme_runtime_context.py', 15), ('test_acme_authority_readers.py', 7)]:
+          for pattern, minimum in [('test_acme_runtime_context.py', 15), ('test_acme_authority_readers.py', 7), ('test_acme_authority_continuity.py', 4)]:
               suite = unittest.defaultTestLoader.discover('tests', pattern=pattern)
               result = unittest.TextTestRunner(verbosity=2).run(suite)
               print(pattern, 'executed=', result.testsRun, 'skips=', len(result.skipped), flush=True)
