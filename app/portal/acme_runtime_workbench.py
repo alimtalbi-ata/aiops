@@ -25,6 +25,7 @@ def render_collector_result(result=None, *, admission=None, preterminal=None):
     parts=["<section class='story-context' aria-label='Résultat collecteur offline'>",
            "<h3>RUNTIME_SANDBOX — UNBOUND</h3>",
            "<p>STORY_OFFLINE / SIMULATED : contexte distinct.</p>",
+           render_phase_identity_comparison(admission, preterminal),
            render_phase("Admission", "ADMISSION", admission),
            render_phase("Préterminal", "PRETERMINAL", preterminal),
            "<h4>Qualification finale</h4><p>"+escape(status)+" — "+text(reason)+"</p>",
@@ -88,3 +89,25 @@ def render_phase(label, phase, value=None):
                 parts.append("</dl>")
         parts.append("</details>")
     return "".join(parts)
+
+
+def render_phase_identity_comparison(admission, preterminal):
+    """Compare display identities only; never infer phase continuity or order."""
+    def identity(value, phase):
+        if not isinstance(value, dict) or value.get("contract_status") != "CONTRACT_ONLY":
+            return None
+        if "projection incompatible" in render_phase(phase, phase, value):
+            return None
+        if value.get("qualification") != "BLOCK" or value.get("reason") != phase+"_CONSISTENT_NOT_ATTESTED":
+            return None
+        projection = value.get("projection")
+        ident = projection.get("identity") if isinstance(projection, dict) else None
+        if not isinstance(ident, dict):
+            return None
+        fields = tuple(ident.get(k) for k in ("tenant_id","incident_id","run_id","attempt_id","proposal_id","ticket_id","approval_id")) + (projection.get("impact_incident_id"),)
+        return fields if all(isinstance(v,str) and 0<len(v)<=512 for v in fields) else None
+    a, p = identity(admission,"ADMISSION"), identity(preterminal,"PRETERMINAL")
+    state = "MISSING" if admission is None or preterminal is None else "UNKNOWN"
+    if a is not None and p is not None:
+        state = "Identités déclarées concordantes" if a == p else "UNKNOWN — identités divergentes"
+    return "<p>Comparaison admission / préterminal : "+state+" ; continuité causale UNKNOWN, aucune fusion des historiques.</p>"

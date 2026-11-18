@@ -95,3 +95,20 @@ def test_same_run_source_provenance_and_scope():
     assert "non reliés au Same-Run" in html
     assert "Référentiel STORY_OFFLINE" in html
     assert "UNKNOWN pour ce Run" in html
+
+
+def test_existing_b_chain_phase_identity_comparison():
+    from test_int09b_admission_nominal import fixture, call
+    from test_int09b_preterminal import chain, invoke
+    from portal.acme_runtime_workbench import render_collector_result
+    admission, preterminal = call(fixture()), invoke(chain())
+    before = deepcopy((admission, preterminal))
+    html = render_collector_result(admission=admission, preterminal=preterminal)
+    assert "Identités déclarées concordantes" in html
+    assert "continuité causale UNKNOWN" in html
+    assert "receipt-source" in html and "postcheck-source" in html
+    assert (admission, preterminal) == before
+    preterminal["projection"]["identity"]["run_id"] = "FOREIGN"
+    assert "identités divergentes" in render_collector_result(admission=admission, preterminal=preterminal)
+    preterminal["execution_allowed"] = True
+    assert "Identités déclarées concordantes" not in render_collector_result(admission=admission, preterminal=preterminal)
