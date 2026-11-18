@@ -80,3 +80,53 @@ def test_workflow_stops_at_bound_blocked_stage_without_finish():
     assert result["blocked_stage"] == "POLICY"
     assert events[-1][0] == "execute_stage"
     assert not any(name == "finish_run" for name, _ in events)
+
+def test_workflow_rejects_unqualified_terminal_resolution():
+    events = []
+    module = ast.parse(SOURCE.read_text())
+    cls = next(n for n in module.body if isinstance(n, ast.ClassDef)
+               and n.name == "IncidentWorkflow")
+    cls.decorator_list = []
+    for fn in cls.body:
+        if isinstance(fn, ast.AsyncFunctionDef):
+            fn.decorator_list = []
+    async def execute_activity(activity, args, **kwargs):
+        events.append(activity.__name__)
+        if activity.__name__ == "start_run":
+            return {"version": 0}
+        if activity.__name__ == "execute_stage":
+            return {"run_id": args["run_id"], "stage": args["stage"],
+                    "status": "PASS", "version": args["version"] + 1}
+        return {"status": "UNKNOWN", "version": args["version"] + 1}
+    namespace = {"workflow": SimpleNamespace(execute_activity=execute_activity),
+                 "start_run": lambda: None, "execute_stage": lambda: None,
+                 "finish_run": lambda: None, "STAGES": ["VERIFY"],
+                 "RETRY": object(), "datetime": datetime}
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), str(SOURCE), "exec"), namespace)
+    with pytest.raises(ValueError, match="unqualified_terminal_transition_receipt"):
+        asyncio.run(namespace["IncidentWorkflow"]().run({
+            "run_id": "demo-run", "mode": "DEMO", "scenario_id": "acme", "version": 0}))
+    assert events == ["start_run", "execute_stage", "finish_run"]
+
+
+def test_workflow_rejects_boolean_start_version():
+    events = []
+    module = ast.parse(SOURCE.read_text())
+    cls = next(n for n in module.body if isinstance(n, ast.ClassDef)
+               and n.name == "IncidentWorkflow")
+    cls.decorator_list = []
+    for fn in cls.body:
+        if isinstance(fn, ast.AsyncFunctionDef):
+            fn.decorator_list = []
+    async def execute_activity(activity, args, **kwargs):
+        events.append(activity.__name__)
+        return {"version": True}
+    namespace = {"workflow": SimpleNamespace(execute_activity=execute_activity),
+                 "start_run": lambda: None, "execute_stage": lambda: None,
+                 "finish_run": lambda: None, "STAGES": ["VERIFY"],
+                 "RETRY": object(), "datetime": datetime}
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), str(SOURCE), "exec"), namespace)
+    with pytest.raises(ValueError, match="unqualified_start_run_version"):
+        asyncio.run(namespace["IncidentWorkflow"]().run({
+            "run_id": "demo-run", "mode": "DEMO", "scenario_id": "acme", "version": 0}))
+    assert events == ["start_run"]

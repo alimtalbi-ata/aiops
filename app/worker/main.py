@@ -102,7 +102,9 @@ async def execute_stage(a):
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:
             post_json(CORE,f'/api/runs/{rid}/demo-artifacts',{'artifact_type':'stage','title':stage,'sequence_no':completed['sequence'],'caption':f'{stage} — {mode} — evidence linked','payload':{'scenario_id':scenario,'synthetic':True}},token=ADMIN)
-        return {'run_id':rid,'stage':stage,'status':'PASS',\n                'version':completed['version'],'sequence':completed['sequence']}\n    except Exception as exc:
+        return {'run_id':rid,'stage':stage,'status':'PASS',
+                'version':completed['version'],'sequence':completed['sequence']}
+    except Exception as exc:
         try: call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_FAILED','event_key':f'{stage}:FAIL','status':'FAIL','confidence':0,'payload':{'error':str(exc)[:500],'attempt':activity.info().attempt}})
         finally: raise
 @activity.defn
