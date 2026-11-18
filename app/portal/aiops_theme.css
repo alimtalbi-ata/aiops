@@ -21,6 +21,14 @@
   --ai-red: #fb7185;
   --ai-radius: 16px;
   --ai-shadow: 0 18px 50px rgba(0,0,0,.24);
+  /* Shared shell compatibility aliases; one canonical palette. */
+  --bg: var(--ai-bg);
+  --card: var(--ai-surface);
+  --text: var(--ai-text);
+  --muted: var(--ai-muted);
+  --line: var(--ai-border);
+  --hero: var(--ai-bg-soft);
+  --c: var(--ai-violet);
 }
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--ai-bg) !important; scroll-behavior: smooth; }
