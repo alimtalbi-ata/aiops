@@ -1,0 +1,75 @@
+"""Inert contention test mixin; requires authorized isolated runner."""
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from threading import Event
+from time import monotonic, sleep
+from unittest.mock import patch
+from fastapi import HTTPException
+
+class ContentionContract:
+    def test_expiry_under_second_lock(self):
+        attempt=self.attempt()
+        docs=self._qualified_no_effect(self.start(attempt))
+        ready,locked=Event(),Event()
+        key='core-acme-sandbox:'+self.core.TENANT+':'+attempt
+        original=self.core.approval_fresh
+        expiry=None
+        hits=0
+        def readback(component, aid):
+            self.assertEqual(aid,attempt)
+            if component=='policy':
+                ready.set()
+                if not locked.wait(10):
+                    raise AssertionError('blocker lock handshake timed out')
+                now=datetime.now(timezone.utc)
+                docs[1].update(issued_at=now.isoformat(),
+                    expires_at=(now+timedelta(seconds=8)).isoformat())
+            return docs[('worker','twin','policy').index(component)]
+        def freshness(issued,expires):
+            nonlocal expiry,hits
+            original(issued,expires)
+            hits+=1
+            expiry=expires
+        with patch.object(self.core,'independent_readback',side_effect=readback), patch.object(self.core,'approval_fresh',side_effect=freshness):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future=pool.submit(self.core.resolve,self.intent(attempt))
+                try:
+                    self.assertTrue(ready.wait(10),'initial readbacks not reached')
+                    with self.connect() as blocker:
+                        pid=blocker.execute('select pg_backend_pid()').fetchone()[0]
+                        blocker.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',(key,))
+                        locked.set()
+                        deadline=monotonic()+6
+                        while True:
+                            with self.connect() as observer:
+                                waiting=observer.execute("""
+                                    select exists(
+                                      select 1 from pg_locks w
+                                      join pg_locks b on b.locktype=w.locktype
+                                       and b.database=w.database and b.classid=w.classid
+                                       and b.objid=w.objid and b.objsubid=w.objsubid
+                                      where b.pid=%s and b.granted and not w.granted
+                                       and w.locktype='advisory'
+                                       and %s=any(pg_blocking_pids(w.pid)))
+                                    """,(pid,pid)).fetchone()[0]
+                            if waiting:
+                                break
+                            if monotonic()>deadline:
+                                raise AssertionError('second advisory lock wait not observed')
+                            sleep(.05)
+                        self.assertEqual(hits,1)
+                        self.assertIsNotNone(expiry)
+                        self.assertLess(datetime.now(timezone.utc),expiry)
+                        deadline=monotonic()+12
+                        while datetime.now(timezone.utc)<=expiry:
+                            if monotonic()>deadline:
+                                raise AssertionError('expiry timeout')
+                            sleep(.05)
+                    with self.assertRaises(HTTPException) as err:
+                        future.result(timeout=10)
+                    self.assertEqual(err.exception.status_code,503)
+                    self.assertEqual(err.exception.detail,'sandbox_twin_approval_stale_or_invalid')
+                    self.assertEqual(hits,1)
+                finally:
+                    locked.set()
+        self.assertEqual(self.snapshot(attempt),('PREPARED','PREPARED',0,0))
