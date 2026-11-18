@@ -1,0 +1,46 @@
+"""Inert composition contract; no service factories, subprocess or entrypoint."""
+import time
+
+def compose_run(plan, *, expected_c_sha, expected_b_sha, validate_plan,
+                boundary, exercise, reserve_seconds=30):
+    """Proposed synchronous runner; boundary must be independently authorized.
+    Boundary owns an externally supervised disposable containment domain.
+    """
+    result = validate_plan(plan, expected_c_sha=expected_c_sha,
+                           expected_b_sha=expected_b_sha)
+    if result.get("launch_authorized") is not False:
+        raise ValueError("invalid_preflight")
+    if type(reserve_seconds) is not int or not 1 <= reserve_seconds < plan["timeout_seconds"]:
+        raise ValueError("cleanup_reserve")
+    # No executable backend is supplied. Central must approve the concrete
+    # boundary and separate invocation before this source is activated.
+    deadline = time.monotonic() + plan["timeout_seconds"]
+    work_deadline = deadline - reserve_seconds
+    inventory = []
+    outcome = "NOT_QUALIFIED"
+    cleanup = False
+    try:
+        boundary.assert_disposable(plan, deadline=work_deadline)
+        for kind in ("postgres", "core", "temporal", "worker"):
+            if time.monotonic() >= work_deadline:
+                raise TimeoutError("work_budget")
+            # reserve registers ownership BEFORE any spawn so partial start
+            # failures remain covered by the independent containment cleanup.
+            resource = boundary.reserve(kind, deadline=work_deadline)
+            inventory.append(resource)
+            boundary.start(resource, deadline=work_deadline)
+            boundary.ready(resource, deadline=work_deadline)
+        exercise(tuple(inventory), deadline=work_deadline)
+        if time.monotonic() < work_deadline:
+            outcome = "EXERCISE_RETURNED"
+    finally:
+        # Independent outer watchdog is mandatory: these calls alone cannot
+        # bound blocking callbacks or survive runner death.
+        try:
+            boundary.destroy_owned(tuple(reversed(inventory)), deadline=deadline)
+            cleanup = boundary.verify_domain_absent(deadline=deadline) is True
+        finally:
+            boundary.record_outcome(outcome, cleanup, deadline=deadline)
+    return {"status":"CANDIDATE_ONLY","outcome":outcome,
+            "cleanup_reported":cleanup,"runtime_attested":False,
+            "launch_authorized":False}
