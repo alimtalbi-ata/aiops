@@ -1,0 +1,42 @@
+{
+  "status": "PROPOSED_NOT_TESTED",
+  "source_commit": "2834158bfff6556673a8d993da9ee1b8e6f5f465",
+  "cases": [
+    {
+      "id": "nominal",
+      "condition": "exact 019 synthetic seed only",
+      "historical_expected": "A, HOST, PAYMENTS, ERP reachable; nominal simulated impact only",
+      "future_required": "authenticated namespace and exact typed path"
+    },
+    {
+      "id": "wrong_orientation",
+      "condition": "replace only HOST→PAYMENTS with PAYMENTS→HOST; no alternate path",
+      "historical_expected": "503 twin_sourced_payments_path_unavailable",
+      "future_required": "reject noncanonical direction, no automatic reversal"
+    },
+    {
+      "id": "foreign_site",
+      "condition": "reachable node site foreign or null",
+      "historical_expected": "503 twin_sourced_payments_path_unavailable",
+      "future_required": "reject"
+    },
+    {
+      "id": "foreign_tenant_same_site",
+      "condition": "foreign tenant claims synthetic site",
+      "historical_expected": "not distinguishable from site alone",
+      "future_required": "reject absent independent authenticated tenant proof"
+    },
+    {
+      "id": "wrong_kind",
+      "condition": "replace required edge relation_type with unrelated kind, same endpoints",
+      "historical_expected": "traversal still reaches target; no kind filter",
+      "future_required": "reject unqualified typed path"
+    },
+    {
+      "id": "alternative_unknown",
+      "condition": "B missing or health unknown while A path remains",
+      "historical_expected": "A path may still qualify",
+      "future_required": "B health/failover UNKNOWN; no continuity or resolution inference"
+    }
+  ]
+}
