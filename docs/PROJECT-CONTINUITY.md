@@ -457,3 +457,45 @@ This review is a preservation/qualification decision only. No PR was merged, no 
 - [Core FS147 PR #450](https://github.com/alimtalbi-ata/aiops/pull/450) advanced from `ac2e3822dd073411ee7450940a5716cdc88fca5a` to [`bbe8b2b46d10e91a2100690941e7a6e2ae0e119a`](https://github.com/alimtalbi-ata/aiops/commit/bbe8b2b46d10e91a2100690941e7a6e2ae0e119a): comparison shows **two new files**, `app/core/fs147_correlation_chain.py` (60 lines) and `tests/test_fs147_correlation_chain.py` (61 lines). Pure offline tests cover tenant/alert/incident/run/evidence identity mismatch, untrusted identifiers, ticket 147, DEMO/LIVE boundaries and deterministic replay. [AIOps quality gates #42438550623](https://github.com/alimtalbi-ata/aiops/actions/runs/42438550623) completed SUCCESS for this HEAD; **CODE/CI only**, not authenticated GLPI, PG16, Temporal or host E2E.
 - [Integration PR #449](https://github.com/alimtalbi-ata/aiops/pull/449) remains at `a1f6d18e0e529b434e8cf45db2e294cc504411af`; [general quality gate #42379782613](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782613) FAILURE and [isolated receipt gate #42379782717](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782717) SUCCESS. These are distinct qualification levels.
 - **One priority blocker:** no newly authenticated SRV-DEB-05 preservation inventory for the five Compose stacks. Existing reporter -> publisher must attest immutable image identities, source/dirty worktrees, effective Compose/overrides, mount/volume and simulated-data retention, test receipts and verified rollback. Four crontab entries are not five stacks. Do not infer deployment from GitHub SHA, image tags or file dates. No host inspection or deployment was performed in this GitHub-only cycle. FS1113 remains non-production and separate from FS147.
+
+
+## 2026-11-17 — Dark SaaS Premium UI foundation
+
+- Opened DEV branch `feat/ui-dark-saas-premium-20261117` from current `main`; no direct main mutation.
+- Added local Portal design tokens and stylesheet at `app/portal/aiops_theme.css`; HTML-only middleware injects it across Portal HTML responses and extends existing CSP with `style-src 'self'` while preserving the existing restrictive directives.
+- Added a Portal theme regression suite covering the stylesheet, Command Center, ITSM, Explore/Story, ACME Impact and non-HTML API behavior.
+- Set the provisioned ACME Grafana dashboard to dark mode with a six-hour default window; its six metric queries remain unchanged.
+- Full design specification: `docs/ui/DARK-SAAS-PREMIUM-DESIGN-SYSTEM.md`.
+- Scope is first-party Portal HTML plus the provisioned ACME Grafana dashboard. Native Grafana chrome, GLPI, n8n, Prometheus and Alertmanager are external UIs and remain outside this increment until their supported theming paths are separately reviewed.
+- Qualification at handoff: code changes committed to this branch; tests and exact-head GitHub Actions are **NOT YET VERIFIED**. No live service, browser, host, or production deployment was touched. LIVE remains NO-GO.
+
+
+## 2026-11-17 — External UI theme convergence increment
+
+- Extended the same DEV branch with Grafana server default dark theme via `GF_USERS_DEFAULT_THEME=dark`.
+- Added a GLPI 11 custom palette `config/glpi/themes/aiops-premium.scss` and read-only Compose mount at `/var/glpi/files/_themes` (GLPI image default `GLPI_VAR_DIR=/var/glpi/files`).
+- Added regression coverage for Grafana Compose default, GLPI mount/palette tokens, and the provisioned Grafana dashboard.
+- Added `docs/ui/EXTERNAL-SERVICE-THEMES.md` with supported theming controls and explicit exceptions.
+- n8n theme remains a per-user preference and must be selected per operator account. Prometheus/Alertmanager native consoles do not expose a supported branded-theme setting in this deployment; do not patch vendor bundles or inject CSS through a reverse proxy.
+- Earlier Portal+Grafana implementation CI passed 3/3 in run #44188109053. New external-theme changes are on PR #809; exact-head CI for SHA `02d7046bb4cc919b4c71b78687e841f09339733e` is pending at handoff. No live service/host/production changes were made.
+
+
+### Observability UI extension — 2026-11-17
+
+- Added Grafana `AIOps Observability Control Plane` dashboard at `config/grafana/dashboards/observability-control-plane.json`, with Prometheus/Alertmanager target health and metrics panels.
+- Prometheus now scrapes its own metrics and Alertmanager; this enables the branded Grafana view while preserving native consoles for diagnostics.
+- Regression coverage extended in `tests/test_external_service_themes.py`; Quality workflow runs both external service theme tests and Portal theme tests.
+- Prometheus/Alertmanager native UIs remain unthemed because no supported branded theme surface is configured; do not vendor-patch or reverse-proxy inject CSS.
+- The latest exact-head workflow is pending; no live runtime/host/production deployment was performed.
+
+
+## 2026-11-17 — Portal operator usability increment
+
+- Latest prior exact-head CI for the theme/observability work passed all three jobs in run [44188984273](https://github.com/alimtalbi-ata/aiops/actions/runs/44188984273).
+- Added same-origin progressive enhancement `app/portal/portal_usability.js`: skip-to-content, labelled sticky workspace navigation, quick-start entry points, local DOM-only Run filtering and polite live-region status semantics.
+- Added route `GET /assets/portal-usability.js`; homepage loads it with `defer`. Added responsive styles to the shared local design system.
+- Added `tests/test_portal_usability.py` and `tests/test_portal_usability_client.cjs`; CI now runs the HTTP contract, DOM behavior and JS syntax checks.
+- This is a usability enhancement only. It adds no API calls, browser storage, credentials, tenant claims, or changes to LIVE/DEMO execution. Existing UNKNOWN and authorization gates remain unchanged.
+- Current PR #809 is still draft. The new exact-head CI must pass before review/merge. No production host or runtime was modified.
+
+- Portal usability CI follow-up: corrected the JavaScript asset media-type assertion to accept the Starlette/FastAPI `application/javascript` response. The earlier test failure was assertion-only; implementation and route tests passed. Re-run exact-head CI on the latest branch SHA before considering the UX increment qualified.

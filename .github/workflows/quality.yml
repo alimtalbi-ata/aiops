@@ -30,10 +30,24 @@ jobs:
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
+      - name: Check patch whitespace and conflict markers
+        run: git diff --check
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Portal registry and integration navigation unit tests
         run: python -m unittest discover -s tests -p "test_portal_integrations.py" -v
+      - name: Dark SaaS Premium Portal theme regression tests
+        run: python -m unittest discover -s tests -p "test_portal_theme.py" -v
+      - name: Actor tenant read policy unit tests
+        run: python -m unittest discover -s tests -p "test_actor_read_policy.py" -v
+      - name: Portal usability asset and HTTP contract tests
+        run: python -m unittest discover -s tests -p "test_portal_usability.py" -v
+      - name: Portal usability browser DOM contract (unit-only)
+        run: node --test tests/test_portal_usability_client.cjs
+      - name: Portal usability JavaScript syntax
+        run: node --check app/portal/portal_usability.js
+      - name: External service UI theme asset and Compose regression tests
+        run: python -m unittest discover -s tests -p "test_external_service_themes.py" -v
       - name: Portal navigation browser JavaScript syntax
         run: node --check app/portal/portal_navigation_client.js
       - name: Portal navigation DOM contract regression (unit-only)
