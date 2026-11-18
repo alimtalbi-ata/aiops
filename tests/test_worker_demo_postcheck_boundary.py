@@ -29,6 +29,6 @@ def test_demo_verify_blocks_before_synthetic_evidence_and_completion():
 
 def test_workflow_stops_on_block_before_finish():
     source = SOURCE.read_text()
-    assert "if r.get('status')=='BLOCKED': return" in source
+    assert "if r['status']=='BLOCKED': return" in source
     assert source.index("if r.get('status')=='BLOCKED': return") < source.index(
         "execute_activity(finish_run")
