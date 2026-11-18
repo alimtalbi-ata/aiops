@@ -1,0 +1,27 @@
+"""Inert watchdog decision logic. No OS signals, timers, or service launch."""
+from dataclasses import dataclass
+import math
+
+@dataclass(frozen=True)
+class Budget:
+    work_deadline: float
+    final_deadline: float
+
+    @classmethod
+    def from_start(cls, now, total, reserve):
+        if (not math.isfinite(now) or type(total) is not int
+                or type(reserve) is not int or not 1 <= reserve < total <= 900):
+            raise ValueError("budget")
+        return cls(now + total - reserve, now + total)
+
+def decide(budget, *, now, identity_matches, runner_alive, absence_verified):
+    """Only advisory decisions for an external independent supervisor."""
+    if identity_matches is not True or not math.isfinite(now):
+        return "QUARANTINE_NOT_QUALIFIED"
+    if now >= budget.final_deadline:
+        return "DEADLINE_NOT_QUALIFIED"
+    if absence_verified is True:
+        return "ABSENCE_REPORTED"
+    if runner_alive is not True or now >= budget.work_deadline:
+        return "STOP_DOMAIN_REQUIRED"
+    return "WORK_WINDOW"
