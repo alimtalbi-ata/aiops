@@ -1,0 +1,61 @@
+-- PROPOSED / NOT_TESTED / inert; Central #804 6986491774.
+-- New internal model, NOT historical v1 proof, no producer/grants/activation.
+begin;
+create table aiops.int10b_ownership_identity (
+ resource_kind text not null check(resource_kind in ('incident','run','glpi_instance','glpi_ticket','glpi_entity')),
+ resource_id text not null check(length(resource_id)>0),
+ tenant_id text not null check(length(tenant_id)>0),
+ primary key(resource_kind,resource_id),
+ unique(resource_kind,resource_id,tenant_id)
+);
+create table aiops.int10b_ownership_observation (
+ observation_id text primary key,
+ resource_kind text not null, resource_id text not null, tenant_id text not null,
+ source_event_id text not null unique,
+ observation_version bigint not null check(observation_version>=1),
+ predecessor_id text,
+ predecessor_version bigint generated always as (observation_version-1) stored,
+ event_type text not null check(event_type in ('VERIFIED','REVOKED')),
+ observed_at timestamptz not null, known_at timestamptz not null,
+ producer_id text not null check(length(producer_id)>0),
+ key_id text not null check(length(key_id)>0),
+ source_payload_sha256 text not null check(source_payload_sha256 ~ '^[0-9a-f]{64}$'),
+ proof_format text not null check(length(proof_format)>0),
+ proof_bytes bytea not null check(octet_length(proof_bytes)>0),
+ check(observed_at<=known_at),
+ check((observation_version=1)=(predecessor_id is null)),
+ foreign key(resource_kind,resource_id,tenant_id) references aiops.int10b_ownership_identity(resource_kind,resource_id,tenant_id),
+ unique(resource_kind,resource_id,observation_version),
+ unique(predecessor_id),
+ unique(observation_id,resource_kind,resource_id,tenant_id,observation_version),
+ foreign key(predecessor_id,resource_kind,resource_id,tenant_id,predecessor_version)
+ references aiops.int10b_ownership_observation(observation_id,resource_kind,resource_id,tenant_id,observation_version)
+);
+create function aiops.int10b_guard_observation() returns trigger language plpgsql as $$
+declare p record;
+begin
+ -- Shared serialization anchor for future authorized writer AND reader.
+ perform 1 from aiops.int10b_ownership_identity
+ where resource_kind=NEW.resource_kind and resource_id=NEW.resource_id and tenant_id=NEW.tenant_id for update;
+ if not found then raise exception 'ownership identity absent'; end if;
+ select * into p from aiops.int10b_ownership_observation
+ where resource_kind=NEW.resource_kind and resource_id=NEW.resource_id
+ order by observation_version desc limit 1;
+ if not found then
+ if NEW.observation_version<>1 or NEW.predecessor_id is not null then raise exception 'ownership genesis invalid'; end if;
+ else
+ if NEW.observation_version<>p.observation_version+1 or NEW.predecessor_id is distinct from p.observation_id
+ or NEW.observed_at<=p.observed_at or NEW.known_at<p.known_at then
+ raise exception 'ownership chain invalid'; end if;
+ -- Conservative: no reinstatement following revocation until Central decides.
+ if p.event_type='REVOKED' then raise exception 'ownership revoked'; end if;
+ end if;
+ if NEW.known_at>clock_timestamp() then raise exception 'future observation'; end if;
+ return NEW;
+end $$;
+create trigger trg_int10b_observation_chain before insert on aiops.int10b_ownership_observation for each row execute function aiops.int10b_guard_observation();
+create trigger trg_int10b_identity_immutable before update or delete on aiops.int10b_ownership_identity for each row execute function aiops.prevent_append_only();
+create trigger trg_int10b_observation_immutable before update or delete on aiops.int10b_ownership_observation for each row execute function aiops.prevent_append_only();
+-- No authorization view/function: proof verification and producer trust UNKNOWN.
+-- Never select latest VERIFIED by filtering before ordering; latest head may be REVOKED.
+commit;
