@@ -130,11 +130,11 @@ def render_hitl_inbox(admission=None):
                 if isinstance(candidate, str) and 0 < len(candidate) <= 512:
                     proposal = candidate
     parts = ["<section aria-labelledby='hitl-inbox-title'><h4 id='hitl-inbox-title'>HITL Inbox — consultation offline</h4>",
-             "<p>STORY_OFFLINE / CONTRACT_ONLY — aucune approbation ni exécution attestée. Ownership UNKNOWN / UNBOUND.</p>"]
+             "<p>STORY_OFFLINE — aucune approbation ni exécution attestée. Ownership UNKNOWN / UNBOUND.</p>"]
     if proposal is None:
         parts.append("<p>Proposition UNKNOWN — aucune ligne qualifiée.</p>")
     else:
-        parts.append("<dl><dt>Proposition déclarée</dt><dd>"+escape(proposal)+"</dd>"
+        parts.append("<p>Admission : CONTRACT_ONLY — cohérence déclarée, non attestée.</p><dl><dt>Proposition déclarée</dt><dd>"+escape(proposal)+"</dd>"
                      "<dt>Risque</dt><dd>UNKNOWN</dd><dt>Action</dt><dd>UNKNOWN</dd>"
                      "<dt>CI cible</dt><dd>UNKNOWN</dd><dt>État HITL</dt><dd>UNKNOWN</dd>"
                      "<dt>Preuves</dt><dd>Voir la provenance Admission ci-dessous ; non attestée.</dd></dl>")

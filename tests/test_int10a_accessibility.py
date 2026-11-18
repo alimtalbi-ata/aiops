@@ -15,7 +15,10 @@ class PopulatedAudit(unittest.TestCase):
         value=call(golden())
         self.assertIn("Proposition déclarée",render_hitl_inbox(value))
         self.assertIn("UNKNOWN",render_hitl_inbox(value))
-        self.assertNotIn("Proposition déclarée",render_hitl_inbox(None))
+        self.assertIn("CONTRACT_ONLY",render_hitl_inbox(value))
+        for invalid in (None, {}, dict(value,execution_allowed=True), dict(value,qualification="REJECT")):
+            self.assertNotIn("CONTRACT_ONLY",render_hitl_inbox(invalid))
+            self.assertNotIn("Proposition déclarée",render_hitl_inbox(invalid))
         self.assertNotIn("Proposition déclarée",render_hitl_inbox(dict(value,execution_allowed=True)))
         self.assertNotIn("Proposition déclarée",render_hitl_inbox(dict(value,qualification="REJECT")))
 
