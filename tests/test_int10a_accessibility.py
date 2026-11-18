@@ -81,7 +81,8 @@ class PopulatedAudit(unittest.TestCase):
                 self.assertTrue(any(n["role"]=="heading" and n["name"]=="HITL Inbox — consultation offline" for n in exposed))
                 ax_path=out/f"populated-ax-{width}-{repetition}.json"
                 ax_path.write_text(json.dumps(exposed,ensure_ascii=False,indent=2),encoding="utf-8")
-                page.evaluate("scrollTo(0,0)")
+                page.evaluate("window.scrollTo({top:0,left:0,behavior:'instant'})")
+                page.wait_for_function("window.scrollY === 0 && window.scrollX === 0")
                 page.evaluate("() => document.fonts.ready")
                 metrics_js="""() => {
                     const root=document.documentElement, body=document.body;
@@ -93,7 +94,9 @@ class PopulatedAudit(unittest.TestCase):
                         devicePixelRatio,contentBottom:Math.max(0,...rects),
                         visualHeight:visualViewport.height,visualScale:visualViewport.scale};
                 }"""
+                page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
                 before=page.evaluate(metrics_js)
+                self.assertEqual(before["scrollY"],0)
                 png=page.screenshot(path=str(out/f"populated-{width}-{repetition}.png"),full_page=True,scale="css")
                 after=page.evaluate(metrics_js)
                 self.assertEqual(png[:8],bytes.fromhex("89504e470d0a1a0a"))
