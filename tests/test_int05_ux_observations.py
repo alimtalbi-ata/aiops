@@ -38,6 +38,16 @@ class Int05Audit(unittest.TestCase):
                     before["after_right"]=region.evaluate("e=>e.scrollLeft")
                     row["tables"].append(before)
                 row["styles"]=self.page.evaluate("""() => Array.from(document.querySelectorAll('h1,h2,h3,p,a,th,td,summary')).filter(e=>e.getClientRects().length).map(e=>{let s=getComputedStyle(e),b=e;while(b && getComputedStyle(b).backgroundColor==='rgba(0, 0, 0, 0)')b=b.parentElement;return {tag:e.tagName,text:e.textContent.trim().slice(0,100),foreground:s.color,background:b?getComputedStyle(b).backgroundColor:null,fontSize:s.fontSize,fontWeight:s.fontWeight}})""")
+                row["labels"] = self.page.locator(".table-scroll").evaluate_all("es=>es.map(e=>e.getAttribute('aria-label'))")
+                self.assertEqual(len(row["labels"]),len(set(row["labels"])))
+                if name == "impact":
+                    self.assertTrue(self.page.locator("a[href='/#incidents']").is_visible())
+                    if width <= 1100:
+                        self.assertTrue(self.page.locator(".mobile-path").is_visible())
+                    else:
+                        self.assertTrue(self.page.locator("svg").is_visible())
+                else:
+                    self.assertTrue(self.page.evaluate("document.querySelector('.demo-cards').getBoundingClientRect().top + scrollY < document.querySelector('nav').getBoundingClientRect().top + scrollY"))
                 row["no_go"]="NO-GO LIVE" in self.page.locator("body").inner_text()
                 report["pages"].append(row)
                 (output/"observations.json").write_text(json.dumps(report,ensure_ascii=False,indent=2))
