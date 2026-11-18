@@ -16,6 +16,7 @@ from typing import Any
 
 from portal.acme_fixture_contract import load_fixture_bytes, validate_fixture
 from portal.acme_twin_provenance import build_twin_evidence
+from portal.acme_twin_consumer import project_twin_consumer
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -90,7 +91,7 @@ def build_acme_impact_read_model() -> dict[str, Any]:
     fixture = load_fixture_bytes(raw)
     report = validate_fixture(fixture)
     digest = hashlib.sha256(raw).hexdigest()
-    return {
+    model = {
         "schema": "aiops.synthetic-impact-read-model.v1",
         "twin_evidence": build_twin_evidence(raw),
         "entrypoint": "http://10.79.94.202:17777/",
@@ -175,12 +176,14 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "production_qualified": False,
         "live_remediation_authorized": False,
     }
+    model["twin_consumer"] = project_twin_consumer(model)
+    return model
 
 
 def _load_or_503() -> dict[str, Any]:
     try:
         return build_acme_impact_read_model()
-    except (OSError, UnicodeError, ValueError, ImportError, AttributeError) as exc:
+    except (OSError, UnicodeError, ValueError, ImportError, AttributeError, KeyError, TypeError, IndexError) as exc:
         raise HTTPException(
             status_code=503,
             detail="synthetic_impact_fixture_unavailable_or_invalid",
