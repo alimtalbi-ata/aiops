@@ -1,0 +1,41 @@
+{
+  "schema": "aiops.debian-acme-sim-e2e.v1",
+  "collected_at": "2026-11-16T16:55:00+00:00",
+  "attempt_id": "ACME-SIM-0123456789ABCDEF",
+  "tenant_id": "ACME-TEST",
+  "scenario_id": "ACME-SAN-PAYMENTS",
+  "mode": "SIMULATION",
+  "status": "PASS",
+  "reason": "SIMULATED_SANDBOX_ONLY",
+  "approval_issuer": "TWIN_ACME_SIMULATED",
+  "human_approval_claimed": false,
+  "live_effects_allowed": false,
+  "real_glpi_writes_allowed": false,
+  "docker_mutations": 1,
+  "stages": {
+    "capability_simulator": "PASS",
+    "capability_core": "PASS",
+    "capability_twin": "PASS",
+    "capability_policy": "PASS",
+    "capability_worker": "PASS",
+    "simulator_start": "PASS",
+    "pre_resolution_core": "PASS",
+    "pre_resolution_twin": "PASS",
+    "pre_resolution_policy": "PASS",
+    "pre_resolution_worker": "PASS",
+    "worker_no_effect": "PASS",
+    "core_finalization": "PASS",
+    "post_resolution_core": "PASS",
+    "post_resolution_twin": "PASS",
+    "post_resolution_policy": "PASS",
+    "post_resolution_worker": "PASS",
+    "resolved": "PASS"
+  },
+  "ids": {
+    "incident_id": "SYNTHETIC-incident_id",
+    "run_id": "SYNTHETIC-run_id",
+    "ticket_id": "SIM-GLPI-TEST-001",
+    "proposal_id": "SYNTHETIC-proposal_id",
+    "approval_id": "SIM-APP-TEST-001"
+  }
+}

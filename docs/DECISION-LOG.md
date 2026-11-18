@@ -190,3 +190,18 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 ### 2026-10-30 — ADR delta: one main-based candidate, fail-closed source transport
 
 **Decision:** retain #201 as the only release integration candidate; port six exact source blobs from #198/#202 without merging stacked/divergent PRs or replacing Portal main/Compose/Core. Canonical Evidence UTC must be bounded and Portal must refuse unqualified authority claims, expose 401/403/503 without navigation, and never persist bearer credentials. **Rationale:** preserve Core authority and operator-visible UNKNOWN, prevent false customer evidence. **Qualification:** [new exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) queued; T0 not yet passed, T4/T5 NO-GO. No merge, Debian or LIVE.
+
+
+## 2026-11-18 — ACME offline Twin provenance (proposed, #804)
+
+Convergence #713 KEEP; base integration #810 `aec5a442a9c0718b6603eda9af9a2628c146b2e3`. Add `twin_evidence` to existing impact read model, no new route or orchestrator. Per-element fixture pointer and SHA256, Git SHA and observed_at null, freshness UNKNOWN, scope STORY_OFFLINE. Structural reachability only; no tenant/Core binding or operational authority. Golden graph/sandbox ADAPT deferred pending edge provenance and ACL. Reproduce: `python -m unittest discover -s tests -p 'test_acme_twin_provenance.py' -v`. Runtime and production not qualified.
+
+
+## ACME E2E selective receipt port — 2026-11-18 (proposed in draft)
+
+See [E2E handover](contracts/acme-e2e-handover.md). Offline structural gate only; runtime NOT_TESTED. Existing orchestration retained.
+
+
+## 2026-11-18 — AIOPS2 ABC candidate (#804)
+
+Frozen source heads: A 77fcbccb52d0a4efd7a28de1072ebc7ff56aa940; B 2a5881de2747b7362060da3b6b2b00f79a3ea37a; C 621eb12e386efbdc5bcc671bc3a5aa210751f464. Isolated candidate only; integrated qualification pending. No runtime or production GO.
