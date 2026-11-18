@@ -1,0 +1,62 @@
+"""Inert catalog preflight; caller supplies authorized isolated transaction.
+Presence and trigger configuration checks, NOT schema semantic equivalence.
+"""
+TABLES = (
+    'runs','incidents','evidence','run_events','analysis_records',
+    'critique_records','policy_decisions','action_proposals','approval_records',
+    'hitl_decision_outbox','hitl_reject_terminal_receipts',
+    'acme_sandbox_attempts','acme_sandbox_terminal_tickets',
+    'int10b_ownership_identity','int10b_ownership_observation',
+)
+TRIGGERS = (
+    ('action_proposals','trg_guard_action_proposal_transition','guard_action_proposal_transition',False),
+    ('action_proposals','trg_guard_action_proposal_insert','guard_action_proposal_insert',False),
+    ('action_proposals','trg_immutable_delete_action_proposals','reject_immutable_mutation',False),
+    ('hitl_reject_terminal_receipts','trg_hitl_reject_terminal_immutable','prevent_append_only',False),
+    ('hitl_decision_outbox','trg_int10b_outbox_dead','int10b_check_dead_receipt',True),
+    ('hitl_reject_terminal_receipts','trg_int10b_receipt_dead','int10b_check_dead_receipt',True),
+    ('hitl_decision_outbox','trg_int10b_outbox_no_delete','prevent_append_only',False),
+    ('hitl_decision_outbox','trg_int10b_outbox_transition','int10b_guard_reject_outbox',False),
+    ('acme_sandbox_attempts','trg_acme_sandbox_immutable','prevent_append_only',False),
+    ('acme_sandbox_terminal_tickets','trg_acme_sandbox_terminal_immutable','prevent_append_only',False),
+    ('int10b_ownership_observation','trg_int10b_observation_chain','int10b_guard_observation',False),
+    ('int10b_ownership_identity','trg_int10b_identity_immutable','prevent_append_only',False),
+    ('int10b_ownership_observation','trg_int10b_observation_immutable','prevent_append_only',False),
+) + tuple((t,'trg_int10b_acme_chain','int10b_check_acme_chain',True)
+          for t in ('incidents','runs','acme_sandbox_attempts','acme_sandbox_terminal_tickets','run_events'))
+
+def preflight(c):
+    version,replication=c.execute("select current_setting('server_version_num')::int,current_setting('session_replication_role')").fetchone()
+    if not 160000 <= version < 170000 or replication!='origin':
+        raise AssertionError('unsupported version or replication role')
+    tables={r[0] for r in c.execute("""
+        select cl.relname from pg_class cl join pg_namespace n on n.oid=cl.relnamespace
+        where n.nspname='aiops' and cl.relkind='r'
+    """).fetchall()}
+    missing=set(TABLES)-tables
+    if missing:
+        raise AssertionError('missing tables: '+','.join(sorted(missing)))
+    rows=c.execute("""
+        select cl.relname,t.tgname,p.proname,t.tgdeferrable,t.tginitdeferred,
+               t.tgenabled,pn.nspname
+        from pg_trigger t join pg_class cl on cl.oid=t.tgrelid
+        join pg_namespace n on n.oid=cl.relnamespace
+        join pg_proc p on p.oid=t.tgfoid
+        join pg_namespace pn on pn.oid=p.pronamespace
+        where n.nspname='aiops' and not t.tgisinternal
+    """).fetchall()
+    actual={(r[0],r[1]):tuple(r[2:]) for r in rows}
+    for table,trigger,function,deferred in TRIGGERS:
+        if actual.get((table,trigger)) != (function,deferred,deferred,'O','aiops'):
+            raise AssertionError('trigger configuration mismatch: '+table+'.'+trigger)
+    valid=c.execute("""
+        select exists(select 1 from pg_index i
+          join pg_class idx on idx.oid=i.indexrelid
+          join pg_class rel on rel.oid=i.indrelid
+          join pg_namespace n on n.oid=rel.relnamespace
+          where n.nspname='aiops' and rel.relname='run_events'
+            and idx.relname='ux_run_events_event_key'
+            and i.indisunique and i.indisvalid and i.indisready)
+    """).fetchone()[0]
+    if valid is not True:
+        raise AssertionError('event key index missing or invalid')
