@@ -429,8 +429,8 @@ def acme_impact_page():
     return HTMLResponse(content=render_acme_impact_html(_load_or_503()), headers=HEADERS)
 
 
-def render_acme_impact_html(model, *, offline_san=None):
-    from portal.acme_workbench_presentation import render_san_scenario
+def render_acme_impact_html(model, *, offline_san=None, offline_twin=None):
+    from portal.acme_workbench_presentation import render_san_scenario, render_historical_twin_consumer
     path = " → ".join(str(part) for part in model["impact_path"])
     rows = [
         ("Run ID (simulation)", model["run_id"], model["run_id_provenance"]),
@@ -516,7 +516,7 @@ def render_acme_impact_html(model, *, offline_san=None):
         "<p><strong>SIMULATION LOCALE UNIQUEMENT.</strong> Aucun incident runtime, "
         "ticket GLPI, capture applicative, appel backend ou événement horodaté n'est créé. "
         "Le run_id affiché est dérivé des octets du fixture, pas d'un run exécuté.</p>"
-        + "<p><strong>GO — scénario synthétique · UNKNOWN — preuves runtime · NO-GO LIVE</strong></p>" + '<nav class="impact-quick" aria-label="Accès rapide aux preuves"><a href="#impact-path">Chemin Twin</a> <a href="#impact-inventory">CI affectées</a> <a href="#impact-decision">Décision</a> <a href="#impact-checkpoints">Checkpoints</a> <a href="#impact-provenance">Provenance</a></nav>' + diagram + render_san_scenario(offline_san) +
+        + "<p><strong>GO — scénario synthétique · UNKNOWN — preuves runtime · NO-GO LIVE</strong></p>" + '<nav class="impact-quick" aria-label="Accès rapide aux preuves"><a href="#impact-path">Chemin Twin</a> <a href="#impact-inventory">CI affectées</a> <a href="#impact-decision">Décision</a> <a href="#impact-checkpoints">Checkpoints</a> <a href="#impact-provenance">Provenance</a></nav>' + diagram + render_historical_twin_consumer(offline_twin) + render_san_scenario(offline_san) +
         '<section class="kpis" aria-label="Indicateurs du scénario">'
         '<article class="kpi"><span>Incident source</span><strong class="p1">SAN P1</strong><span>Dégradation de fabric simulée</span></article>'
         '<article class="kpi"><span>Service impacté</span><strong class="p2">Payments P2</strong><span>Impact métier simulé</span></article>'

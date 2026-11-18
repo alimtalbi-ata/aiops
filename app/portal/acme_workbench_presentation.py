@@ -228,3 +228,32 @@ def render_san_scenario(inputs=None):
         parts.append("<li>"+safe(edge["source_id"])+" → "+safe(edge["target_id"])+" · "+safe(edge["relation_type"])+"</li>")
     parts.append("</ul><p>ABSTAIN — UNKNOWN — NO-GO LIVE.</p></details>")
     return "".join(parts)
+
+
+def render_historical_twin_consumer(impact=None):
+    """Reuse the historical Twin consumer; its STORY_OFFLINE scope stays explicit."""
+    if impact is None:
+        return "<section aria-label='Twin historique'><h2>Twin historique</h2><p>MISSING — aucune entrée offline.</p></section>"
+    try:
+        from portal.acme_twin_consumer import project_twin_consumer
+        value = project_twin_consumer(impact)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return "<section aria-label='Twin historique'><h2>Twin historique</h2><p>UNKNOWN — projection refusée.</p></section>"
+    story = value["story_identity"]
+    binding = value["binding"]
+    graph = value["structural_impact"]
+    parts = ["<section aria-label='Twin historique STORY_OFFLINE'><h2>Twin historique — STORY_OFFLINE</h2>",
+             "<p>Projection structurelle issue du consommateur historique ; distincte du graphe Impact et sans liaison runtime.</p><dl>"]
+    for label, val in (("Incident source", story["incident_id"]), ("Incident impact", story["impact_incident_id"]),
+                       ("Run Story", story["run_id"]), ("SHA-256 source", story["source_sha256"]),
+                       ("Liaison", binding["binding_status"]), ("Tenant", binding["tenant_id"] or "UNBOUND"),
+                       ("Attempt", binding["attempt_id"] or "UNBOUND"), ("Fraîcheur", value["freshness"]["status"]),
+                       ("Observé à", value["freshness"]["observed_at"] or "MISSING"),
+                       ("CI racine", graph["root_node_id"]), ("CI cible", graph["target_node_id"]),
+                       ("Nombre de chemins", graph["target_path_count"]), ("Impact opérationnel", graph["operational_impact"])):
+        parts.append("<dt>"+safe(label)+"</dt><dd>"+safe(val)+"</dd>")
+    parts.append("</dl><p>Runtime attesté : NON · Remédiation LIVE : NON</p><details><summary>Citations de dépendances — hypothèses structurelles</summary><ul>")
+    for row in value["hypothesis_citations"]:
+        parts.append("<li>"+safe(row.get("source_ref"))+" · "+safe(row.get("source_sha256"))+" · "+safe(row.get("freshness"))+"</li>")
+    parts.append("</ul></details></section>")
+    return "".join(parts)

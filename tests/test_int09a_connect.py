@@ -139,3 +139,26 @@ def test_actual_c_collector_in_existing_workbench():
     assert "continuité causale UNKNOWN" in html
     assert "PROD / LIVE : NO-GO" in html
     assert "RESOLVED" not in html
+
+
+def test_historical_twin_consumer_connected_to_existing_impact():
+    from pathlib import Path
+    from portal.acme_twin_provenance import build_twin_evidence
+    from portal.acme_impact_read_model import render_acme_impact_html
+    fixture_bytes=Path("app/portal/acme-fixtures.json").read_bytes()
+    twin=build_twin_evidence(fixture_bytes)
+    impact={k:twin[k] for k in ("source_sha256","run_id","incident_id","impact_incident_id")}
+    impact.update({k:twin["impact"][k] for k in ("impact_path","affected_ci_ids")})
+    impact.update(ci_count=len(twin["nodes"]),twin_evidence=twin)
+    before=deepcopy(impact)
+    html=render_acme_impact_html(build_acme_impact_read_model(),offline_twin=impact)
+    for label in ("Twin historique — STORY_OFFLINE","UNBOUND","UNKNOWN","NO_RUNTIME_OBSERVATION",
+                  "Runtime attesté : NON","Remédiation LIVE : NON","Nombre de chemins","Citations de dépendances"):
+        assert label in html
+    assert "HITL" not in html
+    assert html.count("<nav ")==1
+    assert impact==before
+    impact["twin_evidence"]["runtime_attested"]=True
+    bad=render_acme_impact_html(build_acme_impact_read_model(),offline_twin=impact)
+    assert "UNKNOWN — projection refusée" in bad
+    assert "source_sha256" not in bad
