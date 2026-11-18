@@ -1,0 +1,9 @@
+# INT10-B increment 2 — static review, PROPOSED
+Baseline 63d7129c8ccf7275392a30d4767b9e4aa50365ba; historical source f594d04e02abde19b2299fbb523bf9d0d0e360b8.
+Core main.py blob 384ad59028b93ac14772a2e836b2dfe036a07eba: inserts analysis 14, critique 12, policy 10, proposal 17, approval 10 fields. Sandbox blob e4315e35472e408b1d414ce15b5f2c79f4663b8a inserts synthetic analysis/critique and evidence provenance run_id/tenant_id. Existing 001 evidence has no run FK or tenant column; do not infer historic association. Main historical evidence checks existence only.
+Candidate ledger preserves five table shapes, original proposal guards, adds same-run composite FKs and approval hash binding, explicit initial PROPOSED and immutable proposal_id. Real action transitions disabled deliberately; not a complete runtime migration or API change. Effect/verification/reconciliation/learning/evaluation deferred. Evidence cross-run, approval authorization, revoke semantics, concurrency, policy independent proof remain BLOCKED. No runtime grants. Candidate is fresh-only, not replay-idempotent; PG16 NOT_TESTED.
+Golden010 uses unique source/payload_hash and partial source/external_id; current 001 has columns. Existing duplicates UNKNOWN; reject, never purge.
+Golden012 defines immutable independent ownership, comment explicitly requires separate trusted adapter. No producer established by this review; no backfill or portal binding inference.
+Golden013 uses same issuer/JTI advisory lock, expiry and unique nonce/JTI. NULL hash arguments need explicit checks; clock after wait and privileges require review. No merge or auth activation.
+Golden011 depends on proposals/approvals/runs. C tokenless recovery remains incompatible with B token fencing. No adapter invented.
+Next: locate authenticated ownership producer across historical refs, confirm evidence binding and actual A/C handoff, prepare outbox/terminal candidates and PG16 negative tests. RT10 NO-GO.

@@ -1,0 +1,178 @@
+-- PROPOSED / NOT_TESTED. Review-only, not an active migration.
+-- Not a complete chain; ownership/evidence/approval authorization unresolved.
+-- Golden f594d04e02abde19b2299fbb523bf9d0d0e360b8 blob bfed91982654b6baf0026408fa5134a22af421bb.
+-- AIOps 2.0 canonical AI decision ledger.
+create table if not exists aiops.analysis_records (
+ analysis_id text primary key, run_id text not null references aiops.runs(run_id), incident_id text,
+ idempotency_key text not null unique,
+ revision integer not null check (revision >= 1), contract_version text not null,
+ provider text not null, model text not null, prompt_version text not null,
+ evidence_ids jsonb not null default '[]'::jsonb, evidence_set_hash text not null,
+ output jsonb not null, confidence numeric not null check (confidence between 0 and 1),
+ status text not null check (status in ('VALID','INVALID','UNAVAILABLE','SUPERSEDED')),
+ created_at timestamptz not null default now(), unique(run_id, revision)
+);
+create index if not exists ix_analysis_run_created on aiops.analysis_records(run_id, created_at desc);
+create table if not exists aiops.critique_records (
+ critique_id text primary key, idempotency_key text not null unique, analysis_id text not null references aiops.analysis_records(analysis_id),
+ run_id text not null references aiops.runs(run_id), contract_version text not null,
+ provider text not null, model text not null, validated boolean not null,
+ issues jsonb not null default '[]'::jsonb, evidence_ids jsonb not null default '[]'::jsonb,
+ output jsonb not null, diagnostic_confidence numeric not null check (diagnostic_confidence between 0 and 1),
+ created_at timestamptz not null default now()
+);
+create index if not exists ix_critique_run_created on aiops.critique_records(run_id, created_at desc);
+create table if not exists aiops.policy_decisions (
+ policy_decision_id text primary key, run_id text not null references aiops.runs(run_id),
+ analysis_id text references aiops.analysis_records(analysis_id), critique_id text references aiops.critique_records(critique_id),
+ policy_version text not null, input_hash text not null,
+ decision text not null check (decision in ('OBSERVE','ENRICH','ESCALATE','HUMAN_APPROVAL','BLOCK','AUTO_REMEDIATE','SIMULATE','ALLOW')),
+ state text not null check (state in ('PASS','FAIL','BLOCKED','UNKNOWN')),
+ reasons jsonb not null default '[]'::jsonb, proof_snapshot jsonb not null default '{}'::jsonb,
+ created_at timestamptz not null default now(), unique(run_id,input_hash)
+);
+create index if not exists ix_policy_decision_run on aiops.policy_decisions(run_id, created_at desc);
+create table if not exists aiops.action_proposals (
+ proposal_id text primary key, run_id text not null references aiops.runs(run_id),
+ analysis_id text not null references aiops.analysis_records(analysis_id), critique_id text not null references aiops.critique_records(critique_id), source_action_id text not null,
+ proposal_revision integer not null check (proposal_revision >= 1), target_ci_id text not null,
+ action_type text not null, risk_tier text not null check (risk_tier in ('LOW','MEDIUM','HIGH','CRITICAL')),
+ parameters jsonb not null default '{}'::jsonb, evidence_ids jsonb not null default '[]'::jsonb,
+ preconditions jsonb not null default '[]'::jsonb, expected_postconditions jsonb not null default '[]'::jsonb,
+ rollback_plan jsonb not null default '{}'::jsonb, proposal_hash text not null,
+ status text not null check (status in ('PROPOSED','REJECTED','APPROVED','EXPIRED','EXECUTING','EXECUTED','FAILED','VERIFIED','ROLLED_BACK','SUPERSEDED','REVOKED')),
+ expires_at timestamptz, created_at timestamptz not null default now(),
+ unique(run_id, proposal_hash), unique(run_id, proposal_revision)
+);
+create index if not exists ix_action_proposal_run_status on aiops.action_proposals(run_id,status,created_at desc);
+create table if not exists aiops.approval_records (
+ approval_id text primary key, proposal_id text not null references aiops.action_proposals(proposal_id),
+ proposal_hash text not null, actor_id text not null, actor_role text not null,
+ decision text not null check (decision in ('APPROVE','REJECT','REVOKE')),
+ scope jsonb not null default '{}'::jsonb, nonce text not null unique,
+ decided_at timestamptz not null default now(), expires_at timestamptz not null,
+ audit jsonb not null default '{}'::jsonb
+);
+create index if not exists ix_approval_proposal_time on aiops.approval_records(proposal_id,decided_at desc);
+
+-- A proposal's identity and hash are immutable; only its lifecycle status may advance.
+create or replace function aiops.guard_action_proposal_transition() returns trigger language plpgsql as $$
+declare approval_count integer; approved_roles text[];
+begin
+ if NEW.proposal_id is distinct from OLD.proposal_id
+ or NEW.run_id is distinct from OLD.run_id
+ or NEW.analysis_id is distinct from OLD.analysis_id
+ or NEW.critique_id is distinct from OLD.critique_id
+ or NEW.source_action_id is distinct from OLD.source_action_id
+ or NEW.proposal_revision is distinct from OLD.proposal_revision
+ or NEW.target_ci_id is distinct from OLD.target_ci_id
+ or NEW.action_type is distinct from OLD.action_type
+ or NEW.risk_tier is distinct from OLD.risk_tier
+ or NEW.parameters is distinct from OLD.parameters
+ or NEW.evidence_ids is distinct from OLD.evidence_ids
+ or NEW.preconditions is distinct from OLD.preconditions
+ or NEW.expected_postconditions is distinct from OLD.expected_postconditions
+ or NEW.rollback_plan is distinct from OLD.rollback_plan
+ or NEW.proposal_hash is distinct from OLD.proposal_hash
+ or NEW.expires_at is distinct from OLD.expires_at
+ or NEW.created_at is distinct from OLD.created_at then
+  raise exception 'proposal identity and hash are immutable';
+ end if;
+ if NEW.status is not distinct from OLD.status then return NEW; end if;
+ if not (
+  (OLD.status='PROPOSED' and NEW.status in ('APPROVED','REJECTED','EXPIRED','SUPERSEDED')) or
+  (OLD.status='APPROVED' and NEW.status in ('EXECUTING','EXPIRED','SUPERSEDED','REVOKED')) or
+  (OLD.status='EXECUTING' and NEW.status in ('EXECUTED','FAILED')) or
+  (OLD.status='EXECUTED' and NEW.status in ('VERIFIED','ROLLED_BACK','FAILED')) or
+  (OLD.status='FAILED' and NEW.status in ('ROLLED_BACK','SUPERSEDED'))
+ ) then
+  raise exception 'invalid proposal lifecycle transition: % -> %', OLD.status, NEW.status;
+ end if;
+ if NEW.status in ('APPROVED','EXECUTING','EXECUTED','VERIFIED') then
+  raise exception 'INT10-B candidate: real action transitions disabled';
+  -- Historical LIVE guard retained below for review; not activated.
+  if not exists(select 1 from aiops.runs r where r.run_id=NEW.run_id and r.mode='LIVE') then
+   raise exception 'real action lifecycle requires LIVE run';
+  end if;
+ end if;
+ if NEW.status='APPROVED' then
+  if not exists(select 1 from aiops.approval_records a where a.proposal_id=NEW.proposal_id and a.proposal_hash=NEW.proposal_hash and a.decision='APPROVE' and a.expires_at>now() and a.scope->>'target_ci_id'=NEW.target_ci_id and a.scope->>'action_type'=NEW.action_type) then
+   raise exception 'approval record bound to exact proposal hash and scope is required';
+  end if;
+  if NEW.risk_tier='CRITICAL' then
+   select count(distinct actor_id), array_agg(distinct actor_role) into approval_count,approved_roles
+   from aiops.approval_records where proposal_id=NEW.proposal_id and proposal_hash=NEW.proposal_hash and decision='APPROVE' and expires_at>now()
+   and scope->>'target_ci_id'=NEW.target_ci_id and scope->>'action_type'=NEW.action_type;
+   if coalesce(approval_count,0)<2 or not (coalesce(approved_roles,'{}') @> array['security_admin','incident_commander']) then
+    raise exception 'critical proposal requires security_admin and incident_commander approvals';
+   end if;
+  end if;
+ end if;
+ if NEW.status='REJECTED' and not exists(select 1 from aiops.approval_records a where a.proposal_id=NEW.proposal_id and a.proposal_hash=NEW.proposal_hash and a.decision='REJECT') then
+  raise exception 'rejection requires a recorded human decision';
+ end if;
+ return NEW;
+end;
+$$;
+drop trigger if exists trg_guard_action_proposal_transition on aiops.action_proposals;
+create trigger trg_guard_action_proposal_transition before update on aiops.action_proposals for each row execute function aiops.guard_action_proposal_transition();
+
+create or replace function aiops.guard_action_proposal_insert() returns trigger language plpgsql as $$
+declare a record; q record; action_record jsonb; evidence_count integer;
+begin
+ if NEW.status is distinct from 'PROPOSED' then raise exception 'proposal must start PROPOSED'; end if;
+ select output,evidence_ids,status into a from aiops.analysis_records where analysis_id=NEW.analysis_id and run_id=NEW.run_id;
+ if not found or a.status<>'VALID' then raise exception 'proposal requires a valid analysis for the same run'; end if;
+ select output,evidence_ids,validated into q from aiops.critique_records where critique_id=NEW.critique_id and analysis_id=NEW.analysis_id and run_id=NEW.run_id;
+ if not found or q.validated is not true or coalesce(q.output->'issues','[]'::jsonb)<>'[]'::jsonb or coalesce(q.output->'unsafe_actions','[]'::jsonb)<>'[]'::jsonb or exists(select 1 from jsonb_array_elements(coalesce(q.output->'claim_checks','[]'::jsonb)) checks(value) where coalesce((value->>'supported')::boolean,false) is not true) then
+  raise exception 'proposal requires a clean validated critique for the same analysis';
+ end if;
+ select value into action_record from jsonb_array_elements(coalesce(a.output->'recommended_actions','[]'::jsonb)) where value->>'action_id'=NEW.source_action_id limit 1;
+ if action_record is null then raise exception 'source action is not present in validated analysis'; end if;
+ if action_record->>'risk_tier' is distinct from NEW.risk_tier
+ or coalesce((action_record->>'advisory_only')::boolean,false) is not true
+ or coalesce((action_record->>'requires_human_approval')::boolean,false) is not true
+ or (action_record->>'target_ci_id' is not null and action_record->>'target_ci_id'<>NEW.target_ci_id) then
+  raise exception 'proposal differs from advisory-only analyst action';
+ end if;
+ if jsonb_typeof(NEW.evidence_ids)<>'array' then raise exception 'proposal evidence IDs must be an array'; end if;
+ if jsonb_array_length(NEW.evidence_ids)=0 then raise exception 'proposal evidence IDs must be non-empty'; end if;
+ if not (a.evidence_ids @> NEW.evidence_ids) or not (q.evidence_ids @> NEW.evidence_ids) then raise exception 'proposal evidence must be a subset of analysis and critique evidence'; end if;
+ select count(*) into evidence_count from jsonb_array_elements_text(NEW.evidence_ids) e(id) join aiops.evidence ev on ev.evidence_id=e.id;
+ if evidence_count<>jsonb_array_length(NEW.evidence_ids) then raise exception 'proposal references unknown evidence'; end if;
+ if jsonb_typeof(NEW.preconditions)<>'array' or jsonb_typeof(NEW.expected_postconditions)<>'array' then raise exception 'proposal preconditions and postconditions must be arrays'; end if;
+ if jsonb_array_length(NEW.preconditions)=0 or jsonb_array_length(NEW.expected_postconditions)=0 then raise exception 'proposal requires preconditions and measurable postconditions'; end if;
+ if NEW.risk_tier in ('HIGH','CRITICAL') and (NEW.rollback_plan='{}'::jsonb or NEW.rollback_plan='null'::jsonb) then
+  raise exception 'high-risk proposal requires rollback plan';
+ end if;
+ return NEW;
+end;
+$$;
+drop trigger if exists trg_guard_action_proposal_insert on aiops.action_proposals;
+create trigger trg_guard_action_proposal_insert before insert on aiops.action_proposals for each row execute function aiops.guard_action_proposal_insert();
+
+
+-- Additional same-run relational bindings; no wire fields added.
+alter table aiops.analysis_records add unique (analysis_id,run_id);
+alter table aiops.critique_records add foreign key (analysis_id,run_id) references aiops.analysis_records(analysis_id,run_id);
+alter table aiops.critique_records add unique (critique_id,analysis_id,run_id);
+alter table aiops.policy_decisions add foreign key (analysis_id,run_id) references aiops.analysis_records(analysis_id,run_id);
+alter table aiops.policy_decisions add foreign key (critique_id,analysis_id,run_id) references aiops.critique_records(critique_id,analysis_id,run_id);
+alter table aiops.policy_decisions add check (critique_id is null or analysis_id is not null);
+alter table aiops.action_proposals add foreign key (critique_id,analysis_id,run_id) references aiops.critique_records(critique_id,analysis_id,run_id);
+alter table aiops.action_proposals add unique (proposal_id,proposal_hash);
+alter table aiops.approval_records add foreign key (proposal_id,proposal_hash) references aiops.action_proposals(proposal_id,proposal_hash);
+
+create or replace function aiops.reject_immutable_mutation() returns trigger language plpgsql as $$
+begin raise exception 'immutable ledger: % on %.% is forbidden', TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME; end;
+$$;
+do $$
+declare t text;
+begin
+ foreach t in array array['analysis_records','critique_records','policy_decisions','approval_records'] loop
+  execute format('drop trigger if exists %I on aiops.%I', 'trg_immutable_'||t, t);
+  execute format('create trigger %I before update or delete on aiops.%I for each row execute function aiops.reject_immutable_mutation()', 'trg_immutable_'||t, t);
+ end loop;
+end $$;
+
+create trigger trg_immutable_delete_action_proposals before delete on aiops.action_proposals for each row execute function aiops.reject_immutable_mutation();
