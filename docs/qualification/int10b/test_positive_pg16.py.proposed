@@ -126,6 +126,13 @@ class PositiveContract:
             with self.assertRaises(HTTPException) as err:
                 self.resolve(attempt,docs)
             self.assertEqual(err.exception.status_code,503)
+            self.assertEqual(err.exception.detail,{
+                'unavailable':'fixture unavailable',
+                'digest':'sandbox_worker_receipt_digest_unqualified',
+                'human':'sandbox_no_effect_authority_unqualified',
+                'expired':'sandbox_twin_approval_stale_or_invalid',
+                'foreign':'sandbox_cross_tenant_or_attempt',
+            }[kind])
             self.assertEqual(self.snapshot(attempt),('PREPARED','PREPARED',0,0))
 
     def test_zero_rowcount_rollback(self):
@@ -138,6 +145,10 @@ class PositiveContract:
                 with self.assertRaises(HTTPException) as err:
                     self.resolve(attempt,docs)
                 self.assertEqual(err.exception.status_code,503)
+                self.assertEqual(err.exception.detail,{
+                    'incidents':'sandbox_incident_transition_unqualified',
+                    'runs':'sandbox_run_transition_unqualified',
+                }[table])
             self.assertEqual(self.snapshot(attempt),('PREPARED','PREPARED',0,0))
             # Same nonce now succeeds: failed transaction consumed nothing.
             self.resolve(attempt,docs)
