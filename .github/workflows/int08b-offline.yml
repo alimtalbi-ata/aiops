@@ -22,8 +22,8 @@ jobs:
       - run: pip install -r app/requirements.txt pytest
       - run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          python -m pytest -q tests/test_acme_historical_golden_offline.py tests/test_acme_historical_provenance_offline.py tests/test_acme_historical_journey_offline.py tests/test_acme_historical_san_offline.py tests/test_acme_int08_phases.py tests/test_acme_independent_authorities.py tests/test_acme_runtime_context.py tests/test_acme_authority_readers.py tests/test_acme_authority_continuity.py tests/test_int07_offline_collector.py tests/test_int06a_contract.py tests/test_int06a_integrated_refusals.py --junitxml=int08b.xml
-          python -c "import xml.etree.ElementTree as E; r=E.parse('int08b.xml'); assert not r.findall('.//skipped'); assert len(r.findall('.//testcase')) >= 170"
+          python -m pytest -q tests/test_acme_historical_bridge_offline.py tests/test_acme_historical_golden_offline.py tests/test_acme_historical_provenance_offline.py tests/test_acme_historical_journey_offline.py tests/test_acme_historical_san_offline.py tests/test_acme_int08_phases.py tests/test_acme_independent_authorities.py tests/test_acme_runtime_context.py tests/test_acme_authority_readers.py tests/test_acme_authority_continuity.py tests/test_int07_offline_collector.py tests/test_int06a_contract.py tests/test_int06a_integrated_refusals.py --junitxml=int08b.xml
+          python -c "import xml.etree.ElementTree as E; r=E.parse('int08b.xml'); assert not r.findall('.//skipped'); assert len(r.findall('.//testcase')) >= 178"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
