@@ -170,7 +170,7 @@ jobs:
         run: python -m pytest -q tests/test_acme_demo_container_smoke.py
       - name: SAN Payments Portal Docker image contains blocked register
         run: |
-          docker build --file app/portal/Dockerfile --tag aiops2-portal-demo-smoke:ci app
+          docker build --build-context noc_scripts=./scripts --file app/portal/Dockerfile --tag aiops2-portal-demo-smoke:ci app
           docker run --rm --network none --env AIOPS_INTERNAL_TOKEN --entrypoint python aiops2-portal-demo-smoke:ci -m portal.acme_demo_container_smoke > "${{ runner.temp }}/aiops2-packaged-demo-smoke.json"
           python -m json.tool "${{ runner.temp }}/aiops2-packaged-demo-smoke.json" > /dev/null
           python -c 'import json, pathlib, sys; p = pathlib.Path(sys.argv[1]); d = json.loads(p.read_text()); assert set(d) == {"schema", "accepted", "scope", "runtime_attested", "live_actions_authorized", "incident_id", "source_sha256"}; assert d["schema"] == "aiops2.packaged-demo-smoke.v1" and d["accepted"] is True and d["scope"] == "LOCAL_SYNTHETIC_ONLY"; assert d["runtime_attested"] is False and d["live_actions_authorized"] is False; assert isinstance(d["incident_id"], str) and bool(d["incident_id"]); assert isinstance(d["source_sha256"], str) and len(d["source_sha256"]) == 64 and all(c in "0123456789abcdef" for c in d["source_sha256"])' "${{ runner.temp }}/aiops2-packaged-demo-smoke.json"
