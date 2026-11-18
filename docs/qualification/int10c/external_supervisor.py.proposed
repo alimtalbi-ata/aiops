@@ -1,38 +1,71 @@
-"""Inert external supervisor composition. No provisioning or entrypoint.
-Callbacks must belong to a separately approved executor outside the domain.
-Outer VM controller must enforce hard deadlines even if this process blocks.
+"""Inert cooperative supervisor. Outer autonomous expiry remains mandatory.
+No resource release or quarantine mutation from this process.
 """
 import math
 import time
 
 def supervise(*, reservation, work_deadline, final_deadline,
               verify_owned, observe_runner, stop_admission,
-              destroy_domain, independent_absence, quarantine):
+              destroy_domain, independent_absence, quarantine_readback):
+    outcome = "UNKNOWN"
+    absence = False
+    quarantine = False
+
+    def result():
+        return {"status": "ABSENCE_REPORTED" if absence and quarantine
+                else "NOT_QUALIFIED", "workload_outcome": outcome,
+                "absence_reported": absence, "quarantine_reported": quarantine,
+                "runtime_attested": False, "launch_authorized": False}
+
+    def owned_before(deadline):
+        return (time.monotonic() < deadline
+                and verify_owned(reservation, deadline=deadline) is True
+                and time.monotonic() < deadline)
+
     now = time.monotonic()
     if not (math.isfinite(work_deadline) and math.isfinite(final_deadline)
             and now < work_deadline < final_deadline <= now + 900):
-        return "NOT_QUALIFIED"
-    if verify_owned(reservation, deadline=work_deadline) is not True:
-        return "NOT_QUALIFIED"
+        return result()
+    try:
+        # Readback only: durable quarantine and autonomous expiry must
+        # already be armed by the external controller before guest boot.
+        if not owned_before(work_deadline):
+            return result()
+        quarantine = quarantine_readback(reservation, deadline=work_deadline) is True
+        if not quarantine or not owned_before(work_deadline):
+            return result()
+    except Exception:
+        return result()
+    outcome = "WORK_DEADLINE"
     try:
         while time.monotonic() < work_deadline:
             state = observe_runner(reservation, deadline=work_deadline)
+            if time.monotonic() >= work_deadline:
+                break
+            if state in ("COMPLETED", "FAILED", "INTERRUPTED"):
+                outcome = state
+                break
             if state != "RUNNING":
+                outcome = "UNKNOWN_STATE"
                 break
             time.sleep(min(0.05, max(0, work_deadline-time.monotonic())))
-        if time.monotonic() >= final_deadline:
-            return "NOT_QUALIFIED"
-        if verify_owned(reservation, deadline=final_deadline) is not True:
-            return "NOT_QUALIFIED"
+    except Exception:
+        outcome = "OBSERVATION_ERROR"
+    try:
+        if not owned_before(final_deadline):
+            return result()
         if stop_admission(reservation, deadline=final_deadline) is not True:
-            return "NOT_QUALIFIED"
+            return result()
+        if not owned_before(final_deadline):
+            return result()
+        # Backend MUST atomically enforce reservation generation and deadline
+        # at dispatch; local recheck cannot eliminate check/use races.
         if destroy_domain(reservation, deadline=final_deadline) is not True:
-            return "NOT_QUALIFIED"
-        if independent_absence(reservation, deadline=final_deadline) is True:
-            if time.monotonic() < final_deadline:
-                return "ABSENCE_REPORTED"
-        return "NOT_QUALIFIED"
-    finally:
-        # Quarantine reservation even on success until external controller
-        # adjudicates evidence and releases it. Never release here.
-        quarantine(reservation, deadline=final_deadline)
+            return result()
+        if time.monotonic() >= final_deadline:
+            return result()
+        observed = independent_absence(reservation, deadline=final_deadline) is True
+        absence = observed and time.monotonic() < final_deadline
+    except Exception:
+        absence = False
+    return result()
