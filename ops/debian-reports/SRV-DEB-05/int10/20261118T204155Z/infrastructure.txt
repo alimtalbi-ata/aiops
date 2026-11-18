@@ -1,0 +1,1069 @@
+
+========== HOST ==========
+Wed Nov 18 20:41:55 UTC 2026
+SRV-DEB-05
+Linux SRV-DEB-05 6.12.107+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.107-1 (2026-08-29) x86_64 GNU/Linux
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.7
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+uid=1001(aiops) gid=1001(aiops) groups=1001(aiops),27(sudo),100(users),115(docker)
+ 21:41:55 up 42 days, 10:52,  7 users,  load average: 1.38, 1.17, 1.06
+
+========== RESOURCES ==========
+               total        used        free      shared  buff/cache   available
+Mem:            23Gi       6.2Gi       1.1Gi       563Mi        17Gi        17Gi
+Swap:           10Gi       378Mi       9.7Gi
+Filesystem                         Size  Used Avail Use% Mounted on
+/dev/mapper/SRV--DEB--05--vg-root   16G  4.0G   11G  27% /
+8
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           45 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  8
+On-line CPU(s) list:                     0-7
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Xeon(R) Gold 5120 CPU @ 2.20GHz
+CPU family:                              6
+Model:                                   85
+Thread(s) per core:                      1
+Core(s) per socket:                      8
+Socket(s):                               1
+Stepping:                                4
+BogoMIPS:                                4389.68
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon nopl xtopology tsc_reliable nonstop_tsc cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch pti ssbd ibrs ibpb stibp fsgsbase tsc_adjust bmi1 avx2 smep bmi2 invpcid avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves arat pku ospke md_clear flush_l1d arch_capabilities
+Hypervisor vendor:                       VMware
+Virtualization type:                     full
+L1d cache:                               256 KiB (8 instances)
+L1i cache:                               256 KiB (8 instances)
+L2 cache:                                8 MiB (8 instances)
+L3 cache:                                19.3 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-7
+Vulnerability Gather data sampling:      Unknown: Dependent on hypervisor status
+Vulnerability Indirect target selection: Mitigation; Aligned branch/return thunks
+Vulnerability Itlb multihit:             KVM: Mitigation: VMX unsupported
+Vulnerability L1tf:                      Mitigation; PTE Inversion
+Vulnerability Mds:                       Mitigation; Clear CPU buffers; SMT Host state unknown
+Vulnerability Meltdown:                  Mitigation; PTI
+Vulnerability Mmio stale data:           Mitigation; Clear CPU buffers; SMT Host state unknown
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Mitigation; IBRS
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; IBRS; IBPB conditional; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI SW loop, KVM SW loop
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+
+========== VIRTUALIZATION ==========
+
+$ systemd-detect-virt
+vmware
+
+$ systemd-detect-virt --vm
+vmware
+
+$ systemd-detect-virt --container
+none
+/dev/kvm ABSENT
+crw-rw---- 1 root kvm 10, 238 Oct  7 11:49 /dev/vhost-net
+
+========== KVM MODULES ==========
+tun                    69632  3
+
+========== AVAILABLE TOOLS ==========
+docker                   /usr/bin/docker
+podman                   NOT_FOUND
+virsh                    NOT_FOUND
+qemu-system-x86_64       NOT_FOUND
+qemu-img                 NOT_FOUND
+virt-install             NOT_FOUND
+incus                    NOT_FOUND
+lxc                      NOT_FOUND
+pvesh                    NOT_FOUND
+qm                       NOT_FOUND
+VBoxManage               NOT_FOUND
+systemd-run              /usr/bin/systemd-run
+systemctl                /usr/bin/systemctl
+gcc                      NOT_FOUND
+cc                       NOT_FOUND
+make                     /usr/bin/make
+python3                  /usr/bin/python3
+git                      /usr/bin/git
+psql                     NOT_FOUND
+temporal                 NOT_FOUND
+curl                     /usr/bin/curl
+timeout                  /usr/bin/timeout
+
+========== CGROUP ==========
+
+$ stat -fc %T /sys/fs/cgroup
+cgroup2fs
+
+$ cat /proc/self/cgroup
+0::/user.slice/user-1001.slice/session-120827.scope
+
+$ cat /sys/fs/cgroup/cgroup.controllers
+cpuset cpu io memory hugetlb pids rdma misc
+
+$ cat /sys/fs/cgroup/cgroup.subtree_control
+cpuset cpu io memory hugetlb pids rdma misc
+Current cgroup: /sys/fs/cgroup/user.slice/user-1001.slice/session-120827.scope
+-rw-r--r-- 1 root root 0 Nov 18 21:41 /sys/fs/cgroup/user.slice/user-1001.slice/session-120827.scope/cgroup.procs
+-r--r--r-- 1 root root 0 Nov 18 21:41 /sys/fs/cgroup/user.slice/user-1001.slice/session-120827.scope/cgroup.controllers
+-rw-r--r-- 1 root root 0 Nov 17 12:43 /sys/fs/cgroup/user.slice/user-1001.slice/session-120827.scope/cgroup.subtree_control
+-r--r--r-- 1 root root 0 Nov 18 21:41 /sys/fs/cgroup/user.slice/user-1001.slice/session-120827.scope/cgroup.events
+--w------- 1 root root 0 Nov 18 21:41 /sys/fs/cgroup/user.slice/user-1001.slice/session-120827.scope/cgroup.kill
+
+========== PROCESS SECURITY ==========
+Uid:	1001	1001	1001	1001
+Gid:	1001	1001	1001	1001
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	000001ffffffffff
+CapAmb:	0000000000000000
+NoNewPrivs:	0
+Seccomp:	0
+
+========== VIRTUALIZATION SERVICES ==========
+libvirtd             inactive
+virtqemud            inactive
+virtlogd             inactive
+virtlockd            inactive
+docker               active
+containerd           active
+incus                inactive
+lxd                  inactive
+pvedaemon            inactive
+pveproxy             inactive
+
+========== USER SYSTEMD ==========
+
+$ systemctl --version
+systemd 257 (257.13-1~deb13u1)
++PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +SYSVINIT +LIBARCHIVE
+
+$ systemctl show user@1001.service -p ActiveState -p Delegate -p ControlGroup
+ControlGroup=/user.slice/user-1001.slice/user@1001.service
+Delegate=yes
+ActiveState=active
+
+$ loginctl show-user 1001 -p Linger -p State
+State=active
+Linger=yes
+
+========== RELEVANT PACKAGES ==========
+containerd	1.7.24~ds1-6+deb13u1
+containerd.io	2.3.6-1~debian.13~trixie
+docker-buildx-plugin	0.37.1-1~debian.13~trixie
+docker-ce	5:29.8.1-1~debian.13~trixie
+docker-ce-cli	5:29.8.1-1~debian.13~trixie
+docker-ce-rootless-extras	5:29.8.1-1~debian.13~trixie
+docker-compose-plugin	5.5.1-1~debian.13~trixie
+docker.io	26.1.5+dfsg1-9+deb13u1
+gcc-14-base	14.2.0-19
+libcap-ng0	0.8.5-4+b1
+libcap2	1:2.75-10+deb13u1+b3
+libcap2-bin	1:2.75-10+deb13u1+b3
+systemd	257.13-1~deb13u1
+systemd-sysv	257.13-1~deb13u1
+systemd-timesyncd	257.13-1~deb13u1
+
+========== DOCKER INVENTORY ==========
+
+$ docker version --format {{.Server.Version}}
+29.8.1
+
+$ docker ps -a --format table {{.Names}}\t{{.Image}}\t{{.Status}}
+NAMES                                                        IMAGE                                                         STATUS
+aiops2-acme-qual-test-pg16                                   postgres:16-alpine                                            Up 2 days
+aiops2-acme-qual-pg16                                        postgres:16-alpine                                            Up 2 days
+aiops2-rebuild-core                                          aiops2-core:metrics-plaintext-candidate-20261112              Up 6 days
+aiops2-portal-v3-qual-exposed                                aiops2-portal:v30-observability-recovery-20261112             Up 6 days
+aiops2-portal-v3-qual-before-auth-prometheus-20261112        aiops2-portal:v30-observability-recovery-20261112             Exited (0) 6 days ago
+aiops2-portal-v3-qual-before-observability-20261112          aiops2-portal:v30-catalog-functional                          Exited (0) 6 days ago
+aiops2-portal-v3-qual-exposed-pre-catalog-20261112T121942Z   aiops2-portal:v30-qualification                               Exited (0) 6 days ago
+aiops2-portal-v3-qual-exposed-rollback-20261112T114745Z      aiops2-portal:glpi-sync-v3                                    Exited (0) 6 days ago
+aiops2-portal-v3-qual-v2                                     aiops2-portal:glpi-sync-v3                                    Exited (0) 6 days ago
+aiops2-portal-v3-qual                                        aiops2-portal:glpi-sync-v3                                    Exited (0) 6 days ago
+aiops2-rebuild-portal                                        aiops2-portal:glpi-sync-v1                                    Up 6 days
+aiops2-rebuild-core-before-metrics-20261112                  aiops2-core:glpi-context-v2                                   Exited (0) 6 days ago
+aiops2-rebuild-core-rollback-v1                              aiops2-core:glpi-context-v1                                   Exited (0) 6 days ago
+aiops2-rebuild-portal-rollback-glpi                          aiops2-portal:core-url-fix-v1                                 Exited (0) 6 days ago
+aiops2-rebuild-portal-rollback-20261111                      aiops2-portal:candidate-e6dc55536a1e                          Exited (0) 6 days ago
+aiops2-portal-candidate-integration-smoke                    aiops2-portal:candidate-e6dc55536a1e                          Up 7 days
+aiops2-portal-candidate-auth-smoke                           aiops2-portal:candidate-e6dc55536a1e                          Up 7 days
+aiops2-portal-candidate-debug                                aiops2-portal:candidate-e6dc55536a1e                          Exited (1) 7 days ago
+aiops2-restore-test-mariadb                                  250e1609e93c                                                  Up 7 days
+aiops2-restore-test-temporal-postgres                        721873c34ceb                                                  Up 7 days
+aiops2-restore-test-postgres                                 721873c34ceb                                                  Up 7 days
+aiops2-rebuild-portal-before-upgrade                         a1f3adcf1e11                                                  Exited (0) 7 days ago
+aiops2-rebuild-core-rollback-glpi                            34e0a155cf4f                                                  Exited (0) 6 days ago
+aiops2-rebuild-portal-rollback-20261110T130053212659Z        ed00b30c5faa                                                  Exited (0) 8 days ago
+aiops2-rebuild-portal-rollback-20261110T093531284558Z        97e26dcab0f5                                                  Exited (0) 8 days ago
+aiops2-rebuild-core-rollback-20261110T130053212659Z          4e719b8133c1                                                  Exited (0) 8 days ago
+aiops2-rebuild-portal-rollback-20261110T092706468472Z        e0559a90b34a                                                  Exited (0) 8 days ago
+aiops2-rebuild-intelligence                                  aiops2-intelligence:intelligence-event-verified-v1-20261109   Up 8 days (healthy)
+aiops2-rebuild-core-rollback-20261110T092706468472Z          87427734395d                                                  Exited (0) 8 days ago
+aiops2-rebuild-portal-rollback-20261109T215925202141Z        f8df32ea0fc9                                                  Exited (0) 8 days ago
+aiops2-rebuild-core-rollback-20261109T201354139196Z          a4b0eefe2da0                                                  Exited (0) 9 days ago
+fs1318-http-qual                                             aiops2-core:fs1212-integrated-candidate                       Exited (0) 7 days ago
+aiops2-rebuild-worker                                        aiops2-worker:fs-demo-candidate-20261105                      Up 8 days (healthy)
+aiops2-rebuild-core-rollback-20261109T154818152697Z          aiops2-core:fs1212-integrated-candidate                       Exited (0) 9 days ago
+aiops2-rebuild-cloudbeaver                                   dbeaver/cloudbeaver:latest                                    Up 11 days
+aiops2-rebuild-portal-rollback-20261109T154818152697Z        aiops2-portal:fs1073-csp-candidate                            Exited (0) 9 days ago
+aiops2-rebuild-portal-fs1085-rollback-20261106-233813        aiops2-portal:fs1051-visual-candidate                         Exited (0) 11 days ago
+aiops2-rebuild-portal-fs1062-rollback-20261106-231345        aiops2-portal:fs1040-sql-guard-candidate                      Exited (0) 11 days ago
+aiops2-rebuild-core-rollback-20261107T164456Z                aiops2-core:fs1017-metrics-candidate-20261106                 Exited (0) 11 days ago
+aiops2-rebuild-twin                                          aiops2-twin:fs1009-decimal-metrics-candidate-20261106         Up 12 days
+aiops2-rebuild-portal-fs1047-rollback-20261106-224850        aiops2-portal:fs621-explorers-candidate                       Exited (0) 11 days ago
+aiops2-rebuild-portal-fs563-rollback                         aiops2-portal:fs563-glpi-ownership-candidate-20261106         Exited (0) 12 days ago
+aiops2-fs385-ingest                                          python:3.12-alpine                                            Up 12 days
+aiops2-rebuild-twin-fs1015-rollback                          aiops2-twin:fs-evidence-20261105                              Exited (0) 12 days ago
+aee3afd900f2_aiops2-rebuild-worker                           aiops2-rebuild-aiops2-worker                                  Created
+aiops2-rebuild-prometheus                                    prom/prometheus:v3.14.0                                       Up 13 days (healthy)
+aiops2-fs-lab                                                alpine:3.20                                                   Up 13 days
+aiops2-v29-qualification                                     aiops2-portal:v29-fs-workspace-candidate-20261105             Up 13 days
+aiops2-fs-qualification                                      aiops2-portal:fs-demo-candidate-20261105                      Up 13 days
+aiops2-rebuild-evidence                                      aiops2-evidence:prometheus-fix-20261104                       Up 2 weeks (healthy)
+aiops2-rebuild-policy                                        aiops2-policy:prometheus-fix-20261104                         Up 2 weeks (healthy)
+aiops2-rebuild-core-before-metrics                           aiops2-acme-sandbox-core:e9a21e3e13f9                         Exited (0) 2 weeks ago
+aiops2-rebuild-twin-before-metrics                           aiops2-acme-sandbox-twin:e9a21e3e13f9                         Exited (0) 2 weeks ago
+aiops2-rebuild-simulator                                     aiops2-acme-sandbox-simulator:e9a21e3e13f9                    Up 2 weeks (healthy)
+aiops2-rebuild-policy-before-metrics                         aiops2-acme-sandbox-policy:e9a21e3e13f9                       Exited (0) 2 weeks ago
+aiops2-portal-candidate-web-20261029                         aiops2-portal-candidate:20261029                              Up 2 weeks
+aiops2-glpi-http-qual-db                                     mariadb:11.4                                                  Up 2 weeks
+aiops2-demo-observability-demo-otel-1                        otel/opentelemetry-collector-contrib:0.123.0                  Up 2 weeks
+aiops2-demo-observability-demo-loki-1                        grafana/loki:3.5.0                                            Up 2 weeks
+aiops2-demo-observability-demo-tempo-1                       grafana/tempo:2.7.2                                           Up 2 weeks
+aiops2-rebuild-copilot                                       aiops2-noc-rag-copilot:v1                                     Up 2 weeks (healthy)
+aiops2-noc-rag-test                                          aiops2-noc-rag-portal:v1                                      Up 2 weeks
+aiops2-noc-rag-copilot-test                                  aiops2-noc-rag-copilot:v1                                     Up 2 weeks
+aiops2-rebuild-n8n                                           n8nio/n8n:2.40.6                                              Up 2 weeks
+aiops2-rebuild-glpi                                          glpi/glpi:11.0.9                                              Up 2 weeks
+aiops2-rebuild-alertmanager                                  prom/alertmanager:v0.34.1                                     Up 2 weeks
+aiops2-rebuild-temporal-ui                                   temporalio/ui:2.49.1                                          Up 2 weeks
+aiops2-rebuild-grafana                                       grafana/grafana:13.2.2                                        Up 2 weeks (healthy)
+aiops2-portal-rollback-v2-20261028                           aiops2-portal:demo-studio-20261028                            Exited (0) 3 weeks ago
+aiops2-glpi-recovery-db                                      mariadb:11.4                                                  Up 3 weeks
+aiops2-rebuild-test-llm                                      aiops2-rebuild-aiops2-test-llm                                Up 4 weeks (healthy)
+aiops2-rebuild-temporal-namespace                            temporalio/admin-tools:1.31.0                                 Exited (0) 4 weeks ago
+aiops2-rebuild-evidence-before-metrics                       aiops2-rebuild-aiops2-evidence                                Exited (0) 2 weeks ago
+aiops2-rebuild-temporal                                      temporalio/server:1.31.0                                      Up 4 weeks (healthy)
+aiops2-rebuild-temporal-schema                               temporalio/admin-tools:1.31.0                                 Exited (0) 4 weeks ago
+aiops2-rebuild-postgres                                      postgres:16-alpine                                            Up 4 weeks (healthy)
+aiops2-rebuild-temporal-postgres                             postgres:16-alpine                                            Up 4 weeks (healthy)
+aiops2-rebuild-glpi-db                                       mariadb:11.4                                                  Up 3 weeks (healthy)
+aiops2-v28-core-qf186                                        aiops2-core:v28-qf185                                         Exited (0) 7 days ago
+aiops2-v28-core-qf183                                        aiops2-core:v28-qf183                                         Exited (1) 4 weeks ago
+aiops2-v28-sql-qual                                          postgres:16-alpine                                            Up 4 weeks
+aiops2-v27-qual-aiops2-worker-1                              aiops2-worker:v27-9885fc5                                     Exited (137) 7 days ago
+aiops2-v27-qual-aiops2-core-1                                aiops2-core:v27-9885fc5                                       Exited (0) 7 days ago
+aiops2-v27-qual-aiops2-intelligence-1                        aiops2-candidate-intelligence:cf09ec3                         Exited (0) 7 days ago
+aiops2-v27-qual-aiops2-policy-1                              aiops2-v27-qual-aiops2-policy                                 Exited (0) 7 days ago
+aiops2-v27-qual-aiops2-twin-1                                aiops2-v27-qual-aiops2-twin                                   Exited (0) 7 days ago
+aiops2-v27-qual-aiops2-evidence-1                            aiops2-v27-qual-aiops2-evidence                               Exited (0) 7 days ago
+aiops2-v27-qual-aiops2-test-llm-1                            aiops2-v27-qual-aiops2-test-llm                               Exited (137) 7 days ago
+aiops2-v27-qual-aiops2-temporal-namespace-1                  temporalio/admin-tools:1.31.0                                 Exited (0) 4 weeks ago
+aiops2-v27-qual-aiops2-temporal-1                            temporalio/server:1.31.0                                      Exited (0) 7 days ago
+aiops2-v27-qual-aiops2-temporal-schema-1                     temporalio/admin-tools:1.31.0                                 Exited (0) 4 weeks ago
+aiops2-v27-qual-aiops2-temporal-postgres-1                   postgres:16-alpine                                            Exited (0) 7 days ago
+aiops2-v27-qual-aiops2-postgres-1                            postgres:16-alpine                                            Exited (0) 7 days ago
+aiops2-metrics-normalizer-v1                                 dcd4efde10bd                                                  Up 4 weeks
+aiops2-demo-web-v1                                           aiops2-e2e-v1-aiops2-core                                     Exited (137) 7 days ago
+aiops2-demo-readonly                                         aiops2-e2e-v1-aiops2-core                                     Exited (137) 7 days ago
+aiops2-e2e-v1-aiops2-worker-1                                aiops2-candidate-worker:b870f48                               Exited (137) 7 days ago
+aiops2-e2e-v1-aiops2-intelligence-1                          aiops2-candidate-intelligence:cf09ec3                         Exited (0) 7 days ago
+aiops2-e2e-v1-aiops2-test-llm-1                              aiops2-e2e-v1-aiops2-test-llm                                 Exited (137) 7 days ago
+aiops2-e2e-v1-aiops2-twin-1                                  aiops2-e2e-v1-aiops2-twin                                     Exited (0) 7 days ago
+aiops2-e2e-v1-aiops2-temporal-namespace-1                    temporalio/admin-tools:1.31.0                                 Exited (0) 4 weeks ago
+aiops2-e2e-v1-aiops2-temporal-1                              temporalio/server:1.31.0                                      Exited (0) 7 days ago
+aiops2-e2e-v1-aiops2-temporal-schema-1                       temporalio/admin-tools:1.31.0                                 Exited (0) 4 weeks ago
+aiops2-e2e-v1-aiops2-temporal-postgres-1                     postgres:16-alpine                                            Exited (0) 7 days ago
+aiops2-e2e-v1-aiops2-evidence-1                              aiops2-e2e-v1-aiops2-evidence                                 Exited (0) 7 days ago
+aiops2-e2e-v1-aiops2-core-1                                  aiops2-e2e-v1-aiops2-core                                     Exited (0) 7 days ago
+aiops2-e2e-v1-aiops2-policy-1                                aiops2-e2e-v1-aiops2-policy                                   Exited (0) 7 days ago
+aiops2-e2e-v1-aiops2-postgres-1                              postgres:16-alpine                                            Exited (0) 7 days ago
+
+$ docker image ls --digests --format table {{.Repository}}\t{{.Tag}}\t{{.Digest}}\t{{.ID}}
+REPOSITORY                             TAG                                          DIGEST                                                                    IMAGE ID
+aiops2-core                            acme-temporal-test-runner-20261116           sha256:fe1da960c5fb9fdcc8868e227bf9e0b6813fed302c7ff2125136626a4614633c   fe1da960c5fb
+aiops2-core                            acme-pg16-test-runner-20261116               sha256:e1c962bb5f957ddab612a7d292402133a613170763e3f858456b5f0d08680558   e1c962bb5f95
+aiops2-core                            acme-metrics-candidate-20261116              sha256:5fb30fb75f95cbdfe238f34605df4949757a280162b2c83f1162340aa99bbe07   5fb30fb75f95
+aiops2-portal                          integration-91551be-fixed                    sha256:103838eaecb8c85ea2e9150bdba9dfec65f8f1f414bf6fa49de66ae45c8698a4   103838eaecb8
+aiops2-portal                          integration-91551be                          sha256:48d2068dd6074aac54e52cc40250bffa96c48135de1986d3f190d56b5a0dfea6   48d2068dd607
+aiops2-core                            integration-91551be                          sha256:37120833d5ffa219abe05665b50a15118c2a443b4ba8b31bb10d585029d28df0   37120833d5ff
+aiops2-core                            metrics-plaintext-candidate-20261112         sha256:4bfc7008af54b4ef6ca2bade280726d7cecf51aec364149f4a11eaa1235abe2c   4bfc7008af54
+aiops2-portal                          v30-observability-recovery-20261112          sha256:095e37db1e8e6dbbf78a9492d9a29546df739d2ca4c8f909cb631a507dca3d16   095e37db1e8e
+aiops2-portal                          v30-catalog-functional                       sha256:f320d0ed61827a38f6ecc60e5e7d40a89c1015b06616352b963fe0fe857c934a   f320d0ed6182
+aiops2-portal                          v30-catalog-candidate                        sha256:3b6fbed9af8b544aece44905d24d8da67f3a9f57a9d6d058f3b12786a7431448   3b6fbed9af8b
+aiops2-portal                          v30-integrated-candidate                     sha256:736af18da06131da6df921afd5dc84ed49c4fa899c2f4a230f5afb9742757a88   736af18da061
+aiops2-portal                          v30-qualification                            sha256:c036202a1b88d6f270803f2713aa86d319f34fbbef616c2802db9b4fb15b763e   c036202a1b88
+aiops2-portal                          glpi-sync-v3                                 sha256:e92a3d8f3d64b400a19e07f03c3ea8f7d4c74c60cb258710bef20e95bce2dcbd   e92a3d8f3d64
+aiops2-portal                          glpi-sync-v2                                 sha256:17659b4a4c75aec7c3109ed48d99eea0027e22abe16ac106abef1d44cac9892e   17659b4a4c75
+aiops2-core                            glpi-context-v2                              sha256:0c3e205fa99f82b9e07c9478d7e80e95145b6b298022ff3ec509bf22815baa65   0c3e205fa99f
+aiops2-portal                          glpi-sync-v1                                 sha256:f44b355a876cfc9794cc8fbe96185f8206bc7fa863431639ea67d8b2ab6c8487   f44b355a876c
+aiops2-core                            glpi-context-v1                              sha256:065404edb9fd05e04c45329e01dc853282cac8272c4973169d173fb32726c27e   065404edb9fd
+aiops2-portal                          core-url-fix-v1                              sha256:c4d120b4daf6a28921630f43060ebf4bbc70237bd4b3a3369df3e24a4a4c6035   c4d120b4daf6
+aiops2-portal                          glpi-base-local                              sha256:c4d120b4daf6a28921630f43060ebf4bbc70237bd4b3a3369df3e24a4a4c6035   c4d120b4daf6
+aiops2-core                            enrichment-http-diagnostics-v11-20261110     sha256:1a48b8a4fd9ca676d70256c9ede7ce95b21f04f89b332fbd2846bf9b7472ea98   1a48b8a4fd9c
+aiops2-portal                          review-evidence-v1-20261110                  sha256:a1f3adcf1e1189600d3167f6d5f3970a89deefe99338b19a8f089da08502916b   a1f3adcf1e11
+aiops2-portal                          rollback-before-upgrade                      sha256:a1f3adcf1e1189600d3167f6d5f3970a89deefe99338b19a8f089da08502916b   a1f3adcf1e11
+aiops2-core                            glpi-base-local                              <none>                                                                    34e0a155cf4f
+aiops2-core                            review-evidence-v1-20261110                  <none>                                                                    34e0a155cf4f
+aiops2-enrichment-diag-base            34e0a155cf4f                                 sha256:34e0a155cf4f7c6268738bc9d542876f4857be0df8d725369c5913be2394af9a   34e0a155cf4f
+aiops2-portal                          demo-review-http-v11-20261110                <none>                                                                    ed00b30c5faa
+aiops2-review-base-portal              ed00b30c5faafeaa                             sha256:ed00b30c5faafeaa2273e5bcff25e300954a93bfb5839163755630e6ecc11862   ed00b30c5faa
+aiops2-portal                          demo-review-v1-20261110                      <none>                                                                    97e26dcab0f5
+aiops2-review-base-portal              97e26dcab0f5c2bd                             sha256:97e26dcab0f5c2bd0790920e3a2f606b7cd27ca937dcab8d96023637fc8821bd   97e26dcab0f5
+aiops2-core                            demo-review-v1-20261110                      <none>                                                                    4e719b8133c1
+aiops2-review-base-core                4e719b8133c10a30                             sha256:4e719b8133c10a30477dfb92436e3a50060e47aa48f2c2e8357a11ede7741222   4e719b8133c1
+aiops2-portal                          events-dev-v1-20261109                       <none>                                                                    e0559a90b34a
+aiops2-review-base-portal              e0559a90b34adcfe                             sha256:e0559a90b34adcfe59ad3545e44195a10274398c17a308b6d8df316d4552eed1   e0559a90b34a
+aiops2-intelligence                    rollback-20261109t205845859714z              sha256:cf6fe9c3d3b3a200887a12d167c1f3a64b89711f51d569efcd4dd28b1b1129b9   cf6fe9c3d3b3
+aiops2-intelligence                    rollback-20261109t205317026374z              sha256:ab965c6e9aeb0828bb6339cf66fd419640f3b39ce4629e0ed43dd75b17749604   ab965c6e9aeb
+aiops2-intelligence                    rollback-20261109t205111000773z              sha256:ca163a5d72bdeccae4d9cb171f1f48ecf93d6553a64f9052ca0af1e1e1377cf1   ca163a5d72bd
+aiops2-intelligence                    intelligence-event-verified-v1-20261109      sha256:9bd805af6a8a980de3eea62ceb5eb08d6a44704dde9c6ece0defc7b9c94f2120   9bd805af6a8a
+aiops2-review-base-core                87427734395dd212                             sha256:87427734395dd212f550f03498fb77954c572675b41d8e5ba5dd4f295ecbef4d   87427734395d
+aiops2-core                            event-ingress-v1-20261109                    <none>                                                                    87427734395d
+aiops2-intelligence                    consolidated-20261109-v31                    sha256:3c47d2990f32a3ecad4093da51734801b457e0d4a360f8defd12c1246d24e2f4   3c47d2990f32
+aiops2-event-demo-base                 f8df32ea0fc9107e                             <none>                                                                    f8df32ea0fc9
+aiops2-portal                          consolidated-20261109-v31                    sha256:f8df32ea0fc9107e1dd1cc5c40b8bd38257336fdaa1a2be00b5597a8609f10e8   f8df32ea0fc9
+aiops2-worker                          consolidated-20261109-v31                    sha256:7158253949155eb340cf587f554b297ab2e7e057019d725567eb348a310f8ab1   715825394915
+aiops2-core                            consolidated-20261109-v31                    <none>                                                                    a4b0eefe2da0
+aiops2-event-ingress-base              a4b0eefe2da01dba                             sha256:a4b0eefe2da01dba3c858682538686853e982f0b4f369e84f4a3b2edddc9b4ce   a4b0eefe2da0
+aiops2-twin                            fs1335-v4-integrated-candidate               sha256:d61fde6d5031ddeb2984d9d359c576894762d5a5201ca13c63bb0b594389704b   d61fde6d5031
+aiops2-twin                            fs1335-observer-nonroot-candidate            sha256:0aa6d4bce1f042f9022bf0ce02edb7b61126137a44f9786b804d108d0d2054a4   0aa6d4bce1f0
+aiops2-twin                            fs1334-unified-candidate                     sha256:b7c8e8c2f9b785335ef94f44cde59a4c5488863e19cd097cae0588126cc64820   b7c8e8c2f9b7
+aiops2-core                            fs1333-metrics-candidate                     sha256:af1860ed1ac43be6a05a0ca540b52d32cf533f5ab0a40182c11706d6874cb41e   af1860ed1ac4
+aiops2-core                            fs1320-fs1315-qualified                      sha256:32f5d8386d9f5aa8ecdcfe467ef1ed5f1e73b3ac61e4c782bde693b54cfd71af   32f5d8386d9f
+aiops2-core                            fs1212-integrated-candidate                  <none>                                                                    b28db1f671f8
+aiops2-qualified-base-core             b28db1f671f832ac                             sha256:b28db1f671f832acfa01404edbe2db4111c76f80881e9781a07edd2f3bed70cc   b28db1f671f8
+aiops2-core                            fs1160-glpi-candidate                        sha256:a4499f7e8f8322372316f96c8ad936b6b8152d383aab615042245596d9123866   a4499f7e8f83
+aiops2-portal                          fs1097-history-chart-candidate               sha256:cbc9d80abe21f4c6350c802ff36764c39f8801f67d588ecd212bc0c4acd8280e   cbc9d80abe21
+aiops2-portal                          fs1092-history-fixed-candidate               sha256:a856215625f10ffee5da732b515aef64654996a1c74eb459ee9d36857c1980a5   a856215625f1
+aiops2-portal                          fs1089-history-candidate                     sha256:e9ec88c9cfdad1fe864b669dbb2e45ad3037620257d37fad3e179f697b3f5a03   e9ec88c9cfda
+aiops2-portal                          fs1073-csp-candidate                         <none>                                                                    313b8d277801
+aiops2-qualified-base-portal           313b8d2778017662                             sha256:313b8d27780176622de5fed33d9d516c1ea5ba67a0eba12957b1c470747ef15e   313b8d277801
+aiops2-portal                          fs1051-visual-candidate                      sha256:d48f1a8b51c7b933f4add458befb9e216b9c38e1666dd88fa4163b14aadfc45f   d48f1a8b51c7
+aiops2-portal                          fs1040-sql-guard-candidate                   sha256:1c813d4c76debfba1c453bb41c7cfd55780719acbb258af16aec9eca1064df11   1c813d4c76de
+aiops2-twin                            fs1025-clean-source-candidate-20261106       sha256:f9b6770ddfd5a1559572b7676b52a3da89c71f67851d02f9bab99893ae455052   f9b6770ddfd5
+aiops2-core                            fs1017-metrics-candidate-20261106            sha256:c31c2412af358fe93c680fa8f7193307c5b316aaba57a4b31b42296304818d67   c31c2412af35
+aiops2-twin                            fs1009-decimal-metrics-candidate-20261106    sha256:39ad578d506bcd4857f1a936127cdbb5c7ee7fdfab91a9f3f14bc7cf81819fff   39ad578d506b
+aiops2-twin                            fs1334-local-base                            sha256:39ad578d506bcd4857f1a936127cdbb5c7ee7fdfab91a9f3f14bc7cf81819fff   39ad578d506b
+aiops2-worker                          fs997-demo-gate-hardened-20261106            sha256:d057dcaaef6465c79d4a5fd0b44d669a4d33d57331f31a11bf51c4bf07b371de   d057dcaaef64
+aiops2-worker                          fs990-guarded-isolated-queue-20261106        sha256:0b2bfeb6bbbab32ea933e68b9260e8b59b920663f8d4698a470bb3b47a3ab6fc   0b2bfeb6bbba
+aiops2-worker                          fs001d-guard-validated-20261106              sha256:cb7d7cfdc08e29cd49740818bd7d6adf58c1761bf952d0593a29718cb1a4542b   cb7d7cfdc08e
+aiops2-model-evaluator                 fs850-version-a                              sha256:ca8534c756822462780cc002f9f057d4166108eeab031042752509d2e6202fa0   ca8534c75682
+aiops2-portal                          fs621-explorers-candidate                    sha256:600d157d35b2c040e0cf9985878fd3c84c978ba8b6ba7ebe95c73a9a87f6270a   600d157d35b2
+aiops2-portal                          fs563-glpi-ownership-candidate-20261106      sha256:39aef181023eccf35fee24217dc3bd87752e8da1b52a1e27cce234ea07508878   39aef181023e
+aiops2-portal                          fs297-glpi-new-ticket-routing-20261105       sha256:3a5e5264e6b701d0eab2ba56118a920559fc546702ceb00559597ea3151ca638   3a5e5264e6b7
+aiops2-portal                          fs295-glpi-sync-short-report-20261105        sha256:43512de9db474820a3a6b178ad6e63ea369cdff38d6a64dc9ed88f1c2706bbf5   43512de9db47
+aiops2-portal                          fs291-glpi-short-report-candidate-20261105   sha256:93c8577fe0318c1626aa003f4d85efda8df14cd6a1ca0ba50a9b2491113baadc   93c8577fe031
+aiops2-portal                          fs287-glpi-technician-candidate-20261105     sha256:9cbfcb49749fae8b10bcc083198abee3e2386b5c11cf11c4614adaec98a00ee3   9cbfcb49749f
+aiops2-portal                          fs274-human-questions-readonly-20261105      sha256:c17bd17d1a0ec0e75585e876a18cda10b9440f98fe4183a5e357c146abbb01d3   c17bd17d1a0e
+aiops2-portal                          fs266-glpi-search-fixed-20261105             sha256:2231c05958ec3015e39a4bbfc414bff7bd2a3797899012576c49e59497aa2e0a   2231c05958ec
+aiops2-portal                          fs261-core-glpi-url-fixed-20261105           sha256:cae25573f258b579b8c53a19c99b563aad69d44a3a782e0838385d379b766669   cae25573f258
+aiops2-portal                          fs254-glpi-empty-url-fixed-20261105          sha256:5f6b7892140bd99bb375f813a760ef82c4534aec5282731bac261aa3b8c43094   5f6b7892140b
+aiops2-portal                          fs248-glpi-repaired-20261105                 sha256:731ac826d8314e6b1a8383130429885667232b9f211427fd6d705d5e38fd7365   731ac826d831
+aiops2-portal                          fs246-two-real-buttons-glpi-20261105         sha256:0b4406c6c5da1153ad065b3a1cd414fa4cbfcd64850b1daab364b089be8142b0   0b4406c6c5da
+aiops2-portal                          fs250-glpi-verified-20261105                 sha256:99f4af624cfbfde0e610e51edec063abd4cd1eb61c1e064cf2f06c0ff817ef59   99f4af624cfb
+aiops2-portal                          fs243-two-buttons-http-candidate-20261105    sha256:66558387f5559bd268750288d6e206ba500d864cad853c64fc991eed587c98b6   66558387f555
+aiops2-portal                          fs242-two-real-buttons-candidate-20261105    sha256:d3d87fa241bd1361313b710df84190c6d3c6bbdf40a327e624f84bd39ba1fc6e   d3d87fa241bd
+aiops2-portal                          fs237-real-fs-http-validated-20261105        sha256:7921b54393718d985c263036ed9ad60ece5e29624bfb8903d0497320a0cda213   7921b5439371
+aiops2-portal                          fs233-real-fs-ui-candidate-20261105          sha256:3e25f982475ad6668fec947d289976337315af7f6734289f6ee72770d1a28c9b   3e25f982475a
+aiops2-portal                          fs232-real-core-validated-20261105           sha256:02b25f01c26223bd6f3673342b9fff834703031fa70d86bcaf2478ec4aaeac72   02b25f01c262
+aiops2-portal                          fs230-real-core-candidate-20261105           sha256:a23691f6b635860b2a8103dd5d9e442606985803b7dc6adc6e15bcd2cd94863b   a23691f6b635
+aiops2-portal                          fs226-real-status-candidate-20261105         sha256:09a33d5c096ee529591b6f0f6e8f393bafee4167d551beda45e099913c6504b2   09a33d5c096e
+aiops2-portal                          fs207-glpi-core-auth-20261105                sha256:79fd924fca72f0f5bc10f547db3864cf86d47a6ccc17567885c2384256bf71f8   79fd924fca72
+aiops2-portal                          fs183-glpi-sync-20261105                     sha256:b7b833757fa753a6590817735b1fbd432fd9cc704dde855fd0d6a99e315d06a3   b7b833757fa7
+aiops2-portal                          fs182-glpi-sync-20261105                     sha256:6c5dc1f4d271852a2fb10d6ad983564aeedca5bc92c51ee0009af3489d0a64dc   6c5dc1f4d271
+aiops2-portal                          fs181-glpi-sync-20261105                     sha256:c70251631ab1e1f9aa85ef8c34d7216d27fefc81b090a9205f31e293e7c61e28   c70251631ab1
+aiops2-core                            fs-real-registration-20261105                sha256:a41a250997460793b50b7eb5a5c41a637d1e39960ceb7e9664d2e1553bf784a7   a41a25099746
+aiops2-twin                            fs-evidence-20261105                         sha256:73fde0a153e9c41d20b3e3fdfb0fc9d3442399aa6cd2dccf34b2b09d88cbb9c6   73fde0a153e9
+python                                 3.13-alpine                                  sha256:1e1f6334529d1fb26a2ef619d7cffb30a7c7d7cc1cc7338ebee283a58d1aeaca   1e1f6334529d
+aiops2-portal                          v29-fs-workspace-candidate-20261105          sha256:571bc2e535f7d9bdd5b6a045420c2e0c4cdf2cfff36b010bc069bcffebada16f   571bc2e535f7
+aiops2-portal                          fs-demo-candidate-20261105                   sha256:5eba74c0c1822cd8c087fd581e7f9006e1182f57dd70401cae34dc0fe7eff393   5eba74c0c182
+aiops2-qualified-base-worker           14f5dca634bc7ea5                             <none>                                                                    14f5dca634bc
+aiops2-worker                          fs-demo-candidate-20261105                   sha256:14f5dca634bc7ea59f065c977f9f61fbc63dede12df965d2b4f9e9620a2fad3f   14f5dca634bc
+aiops2-portal                          v28-fs-demo-20261105                         sha256:a477b7baa24d7bf5978c78918fa53ae47c33ec8e5afe6c4a15a70a6ec13c4d79   a477b7baa24d
+aiops2-portal                          v28-unified-workspace-20261105               sha256:45c83d798488dded1eab7794026918eadec269e12cc8424335a352b52b5167f3   45c83d798488
+python                                 3.12-slim                                    sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54   4840d514c583
+aiops2-worker                          prometheus-fix-20261104                      sha256:177bb2a14db66ce865bdf31f9a7b7bca50460b4cd1321cc891116a71db190269   177bb2a14db6
+aiops2-evidence                        prometheus-fix-20261104                      sha256:faec51e0b9d58ff3f40db0b7384835189335f456712955d140d75c430f532b22   faec51e0b9d5
+aiops2-policy                          prometheus-fix-20261104                      sha256:c47d6a01da09fc73aadfdce67fbdb22d6b95cf1b0055d5345c933cb2cea21524   c47d6a01da09
+aiops2-twin                            prometheus-fix-20261104                      sha256:ee3b2697780360bc1a0db6edcb41b95908e16b7a41ef1bdcdfd215babcdecee7   ee3b26977803
+aiops2-twin                            rollback-fs155                               sha256:ee3b2697780360bc1a0db6edcb41b95908e16b7a41ef1bdcdfd215babcdecee7   ee3b26977803
+aiops2-core                            prometheus-fix-20261104                      sha256:eaecf1f8f22a6582a48822c54a86acb3e678b4e1bc52b19e44ed7a143b179612   eaecf1f8f22a
+aiops2-core                            rollback-fs171                               sha256:eaecf1f8f22a6582a48822c54a86acb3e678b4e1bc52b19e44ed7a143b179612   eaecf1f8f22a
+aiops2-portal                          pinned-e6dc55536a1e                          sha256:4c94cd792d44167d030a2207312d2e6ac4e34105ea1531eb53802cbc4a37a2ab   4c94cd792d44
+aiops2-portal                          v28-base-local-20261105                      sha256:4c94cd792d44167d030a2207312d2e6ac4e34105ea1531eb53802cbc4a37a2ab   4c94cd792d44
+aiops2-portal                          candidate-e6dc55536a1e                       sha256:6713aa4f20f897c14efeacbf8b012383b1911ddfaf50be111a60ede022b793aa   6713aa4f20f8
+aiops2-portal                          rollback-pre-core-url-fix                    sha256:6713aa4f20f897c14efeacbf8b012383b1911ddfaf50be111a60ede022b793aa   6713aa4f20f8
+aiops2-portal                          pinned-9a827041ec8b                          sha256:a4426ba2d90d1ed32af2ddaa807804b15c1cd24b912b4f060c5b38f846476b5d   a4426ba2d90d
+aiops2-portal                          pinned-f8921bf2c465                          sha256:47e7392c275022ab00438237198b602b2fc9ccd619106fa272b69a9bae08817d   47e7392c2750
+aiops2-portal                          pinned-558c57765016                          sha256:fab0a6c6d28d70bac3a463ab3ac5933ddbd2d925eb442fdba2db35cde8d696c1   fab0a6c6d28d
+aiops2-portal                          pinned-c6df1eaec829                          sha256:6fb289c191b4bda4a1b8e9962672d1a33c3b1c44f55785c9b3b74f8e9336b776   6fb289c191b4
+aiops2-portal                          pinned-41d531655cd6                          sha256:ff12285642002fa3b0437e232e73ed006bfe738b3f93883991e597de50a56b58   ff1228564200
+aiops2-portal                          pinned-3c87aa54fac9                          sha256:b90d2f4657bc6d761bd82153078ff0164e4b6eaa48d6526bf79b1f87947a26b3   b90d2f4657bc
+aiops2-acme-sandbox-worker             e9a21e3e13f9                                 sha256:d2eb01cf58e567711dc589be845d35429ff4af3a40a2f27ac6db91375631d0a5   d2eb01cf58e5
+aiops2-acme-sandbox-simulator          56d3c87bef88                                 sha256:e2ae176897ebc8e88c3324bdf3c43e063efe35a9dedd29e7b4108134cf9054e6   e2ae176897eb
+aiops2-acme-rollback-simulator         e9a21e3e13f9                                 <none>                                                                    e2ae176897eb
+aiops2-acme-sandbox-simulator          e9a21e3e13f9                                 sha256:57504b843cd746eb7ae8dfb8a3ae277545044652b8f85a132ea5f40df4d8e015   57504b843cd7
+aiops2-acme-rollback-worker            e9a21e3e13f9                                 <none>                                                                    ed145f8b90a6
+aiops2-acme-sandbox-worker             56d3c87bef88                                 sha256:ed145f8b90a6a8263fac3054b4bbabab1aa10dda087c3603a9b6ac717cba4c56   ed145f8b90a6
+aiops2-acme-rollback-worker            56d3c87bef88                                 <none>                                                                    0c54ddc1d2e3
+aiops2-acme-sandbox-worker             8115f28d0af6                                 sha256:0c54ddc1d2e3df7aea2b4e0bf661f72b6356ca64e2fac2f2fec8858b3c6347f6   0c54ddc1d2e3
+aiops2-acme-sandbox-twin               56d3c87bef88                                 sha256:44c4db1b299a9762bf4e770a57af90c233be3a81c0f887fb96b283c034baac8e   44c4db1b299a
+aiops2-acme-rollback-twin              e9a21e3e13f9                                 <none>                                                                    44c4db1b299a
+aiops2-acme-sandbox-twin               e9a21e3e13f9                                 sha256:316c8362c7cb3dfe5ae3ef28939233fe4ae210defdefeef855651e42abc47ac6   316c8362c7cb
+aiops2-acme-sandbox-twin               9cf5f0867898                                 sha256:b5c057719332477678c31184e99c26a2179d928ea956f2e0fec314ed8c08d591   b5c057719332
+aiops2-acme-rollback-twin              8115f28d0af6                                 <none>                                                                    b5c057719332
+aiops2-acme-rollback-twin              56d3c87bef88                                 <none>                                                                    ca090a4262b3
+aiops2-acme-sandbox-twin               8115f28d0af6                                 sha256:ca090a4262b38b2075143440b56513688e1e983b8dad9b09793c31fa849d018e   ca090a4262b3
+aiops2-acme-rollback-worker            8115f28d0af6                                 <none>                                                                    2223c1561099
+aiops2-acme-sandbox-worker             9cf5f0867898                                 sha256:2223c15610993cb016e57b909f35adbb24a4026a4e6961304a2ddf63f0e4f4e2   2223c1561099
+aiops2-acme-sandbox-worker             7a2c843f98a0                                 sha256:c1d59d4bb654a00004603e7d933ee9f8f1e491d515befcb1ad1a51982ac23c3d   c1d59d4bb654
+aiops2-acme-rollback-worker            9cf5f0867898                                 <none>                                                                    c1d59d4bb654
+aiops2-acme-rollback-worker            7a2c843f98a0                                 <none>                                                                    0ffb89a34e88
+aiops2-acme-sandbox-worker             577cbcaf8430                                 sha256:0ffb89a34e88346b7f0ae694e89483a6d5e51005b58bdc0e70b7515de2e24c5d   0ffb89a34e88
+aiops2-acme-rollback-core              9cf5f0867898                                 <none>                                                                    d90b4010a3e9
+aiops2-acme-sandbox-core               7a2c843f98a0                                 sha256:d90b4010a3e93762d797de6fb3672ab573b6a3a32ed00de7e85ccb04f45b496b   d90b4010a3e9
+aiops2-acme-rollback-core              8115f28d0af6                                 <none>                                                                    8d2702bcb7fd
+aiops2-acme-sandbox-core               9cf5f0867898                                 sha256:8d2702bcb7fd0ee40961b22799a677be471e2f16e9d4803c8b6140d88c174c9a   8d2702bcb7fd
+aiops2-acme-rollback-core              56d3c87bef88                                 <none>                                                                    06cfca3c2c30
+aiops2-acme-sandbox-core               8115f28d0af6                                 sha256:06cfca3c2c30b12a3fe891a4603f35620aa65509f4ed7bd9bcfe947d612cc146   06cfca3c2c30
+aiops2-acme-sandbox-core               e9a21e3e13f9                                 sha256:ad9ee3fcc42898615f85fae53cf0fa47dc8365ff3fd12fed91c16271dcbab304   ad9ee3fcc428
+aiops2-acme-rollback-core              e9a21e3e13f9                                 <none>                                                                    5c927c5946d2
+aiops2-acme-sandbox-core               56d3c87bef88                                 sha256:5c927c5946d2908cd5a3abce161d32c9b9cc3cb8af2e72b393193dbcddfeef3f   5c927c5946d2
+aiops2-acme-rollback-core              7a2c843f98a0                                 <none>                                                                    c235fa879707
+aiops2-acme-sandbox-core               577cbcaf8430                                 sha256:c235fa8797070dc2f0f2387087d44bf03545ba004a9a3a05e63175a91b641ce4   c235fa879707
+aiops2-acme-rollback-policy            56d3c87bef88                                 <none>                                                                    73aeefa9ae5b
+aiops2-acme-sandbox-policy             8115f28d0af6                                 sha256:73aeefa9ae5b82e4758d4d2e53a5b91989a578c773620a90c183e70f5090316c   73aeefa9ae5b
+aiops2-acme-sandbox-policy             577cbcaf8430                                 sha256:bee682d1b900255bf5f9a528d3c4feb0c5910b5abec62437f46b96db79a786c4   bee682d1b900
+aiops2-acme-rollback-policy            7a2c843f98a0                                 <none>                                                                    bee682d1b900
+aiops2-acme-rollback-policy            e9a21e3e13f9                                 <none>                                                                    30b9fc685c49
+aiops2-acme-sandbox-policy             56d3c87bef88                                 sha256:30b9fc685c492f0c94ba2479ebc525693c8f395048128fcb7742868363b20717   30b9fc685c49
+aiops2-acme-rollback-policy            577cbcaf8430                                 <none>                                                                    268f7152ca2e
+aiops2-acme-sandbox-policy             5691d31b6488                                 sha256:268f7152ca2e510dc110c097d1bc0521083336ea503318d3d5d81e11fddb88ee   268f7152ca2e
+aiops2-acme-sandbox-policy             e9a21e3e13f9                                 sha256:9072109af526d14a8fd8f85639568288a6b312180334135b9a8300420aca56f4   9072109af526
+aiops2-acme-rollback-policy            8115f28d0af6                                 <none>                                                                    87df84c9e102
+aiops2-acme-sandbox-policy             9cf5f0867898                                 sha256:87df84c9e102a44de3a2b33433759e3550ac5827771d1a78aa6212bd0418fa2f   87df84c9e102
+aiops2-acme-rollback-policy            9cf5f0867898                                 <none>                                                                    2c1ad125330b
+aiops2-acme-sandbox-policy             7a2c843f98a0                                 sha256:2c1ad125330b6c8d691788e57be77eb1998e724e4eed7388484626765ccda4f5   2c1ad125330b
+aiops2-acme-rollback-worker            577cbcaf8430                                 <none>                                                                    5c90397189db
+aiops2-acme-sandbox-worker             5691d31b6488                                 sha256:5c90397189db1a87d2e50197c49552ec6376b8bab3fc09400dc4b5c8e6268ebd   5c90397189db
+aiops2-acme-rollback-worker            5691d31b6488                                 <none>                                                                    03252c1a37eb
+aiops2-acme-sandbox-worker             dc005534aedc                                 sha256:03252c1a37eb1617b6fb2099032cd925fc6076ed0403605d78655e58424b891a   03252c1a37eb
+aiops2-acme-rollback-twin              577cbcaf8430                                 <none>                                                                    749d2e6d4c9c
+aiops2-acme-sandbox-twin               5691d31b6488                                 sha256:749d2e6d4c9c7d354b9e4347feec6d6dd2c06644669463750db7981e132616ec   749d2e6d4c9c
+aiops2-acme-rollback-twin              5691d31b6488                                 <none>                                                                    51ab8340a025
+aiops2-acme-sandbox-twin               dc005534aedc                                 sha256:51ab8340a02594f329cd5dcd6191da63e2f47fdff308a14dfdb05ca3953dd61b   51ab8340a025
+aiops2-acme-rollback-twin              9cf5f0867898                                 <none>                                                                    0388dc0639bb
+aiops2-acme-sandbox-twin               7a2c843f98a0                                 sha256:0388dc0639bb41b45fc0b4ee7af91145f7031d368477630b596502a2c7ce504d   0388dc0639bb
+aiops2-acme-rollback-twin              7a2c843f98a0                                 <none>                                                                    514908d7c532
+aiops2-acme-sandbox-twin               577cbcaf8430                                 sha256:514908d7c532ae3b376534ae839e0dad90780698e99273779df5bb40c1142d0c   514908d7c532
+aiops2-acme-rollback-simulator         dc005534aedc                                 <none>                                                                    958974a4b65b
+aiops2-acme-sandbox-simulator          35c244267b90                                 sha256:958974a4b65b076f8cb7ae069dcb432e50fc82d45241b558583794f99388d21c   958974a4b65b
+aiops2-acme-rollback-simulator         56d3c87bef88                                 <none>                                                                    2bb1c5efc731
+aiops2-acme-sandbox-simulator          8115f28d0af6                                 sha256:2bb1c5efc731c4556f583b62110dc17b420186c6a62c0398d4a217dbd61c12df   2bb1c5efc731
+aiops2-acme-rollback-simulator         9cf5f0867898                                 <none>                                                                    df03e2bfebae
+aiops2-acme-sandbox-simulator          7a2c843f98a0                                 sha256:df03e2bfebae6e0f56b7927f33d04544510a3a38912dac4b52523d2ebfa424b6   df03e2bfebae
+aiops2-acme-rollback-simulator         8115f28d0af6                                 <none>                                                                    42083002a571
+aiops2-acme-sandbox-simulator          9cf5f0867898                                 sha256:42083002a571eab19baf4a65cb4778c311728eb1e8afcbe2b8a80d64cd5fc78d   42083002a571
+aiops2-acme-sandbox-simulator          577cbcaf8430                                 sha256:24d5772ace0576a598352eb5798c01ac5b7272b39aa8d8464136d326b2eff1be   24d5772ace05
+aiops2-acme-rollback-simulator         7a2c843f98a0                                 <none>                                                                    24d5772ace05
+aiops2-acme-rollback-simulator         5691d31b6488                                 <none>                                                                    93a212801b42
+aiops2-acme-sandbox-simulator          dc005534aedc                                 sha256:93a212801b4202218e186cd6b21e90a33092d40ff1a4d8c130d34353f7423524   93a212801b42
+aiops2-acme-rollback-simulator         577cbcaf8430                                 <none>                                                                    e851b589bb86
+aiops2-acme-sandbox-simulator          5691d31b6488                                 sha256:e851b589bb86b14f0242c6179bc7b82e3b35446cb43b52b0bed68f20697e9ef5   e851b589bb86
+aiops2-acme-rollback-worker            dc005534aedc                                 <none>                                                                    914388472b1f
+aiops2-acme-sandbox-worker             35c244267b90                                 sha256:914388472b1fed5c12e37be5eb211fb8a6469937aa44a31cc1f99c7ffc0a5ad0   914388472b1f
+aiops2-acme-rollback-policy            dc005534aedc                                 <none>                                                                    6ef2b18df8b5
+aiops2-acme-sandbox-policy             35c244267b90                                 sha256:6ef2b18df8b58e88d1ec0978ddcfe38961613a96defe86b1654276a972a3c7a5   6ef2b18df8b5
+aiops2-acme-rollback-policy            5691d31b6488                                 <none>                                                                    245aca1e134d
+aiops2-acme-sandbox-policy             dc005534aedc                                 sha256:245aca1e134d0775fdc086c716c0da980e60aaf9601c4eeb10b15296ad47dc38   245aca1e134d
+aiops2-acme-rollback-twin              dc005534aedc                                 <none>                                                                    1f7a7dd436c8
+aiops2-acme-sandbox-twin               35c244267b90                                 sha256:1f7a7dd436c8b106b245d35e279c75a6f3f9bb912a1bc824c8e09ded2cde12bc   1f7a7dd436c8
+aiops2-acme-rollback-core              dc005534aedc                                 <none>                                                                    133d8c91606f
+aiops2-acme-sandbox-core               35c244267b90                                 sha256:133d8c91606f5b7c8a58b45568254c796ff1be6a6d3750a67117ca3912fdb01a   133d8c91606f
+aiops2-acme-sandbox-core               5691d31b6488                                 sha256:faaa803cf652fe754ef19ecda89a8328f0bf1fb1d8599d2d59b3da9b6de008ce   faaa803cf652
+aiops2-acme-rollback-core              577cbcaf8430                                 <none>                                                                    faaa803cf652
+aiops2-acme-rollback-core              5691d31b6488                                 <none>                                                                    09233684d6d9
+aiops2-acme-sandbox-core               dc005534aedc                                 sha256:09233684d6d9506b61c3e305d5ca16f06eae55de83b1097ee608ce0cecaf8e4c   09233684d6d9
+aiops2-portal                          pinned-1fd6391f8a8e                          sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1   16fe60c3e394
+dbeaver/cloudbeaver                    latest                                       sha256:1b9e645bbbf44d5f8aefa4fca740311e438bc9255ecec2c8be2244744d5f603c   1b9e645bbbf4
+aiops2-portal                          pr234-e289e4d4374e                           sha256:cd84446544effd351e02484fcb3ce7bd7a6570252b3fe5239aec2e4d72cd403a   cd84446544ef
+aiops2-acme-rollback-simulator         35c244267b90                                 <none>                                                                    b5642d8e6f5b
+aiops2-rebuild-aiops2-simulator        latest                                       sha256:b5642d8e6f5b97b641d1fffe8bfa26399290798ba8c9dbb03cafca28db31cdb1   b5642d8e6f5b
+aiops2-acme-rollback-worker            35c244267b90                                 <none>                                                                    1a6650d8beb8
+aiops2-rebuild-aiops2-worker           latest                                       sha256:1a6650d8beb86fa4b6301e28a3f3e14ba07743ed66ead9f03b06259fdadf90df   1a6650d8beb8
+aiops2-rebuild-aiops2-portal           latest                                       sha256:ef93d301d50f5ab816917a29d277ae0a099b4e671b374d5e8618d93f11b3d092   ef93d301d50f
+aiops2-acme-rollback-core              35c244267b90                                 <none>                                                                    87e9fb9a7412
+aiops2-rebuild-aiops2-core             latest                                       sha256:87e9fb9a7412698197aa0a6888bbb18f20bb719c94d0bc3ebd14d850fc825200   87e9fb9a7412
+aiops2-p0-new-portal                   b51f6c1deef9                                 sha256:d64527fe27eaeeca0557a7b642da318af2ee0f40f8b8abcb36b5c209932f2c97   d64527fe27ea
+aiops2-acme-rollback-policy            35c244267b90                                 <none>                                                                    ef84ccebd21a
+aiops2-p0-new-policy                   b51f6c1deef9                                 sha256:ef84ccebd21a3e236153658d6d006f3678182a882c2540ef2349d2abd5786b4d   ef84ccebd21a
+aiops2-acme-rollback-twin              35c244267b90                                 <none>                                                                    d7667c50a266
+aiops2-p0-new-twin                     b51f6c1deef9                                 sha256:d7667c50a266bb707accdb6ef1024c389ac0106dd18412a56d1ad74d483f7ebc   d7667c50a266
+aiops2-p0-new-core                     b51f6c1deef9                                 sha256:bc74e90d5ec389bf13fa00d78095b5bc1c9685733a8cf9607931ac5124c59a38   bc74e90d5ec3
+aiops2-acme-candidate                  worker-observed-at-fixed-20261030            sha256:c4fcd74d14fb1944c7e5a98d0509cc1112120929bb85d98fe5cf4460df5fd9ae   c4fcd74d14fb
+aiops2-portal-candidate                20261029                                     sha256:c86fd0bd8e8f2e85342dcdab56b93b49e7964cbcc78f9ec0ab1658296c82793b   c86fd0bd8e8f
+aiops2-itsm-qualification              20261029                                     sha256:01727704e4e27c53a329f49d1dd4ee5d97cc56a0b9ee827296e640f2e886e22d   01727704e4e2
+aiops2-acme-candidate                  core-denial-observe-20261029                 <none>                                                                    57e9aefd23e6
+aiops2-p0-old-core                     b51f6c1deef9                                 sha256:57e9aefd23e6efd03927291cccc70fd5422e855cd0cd67271addb1bba7c06b92   57e9aefd23e6
+aiops2-acme-candidate                  worker-policy-observe-minimal-20261029       sha256:026342546bae36d5aab9ba097ad287fe5e965869f4bcdf1c0a9346fc1d4b5653   026342546bae
+aiops2-acme-candidate                  worker-policy-observe-20261029               sha256:12e2585b73088d6e35d933b0b5c7f545f36c0ecf47ecfdad7513367cd22107c9   12e2585b7308
+aiops2-acme-pytest                     20261029                                     sha256:3771223d7148ef50b7e9b06ff02dd550e22a2695e9f18b2c2ef857edae06f3a9   3771223d7148
+aiops2-acme-candidate                  worker-20261029-204439                       sha256:7ae9f6dfaa0e3cecdf4d076eafa49acca2637ebb8c66c6ef7e2f9a9c727ef11b   7ae9f6dfaa0e
+aiops2-acme-candidate                  simulator-20261029-204439                    sha256:f247de5e878d35ffc6ab3161eb35486bcb88fac0d90aa5ebd34736842bb4aeef   f247de5e878d
+aiops2-acme-candidate                  core-20261029-204439                         <none>                                                                    9f50ed6aa55c
+aiops2-acme-core-denial-base           local                                        sha256:9f50ed6aa55c7f73693aaee7dbc1b632a268446fde43c410b09e1df37f2da546   9f50ed6aa55c
+aiops2-noc-rag-copilot                 v1                                           sha256:71696a44635d92ffcb39dddc2375ea1231cefeab90c2d26f4a280c3e1b8a32b6   71696a44635d
+aiops2-noc-rag-portal                  v1                                           <none>                                                                    33436d75f940
+aiops2-p0-old-portal                   b51f6c1deef9                                 <none>                                                                    33436d75f940
+aiops2-portal-qualification-base       local                                        sha256:33436d75f940ecdd8c36867a3a9952c2ed830da7ed3626c2fffb42bf8e2446ca   33436d75f940
+aiops2-p0-candidate-worker             worker-evidence-fix                          sha256:0c913a933f310b212aab7e8db024f980681f357f005d14738059da410f80e30f   0c913a933f31
+aiops2-p0-candidate-policy             e94fe784                                     <none>                                                                    43cb9d46a108
+aiops2-p0-old-policy                   b51f6c1deef9                                 sha256:43cb9d46a1086763c1e57d540de807f36bd323ab831abfc52614b91574f26475   43cb9d46a108
+aiops2-p0-candidate-portal             e94fe784                                     sha256:d7cfa9b4ca4635db341b09733357828aea51c21d577cdc7bebaa31bcb07cacd7   d7cfa9b4ca46
+aiops2-p0-candidate-twin               e94fe784                                     <none>                                                                    336d9e6b52ac
+aiops2-p0-old-twin                     b51f6c1deef9                                 sha256:336d9e6b52ac5e4b6bdc42970aa0accfddb42edceae032da0fc3bcd7572cf3db   336d9e6b52ac
+aiops2-p0-candidate-core               e94fe784                                     sha256:d9d8d03c722354f5bf2fbc06a7d94ec03602141919570ba774443ece6871a63e   d9d8d03c7223
+aiops2-portal                          demo-studio-v2-20261028                      sha256:cfb47a60344f8327df2cbd3ca3fa33c78a39d67b04e81ccf4e80762e2c90fae6   cfb47a60344f
+aiops2-manual-rollback-portal          e54c4e9                                      <none>                                                                    cfb47a60344f
+aiops2-portal                          demo-studio-20261028                         sha256:fd32c648d279707576d663a7e0d18af3dd471902357d7c1114552e40ccf390ad   fd32c648d279
+python                                 3.12-alpine                                  sha256:5789aa194f757888f41fa3d48e14b6feaa1b57c0af0b56fcb1372d6474d3bff0   5789aa194f75
+aiops2-portal                          v21314                                       sha256:f812e8c35f8c46c28d7786735c9eb6ff8ced0001cd0d7014f738b2c79805f486   f812e8c35f8c
+aiops2-portal                          v21313                                       sha256:1c0e808b9cad5ad77236269a2310edbc90658c289940cef226c76a4984fbc071   1c0e808b9cad
+aiops2-portal                          v21312                                       sha256:a9e764d065085ea18aa4a0521740ff9c0565ea02b1d10b02dc12236ebd0f3126   a9e764d06508
+aiops2-portal                          v21311                                       sha256:ee4e3e536cdfe64d0c903f261ec5c7285b729ce08afc83dfcf3c0af578dfd95c   ee4e3e536cdf
+aiops2-portal                          v21310                                       sha256:3405a8b2317816e3681f26848b31f27386126e7c2c81a994cd5e5a187dac5fe4   3405a8b23178
+aiops2-portal                          v21391                                       sha256:18a2514e5bd34905eb86da2d76bee7539402dbeb4c1b30ff277c90df36abde3b   18a2514e5bd3
+aiops2-portal                          v2139-secure                                 sha256:08d05592c16c1039ce010e41f4eea241ed8fb60a81b22660fa4c992ac5294285   08d05592c16c
+aiops2-portal                          v2138-integrated                             sha256:bb703f1e4a9d28706aad14a40ef68ee5d0f5f7121ff6db991ec44c7fa15dfe09   bb703f1e4a9d
+aiops2-portal                          v2138-candidate                              sha256:23d99b76bf27cc3eb0b8990995ecb11e38d635e2fdbc416e39e09f634793ee12   23d99b76bf27
+nginx                                  alpine                                       sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606   785835ea65db
+aiops2-portal                          v21392-rollback                              sha256:4e354f5ddd6b449f1edfc69d10f3acfc1cd5ab92552a9172df550c5001168c45   4e354f5ddd6b
+aiops2-portal                          v21393-rollback                              sha256:4e354f5ddd6b449f1edfc69d10f3acfc1cd5ab92552a9172df550c5001168c45   4e354f5ddd6b
+aiops2-manual-rollback-twin            e54c4e9                                      <none>                                                                    468716fea68a
+aiops2-rebuild-aiops2-twin             latest                                       sha256:468716fea68adc121cc748f9e2ec33c72872d4fb80101618a12d919b4208a2fe   468716fea68a
+aiops2-rebuild-aiops2-copilot          latest                                       sha256:94aaeab72749c7229574a68292becc1e09320117beff523854b576bb161f2563   94aaeab72749
+aiops2-manual-rollback-core            e54c4e9                                      sha256:e65b5f183c21cac95fe5fdd394805d38b146f6188823f69d54200c9796f06219   e65b5f183c21
+aiops2-manual-rollback-worker          pre-p0                                       sha256:7f23c54f7c61d12c5625abfd8d5818532dd50dfc518560fb23a1e50f437ac457   7f23c54f7c61
+aiops2-rebuild-aiops2-test-llm         latest                                       sha256:7b9836004e6ec9f30d79a886463f334e1390e3db63b02b3310d550634939d732   7b9836004e6e
+aiops2-qualified-base-intelligence     c12bbb2c32dee7e2                             <none>                                                                    c12bbb2c32de
+aiops2-rebuild-aiops2-intelligence     latest                                       sha256:c12bbb2c32dee7e235774edf5d5ea0446e81bf50e6f6fea6f9d4892616f6d6f7   c12bbb2c32de
+aiops2-rebuild-aiops2-evidence         latest                                       sha256:20d4f7da841e85cee086ef967f6abb2ac92ccec563c7eba36b5a2fe924782345   20d4f7da841e
+aiops2-manual-rollback-policy          e54c4e9                                      <none>                                                                    674abd81fdba
+aiops2-rebuild-aiops2-policy           latest                                       sha256:674abd81fdba824002eea4538e379be5ed250bc9dcdb2f37daa60825496eea9f   674abd81fdba
+aiops2-core                            v28-qf185                                    sha256:cf102d86242ebce54d882c3c5c224a5bcbd03b95d0829d6778edd18186f2b20a   cf102d86242e
+aiops2-core                            v28-qf184                                    sha256:f5e82390f9f4be1ebc95ccdf7392ad5286e5a6599f5651e43d8a38aa5f54ed9a   f5e82390f9f4
+aiops2-core                            v28-qf183                                    sha256:2da07a39113332f5a4034eb09b030deed9a34fce34fb80c044d9d2df2051eb6a   2da07a391133
+aiops2-v27-qual-aiops2-test-llm        latest                                       sha256:c76fc8600b3c51c8f7b995e5b82425875019fe2b1437f35c6a9c55b1053340ff   c76fc8600b3c
+aiops2-v27-qual-aiops2-policy          latest                                       sha256:cb9ff9710b0a2b8020067e8a6992a2f42445038346e136ca12c1f150d975497d   cb9ff9710b0a
+aiops2-v27-qual-aiops2-evidence        latest                                       sha256:ee2ade24f84a37003c0b859b0d0f3e715924f568f617d33566ae10e2735de45b   ee2ade24f84a
+aiops2-core                            v27-9885fc5                                  sha256:bac4c702079b9f12e4d690dbbc4faf20b6612f1d8b70acef1c2ee1c18ad5488b   bac4c702079b
+aiops2-worker                          v27-9885fc5                                  sha256:3339ed68458e742b0e4ffe790e4394a9706cfb369959337b57236921c10a8680   3339ed68458e
+aiops2-e2e-v1-aiops2-test-llm          latest                                       sha256:56a487fe35eb9cd6f935ad6629ef46c8d4a6229417ef725d99d60800edfd968b   56a487fe35eb
+aiops2-v27-qual-aiops2-twin            latest                                       sha256:2dc54fb1400ea966fe08045f91865ac4960c56957bc35ee88fe4d8dc9ea43a2b   2dc54fb1400e
+aiops2-e2e-v1-aiops2-twin              latest                                       sha256:d09bf9dad6bebc2d8f4681e4876f8c5f27398609369804015dff427a2038b965   d09bf9dad6be
+aiops2-e2e-v1-aiops2-core              latest                                       sha256:9e37c21575b15be39e323443361e6436bc2c6d1ef7a1a30c617039b64873a31f   9e37c21575b1
+aiops2-e2e-v1-aiops2-policy            latest                                       sha256:867a0a88e0a1db66d17d176509791361d2d39b3a35833bcf348b9a94a06963b7   867a0a88e0a1
+aiops2-e2e-v1-aiops2-evidence          latest                                       sha256:a92d3ab17c01908af2f133234c64626d870f2c13c6bd46c9abf227114e76d410   a92d3ab17c01
+aiops2-candidate-worker                b870f48                                      sha256:a6b0810f7180e8d05f881cd440fe07eb557b63307bac43dbc5a116e09c85a4ba   a6b0810f7180
+aiops2-candidate-intelligence          cf09ec3                                      sha256:4635c4455158b7edbc7ea0f9a308a446b1eb82a7d37bd4ffb535881b1e36269c   4635c4455158
+aiops2-candidate-intelligence          12cc116                                      sha256:a9e659c7b7609c73bc06457245a0157a443c632ffb70cd39ffdede0a15dfe101   a9e659c7b760
+mariadb                                11.4                                         sha256:250e1609e93c0e6aecf64bfbab2d84d5e89d2481540fe77447ff6c855c3b1873   250e1609e93c
+python                                 3.13-slim                                    sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f   70729b46c69b
+glpi/glpi                              11.0.9                                       sha256:937c2245467c7b37dd81dfbf44c80ded049af47a929650599edc65f1bcd84649   937c2245467c
+n8nio/n8n                              2.40.6                                       sha256:9c7871d5cc4fc2565bb905e4df5bf7d6a5a4bf2f4313fb99a2b3fa380f331d7c   9c7871d5cc4f
+postgres                               16-alpine                                    sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea   721873c34ceb
+prom/alertmanager                      v0.34.1                                      sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a   e9733bafb1bd
+grafana/grafana                        13.2.2                                       sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0   ac461fb352ab
+prom/prometheus                        v3.14.0                                      sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0   5ce7540c3c00
+temporalio/admin-tools                 1.31.0                                       sha256:3e68adcd54195a7c1222e99f2dbc32a4fdbf44ad69e3bb48e21e85c4bf417c2e   3e68adcd5419
+temporalio/server                      1.31.0                                       sha256:b021b3b58c3f169634cdbb0451fcc0e69e8190b40454323362c7c52bbd4ff7b9   b021b3b58c3f
+temporalio/ui                          2.49.1                                       sha256:a066bdf5c4de689cabaf80cc357871f1db5e6d750a6bcfc42e877b913e31ef24   a066bdf5c4de
+alpine                                 3.20                                         sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc   d9e853e87e55
+grafana/loki                           3.5.0                                        sha256:4c431d2e6b9b38718694b31c5d56be7c80dc69c513215fde1aeb5b02cd4e2665   4c431d2e6b9b
+otel/opentelemetry-collector-contrib   0.123.0                                      sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2   e39311df1f3d
+grafana/tempo                          2.7.2                                        sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3   4b0277a9b572
+curlimages/curl                        8.12.1                                       sha256:94e9e444bcba979c2ea12e27ae39bee4cd10bc7041a472c4727a558e213744e6   94e9e444bcba
+busybox                                1.36                                         sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662   73aaf090f3d8
+
+$ docker compose ls
+NAME                        STATUS              CONFIG FILES
+aiops2-demo-observability   running(3)          /home/aiops/aiops2-observability-deploy/deploy/observability-demo/compose.yml
+aiops2-metrics-cutover      running(3)          /home/aiops/aiops-prometheus-image-patch/compose.metrics-cutover.yml,/home/aiops/aiops2-fs-demo-source/integration/worker-fs-candidate/compose.fs-worker.yml,/home/aiops/aiops2-patches/fs-portal-v30/build/compose-fs-worker-socket.override.yml,/home/aiops/aiops2-patches/fs-portal-v30/build/compose-fs-worker-code.override.yml,/home/aiops/fs1242-config-backup-20261107T171139Z/compose.fs1242-portal-url.override.yml
+aiops2-rebuild              running(14)         /home/aiops/aiops-v28-demo/compose.yml,/home/aiops/aiops-v28-demo/compose.demo-local.yml,/home/aiops/aiops-v28-demo/compose.dgx-network.yml,/home/aiops/aiops-v28-demo/compose.dgx-model.yml,/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e/compose.yml,/home/aiops/aiops2-patches/portal-v28-integration/delivery/release-20261105T134055Z/compose-v28.override.yml,/home/aiops/aiops2-patches/fs-portal-integration/compose-fs-demo.override.yml,/home/aiops/aiops2-patches/fs-portal-v30/build/compose-fs-prometheus.override.yml,/home/aiops/.local/state/aiops-debian-agent/.acme-upgrade-6cXA5o/upgrade.yml,/home/aiops/aiops-v28-demo/compose.llm-test.yml,/home/aiops/aiops2-p0-backup/portal-candidate.yml,/home/aiops/aiops-v28-demo/compose.windows-admin.yml,/home/aiops/aiops-v28-demo/compose.admin-network.yml,/home/aiops/aiops2-noc-rag-work/compose.noc-rag.yml
+
+$ docker network ls
+NETWORK ID     NAME                             DRIVER    SCOPE
+fb497803d935   aiops2-acme-qual-net             bridge    local
+901d26cae2fe   aiops2-e2e-v1_control            bridge    local
+00be3585fcd2   aiops2-e2e-v1_data               bridge    local
+227621e398a6   aiops2-e2e-v1_temporal_data      bridge    local
+9c1cd5020792   aiops2-fs-qualification          bridge    local
+027f90357410   aiops2-glpi-http-qual-20261029   bridge    local
+3170aba49f09   aiops2-portal-v3-access-net      bridge    local
+29afdf8dbfa5   aiops2-portal-v3-qual-net        bridge    local
+2e7cb74dd0d9   aiops2-rebuild-control           bridge    local
+04adbff54782   aiops2-rebuild-data              bridge    local
+49638e1e15d5   aiops2-rebuild-execution         bridge    local
+f2f1a6dce620   aiops2-rebuild-integration       bridge    local
+c047955d8c77   aiops2-rebuild-observability     bridge    local
+39089c871ba5   aiops2-rebuild-public            bridge    local
+4aab3c19f563   aiops2-rebuild-temporal-data     bridge    local
+0fbf3008bb0a   aiops2-v27-qual_control          bridge    local
+2678113df611   aiops2-v27-qual_data             bridge    local
+dc0f93440521   aiops2-v27-qual_temporal_data    bridge    local
+f32236c7a9d8   aiops2-v29-qualification         bridge    local
+a2355d7f71ad   bridge                           bridge    local
+27024c00288e   host                             host      local
+969ba2244ead   none                             null      local
+
+$ docker volume ls
+DRIVER    VOLUME NAME
+local     0cb609cecedd245cc24a4298b5925357ba731e1ee54145e029181d43127793f9
+local     1b2dd7d748edcb28113c11fe4b933809b6ddbef53bd05ec23fc90f8dcf82f1d1
+local     1c8f53ae16e2999bffb0cf8700a9c2bf36d3c9317a894fbdf7de40515b2f4ee1
+local     1fc7731903ffc3046d63fdc72bc3402dd37edad5a46a3b101da55eebe90ea8b3
+local     3a93e9a395fa232d12821ca1c5fdc27d08decdf3a30107139e5afd74a88371d1
+local     3d4343d76433d887ea12eecd306b7643e10f2e5e9892c8298028a1dbbed7651a
+local     3fb3cb00b94e020cf575df3e07ad658386370aedb7325056d6d8882d19791dee
+local     4a0b56ce9c2bb2af84761bf8bb4d2fed4ca43933e353bb9e2dc36ce7d3961744
+local     4eec6db68eebf910939d9243264a4490e10d3dde43a2ff4546b9fb0d604f1702
+local     4f4b91d28ca7b2208afb7647d4cfcc6a638a28921ae3fdddf3534fcb0324ef4c
+local     5c6b5e1221b606b7a3e370ab4e16e126fb854e805ce09a5a00386d9b20ea6f80
+local     5cdd37c0cc630fed3fad39576a6676f6d6dfc5b4ef5fe2e02cb4c75bb93cd76e
+local     5f370da6a6cdaf9cdd405a35aaeabd7dd84803f6a9ed818b45b5ee8050e01738
+local     6e558007118f24bff9ddc57256f743933eb020109d1b87d153b051fba7818616
+local     7c7ece55f3ea7b507df681f3ad88c87eb5846f6a595a736d2dff149957465b70
+local     9c79131daa42456345bb65b4712ce0d50b7fa0d93e294b7952296d43415bd04b
+local     9fbafadf7e61384f0d7028fc7dffbf1041c6313086f3a0000c29b703d294a688
+local     34f828f398b44a942b099cecac8d6056c448bd44530f3f63065bc25a2e725ef5
+local     46bfe7d9860f079633ada76c40244418d8e21d905460cbad19ec58b64f96b86a
+local     79a22c9eea1e2b1b81d6e9e87bcc561cce14a5b7b0aa38917ec08e1c2717914c
+local     89b42f15f420920210661a482b24e89ca8e0773558c3879f4c43f3158d1650c2
+local     89f02a385ddf7f5fc2cba6300756da27bd16cdc46d9cbe17c24ada1ce2f897c9
+local     119a31ca903dd41df87c5818b71b229ebf760061dc935e194641542f31aabd2c
+local     856e3a13009a28b79755672ee4ce7da2ec71400ed68fc00fe8c255d29f44f0a0
+local     941f493d88eff66f3aca76007b6149e44a6be595c9209d918c44c2b3eb87dada
+local     2260ddf69fb0531f75c54bcdc3f8618bedc362c0b07c86a9f7005d4b29c9edae
+local     9220b3f8bf1f71d2ec799ca58ea57594698d7dcc8fd5c402e84e9f519bb9fef9
+local     9928b862927f0544f8190e8b5ea88cd1f2d9a2f1c0cb4a74ce0b76f1cbdffa33
+local     12891b2f47af7d3aac9cddbddc5fac8268c3e6dfbd9275759da6dc6bb0a417d6
+local     40052cb17e4779596b9a683e3edad6785856fa75c7a5c5d10eaca2491fae5b0d
+local     45437aa48cb5e2b2288121bd829637c7d486200ff58f3fa6517c32f9c6afcd2b
+local     98907e218308f3c7cada03cbe3e7415d0cdbf724af29c41ba35f53e685c90353
+local     186153e7c959bc8fea1e0ba65a133f5aa2d2180f1f9614160656a24493832a02
+local     739549bf7562a5c3f0c9ff29cbeca71b3fb2e2d5da67b1a0a6b4710a43d7f07a
+local     881544ccd2c447149b598ad8b6462aea85e19c04dc73912c4a3bc2847513ca80
+local     15102153101b3712b5eb292a681f5b4fd1340d1f72d941ade52d9b35feffc581
+local     18102701150cb740d2f94c7de3479cad6ae907c6f4a8b4647852e783abd01003
+local     a4bc82227e192516a89766651b455ce5372d3dc8706ba1f169c7d23d23a37589
+local     a95dcef68433353f547838eb03b0c9bfcab67de9fb7b748b23ac958a62a62d31
+local     a472a136131c6192cf775f40d616bba77e98dc8f393a88d865811f4fbe80cb20
+local     a555bb06e5c5941b2dfdaa2bdbe49d1c6a9d68c6445db859b6afa4c1f9a5a80c
+local     a353205c8c462b13f0538ea1b210bec7aa4824415a27c4e551e0c5ff4bbb076e
+local     abdd3dbdd901ecf9301d2ea1c8e23400d4a5a8be2caca23e351b5b305800e501
+local     ae4ab7f9a3bd0d4957a4ff19f4896a714ced2a7265a124547ac4e013f6f137da
+local     aiops2-cloudbeaver-workspace
+local     aiops2-demo-observability_demo_loki_data
+local     aiops2-demo-observability_demo_tempo_data
+local     aiops2-e2e-v1_pgdata
+local     aiops2-e2e-v1_temporal_pgdata
+local     aiops2-fs-qualification-data
+local     aiops2-glpi-recovery-20261022
+local     aiops2-portal-v3-qual-demo
+local     aiops2-portal-v3-qual-state
+local     aiops2-rebuild-glpi-data
+local     aiops2-rebuild-glpi-db-data
+local     aiops2-rebuild-grafana-data
+local     aiops2-rebuild-n8n-data
+local     aiops2-rebuild-postgres-data
+local     aiops2-rebuild-prometheus-data
+local     aiops2-rebuild-temporal-postgres-data
+local     aiops2-rebuild_aiops2-fs-demo-data
+local     aiops2-restore-test-mariadb-data
+local     aiops2-restore-test-postgres-data
+local     aiops2-restore-test-temporal-postgres-data
+local     aiops2-v27-qual_pgdata
+local     aiops2-v27-qual_temporal_pgdata
+local     aiops2-v28-sql-qual-pgdata
+local     aiops2-v29-qualification-data
+local     b3a3e2d08f0e32ec8620d46225ea511fad9612d9a623b7c4c70f9f2d1d4becb9
+local     b6abb171b08ddfa8f3a5086a4a8177c339901cfb8907cbc58b062150f6b7b49c
+local     b984b63853c9c828c4e6fd4d03875de41f296c5a6342dc2765a46385d433f4dd
+local     b8397756f1fd8f6b1510591e0a6a07d90f911f7021cf0420f84776f1630a7319
+local     bb0a47db15d60af8703dfca3507b99a02b3e72d1310829d36510f37b3492103f
+local     bb0e2cee7d4183ec07449393cf1704a5176d881683b173996029da14ff78e85c
+local     bbbfd7a2956d127252b15997fc32166283c41548dc2bec9a45a0b95f106de305
+local     bea6d1a75169b292b0e9b853a486cb529d35b56645671713ebae5105c8b98fd4
+local     c9de2c88087a7d773ed4277df10bb6994e54aa5035085424bc8215ea4834fc01
+local     c1381fc4551fd4b01d00f6511f8a57b84ca110e9efd9076137c59aa3e7190605
+local     c7972c4ac4832b88d8e43b06fa867f455b327d9586b648587a793024dc9bf5e2
+local     c8008e63c63c410f461d24e37386b2970dca3e16345fe95fa220ab1c91dbf0a0
+local     ceadafdc372191a5df9fa22e04063a5126cb64b5cd2f5402d45ecb2ed0b78ba4
+local     d48d99ec9296fd1171b9b0b609e4f0c4adab28c0f15922c4749e5ad337a8569c
+local     e7b893a8dd1b6c7c562c812d250ad51e494666d32ca8f99b9b31ef847cc9cfe0
+local     f6f056f6653860d231280760f80522f9f261287225e181f26475934779a7d294
+local     f08f577d6124c4d3866c925c872ff057f63788a99958370cdcd96bfa8707ee10
+local     fa709cd1e6c41a2b5a220e3a00d90302a38ff1029f8b1e7d8b001d096d610945
+local     fd3e19b4b51709cf7eea9814a10f35cabeb6d8d2196593fad23d0e5eddda8b3f
+
+========== COMPOSE PROJECT IDENTITIES ==========
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 79cb8ba58d35
+name=/aiops2-acme-qual-test-pg16 image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} b31e2c35c8a0
+name=/aiops2-acme-qual-pg16 image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} d45f757e0ee3
+name=/aiops2-rebuild-core image_id=sha256:4bfc7008af54b4ef6ca2bade280726d7cecf51aec364149f4a11eaa1235abe2c project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1e2882c12bf8
+name=/aiops2-portal-v3-qual-exposed image_id=sha256:095e37db1e8e6dbbf78a9492d9a29546df739d2ca4c8f909cb631a507dca3d16 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 60caa37568a5
+name=/aiops2-portal-v3-qual-before-auth-prometheus-20261112 image_id=sha256:095e37db1e8e6dbbf78a9492d9a29546df739d2ca4c8f909cb631a507dca3d16 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 559cff8d1637
+name=/aiops2-portal-v3-qual-before-observability-20261112 image_id=sha256:f320d0ed61827a38f6ecc60e5e7d40a89c1015b06616352b963fe0fe857c934a project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} a380b4704d3b
+name=/aiops2-portal-v3-qual-exposed-pre-catalog-20261112T121942Z image_id=sha256:c036202a1b88d6f270803f2713aa86d319f34fbbef616c2802db9b4fb15b763e project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1beb929a1a26
+name=/aiops2-portal-v3-qual-exposed-rollback-20261112T114745Z image_id=sha256:e92a3d8f3d64b400a19e07f03c3ea8f7d4c74c60cb258710bef20e95bce2dcbd project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 40179302c6bf
+name=/aiops2-portal-v3-qual-v2 image_id=sha256:e92a3d8f3d64b400a19e07f03c3ea8f7d4c74c60cb258710bef20e95bce2dcbd project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 177824ce6596
+name=/aiops2-portal-v3-qual image_id=sha256:e92a3d8f3d64b400a19e07f03c3ea8f7d4c74c60cb258710bef20e95bce2dcbd project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} c6d6d4fab965
+name=/aiops2-rebuild-portal image_id=sha256:f44b355a876cfc9794cc8fbe96185f8206bc7fa863431639ea67d8b2ab6c8487 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 57efad5c6413
+name=/aiops2-rebuild-core-before-metrics-20261112 image_id=sha256:0c3e205fa99f82b9e07c9478d7e80e95145b6b298022ff3ec509bf22815baa65 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 9d89a027cdc8
+name=/aiops2-rebuild-core-rollback-v1 image_id=sha256:065404edb9fd05e04c45329e01dc853282cac8272c4973169d173fb32726c27e project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 462c20f7a5b6
+name=/aiops2-rebuild-portal-rollback-glpi image_id=sha256:c4d120b4daf6a28921630f43060ebf4bbc70237bd4b3a3369df3e24a4a4c6035 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 69b586737b89
+name=/aiops2-rebuild-portal-rollback-20261111 image_id=sha256:6713aa4f20f897c14efeacbf8b012383b1911ddfaf50be111a60ede022b793aa project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 265170dc590b
+name=/aiops2-portal-candidate-integration-smoke image_id=sha256:6713aa4f20f897c14efeacbf8b012383b1911ddfaf50be111a60ede022b793aa project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} a91a098514ad
+name=/aiops2-portal-candidate-auth-smoke image_id=sha256:6713aa4f20f897c14efeacbf8b012383b1911ddfaf50be111a60ede022b793aa project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 35265cee2681
+name=/aiops2-portal-candidate-debug image_id=sha256:6713aa4f20f897c14efeacbf8b012383b1911ddfaf50be111a60ede022b793aa project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} dc156f91433f
+name=/aiops2-restore-test-mariadb image_id=sha256:250e1609e93c0e6aecf64bfbab2d84d5e89d2481540fe77447ff6c855c3b1873 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 97d119246c42
+name=/aiops2-restore-test-temporal-postgres image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} bd705239908e
+name=/aiops2-restore-test-postgres image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} f2ad4a1dc85a
+name=/aiops2-rebuild-portal-before-upgrade image_id=sha256:a1f3adcf1e1189600d3167f6d5f3970a89deefe99338b19a8f089da08502916b project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 84e0f2d87553
+name=/aiops2-rebuild-core-rollback-glpi image_id=sha256:34e0a155cf4f7c6268738bc9d542876f4857be0df8d725369c5913be2394af9a project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} d4d1639ab2de
+name=/aiops2-rebuild-portal-rollback-20261110T130053212659Z image_id=sha256:ed00b30c5faafeaa2273e5bcff25e300954a93bfb5839163755630e6ecc11862 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 331348a1d806
+name=/aiops2-rebuild-portal-rollback-20261110T093531284558Z image_id=sha256:97e26dcab0f5c2bd0790920e3a2f606b7cd27ca937dcab8d96023637fc8821bd project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} def50e4ccd1d
+name=/aiops2-rebuild-core-rollback-20261110T130053212659Z image_id=sha256:4e719b8133c10a30477dfb92436e3a50060e47aa48f2c2e8357a11ede7741222 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} e887b54d820e
+name=/aiops2-rebuild-portal-rollback-20261110T092706468472Z image_id=sha256:e0559a90b34adcfe59ad3545e44195a10274398c17a308b6d8df316d4552eed1 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 415a9de78ba9
+name=/aiops2-rebuild-intelligence image_id=sha256:9bd805af6a8a980de3eea62ceb5eb08d6a44704dde9c6ece0defc7b9c94f2120 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1185d66e8ef8
+name=/aiops2-rebuild-core-rollback-20261110T092706468472Z image_id=sha256:87427734395dd212f550f03498fb77954c572675b41d8e5ba5dd4f295ecbef4d project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} b36c9c7a8189
+name=/aiops2-rebuild-portal-rollback-20261109T215925202141Z image_id=sha256:f8df32ea0fc9107e1dd1cc5c40b8bd38257336fdaa1a2be00b5597a8609f10e8 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 754f35805155
+name=/aiops2-rebuild-core-rollback-20261109T201354139196Z image_id=sha256:a4b0eefe2da01dba3c858682538686853e982f0b4f369e84f4a3b2edddc9b4ce project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 2a8b79fbbc23
+name=/fs1318-http-qual image_id=sha256:b28db1f671f832acfa01404edbe2db4111c76f80881e9781a07edd2f3bed70cc project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 96d18b52a97d
+name=/aiops2-rebuild-worker image_id=sha256:14f5dca634bc7ea59f065c977f9f61fbc63dede12df965d2b4f9e9620a2fad3f project=aiops2-metrics-cutover
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 5445b00a8b83
+name=/aiops2-rebuild-core-rollback-20261109T154818152697Z image_id=sha256:b28db1f671f832acfa01404edbe2db4111c76f80881e9781a07edd2f3bed70cc project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 07673bdc358c
+name=/aiops2-rebuild-cloudbeaver image_id=sha256:1b9e645bbbf44d5f8aefa4fca740311e438bc9255ecec2c8be2244744d5f603c project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 350392794abf
+name=/aiops2-rebuild-portal-rollback-20261109T154818152697Z image_id=sha256:313b8d27780176622de5fed33d9d516c1ea5ba67a0eba12957b1c470747ef15e project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 881f5b03888b
+name=/aiops2-rebuild-portal-fs1085-rollback-20261106-233813 image_id=sha256:d48f1a8b51c7b933f4add458befb9e216b9c38e1666dd88fa4163b14aadfc45f project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 20bd64aa702c
+name=/aiops2-rebuild-portal-fs1062-rollback-20261106-231345 image_id=sha256:1c813d4c76debfba1c453bb41c7cfd55780719acbb258af16aec9eca1064df11 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 8bb8f7da8d69
+name=/aiops2-rebuild-core-rollback-20261107T164456Z image_id=sha256:c31c2412af358fe93c680fa8f7193307c5b316aaba57a4b31b42296304818d67 project=aiops2-metrics-cutover
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 4f1eae6d5495
+name=/aiops2-rebuild-twin image_id=sha256:39ad578d506bcd4857f1a936127cdbb5c7ee7fdfab91a9f3f14bc7cf81819fff project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 5c7d433daf43
+name=/aiops2-rebuild-portal-fs1047-rollback-20261106-224850 image_id=sha256:600d157d35b2c040e0cf9985878fd3c84c978ba8b6ba7ebe95c73a9a87f6270a project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 8706fb3a319f
+name=/aiops2-rebuild-portal-fs563-rollback image_id=sha256:39aef181023eccf35fee24217dc3bd87752e8da1b52a1e27cce234ea07508878 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1a2b42f08ba4
+name=/aiops2-fs385-ingest image_id=sha256:5789aa194f757888f41fa3d48e14b6feaa1b57c0af0b56fcb1372d6474d3bff0 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} bd70dd6239d2
+name=/aiops2-rebuild-twin-fs1015-rollback image_id=sha256:73fde0a153e9c41d20b3e3fdfb0fc9d3442399aa6cd2dccf34b2b09d88cbb9c6 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 3ff4e7d4002b
+name=/aee3afd900f2_aiops2-rebuild-worker image_id=sha256:1a6650d8beb86fa4b6301e28a3f3e14ba07743ed66ead9f03b06259fdadf90df project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} c25309947682
+name=/aiops2-rebuild-prometheus image_id=sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} ecb1be0c4e09
+name=/aiops2-fs-lab image_id=sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 51d137d5e11d
+name=/aiops2-v29-qualification image_id=sha256:571bc2e535f7d9bdd5b6a045420c2e0c4cdf2cfff36b010bc069bcffebada16f project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 15706fff73ec
+name=/aiops2-fs-qualification image_id=sha256:5eba74c0c1822cd8c087fd581e7f9006e1182f57dd70401cae34dc0fe7eff393 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1b5e62461cbe
+name=/aiops2-rebuild-evidence image_id=sha256:faec51e0b9d58ff3f40db0b7384835189335f456712955d140d75c430f532b22 project=aiops2-metrics-cutover
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} f458ffc783d1
+name=/aiops2-rebuild-policy image_id=sha256:c47d6a01da09fc73aadfdce67fbdb22d6b95cf1b0055d5345c933cb2cea21524 project=aiops2-metrics-cutover
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 9427a0cc9d5c
+name=/aiops2-rebuild-core-before-metrics image_id=sha256:ad9ee3fcc42898615f85fae53cf0fa47dc8365ff3fd12fed91c16271dcbab304 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 219aed74c1e7
+name=/aiops2-rebuild-twin-before-metrics image_id=sha256:316c8362c7cb3dfe5ae3ef28939233fe4ae210defdefeef855651e42abc47ac6 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1596aef6a0f2
+name=/aiops2-rebuild-simulator image_id=sha256:57504b843cd746eb7ae8dfb8a3ae277545044652b8f85a132ea5f40df4d8e015 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 82e800e63829
+name=/aiops2-rebuild-policy-before-metrics image_id=sha256:9072109af526d14a8fd8f85639568288a6b312180334135b9a8300420aca56f4 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 80b33570aabf
+name=/aiops2-portal-candidate-web-20261029 image_id=sha256:c86fd0bd8e8f2e85342dcdab56b93b49e7964cbcc78f9ec0ab1658296c82793b project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 2f93e7b34bb3
+name=/aiops2-glpi-http-qual-db image_id=sha256:250e1609e93c0e6aecf64bfbab2d84d5e89d2481540fe77447ff6c855c3b1873 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 3ab850c32331
+name=/aiops2-demo-observability-demo-otel-1 image_id=sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2 project=aiops2-demo-observability
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 2dedee22832a
+name=/aiops2-demo-observability-demo-loki-1 image_id=sha256:4c431d2e6b9b38718694b31c5d56be7c80dc69c513215fde1aeb5b02cd4e2665 project=aiops2-demo-observability
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 65d585b28e30
+name=/aiops2-demo-observability-demo-tempo-1 image_id=sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3 project=aiops2-demo-observability
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} a4ad81971c82
+name=/aiops2-rebuild-copilot image_id=sha256:71696a44635d92ffcb39dddc2375ea1231cefeab90c2d26f4a280c3e1b8a32b6 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} cb2264430e07
+name=/aiops2-noc-rag-test image_id=sha256:33436d75f940ecdd8c36867a3a9952c2ed830da7ed3626c2fffb42bf8e2446ca project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 9dd0241622b7
+name=/aiops2-noc-rag-copilot-test image_id=sha256:71696a44635d92ffcb39dddc2375ea1231cefeab90c2d26f4a280c3e1b8a32b6 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} b86b24e5597c
+name=/aiops2-rebuild-n8n image_id=sha256:9c7871d5cc4fc2565bb905e4df5bf7d6a5a4bf2f4313fb99a2b3fa380f331d7c project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 98cd59b75985
+name=/aiops2-rebuild-glpi image_id=sha256:937c2245467c7b37dd81dfbf44c80ded049af47a929650599edc65f1bcd84649 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 8a2146090b44
+name=/aiops2-rebuild-alertmanager image_id=sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} e114a4ed1bd1
+name=/aiops2-rebuild-temporal-ui image_id=sha256:a066bdf5c4de689cabaf80cc357871f1db5e6d750a6bcfc42e877b913e31ef24 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 2cc8b5a6bcee
+name=/aiops2-rebuild-grafana image_id=sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 6c70f2aef575
+name=/aiops2-portal-rollback-v2-20261028 image_id=sha256:fd32c648d279707576d663a7e0d18af3dd471902357d7c1114552e40ccf390ad project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 578498af893a
+name=/aiops2-glpi-recovery-db image_id=sha256:250e1609e93c0e6aecf64bfbab2d84d5e89d2481540fe77447ff6c855c3b1873 project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} c586b1093dae
+name=/aiops2-rebuild-test-llm image_id=sha256:7b9836004e6ec9f30d79a886463f334e1390e3db63b02b3310d550634939d732 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} a1620edea346
+name=/aiops2-rebuild-temporal-namespace image_id=sha256:3e68adcd54195a7c1222e99f2dbc32a4fdbf44ad69e3bb48e21e85c4bf417c2e project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 3831bd51bd34
+name=/aiops2-rebuild-evidence-before-metrics image_id=sha256:20d4f7da841e85cee086ef967f6abb2ac92ccec563c7eba36b5a2fe924782345 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1ddd59ba0df8
+name=/aiops2-rebuild-temporal image_id=sha256:b021b3b58c3f169634cdbb0451fcc0e69e8190b40454323362c7c52bbd4ff7b9 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} cf6e2edf807f
+name=/aiops2-rebuild-temporal-schema image_id=sha256:3e68adcd54195a7c1222e99f2dbc32a4fdbf44ad69e3bb48e21e85c4bf417c2e project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} ab408dba8c6a
+name=/aiops2-rebuild-postgres image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 5f4876f8c3a8
+name=/aiops2-rebuild-temporal-postgres image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 248317e6e99c
+name=/aiops2-rebuild-glpi-db image_id=sha256:250e1609e93c0e6aecf64bfbab2d84d5e89d2481540fe77447ff6c855c3b1873 project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 2d0757258d03
+name=/aiops2-v28-core-qf186 image_id=sha256:cf102d86242ebce54d882c3c5c224a5bcbd03b95d0829d6778edd18186f2b20a project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 307e481b9e45
+name=/aiops2-v28-core-qf183 image_id=sha256:2da07a39113332f5a4034eb09b030deed9a34fce34fb80c044d9d2df2051eb6a project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} a24f2a87d5e2
+name=/aiops2-v28-sql-qual image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} d2e62e73a391
+name=/aiops2-v27-qual-aiops2-worker-1 image_id=sha256:3339ed68458e742b0e4ffe790e4394a9706cfb369959337b57236921c10a8680 project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 0a58af7472c4
+name=/aiops2-v27-qual-aiops2-core-1 image_id=sha256:bac4c702079b9f12e4d690dbbc4faf20b6612f1d8b70acef1c2ee1c18ad5488b project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 139f4145d98e
+name=/aiops2-v27-qual-aiops2-intelligence-1 image_id=sha256:4635c4455158b7edbc7ea0f9a308a446b1eb82a7d37bd4ffb535881b1e36269c project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 53d5cbce9ec9
+name=/aiops2-v27-qual-aiops2-policy-1 image_id=sha256:cb9ff9710b0a2b8020067e8a6992a2f42445038346e136ca12c1f150d975497d project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 445f6de70958
+name=/aiops2-v27-qual-aiops2-twin-1 image_id=sha256:2dc54fb1400ea966fe08045f91865ac4960c56957bc35ee88fe4d8dc9ea43a2b project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} f3507c491209
+name=/aiops2-v27-qual-aiops2-evidence-1 image_id=sha256:ee2ade24f84a37003c0b859b0d0f3e715924f568f617d33566ae10e2735de45b project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 53b3eeda5b87
+name=/aiops2-v27-qual-aiops2-test-llm-1 image_id=sha256:c76fc8600b3c51c8f7b995e5b82425875019fe2b1437f35c6a9c55b1053340ff project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1c13521f248d
+name=/aiops2-v27-qual-aiops2-temporal-namespace-1 image_id=sha256:3e68adcd54195a7c1222e99f2dbc32a4fdbf44ad69e3bb48e21e85c4bf417c2e project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} bef0098ff11f
+name=/aiops2-v27-qual-aiops2-temporal-1 image_id=sha256:b021b3b58c3f169634cdbb0451fcc0e69e8190b40454323362c7c52bbd4ff7b9 project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 53a873032c7b
+name=/aiops2-v27-qual-aiops2-temporal-schema-1 image_id=sha256:3e68adcd54195a7c1222e99f2dbc32a4fdbf44ad69e3bb48e21e85c4bf417c2e project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 294c0e6ee412
+name=/aiops2-v27-qual-aiops2-temporal-postgres-1 image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 864429c7b7ea
+name=/aiops2-v27-qual-aiops2-postgres-1 image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=aiops2-v27-qual
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} b9bc9514084b
+name=/aiops2-metrics-normalizer-v1 image_id=sha256:dcd4efde10bdf313c29fd23a533956b89affa0864decd7a1a9c9afbf1fa751ed project=aiops2-rebuild
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} f25e92424e3b
+name=/aiops2-demo-web-v1 image_id=sha256:9e37c21575b15be39e323443361e6436bc2c6d1ef7a1a30c617039b64873a31f project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} a7bd6b30f5d3
+name=/aiops2-demo-readonly image_id=sha256:9e37c21575b15be39e323443361e6436bc2c6d1ef7a1a30c617039b64873a31f project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 97b886a712b8
+name=/aiops2-e2e-v1-aiops2-worker-1 image_id=sha256:a6b0810f7180e8d05f881cd440fe07eb557b63307bac43dbc5a116e09c85a4ba project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 6921dc65082a
+name=/aiops2-e2e-v1-aiops2-intelligence-1 image_id=sha256:4635c4455158b7edbc7ea0f9a308a446b1eb82a7d37bd4ffb535881b1e36269c project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} ece622094bec
+name=/aiops2-e2e-v1-aiops2-test-llm-1 image_id=sha256:56a487fe35eb9cd6f935ad6629ef46c8d4a6229417ef725d99d60800edfd968b project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 3722b0d533e0
+name=/aiops2-e2e-v1-aiops2-twin-1 image_id=sha256:d09bf9dad6bebc2d8f4681e4876f8c5f27398609369804015dff427a2038b965 project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 2f72ca4aec57
+name=/aiops2-e2e-v1-aiops2-temporal-namespace-1 image_id=sha256:3e68adcd54195a7c1222e99f2dbc32a4fdbf44ad69e3bb48e21e85c4bf417c2e project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 3e344d15bb7b
+name=/aiops2-e2e-v1-aiops2-temporal-1 image_id=sha256:b021b3b58c3f169634cdbb0451fcc0e69e8190b40454323362c7c52bbd4ff7b9 project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 627999d2c1df
+name=/aiops2-e2e-v1-aiops2-temporal-schema-1 image_id=sha256:3e68adcd54195a7c1222e99f2dbc32a4fdbf44ad69e3bb48e21e85c4bf417c2e project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 57191286b287
+name=/aiops2-e2e-v1-aiops2-temporal-postgres-1 image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 982a131936a9
+name=/aiops2-e2e-v1-aiops2-evidence-1 image_id=sha256:a92d3ab17c01908af2f133234c64626d870f2c13c6bd46c9abf227114e76d410 project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 1f0787d0e53f
+name=/aiops2-e2e-v1-aiops2-core-1 image_id=sha256:9e37c21575b15be39e323443361e6436bc2c6d1ef7a1a30c617039b64873a31f project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} 54e347bcd0f9
+name=/aiops2-e2e-v1-aiops2-policy-1 image_id=sha256:867a0a88e0a1db66d17d176509791361d2d39b3a35833bcf348b9a94a06963b7 project=aiops2-e2e-v1
+
+$ docker inspect --format name={{.Name}} image_id={{.Image}} project={{index .Config.Labels "com.docker.compose.project"}} fd2a89fc4e27
+name=/aiops2-e2e-v1-aiops2-postgres-1 image_id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea project=aiops2-e2e-v1
+
+========== LIBVIRT INVENTORY ==========
+
+========== EXISTING REPORTER ==========
+-rwx------ 1 aiops aiops 7680 Nov  2 12:03 /home/aiops/.local/bin/aiops-debian-reporter
+71246acf9b642fa18bfa4c19651c8e52ecc6fb7405ad3c4c4ef798adb12ad1f5  /home/aiops/.local/bin/aiops-debian-reporter
+-rwx------ 1 aiops aiops 1414 Nov  5 11:41 /home/aiops/.local/bin/aiops-publish-report
+cb500ddaf896070d5dccbd05996e8a7081f5788946743c25737debb8046b6355  /home/aiops/.local/bin/aiops-publish-report
+
+========== CRON STATUS ==========
+
+$ systemctl is-active cron
+active
+Relevant cron identifiers:
+aiops-debian-reporter
+aiops-publish-report
+fs-watch.sh
+poll.sh

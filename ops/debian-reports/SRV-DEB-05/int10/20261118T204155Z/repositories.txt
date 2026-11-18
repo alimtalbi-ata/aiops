@@ -1,0 +1,264 @@
+
+========== EXISTING GIT REPOSITORIES ==========
+Search root: /home/aiops
+
+Repository: /home/aiops/aiops2-v2-delivery
+3ecbebe4732e9d7d1c8be58f441987648303a509
+feat/cron-stable-auto-deploy-20261028
+Last commit: 3ecbebe 2026-10-28T20:37:41+01:00
+
+Repository: /home/aiops/aiops2-debian-reconciliation/golden-demo-pr
+4dd08aa6e67c0c82d8206effa9e6e9a3556ab9c3
+integration/aiops2-golden-demo-install-kit-20261116
+Last commit: 4dd08aa 2026-11-16T22:23:58+01:00
+
+Repository: /home/aiops/aiops2-debian-reconciliation/pr-worktree
+dcf7bcebabc880ee17b95b0e5901b4f4345339a3
+audit/debian-runtime-reference-20261116
+Last commit: dcf7bce 2026-11-04T11:47:46+01:00
+
+Repository: /home/aiops/aiops2-private-data-backup
+d798479625f5621153d1445ab9b5ba854c42c0a5
+main
+Last commit: d798479 2026-10-29T22:36:23+01:00
+
+Repository: /home/aiops/aiops2-codex-roundtrip-20261109T094137Z/repo
+97a2565c737d352ab166ed1f3b4ae869d1e6e524
+Last commit: 97a2565c 2026-11-09T11:56:52+01:00
+
+Repository: /home/aiops/aiops-github-archive-worktree
+
+Repository: /home/aiops/aiops2-fs621
+9e68f4d977b7e28411f20edba21083c5d531ec22
+feature/portal-unified-explorers-fs621
+Last commit: 9e68f4d 2026-11-06T15:25:14+01:00
+
+Repository: /home/aiops/aiops-v28-demo
+b7f16c0165a02e7a04ee3d21876404a5411e8c3c
+audit/p0-runtime-reconciliation-20261029
+Last commit: b7f16c0 2026-10-29T16:20:15+01:00
+
+Repository: /home/aiops/aiops2-p0-consolidation
+0d7f2acfa3615a0a78b09321dc15285db85f304b
+prep/acme-demo-offline-20261029
+Last commit: 0d7f2ac 2026-10-29T17:19:43+01:00
+
+Repository: /home/aiops/aiops2-p0-candidate
+22d6ed9e5347e6cb97c2902453aef935535576ad
+Last commit: 22d6ed9 2026-10-29T13:42:32+01:00
+
+Repository: /home/aiops/aiops-qualification-20261031
+9478a400aa10667320ba58dbfb02010fcefb5779
+Last commit: 9478a40 2026-10-31T20:16:38+01:00
+
+Repository: /home/aiops/aiops2-reconstruction-export-20261029
+2f652790eb6befdb5482cf5170e7c1eebc5bcd13
+recovery-20261029
+Last commit: 2f65279 2026-10-29T22:43:51+01:00
+
+Repository: /home/aiops/aiops2-patches/worker-v28
+
+Repository: /home/aiops/aiops2-patches/critic-v24
+
+Repository: /home/aiops/aiops2-patches/core-portal-acl-v28-worktree
+50356b138c90d12d3c68ff3ce4a4a4f99ab812d3
+aiops2-v28-core-portal-acl
+Last commit: 50356b1 2026-11-05T14:15:40+01:00
+
+Repository: /home/aiops/aiops2-patches/worker-v26
+
+Repository: /home/aiops/aiops2-patches/worker-v27
+
+Repository: /home/aiops/aiops2-patches/copilot-v28-worktree
+718e86a33720c52011f221ecfb5f07d3b2c31261
+aiops2-v28-copilot-policy-fix
+Last commit: 718e86a 2026-11-05T13:51:31+01:00
+
+Repository: /home/aiops/aiops2-patches/critic-v23
+12cc116316bea36a1de7dfe676cb5a5962b946c9
+fix/critic-fail-closed-v23-20261020
+Last commit: 12cc116 2026-10-20T15:54:48+02:00
+
+Repository: /home/aiops/aiops2-patches/worker-v25
+
+Repository: /home/aiops/aiops2-patches/intelligence-v28-worktree
+86f52ded82f62a96b1660b58557bbc1c92d3368d
+Last commit: 86f52de 2026-11-05T12:46:36+01:00
+
+Repository: /home/aiops/aiops2-auto-deploy/candidate-b51f6c1
+b51f6c1deef905f2ee890055d7fa4c7a0e1bbd8f
+Last commit: b51f6c1 2026-10-30T07:08:43+01:00
+
+Repository: /home/aiops/aiops2-auto-deploy/repo
+dcf7bcebabc880ee17b95b0e5901b4f4345339a3
+aiops2-approved-deployment
+Last commit: dcf7bce 2026-11-04T11:47:46+01:00
+
+Repository: /home/aiops/aiops2-auto-deploy/portal-hitl-copilot-glpi
+8488e64c718ba887cb9b1e4a3b0161c8a435232f
+Last commit: 8488e64 2026-10-30T08:45:15+01:00
+
+Repository: /home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e
+5b3b9f327f517e8f5999766389abf69c8a035cf8
+Last commit: 5b3b9f3 2026-10-30T09:35:39+01:00
+
+Repository: /home/aiops/aiops2-auto-deploy/glpi-hitl-proposal-fastpath
+e8f05d8c50045f4256e89ad0776424f4dad5bb61
+Last commit: e8f05d8 2026-10-30T09:05:17+01:00
+
+Repository: /home/aiops/aiops-debian-audit
+4714300acb7a02670a99dbe57ab3569f0c9d5adb
+main
+Last commit: 4714300 2026-11-12T14:48:58+01:00
+
+Repository: /home/aiops/aiops2-rebuild-kit/github-safe-worktree
+35c8a7d902e2e7198635f5d6e4f970217e8e129b
+backup/aiops2-safe-deploy-20261028
+Last commit: 35c8a7d 2026-10-28T18:39:51+01:00
+
+Repository: /home/aiops/aiops2-integration-20261116
+91551be28bc1383062669ef48d9c29aff6a83718
+Last commit: 91551be 2026-11-16T09:10:16+01:00
+
+Repository: /home/aiops/.local/state/aiops-debian-agent/report-git
+47226fc4ccb33977795857674854af49b5faa4ed
+ops/debian-runtime-reports
+Last commit: 47226fc4c 2026-11-18T21:42:02+01:00
+
+Repository: /home/aiops/.local/share/aiops2-codex-dispatch/repo
+6c1293930abf73217c009924ef8015efea5401c9
+Last commit: 6c129393 2026-11-09T11:01:18+01:00
+
+Repository: /home/aiops/aiops2-one-stack-audit
+5b6a70c364a5820ef697bae19ec3e39a955974a7
+ops/rootless-one-stack-inventory-20261111
+Last commit: 5b6a70c 2026-11-11T17:08:08+01:00
+
+Repository: /home/aiops/aiops2-fs-demo-source
+b3523f951b8fe76bc1c5c1c76cb52357f64b92f6
+Last commit: b3523f95 2026-11-05T11:59:54+01:00
+
+Repository: /home/aiops/aiops-rebuild-export/FS791-publication
+7d9246d93eb3f1519253ffdb6fce77040f4547d6
+integration/debian-rebuild-fs804
+Last commit: 7d9246d 2026-11-06T17:27:42+01:00
+
+Repository: /home/aiops/aiops2-p0-deploy-review
+e94fe78430fe0e92e56aa99ac44fad72a117d204
+Last commit: e94fe78 2026-10-29T11:16:42+01:00
+Search root: /opt
+Search root: /srv
+Search root: /var/backups
+
+========== BACKUP LOCATIONS ==========
+/home/aiops
+/home/aiops/aiops-video-private
+/home/aiops/aiops2-audit-tools
+/home/aiops/aiops2-v2-delivery
+/home/aiops/aiops2-glpi-copilot-recovery
+/home/aiops/aiops2-denial-coordinated-20261029
+/home/aiops/aiops2-debian-reconciliation
+/home/aiops/aiops2-debian-reconciliation/canonical-stack/backup
+/home/aiops/aiops2-debian-reconciliation/runtime-quarantine/aiops2-rebuild-portal
+/home/aiops/aiops2-debian-reconciliation/runtime-quarantine/aiops2-portal-v3-qual-exposed
+/home/aiops/aiops2-debian-reconciliation/runtime-quarantine/aiops2-rebuild-core
+/home/aiops/aiops2-portal-fs1044-backup-20261106-224604
+/home/aiops/aiops2-private-data-backup
+/home/aiops/aiops2-private-data-backup/backups
+/home/aiops/aiops2-v30-qualification
+/home/aiops/aiops2-codex-roundtrip-20261109T094137Z
+/home/aiops/aiops2-qualification
+/home/aiops/aiops2-v27-qual
+/home/aiops/aiops-github-archive-worktree
+/home/aiops/aiops-github-archive-worktree/postgresql-backups
+/home/aiops/aiops2-local-backups
+/home/aiops/aiops-platform
+/home/aiops/aiops2-fs621
+/home/aiops/aiops-v28-demo
+/home/aiops/aiops2-p0-consolidation
+/home/aiops/aiops2-tools
+/home/aiops/aiops2-observability-candidate
+/home/aiops/aiops2-p0-candidate
+/home/aiops/aiops2-consolidation-20261112T124137Z
+/home/aiops/aiops-int10-inventory-20261118T204155Z
+/home/aiops/aiops-v69
+/home/aiops/aiops2-release-receipts
+/home/aiops/aiops-v28-test-venv
+/home/aiops/aiops2-portal-fs1062-backup-20261106-231345
+/home/aiops/aiops2-merge-20261116
+/home/aiops/aiops2-qualification-reports
+/home/aiops/aiops2-core-denial-patch-20261029-214351
+/home/aiops/aiops2-acme-rollback-20261029-204439
+/home/aiops/aiops2-backups
+/home/aiops/aiops-qualification-20261031
+/home/aiops/aiops2-reconstruction-export-20261029
+/home/aiops/aiops2-patches
+/home/aiops/aiops2-patches/qf99-backup
+/home/aiops/aiops2-patches/fs-glpi-bubbles/backups
+/home/aiops/aiops2-itsm-historical-recovery-20261029
+/home/aiops/aiops2-operations
+/home/aiops/aiops2-operations/glpi-plugins/aiops2copilot.before-fs419-20261106T080529Z
+/home/aiops/aiops2-operations/glpi-plugins/aiops2copilot
+/home/aiops/aiops2-itsm-portal-candidate-20261029
+/home/aiops/aiops2-v30-rollback-20261112
+/home/aiops/aiops2-auto-deploy
+/home/aiops/aiops2-auto-deploy/backups
+/home/aiops/aiops2-auto-deploy/portal-rollback/volume-backups
+/home/aiops/aiops2-observability-deploy
+/home/aiops/aiops-metrics-backup
+/home/aiops/aiops-debian-audit
+/home/aiops/aiops-debian-audit/postgresql-backups
+/home/aiops/aiops-db-backups-20261028T151311Z
+/home/aiops/.aiops2-v3-expose.L8gVjyrS
+/home/aiops/aiops2-noc-rag-work
+/home/aiops/aiops2-e2e-lab
+/home/aiops/aiops2-audit-20261111
+/home/aiops/aiops2-demo-executable
+/home/aiops/aiops2-portal-fs1047-backup-20261106-224850
+/home/aiops/aiops2-rebuild-kit
+/home/aiops/aiops2-rebuild-kit/db-backup-20261028T165746Z
+/home/aiops/aiops2-integration-20261116
+/home/aiops/aiops2-integration-20261116/docs/aiops2
+/home/aiops/aiops2-v30-rollback
+/home/aiops/aiops2-p0-backup
+/home/aiops/aiops2-convergence-backup-20261116
+/home/aiops/aiops-int10-inventory-20261118T204147Z
+/home/aiops/.config/aiops
+/home/aiops/.config/aiops2
+/home/aiops/aiops-prometheus-image-patch
+/home/aiops/aiops-prometheus-image-patch/runtime-backup
+/home/aiops/aiops2-deploy
+/home/aiops/.local/state/aiops-debian-agent
+/home/aiops/.local/state/aiops2-payments-health
+/home/aiops/.local/state/aiops2-grafana-consolidation
+/home/aiops/.local/state/aiops2-core-metrics-20261112
+/home/aiops/.local/state/aiops2-codex-pilot
+/home/aiops/.local/state/aiops2-codex-dispatch
+/home/aiops/.local/state/aiops2-github-openai-bridge
+/home/aiops/.local/state/aiops2-demo-filesystem
+/home/aiops/.local/state/aiops2-v30-auth-prometheus-20261112
+/home/aiops/.local/share/aiops-playwright-venv
+/home/aiops/.local/share/aiops2-codex-dispatch
+/home/aiops/.local/share/aiops2-github-openai-bridge
+/home/aiops/aiops2-acme-build-20261029-204439
+/home/aiops/aiops2-regression-forensics
+/home/aiops/aiops2-portal-fs1085-backup-20261106-233813
+/home/aiops/aiops2-status-20261110T160657Z
+/home/aiops/fs1242-config-backup-20261107T171139Z
+/home/aiops/aiops2-one-stack-audit
+/home/aiops/aiops2-one-stack-audit/backups
+/home/aiops/aiops2-core-mode-guard-20261029-214650
+/home/aiops/portal-active-snapshot
+/home/aiops/aiops2-fs-demo-source
+/home/aiops/aiops-rebuild-export
+/home/aiops/aiops2-demo-24h
+/home/aiops/aiops2-demo-24h/backups-v27
+/home/aiops/aiops2-p0-deploy-review
+/home/aiops/aiops2-glpi-portal-patch
+/home/aiops/aiops2-glpi-portal-patch/deployment-backup
+/home/aiops/aiops2-glpi-http-qualification-20261029
+/home/aiops/fs716-backup-20261106-155625
+/home/aiops/aiops2-v30-integration
+/home/aiops/aiops2-portal-fs1053-backup-20261106-230029
+/opt/aiops-candidate
+/var/backups
