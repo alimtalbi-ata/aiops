@@ -42,5 +42,19 @@ class PortalUsabilityTests(unittest.TestCase):
             self.assertIn(expected, page.text)
 
 
+    def test_noc_workspace_keeps_controls_and_explicit_initial_states(self):
+        page = self.client.get("/")
+        for expected in (
+            'class="noc-workspace-summary"', 'class="noc-workspace-grid"',
+            'UNKNOWN — corrélation à vérifier', 'NOT_TESTED — contrôle HTTP disponible',
+            'DEMO — références synthétiques uniquement',
+            'id="noc-token"', 'id="noc-result"', 'id="noc-grafana-result"',
+            'id="noc-rag-result"', 'onclick="correlateNoc()"',
+            'onclick="grafanaHealth()"', 'onclick="demoRag()"',
+        ):
+            self.assertIn(expected, page.text)
+
+
+
 if __name__ == "__main__":
     unittest.main()
