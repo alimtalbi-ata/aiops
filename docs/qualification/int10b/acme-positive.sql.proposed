@@ -1,0 +1,139 @@
+-- PROPOSED / NOT_TESTED. Fresh disposable schema only, never active migration.
+-- Golden 016 848c6a3a163f227adac17a153e3388e622b989ba; 018 3c05ac7f2ad6ea93f55884300fb52a261cb2dc38; 017 fff241c6a1eefcf6a348c9f668c202a63b106176.
+-- Requires current 000-013 and B2 ledger. No grants, seed or runtime.
+begin;
+alter table aiops.incidents drop constraint incidents_state_check;
+alter table aiops.incidents add constraint incidents_state_check check
+(state in ('OPEN','ACKNOWLEDGED','INVESTIGATING','MITIGATED','RESOLVED','CLOSED') or
+(state='PREPARED' and synthetic and source='SYNTHETIC_SIMULATOR'
+ and (payload @> '{"tenant_id":"ACME-TEST","mode":"SIMULATION","human_approved":false,"live_effects_allowed":false}'::jsonb) is true));
+alter table aiops.runs drop constraint runs_status_check;
+alter table aiops.runs add constraint runs_status_check check
+(status in ('CREATED','RUNNING','WAITING','BLOCKED','RESOLVED','FAILED','CANCELLED') or
+(status='PREPARED' and mode='DEMO' and scenario_id='ACME-SAN-PAYMENTS' and incident_id is not null
+ and idempotency_key like 'acme-sandbox-v1:ACME-TEST:%'));
+alter table aiops.runs add unique(run_id,incident_id);
+alter table aiops.analysis_records add unique(analysis_id,run_id,incident_id);
+-- 016: isolated ACME-TEST SIMULATION attempt ledger; after 001/004/009-015.
+-- Additive; never a real GLPI ticket, human approval or LIVE effect.
+-- Rollback: disable route/revert code, preserve immutable synthetic facts.
+create table if not exists aiops.acme_sandbox_attempts (
+ tenant_id text not null check (tenant_id='ACME-TEST'),
+ attempt_id text not null check (attempt_id ~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,99}$'),
+ request_sha256 char(64) not null check (request_sha256 ~ '^[0-9a-f]{64}$'),
+ incident_id text not null unique references aiops.incidents(incident_id),
+ run_id text not null unique references aiops.runs(run_id),
+ ticket_id text not null unique check (ticket_id like 'SIM-GLPI-%'),
+ proposal_id text not null unique check (proposal_id like 'PROP-SIM-%'),
+ analysis_id text not null unique references aiops.analysis_records(analysis_id),
+ critique_id text not null unique references aiops.critique_records(critique_id),
+ ticket_status text not null check (ticket_status='PREPARED'),
+ source text not null check (source='SYNTHETIC_SIMULATOR'),
+ evidence_count integer not null check (evidence_count=2),
+ source_event_count integer not null check (source_event_count=7),
+ created_at timestamptz not null default now(),
+ primary key (tenant_id,attempt_id)
+);
+create index if not exists ix_acme_sandbox_run on aiops.acme_sandbox_attempts(run_id,tenant_id);
+drop trigger if exists trg_acme_sandbox_immutable on aiops.acme_sandbox_attempts;
+create trigger trg_acme_sandbox_immutable before update or delete
+ on aiops.acme_sandbox_attempts for each row
+ execute function aiops.prevent_append_only();
+
+alter table aiops.acme_sandbox_attempts
+ add foreign key(run_id,incident_id) references aiops.runs(run_id,incident_id),
+ add foreign key(analysis_id,run_id,incident_id) references aiops.analysis_records(analysis_id,run_id,incident_id),
+ add foreign key(critique_id,analysis_id,run_id) references aiops.critique_records(critique_id,analysis_id,run_id),
+ add unique(tenant_id,attempt_id,incident_id,run_id,ticket_id,proposal_id);
+-- 018: Core-owned immutable terminal SIM-GLPI receipt, separate from Run state.
+-- RG-ACME-18: only a PREPARED sandbox Run may atomically persist a terminal
+-- simulated ticket and independently hashed Worker no-effect receipt.
+-- The table is append-only; disable sandbox/forward-revert code on rollback.
+-- Never delete immutable terminal evidence, restore over live PG16, or grant LIVE.
+CREATE TABLE IF NOT EXISTS aiops.acme_sandbox_terminal_tickets (
+ tenant_id text NOT NULL CHECK (tenant_id='ACME-TEST'),
+ attempt_id text NOT NULL,
+ incident_id text NOT NULL REFERENCES aiops.incidents(incident_id),
+ run_id text NOT NULL REFERENCES aiops.runs(run_id),
+ ticket_id text NOT NULL UNIQUE CHECK (ticket_id LIKE 'SIM-GLPI-%'),
+ proposal_id text NOT NULL,
+ approval_id text NOT NULL CHECK (approval_id LIKE 'SIM-APP-%'),
+ approval_issued_at timestamptz NOT NULL,
+ approval_expires_at timestamptz NOT NULL,
+ approval_nonce_sha256 char(64) NOT NULL UNIQUE
+  CHECK (approval_nonce_sha256 ~ '^[0-9a-f]{64}$'),
+ CHECK (approval_expires_at > approval_issued_at AND
+        approval_expires_at <= approval_issued_at + interval '5 minutes'),
+ worker_receipt_sha256 char(64) NOT NULL
+  CHECK (worker_receipt_sha256 ~ '^[0-9a-f]{64}$'),
+ worker_receipt jsonb NOT NULL,
+ ticket_status text NOT NULL CHECK (ticket_status='RESOLVED'),
+ terminal_ticket_sha256 char(64) NOT NULL
+  CHECK (terminal_ticket_sha256 ~ '^[0-9a-f]{64}$'),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY (tenant_id, attempt_id),
+ FOREIGN KEY (tenant_id,attempt_id)
+  REFERENCES aiops.acme_sandbox_attempts(tenant_id,attempt_id)
+);
+DROP TRIGGER IF EXISTS trg_acme_sandbox_terminal_immutable
+ ON aiops.acme_sandbox_terminal_tickets;
+CREATE TRIGGER trg_acme_sandbox_terminal_immutable BEFORE UPDATE OR DELETE
+ ON aiops.acme_sandbox_terminal_tickets FOR EACH ROW
+ EXECUTE FUNCTION aiops.prevent_append_only();
+
+alter table aiops.acme_sandbox_terminal_tickets
+ add foreign key(tenant_id,attempt_id,incident_id,run_id,ticket_id,proposal_id)
+ references aiops.acme_sandbox_attempts(tenant_id,attempt_id,incident_id,run_id,ticket_id,proposal_id),
+ add check ((worker_receipt @> '{"receipt_status":"SIMULATED_NO_EFFECT","receipt_phase":"PRE_RESOLUTION","human_approved":false,"execution_allowed":false,"effect_allowed":false,"live_effects_allowed":false,"real_glpi_writes_allowed":false,"glpi_write":false,"effect_receipts":0}'::jsonb) is true),
+ add check ((worker_receipt->>'ticket_id' = ticket_id) is true),
+ add check ((worker_receipt->>'approval_id' = approval_id) is true),
+ add check ((worker_receipt->>'twin_approval_nonce_sha256' = approval_nonce_sha256::text) is true),
+ add check (created_at < approval_expires_at and approval_issued_at <= created_at + interval '30 seconds');
+-- Freshness must be checked by Core under lock using wall clock, not now() alone.
+-- Deferred final-state consistency for all touched sandbox rows.
+create function aiops.int10b_check_acme_chain() returns trigger language plpgsql as $$
+declare a record; i record; r record; t record; rid text; iid text;
+begin
+ if TG_TABLE_NAME='incidents' then
+   select * into a from aiops.acme_sandbox_attempts where incident_id=NEW.incident_id;
+   if not found then
+     if NEW.state='PREPARED' then raise exception 'unbound prepared incident'; end if;
+     return null;
+   end if;
+ else
+   rid := NEW.run_id;
+   select * into a from aiops.acme_sandbox_attempts where run_id=rid;
+   if not found then
+     if TG_TABLE_NAME='runs' then
+       if NEW.status='PREPARED' then raise exception 'unbound prepared run'; end if;
+     end if;
+     return null;
+   end if;
+ end if;
+ select * into i from aiops.incidents where incident_id=a.incident_id;
+ select * into r from aiops.runs where run_id=a.run_id;
+ select * into t from aiops.acme_sandbox_terminal_tickets where tenant_id=a.tenant_id and attempt_id=a.attempt_id;
+ if i.state is distinct from r.status or i.state not in ('PREPARED','RESOLVED')
+ or i.synthetic is not true or i.source is distinct from a.source
+ or r.mode is distinct from 'DEMO' or r.scenario_id is distinct from 'ACME-SAN-PAYMENTS'
+ or r.idempotency_key is distinct from ('acme-sandbox-v1:'||a.tenant_id||':'||a.attempt_id)
+ or (i.payload @> jsonb_build_object('tenant_id',a.tenant_id,'attempt_id',a.attempt_id,'mode','SIMULATION','human_approved',false,'live_effects_allowed',false)) is not true
+ or (i.state='RESOLVED') is distinct from (t.attempt_id is not null)
+ then raise exception 'sandbox chain inconsistent'; end if;
+ if not exists(select 1 from aiops.run_events e where e.run_id=a.run_id and e.sequence=8 and e.event_type='SIMULATED_PREPARED' and e.status='PREPARED') then
+ raise exception 'missing prepared event'; end if;
+ if i.state='RESOLVED' then
+ if not exists(select 1 from aiops.run_events e where e.run_id=a.run_id and e.sequence=9 and e.event_type='SIMULATED_RESOLVED' and e.status='RESOLVED'
+ and e.payload @> jsonb_build_object('approval_id',t.approval_id,'worker_receipt_sha256',t.worker_receipt_sha256::text,'terminal_ticket_sha256',t.terminal_ticket_sha256::text,'worker_receipt_verified',true,'execution_allowed',false,'effect_allowed',false))
+ then raise exception 'missing bound terminal event'; end if;
+ elsif exists(select 1 from aiops.run_events e where e.run_id=a.run_id and (e.sequence=9 or e.event_type='SIMULATED_RESOLVED')) then
+ raise exception 'premature terminal event'; end if;
+ return null;
+end $$;
+do $$ declare tab text; begin
+ foreach tab in array array['incidents','runs','acme_sandbox_attempts','acme_sandbox_terminal_tickets','run_events'] loop
+ execute format('create constraint trigger trg_int10b_acme_chain after insert or update on aiops.%I deferrable initially deferred for each row execute function aiops.int10b_check_acme_chain()',tab);
+ end loop;
+end $$;
+-- No general evidence/ACL proof; canonical Python digest and independent reads remain required.
+commit;
