@@ -56,5 +56,17 @@ class PortalUsabilityTests(unittest.TestCase):
 
 
 
+    def test_run_explorer_shows_ordered_model_not_observed_events(self):
+        page = self.client.get("/runs/RUN-73AFC6FF9315376C")
+        self.assertIn(page.status_code, (401, 503))
+        self.assertIn('class="run-journey-grid"', page.text)
+        self.assertEqual(page.text.count('class="run-step-number"'), 8)
+        self.assertIn("Étape 01", page.text)
+        self.assertIn("Étape 08", page.text)
+        self.assertIn("pas une chronologie observée", page.text)
+        self.assertIn("NOT VERIFIED", page.text)
+
+
+
 if __name__ == "__main__":
     unittest.main()
