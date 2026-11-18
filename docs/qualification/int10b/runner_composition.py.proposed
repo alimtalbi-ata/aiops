@@ -4,6 +4,7 @@ connection creation, gate overrides, migrations, or execution.
 from contextlib import contextmanager
 from unittest import TestCase
 from threading import Lock
+from psycopg.pq import TransactionStatus
 
 _suite_lock=Lock()
 
@@ -20,7 +21,8 @@ def compose_contract(*, positive, negative, contention, fixtures, support,
     class Contract(positive,negative,contention,fixtures,support,TestCase):
         def setUp(self):
             super().setUp()
-            _suite_lock.acquire()
+            if not _suite_lock.acquire(timeout=10):
+                raise AssertionError('suite lock timeout')
             self.addCleanup(_suite_lock.release)
             isolation_check()
             self.core=core
@@ -36,6 +38,8 @@ def compose_contract(*, positive, negative, contention, fixtures, support,
             with connection_factory() as c:
                 if c.autocommit:
                     raise AssertionError('transactional connection required')
+                if c.closed or c.info.transaction_status != TransactionStatus.IDLE:
+                    raise AssertionError('fresh idle connection required')
                 with c.transaction():
                     c.execute("set transaction isolation level read committed")
                     c.execute("set local statement_timeout = '30s'")

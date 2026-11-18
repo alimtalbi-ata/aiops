@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Event
+from copy import deepcopy
 from time import monotonic, sleep
 from unittest.mock import patch
 from fastapi import HTTPException
@@ -17,14 +18,16 @@ class ContentionContract:
         hits=0
         def readback(component, aid):
             self.assertEqual(aid,attempt)
-            if component=='policy':
+            if component=='twin':
                 ready.set()
                 if not locked.wait(10):
                     raise AssertionError('blocker lock handshake timed out')
                 now=datetime.now(timezone.utc)
-                docs[1].update(issued_at=now.isoformat(),
+                twin=deepcopy(docs[1])
+                twin.update(issued_at=now.isoformat(),
                     expires_at=(now+timedelta(seconds=8)).isoformat())
-            return docs[('worker','twin','policy').index(component)]
+                return twin
+            return deepcopy(docs[('worker','twin','policy').index(component)])
         def freshness(issued,expires):
             nonlocal expiry,hits
             original(issued,expires)
