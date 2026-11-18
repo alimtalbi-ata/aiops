@@ -1,0 +1,144 @@
+"""PROPOSED, inert source; no automatic collection or DB provisioning.
+Historical fixture c00ff1e7688022093672132d0ae0ea9e911c8602.
+Only future authorized runner may supply isolated candidate module and fixture.
+"""
+import hashlib
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+from concurrent.futures import ThreadPoolExecutor
+from uuid import uuid4
+from fastapi import HTTPException
+
+class PositiveContract:
+    # Mixin, deliberately not a TestCase; runner supplies assertions, isolated
+    # core module, db context factory and test-local gates. No env or network.
+    def attempt(self):
+        return 'ACME-SIM-B7-' + uuid4().hex
+
+    def intent(self, attempt):
+        return self.core.Intent(attempt_id=attempt, tenant_id='ACME-TEST',
+            scenario_id='ACME-SAN-PAYMENTS', mode='SIMULATION',
+            approval_issuer='TWIN_ACME_SIMULATED', idempotency_key=attempt,
+            live_effects_allowed=False)
+
+    def start(self, attempt):
+        return self.core.start(self.intent(attempt))
+
+    def resolve(self, attempt, docs):
+        with patch.object(self.core, 'independent_readback', side_effect=docs):
+            return self.core.resolve(self.intent(attempt))
+
+    def snapshot(self, attempt):
+        with self.connect() as c:
+            return c.execute("""
+                select i.state,r.status,
+                  (select count(*) from aiops.acme_sandbox_terminal_tickets t
+                   where t.tenant_id=a.tenant_id and t.attempt_id=a.attempt_id),
+                  (select count(*) from aiops.run_events e where e.run_id=a.run_id and e.sequence=9)
+                from aiops.acme_sandbox_attempts a
+                join aiops.incidents i on i.incident_id=a.incident_id
+                join aiops.runs r on r.run_id=a.run_id
+                where a.tenant_id='ACME-TEST' and a.attempt_id=%s
+                """,(attempt,)).fetchone()
+
+    def _qualified_no_effect(self, state):
+        common = {'attempt_id': state['attempt_id'], 'tenant_id': 'ACME-TEST',
+                  'incident_id': state['incident_id'], 'run_id': state['run_id'],
+                  'proposal_id': state['proposal_id']}
+        flags = {'human_approved': False, 'execution_allowed': False,
+                 'effect_allowed': False, 'live_effects_allowed': False,
+                 'real_glpi_writes_allowed': False}
+        approval = 'SIM-APP-TEST-VALID'
+        worker = dict(common, **flags, approval_id=approval,
+                      ticket_id=state['ticket_id'], schema='aiops.worker-acme-simulated-no-effect.v1',
+                      receipt_status='SIMULATED_NO_EFFECT',
+                      receipt_phase='PRE_RESOLUTION',
+                      core_status_at_validation='PREPARED',
+                      resolution_verified=False, post_resolution_readback_required=True,
+                      action='SIMULATE', effect_receipts=0,
+                      core_014_015_written=False, glpi_write=False,
+                      audit_authority='TEMPORAL_WORKFLOW_HISTORY_ONLY',
+                      audit_transitions=[
+                          'CORE_PREPARED_INDEPENDENTLY_VERIFIED',
+                          'TWIN_SIMULATED_APPROVAL_VALIDATED',
+                          'POLICY_SIMULATE_INDEPENDENTLY_VERIFIED',
+                          'WORKER_NO_EFFECT'],
+                      approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
+        twin = dict(common, **flags, approval_id=approval,
+                    ticket_id=state['ticket_id'],
+                    approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED',
+                    core_status_at_issuance='PREPARED')
+        policy = dict(common, **flags, approval_id=approval,
+                      ticket_id=state['ticket_id'], decision='SIMULATE',
+                      approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
+        nonce = 'SIM-NONCE-CORE-TEST-' + state['attempt_id']
+        issued = datetime.now(timezone.utc) - timedelta(seconds=10)
+        twin.update(approval_nonce=nonce, approval_phase='PRE_RESOLUTION',
+                    approval_status='SIMULATED',
+                    core_request_sha256=state['request_sha256'],
+                    core_source_event_ids=state['source_event_ids'],
+                    issued_at=issued.isoformat(),
+                    expires_at=(issued + timedelta(minutes=5)).isoformat())
+        worker.update(core_request_sha256=state['request_sha256'],
+                      core_source_event_ids=state['source_event_ids'],
+                      twin_approval_nonce_sha256=hashlib.sha256(
+                          nonce.encode('ascii')).hexdigest())
+        worker['receipt_sha256'] = self.core.digest(worker)
+        return [worker, twin, policy]
+
+    def test_start_replay_and_sources(self):
+        attempt=self.attempt()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results=list(pool.map(self.start,[attempt,attempt]))
+        self.assertEqual(sorted(r['idempotent'] for r in results),[False,True])
+        self.assertEqual(results[0]['run_id'],results[1]['run_id'])
+        self.assertEqual(len(set(results[0]['source_event_ids'])),7)
+        self.assertEqual(results[0]['evidence_count'],2)
+        self.assertTrue(results[0]['source_hashes_qualified'])
+        self.assertEqual(self.snapshot(attempt),('PREPARED','PREPARED',0,0))
+
+    def test_terminal_and_local_replay(self):
+        attempt=self.attempt()
+        state=self.start(attempt)
+        result=self.resolve(attempt,self._qualified_no_effect(state))
+        self.assertEqual(self.snapshot(attempt),('RESOLVED','RESOLVED',1,1))
+        self.assertFalse(result['effect_allowed'])
+        repeated=self.resolve(attempt,AssertionError('no remote replay'))
+        self.assertTrue(repeated['idempotent'])
+        self.assertEqual(repeated['terminal_ticket_sha256'],result['terminal_ticket_sha256'])
+
+    def test_invalid_readbacks(self):
+        for kind in ('unavailable','digest','human','expired','foreign'):
+            attempt=self.attempt()
+            docs=self._qualified_no_effect(self.start(attempt))
+            if kind=='unavailable':
+                docs=HTTPException(503,'fixture unavailable')
+            elif kind=='digest':
+                docs[0]['receipt_sha256']='0'*64
+            elif kind=='human':
+                docs[0]['human_approved']=True
+                docs[0]['receipt_sha256']=self.core.digest({k:v for k,v in docs[0].items() if k!='receipt_sha256'})
+            elif kind=='expired':
+                past=datetime.now(timezone.utc)-timedelta(minutes=10)
+                docs[1].update(issued_at=past.isoformat(),expires_at=(past+timedelta(minutes=5)).isoformat())
+            else:
+                docs[2]['tenant_id']='FOREIGN'
+            with self.assertRaises(HTTPException) as err:
+                self.resolve(attempt,docs)
+            self.assertEqual(err.exception.status_code,503)
+            self.assertEqual(self.snapshot(attempt),('PREPARED','PREPARED',0,0))
+
+    def test_zero_rowcount_rollback(self):
+        # Runner fault injector must suppress only the indicated UPDATE,
+        # return rowcount=0 and preserve real transaction rollback semantics.
+        for table in ('incidents','runs'):
+            attempt=self.attempt()
+            docs=self._qualified_no_effect(self.start(attempt))
+            with self.suppress_update(table):
+                with self.assertRaises(HTTPException) as err:
+                    self.resolve(attempt,docs)
+                self.assertEqual(err.exception.status_code,503)
+            self.assertEqual(self.snapshot(attempt),('PREPARED','PREPARED',0,0))
+            # Same nonce now succeeds: failed transaction consumed nothing.
+            self.resolve(attempt,docs)
+            self.assertEqual(self.snapshot(attempt),('RESOLVED','RESOLVED',1,1))
