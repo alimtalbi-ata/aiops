@@ -34,6 +34,10 @@ def collect(expected,intent,readers,observers,policies,registry,clock,expected_s
             ts=_utc(envelope["observed_at"])
             if ts>now: return refuse("FUTURE:"+k,True)
             if now-ts>timedelta(seconds=policies[source]): return refuse("STALE:"+k)
+            if k in ("prepared","history","postcheck","terminal","terminal_readback"):
+                observed=_utc(envelope["content"]["observed_at"])
+                if observed>ts: return refuse("OBSERVATION_ORDER:"+k,True)
+                if now-observed>timedelta(seconds=policies[source]): return refuse("STALE:"+k)
             values[k]=envelope["content"]
             captured[k]=envelope
         second=deepcopy(observers["terminal_readback"]())
