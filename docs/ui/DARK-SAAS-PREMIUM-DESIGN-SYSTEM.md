@@ -52,3 +52,11 @@ Give every first-party Portal screen and provisioned Grafana dashboard one coher
 ## Scope still to audit
 
 This increment themes all first-party Portal HTML routes, the provisioned ACME Grafana dashboard and (through supported configuration) Grafana's default native theme plus a GLPI 11 custom palette. n8n dark mode is a per-user preference and needs operator-level selection. Prometheus and Alertmanager native consoles have no supported brand-theme setting in the deployed config; keep them as native diagnostic tools and use the Portal/Grafana as the branded operations surfaces. No live external instance was modified or visually verified.
+
+## Convergence B adapter contract (proposed, not integrated)
+
+Source shell: Golden/#805 `app/portal/ui_theme.py`, blob `fcc604e5d62a263157e7d240318c51890f5688e2`. Preserve shell(), panel(), table(), pretty(), escaping, mode disclosure and current-page semantics. Do not copy the Golden navigation blindly: resolve each route against the selected Convergence host.
+
+Map existing shell tokens to the Premium palette: --bg to --ai-bg, --card to --ai-surface, --text to --ai-text, --muted to --ai-muted, --line to --ai-border, --hero to --ai-bg-soft, --c to --ai-violet. Use --ai-blue for links and keyboard focus. Dark is the default regardless of OS preference; remove the light-theme toggle only when its script and control can be removed together. Preserve status-specific colors and simulation disclaimers.
+
+Use one local stylesheet and explicit template integration; do not widen CSP to enable the old inline toggle. Avoid generic header/card overrides on semantic timeline content. Verify navigation targets, keyboard access, table overflow and 320/768/1440px layouts in a real browser. No new business routes or demo orchestrator. This adapter contract is a review candidate, not a qualified implementation.
