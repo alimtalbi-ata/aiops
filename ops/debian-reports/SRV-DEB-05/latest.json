@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-18T21:16:01.618483+00:00",
+  "collected_at": "2026-11-18T21:17:01.228654+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:834d1138f7fe27e8f5349af5250991e3ff96854060156a5ac43400737aa47d65",
+        "inspect_ok": true,
+        "name": "aiops2-portal-v3-qual-exposed",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "sha256:c733cb4c67bc99ebebfa3627daabb3a9b5c4c91a50b8d649e3a1ea6d11b95a17",
@@ -18,8 +25,8 @@
         "health": "no-healthcheck",
         "image": "sha256:c030b1ffa2f7924b385234156193e9149a549d374df7b9b9fe545969c2b8eb78",
         "inspect_ok": true,
-        "name": "aiops2-portal-v3-qual-exposed",
-        "state": "running"
+        "name": "aiops2-portal-v3-qual-exposed-rollback-navfix1-20261118T211636Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -559,13 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-rebuild-temporal-postgres",
         "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "mariadb:11.4",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-glpi-db",
-        "state": "running"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 6 weeks, 11 hours, 27 minutes"
+    "uptime": "up 6 weeks, 11 hours, 28 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 138019758080,
+      "free_bytes": 138017886208,
       "total_bytes": 172898033664,
-      "used_bytes": 26020954112
+      "used_bytes": 26022825984
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.1103515625,
-      0.85302734375,
-      0.83203125
+      0.75341796875,
+      0.7890625,
+      0.810546875
     ],
     "memory_bytes": {
-      "MemAvailable": 18773594112,
+      "MemAvailable": 18593017856,
       "MemTotal": 25205911552,
       "SwapFree": 10441560064,
       "SwapTotal": 10838077440
