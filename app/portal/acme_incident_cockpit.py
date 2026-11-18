@@ -6,6 +6,7 @@ No runtime proof, authenticated user action or execution capability is implied.
 from __future__ import annotations
 
 from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
+from portal.acme_signal_context import build_signal_context
 from portal.acme_itil_readiness import assess_synthetic_itil_readiness
 from portal.acme_evidence_collection_plan import plan_synthetic_evidence_collection
 from portal.acme_analyst_critic_review import review_synthetic_analyst_critic
@@ -16,6 +17,9 @@ def project_synthetic_incident_cockpit(impact: dict) -> dict:
     readiness = assess_synthetic_itil_readiness(lifecycle)
     evidence = plan_synthetic_evidence_collection(lifecycle)
     review = review_synthetic_analyst_critic(impact)
+    signal_context = build_signal_context(impact['twin_evidence'])
+    if impact.get('signal_context') != signal_context:
+        raise ValueError('synthetic_signal_context_mismatch')
     views = (lifecycle, readiness, evidence, review)
     if (any(view.get("source_sha256") != lifecycle["source_sha256"] for view in views)
             or any(view.get("mode") != "DEMO" for view in views)
@@ -33,6 +37,7 @@ def project_synthetic_incident_cockpit(impact: dict) -> dict:
     return {
         "schema": "aiops.synthetic-incident-cockpit.v1",
         "twin_consumer": lifecycle["twin_consumer"],
+        "signal_context": signal_context,
         "mode": "DEMO",
         "provenance": "LOCAL_SYNTHETIC_FIXTURE",
         "source_sha256": lifecycle["source_sha256"],
