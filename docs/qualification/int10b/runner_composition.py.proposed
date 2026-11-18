@@ -1,0 +1,46 @@
+"""Inert composition source. No automatic collection, imports of candidates,
+connection creation, gate overrides, migrations, or execution.
+"""
+from contextlib import contextmanager
+from unittest import TestCase
+from threading import Lock
+
+_suite_lock=Lock()
+
+def compose_contract(*, positive, negative, contention, fixtures, support,
+                     core, connection_factory, test_local_binding,
+                     isolation_check, expected_database, expected_role):
+    """Return a class, not a running suite.
+
+    All callables supplied by a future separately authorized harness.
+    connection_factory yields a fresh connection and closes it on exit;
+    test_local_binding must be isolated from operational modules.
+    isolation_check must verify actual disposable lab provenance independently.
+    """
+    class Contract(positive,negative,contention,fixtures,support,TestCase):
+        def setUp(self):
+            super().setUp()
+            _suite_lock.acquire()
+            self.addCleanup(_suite_lock.release)
+            isolation_check()
+            self.core=core
+            binding=test_local_binding(core)
+            binding.__enter__()
+            self.addCleanup(binding.__exit__,None,None,None)
+            db_binding=self.bind_candidate_db()
+            db_binding.__enter__()
+            self.addCleanup(db_binding.__exit__,None,None,None)
+
+        @contextmanager
+        def connect(self):
+            with connection_factory() as c:
+                if c.autocommit:
+                    raise AssertionError('transactional connection required')
+                with c.transaction():
+                    c.execute("set transaction isolation level read committed")
+                    c.execute("set local statement_timeout = '30s'")
+                    c.execute("set local lock_timeout = '20s'")
+                    c.execute("set local idle_in_transaction_session_timeout = '45s'")
+                    self.assert_fixture_identity(c,expected_database,expected_role)
+                    yield c
+    return Contract
