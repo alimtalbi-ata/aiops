@@ -57,3 +57,48 @@ class LifecycleRehearsal(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await rehearse(dict(PLAN,launch_authorized=True),exercise=forbidden,
                            cleanup=forbidden,verify_absence=forbidden,timeout=1)
+
+    async def test_elapsed_timeout_cancels_cooperative_exercise(self):
+        entered = asyncio.Event()
+        cancelled = asyncio.Event()
+        calls = []
+        async def exercise():
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+        async def cleanup():
+            self.assertTrue(cancelled.is_set())
+            calls.append("cleanup")
+        async def absence():
+            return True
+        result = await rehearse(PLAN,exercise=exercise,cleanup=cleanup,
+                                verify_absence=absence,timeout=1)
+        self.assertTrue(entered.is_set())
+        self.assertEqual(result["outcome"],"TIMEOUT")
+        self.assertEqual(calls,["cleanup"])
+
+    async def test_external_cancellation_runs_cleanup_and_propagates(self):
+        entered = asyncio.Event()
+        calls = []
+        async def exercise():
+            entered.set()
+            await asyncio.Event().wait()
+        async def cleanup():
+            calls.append("cleanup")
+        async def absence():
+            calls.append("absence")
+            return True
+        task = asyncio.create_task(rehearse(PLAN,exercise=exercise,
+                                   cleanup=cleanup,verify_absence=absence,timeout=1))
+        try:
+            await asyncio.wait_for(entered.wait(),1)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await asyncio.wait_for(task,3)
+            self.assertEqual(calls,["cleanup","absence"])
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task,return_exceptions=True)

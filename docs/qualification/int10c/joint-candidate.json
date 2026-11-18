@@ -1,0 +1,13 @@
+{
+  "status": "PROPOSED_NOT_INTEGRATED",
+  "c_reviewed_sha": "be819ad84d7b83935065ab19291985f8d0fcf679",
+  "b_reviewed_sha": "9feb83289c02a4a7f5bc790bcbdf29fc15266f8c",
+  "requirements_text_equal": true,
+  "requirements_path": "app/requirements.txt",
+  "postgres_image_digest": null,
+  "temporal_image_digest": null,
+  "worker_image_digest": null,
+  "ownership": "UNKNOWN",
+  "durable_raccord": "BLOCKED",
+  "launch_authorized": false
+}
