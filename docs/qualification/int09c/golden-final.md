@@ -1,0 +1,1 @@
+Reuse exact B fixture 6d5b001 and B chain 47b6d97 (CI44349267882 success). Final observations synthetic, built from same identity and actual receipt. Prefix digest in history summary, not proof of raw Temporal inclusion; altered prefix without rehashing downstream is detected, coherent forgery not addressed. No transaction or runtime calls.

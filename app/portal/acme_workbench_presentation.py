@@ -168,3 +168,58 @@ def render_offline_evidence(events=None, evidence=None):
             + evidence_catalog(evidence)
             + "".join(event_facts(e) for e in (events[:60] if isinstance(events, list) else []))
             + "</details>")
+
+def render_same_run_journey(inputs=None):
+    """Call B's historical projector on explicitly injected rows, never join scopes."""
+    from portal.acme_historical_journey_offline import project_journey
+    from fastapi import HTTPException
+    if inputs is None:
+        return "<p>Same-Run Journey : MISSING — aucune entrée offline.</p>"
+    try:
+        snapshot, rows, attempt = inputs
+        value = project_journey(snapshot, rows, attempt)
+    except (HTTPException, ValueError, TypeError, KeyError, AttributeError, OverflowError):
+        return "<p>Same-Run Journey : UNKNOWN — entrée refusée.</p>"
+    parts = ["<details><summary>Same-Run Journey — UNBOUND / UNKNOWN</summary>",
+             "<p>Historique injecté distinct du scénario Story ; aucun rapprochement attesté.</p><dl>"]
+    for key in ("tenant_id","incident_id","run_id","attempt_id","ticket_id","readback_authority","event_digest_kind"):
+        parts.append("<dt>"+safe(key)+"</dt><dd>"+safe(value.get(key))+"</dd>")
+    parts.append("</dl><ol>")
+    for row in value["timeline"]:
+        parts.append("<li>"+safe(row["sequence"])+" · "+safe(row["stage"])+" / "+safe(row["event_type"])
+                     +" — statut historique non attesté : "+safe(row["status"])
+                     +"<br>occurred_at_utc : "+safe(row["occurred_at_utc"])
+                     +"<br>SHA-256 : "+safe(row["record_sha256"])+"</li>")
+    parts.append("</ol><p>Impact Payments distinct / Twin / Analyst / Critic / Policy / HITL / Worker / Postcheck : UNKNOWN pour ce Run. Ticket simulé uniquement ; aucun effet attesté.</p></details>")
+    return "".join(parts)
+
+def render_san_scenario(inputs=None):
+    """Reuse #366 validated synthetic graph and assessment; no Run join."""
+    from portal.acme_historical_san_offline import provenance_snapshot, scenario_assessment
+    from fastapi import HTTPException
+    if inputs is None:
+        return ""
+    try:
+        scenario, nodes, edges = inputs
+        provenance = provenance_snapshot(nodes, edges)
+        value = scenario_assessment(scenario, provenance)
+    except (HTTPException, ValueError, TypeError, KeyError, AttributeError, OverflowError):
+        return "<p>Scénario SAN historique : UNKNOWN — entrée refusée.</p>"
+    parts = ["<details><summary>Scénario SAN historique — UNBOUND / UNKNOWN</summary>",
+             "<p>Topologie synthétique distincte du fixture Impact ; aucun lien Run attesté.</p><dl>"]
+    for key in ("scenario_id","decision","reason"):
+        parts.append("<dt>"+key+"</dt><dd>"+safe(value.get(key))+"</dd>")
+    for key in ("provenance","graph_sha256","historical_schema_reference"):
+        parts.append("<dt>"+key+"</dt><dd>"+safe(provenance.get(key))+"</dd>")
+    for label,key in (("Services candidats","candidate_impacted_services"),
+                      ("Services observés","observed_impacted_services"),
+                      ("Exposition récupération","recovery_exposure_services")):
+        parts.append("<dt>"+label+"</dt><dd>"+safe(", ".join(value[key]) or "MISSING")+"</dd>")
+    parts.append("<dt>observed_at_utc</dt><dd>MISSING</dd></dl><p>Télémétrie indépendante requise : "+
+                 safe(", ".join(value["evidence"]["required_independent_fields"]))+"</p>")
+    parts.append("<p>Analyst — question : "+safe(value["analyst"]["question"])+"</p><p>Critic — challenge : "+
+                 safe(value["critic"]["challenge"])+"</p><h3>Relations directes synthétiques</h3><ul>")
+    for edge in provenance["graph"]["edges"]:
+        parts.append("<li>"+safe(edge["source_id"])+" → "+safe(edge["target_id"])+" · "+safe(edge["relation_type"])+"</li>")
+    parts.append("</ul><p>ABSTAIN — UNKNOWN — NO-GO LIVE.</p></details>")
+    return "".join(parts)
