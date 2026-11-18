@@ -1,0 +1,56 @@
+"""Inert Linux cgroup-v2 cleanup primitive. No provisioning or entrypoint.
+Only for a separately authorized supervisor holding an exclusive domain fd.
+"""
+import os
+import stat
+import time
+
+def _open_file(domain_fd, name, flags):
+    fd = os.open(name, flags | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=domain_fd)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise ValueError("unexpected_control_type")
+    return fd
+
+def _read(domain_fd, name):
+    fd = _open_file(domain_fd,name,os.O_RDONLY)
+    try:
+        data = os.read(fd,4096)
+        if len(data) == 4096:
+            raise ValueError("control_truncated")
+        return data.decode("ascii")
+    finally:
+        os.close(fd)
+
+def empty(domain_fd):
+    fields = [line.split() for line in _read(domain_fd,"cgroup.events").splitlines()]
+    values = [v[1] for v in fields if len(v)==2 and v[0]=="populated"]
+    if values not in (["0"],["1"]):
+        raise ValueError("invalid_population")
+    return values == ["0"]
+
+def stop_domain(domain_fd, *, identity, verify_exclusive_domain, deadline):
+    """No path fallback. Caller must enforce exclusive ownership and no escape.
+    Independent verifier must prove cgroup2 filesystem, delegation and reservation.
+    """
+    if time.monotonic() >= deadline:
+        return "NOT_QUALIFIED"
+    if verify_exclusive_domain(domain_fd,identity) is not True:
+        return "NOT_QUALIFIED"
+    try:
+        if not empty(domain_fd):
+            fd = _open_file(domain_fd,"cgroup.kill",os.O_WRONLY)
+            try:
+                if time.monotonic() >= deadline:
+                    return "NOT_QUALIFIED"
+                if os.write(fd,b"1") != 1:
+                    return "NOT_QUALIFIED"
+            finally:
+                os.close(fd)
+        while time.monotonic() < deadline:
+            if empty(domain_fd):
+                return "DOMAIN_EMPTY_REPORTED"
+            time.sleep(min(0.05,max(0,deadline-time.monotonic())))
+    except (OSError,ValueError):
+        pass
+    return "NOT_QUALIFIED"
