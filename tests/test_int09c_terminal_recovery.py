@@ -114,8 +114,9 @@ class TerminalRuntimeTests(unittest.TestCase):
 
     def test_no_registration(self):
         root=pathlib.Path(__file__).resolve().parents[1]/"app/worker"
-        for name in ("main.py","temporal_workflows.py"):
-            source=(root/name).read_text()
+        for path in root.glob("*.py"):
+            if path.name=="hitl_reject_terminal_runtime.py": continue
+            source=path.read_text()
             self.assertNotIn("recover_terminal_once",source)
             self.assertNotIn("TerminalRejectWorkflow",source)
 
