@@ -30,7 +30,8 @@
     if (!doc.getElementById("portal-skip-link")) {
       const skip = element(doc, "a", "portal-skip-link", "Aller au contenu principal");
       skip.id = "portal-skip-link";
-      skip.href = "#portal-main";
+      skip.href = "#" + main.id;
+      main.setAttribute("tabindex", "-1");
       doc.body.insertBefore(skip, doc.body.firstChild || null);
     }
 
@@ -40,7 +41,7 @@
       nav.setAttribute("aria-label", "Accès rapide");
       [
         ["#runs", "Runs"], ["#noc", "Supervision NOC"],
-        ["#twin", "Digital Twin"], ["#integrations", "Outils"],
+        ["#twin", "Digital Twin"],
         ["/itsm", "GLPI / ITSM"], ["/demo/acme-impact", "Impact métier"],
         ["/demo/explore-story", "Explore / Story"]
       ].forEach(function (item) {
@@ -89,8 +90,9 @@
       filter.appendChild(label);
       filter.appendChild(input);
       filter.appendChild(result);
-      main.insertBefore(filter, runs);
-      input.addEventListener("input", function () {
+      runs.parentNode.insertBefore(filter, runs);
+      result.setAttribute("aria-live", "polite");
+      const applyFilter = function () {
         const query = input.value.trim().toLowerCase();
         const rows = runs.querySelectorAll("tbody tr");
         let visible = 0;
@@ -102,7 +104,12 @@
         result.textContent = query
           ? visible + " ligne(s) correspondante(s) · filtre local uniquement"
           : "Filtre local · aucune donnée supplémentaire chargée";
-      });
+      };
+      input.addEventListener("input", applyFilter);
+      if (root && root.MutationObserver) {
+        const observer = new root.MutationObserver(applyFilter);
+        observer.observe(runs, { childList: true, subtree: true, characterData: true });
+      }
       const table = runs.querySelector("table");
       if (table) table.setAttribute("aria-label", "Runs canoniques — données non attestées tant que la source reste UNKNOWN");
     }
