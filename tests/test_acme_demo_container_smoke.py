@@ -4,6 +4,9 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+from contextlib import contextmanager
+from types import SimpleNamespace
+
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,10 +39,28 @@ def test_packaged_demo_rejects_forged_positive_register():
             verify_packaged_demo()
 
 
+@contextmanager
+def patched_preview_endpoint(smoke, replacement):
+    # Keep the registered endpoint and its renderer identical so the test
+    # reaches the intended rendering failure rather than the route guard.
+    original = smoke.acme_grafana_pilot_preview_page
+    routes = [
+        SimpleNamespace(path=route.path, methods=getattr(route, "methods", None),
+                        endpoint=replacement if getattr(route, "endpoint", None) is original
+                        else getattr(route, "endpoint", None))
+        for route in smoke.portal_app.routes
+    ]
+    with patch.object(smoke.portal_app.router, "routes", routes):
+        with patch.object(smoke, "acme_grafana_pilot_preview_page", replacement):
+            yield
+
+
 def test_packaged_demo_rejects_missing_customer_screen():
     import portal.acme_demo_container_smoke as smoke
-    with patch.object(smoke, "acme_grafana_pilot_preview_page",
-                      side_effect=ValueError("unavailable")):
+    def unavailable():
+        raise ValueError("unavailable")
+
+    with patched_preview_endpoint(smoke, unavailable):
         with pytest.raises(ValueError, match="unavailable"):
             verify_packaged_demo()
 
@@ -133,7 +154,7 @@ def test_packaged_demo_rejects_broken_customer_navigation():
         )
         return response
 
-    with patch.object(smoke, "acme_grafana_pilot_preview_page", new=broken):
+    with patched_preview_endpoint(smoke, broken):
         with pytest.raises(ValueError, match="synthetic_customer_navigation_missing"):
             verify_packaged_demo()
 
