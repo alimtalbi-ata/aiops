@@ -1,0 +1,38 @@
+"""Inert external supervisor composition. No provisioning or entrypoint.
+Callbacks must belong to a separately approved executor outside the domain.
+Outer VM controller must enforce hard deadlines even if this process blocks.
+"""
+import math
+import time
+
+def supervise(*, reservation, work_deadline, final_deadline,
+              verify_owned, observe_runner, stop_admission,
+              destroy_domain, independent_absence, quarantine):
+    now = time.monotonic()
+    if not (math.isfinite(work_deadline) and math.isfinite(final_deadline)
+            and now < work_deadline < final_deadline <= now + 900):
+        return "NOT_QUALIFIED"
+    if verify_owned(reservation, deadline=work_deadline) is not True:
+        return "NOT_QUALIFIED"
+    try:
+        while time.monotonic() < work_deadline:
+            state = observe_runner(reservation, deadline=work_deadline)
+            if state != "RUNNING":
+                break
+            time.sleep(min(0.05, max(0, work_deadline-time.monotonic())))
+        if time.monotonic() >= final_deadline:
+            return "NOT_QUALIFIED"
+        if verify_owned(reservation, deadline=final_deadline) is not True:
+            return "NOT_QUALIFIED"
+        if stop_admission(reservation, deadline=final_deadline) is not True:
+            return "NOT_QUALIFIED"
+        if destroy_domain(reservation, deadline=final_deadline) is not True:
+            return "NOT_QUALIFIED"
+        if independent_absence(reservation, deadline=final_deadline) is True:
+            if time.monotonic() < final_deadline:
+                return "ABSENCE_REPORTED"
+        return "NOT_QUALIFIED"
+    finally:
+        # Quarantine reservation even on success until external controller
+        # adjudicates evidence and releases it. Never release here.
+        quarantine(reservation, deadline=final_deadline)
