@@ -87,8 +87,6 @@ def decode_authority_json(body):
         raise SandboxDenied("sandbox_readback_json_unqualified")
 
     def finite_float(raw):
-        # JSON 1e309 is syntactically valid but float() overflows to Infinity.
-        # Never accept an infinite authority value from Core/Twin/Policy.
         value = float(raw)
         if not math.isfinite(value):
             raise SandboxDenied("sandbox_readback_json_unqualified")
@@ -104,7 +102,16 @@ def decode_authority_json(body):
         raise SandboxDenied("sandbox_readback_json_unqualified") from None
     if type(document) is not dict:
         raise SandboxDenied("sandbox_readback_json_unqualified")
+    # json.loads accepts lone escaped UTF-16 surrogates (\\ud800/\\udc00).
+    # Such non-Unicode strings cannot be round-tripped as UTF-8 and must not
+    # become authenticated Core/Twin/Policy claims or Temporal receipts.
+    # Properly paired surrogate escapes decode to a valid code point.
+    try:
+        json.dumps(document, ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        raise SandboxDenied("sandbox_readback_json_unqualified") from None
     return document
+
 
 
 def _id(value):
@@ -191,7 +198,6 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or core.get("ticket_authority") != "SIMULATED_ONLY"
             or core.get("ticket_status") != "PREPARED"
             or core.get("source") != "SYNTHETIC_SIMULATOR"
-            # RG-ACME-31: reject bool/float/string source authority before receipt.
             or type(core.get("source_event_count")) is not int
             or core["source_event_count"] != 7
             or core.get("source_hashes_qualified") is not True
@@ -242,6 +248,11 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or twin.get("impact_root") != "ACME-TEST-SAN-FABRIC-A"
             or type(twin.get("impacted_cis")) is not list
             or "ACME-TEST-SVC-PAYMENTS" not in twin["impacted_cis"]
+            # A signed Twin impact claim still must be a typed set of CIs:
+            # malformed/duplicate entries must not qualify a no-effect receipt.
+            or any(type(ci) is not str or not _id(ci)
+                   for ci in twin["impacted_cis"])
+            or len(set(twin["impacted_cis"])) != len(twin["impacted_cis"])
             or not _id(twin.get("approval_nonce"))):
         raise SandboxDenied("twin_simulated_approval_unqualified")
     now = datetime.now(timezone.utc) if now is None else now
@@ -281,13 +292,19 @@ async def simulate_no_effect(intent, *, get, now=None):
     """
     intent = validate_intent(intent)
     path = "/api/sandbox/acme/e2e/" + intent["attempt_id"]
+
+    def validation_time():
+        # Sample independently at every fence. A Twin approval can expire
+        # during the second round of authenticated Core/Twin/Policy GETs.
+        return now() if callable(now) else now
+
     try:
         first = {component: await get(component, path)
                  for component in ("core", "twin", "policy")}
-        validate_readbacks(intent, **first, now=now)
+        validate_readbacks(intent, **first, now=validation_time())
         second = {component: await get(component, path)
                   for component in ("core", "twin", "policy")}
-        validate_readbacks(intent, **second, now=now)
+        validate_readbacks(intent, **second, now=validation_time())
     except SandboxDenied:
         raise
     except Exception:
@@ -298,6 +315,25 @@ async def simulate_no_effect(intent, *, get, now=None):
             or first["twin"]["issued_at"] != second["twin"]["issued_at"]
             or first["twin"]["expires_at"] != second["twin"]["expires_at"]):
         raise SandboxDenied("sandbox_approval_replay_or_rotation")
+    # Require the entire independently authenticated snapshot to remain
+    # byte-equivalent across both reads. Field-by-field comparisons miss
+    # changes to otherwise valid evidence, impact or Policy metadata; Python
+    # dict equality also conflates JSON booleans with numbers (True == 1).
+    try:
+        snapshot_stable = all(
+            json.dumps(first[component], sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True, allow_nan=False)
+            == json.dumps(second[component], sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=True, allow_nan=False)
+            for component in ("core", "twin", "policy")
+        )
+    except (TypeError, ValueError, UnicodeError):
+        raise SandboxDenied("sandbox_readback_snapshot_unqualified") from None
+    if not snapshot_stable:
+        raise SandboxDenied("sandbox_readback_snapshot_rotated")
+    # Final freshness fence after the second Policy response and comparison;
+    # never issue a no-effect receipt from an approval expired in transit.
+    validate_readbacks(intent, **second, now=validation_time())
     receipt = {
         "schema": SCHEMA, "attempt_id": intent["attempt_id"],
         "tenant_id": TENANT, "incident_id": intent["incident_id"],
@@ -397,6 +433,7 @@ def verify_no_effect_receipt(receipt, expected_identity):
             "human_approved", "execution_allowed", "effect_allowed",
             "live_effects_allowed", "real_glpi_writes_allowed",
             "resolution_verified", "core_014_015_written", "glpi_write"))
+        and type(receipt.get("effect_receipts")) is int
         and receipt.get("effect_receipts") == 0
         and receipt.get("audit_transitions") == [
             "CORE_PREPARED_INDEPENDENTLY_VERIFIED",
