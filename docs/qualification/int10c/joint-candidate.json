@@ -1,7 +1,7 @@
 {
   "status": "PROPOSED_NOT_INTEGRATED",
-  "c_reviewed_sha": "be819ad84d7b83935065ab19291985f8d0fcf679",
-  "b_reviewed_sha": "9feb83289c02a4a7f5bc790bcbdf29fc15266f8c",
+  "c_reviewed_sha": "54182d521a75524a2ed8c9c300449fe132b3b5fa",
+  "b_reviewed_sha": "c1e9260a7288e6be6f13f5ec2463b84b6fa9a501",
   "requirements_text_equal": true,
   "requirements_path": "app/requirements.txt",
   "postgres_image_digest": null,
@@ -9,5 +9,13 @@
   "worker_image_digest": null,
   "ownership": "UNKNOWN",
   "durable_raccord": "BLOCKED",
-  "launch_authorized": false
+  "launch_authorized": false,
+  "offline_evidence": {
+    "sha": "a3b809fb8c38841587907cc5f9bee347c124b77d",
+    "run_id": 44362132329,
+    "job_id": 135006094464,
+    "artifact_id": 14456271033,
+    "provider_digest": "sha256:0b08265ff35c1ae0a31136fc038695077de327ef7cf98d2bd0dd92a1cb31c9de",
+    "archive_independently_verified": false
+  }
 }
