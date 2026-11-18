@@ -31,7 +31,13 @@ class PopulatedAudit(unittest.TestCase):
                         detail.locator("summary").focus()
                         page.keyboard.press("Space")
                         self.assertTrue(detail.evaluate("e=>e.open"))
-                self.assertFalse(page.evaluate("document.documentElement.scrollWidth>innerWidth"))
+                overflow=page.evaluate("""() => ({
+                    width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+                    candidates: [...document.querySelectorAll('main *')]
+                        .filter(e => !e.closest('.table-scroll') && e.getBoundingClientRect().right > innerWidth)
+                        .slice(0,20).map(e => ({tag:e.tagName, id:e.id, right:e.getBoundingClientRect().right}))
+                })""")
+                self.assertFalse(page.evaluate("document.documentElement.scrollWidth>innerWidth"), overflow)
                 self.assertEqual(page.locator("#same-run-history").count(),1)
                 page.evaluate("scrollTo(0,0)")
                 png=page.screenshot(path=str(out/f"populated-{width}.png"),full_page=True)
