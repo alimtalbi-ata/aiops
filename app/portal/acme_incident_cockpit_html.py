@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from html import escape
+from portal.acme_workbench_presentation import render_story_context, render_runtime_refusals
 
 from portal.acme_evidence_collection_plan import EVIDENCE_REQUIREMENTS
 
@@ -115,7 +116,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "@media(max-width:700px){body{margin:1rem auto}.demo-cards{grid-template-columns:1fr}"
         "nav{align-items:stretch}nav a{flex:1 1 40%;text-align:center}}"
         "@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}"
-        "body{background:#080b14;color:#f4f7ff}a{color:#38bdf8}thead{background:#172136;color:#f4f7ff}nav{background:#111827}nav a{background:#172136;color:#38bdf8;border-color:#64748b}.demo-card{background:#111827}.warning{background:#31251b;color:#fff0cc;border-color:#fbbf24}a:focus-visible,summary:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}details{background:#111827;padding:1rem;border-radius:12px;margin:1rem 0}summary{cursor:pointer;font-weight:bold}</style></head><body><main>"
+        "body{background:#080b14;color:#f4f7ff}a{color:#38bdf8}thead{background:#172136;color:#f4f7ff}nav{background:#111827}nav a{background:#172136;color:#38bdf8;border-color:#64748b}.demo-card{background:#111827}.warning{background:#31251b;color:#fff0cc;border-color:#fbbf24}a:focus-visible,summary:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}details{background:#111827;padding:1rem;border-radius:12px;margin:1rem 0}summary{cursor:pointer;font-weight:bold}.table-scroll:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}td,th{overflow-wrap:normal;word-break:normal}.story-context{background:#111827;padding:1rem;border-radius:12px}.story-context dd{overflow-wrap:anywhere}</style></head><body><main>"
         "<header><a href='/#incidents'>Retour Incident Explorer</a> · <a href='/#runs'>Runs Core (ACL requise)</a></header><h1>AIOPS2 — Cockpit incident → ITIL</h1>"
         "<p class='warning'><strong>DEMO SYNTHÉTIQUE — NO-GO LIVE.</strong> "
         "Aucune preuve runtime authentifiée, aucun ticket GLPI modifié, "
@@ -155,21 +156,22 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + "</p><h2>Chronologie explicative — scénario, pas événements observés</h2>"
         "<p>Neuf étapes attendues, aucune horodatée ni attestée. "
         "La prochaine vérification ne constitue pas une action exécutée.</p>"
-        "<div class='table-scroll'><table><thead><tr><th>Étape métier</th><th>Source attendue</th>"
+        "<div class='table-scroll' role='region' aria-label='Tableau de preuves ou étapes' tabindex='0'><table><thead><tr><th>Étape métier</th><th>Source attendue</th>"
         "<th>État de preuve</th><th>Prochaine vérification</th></tr></thead>"
         "<tbody>" + timeline_rows + "</tbody></table></div>"
-        "<h2>Cycle incident (9 étapes)</h2><div class='table-scroll'><table><thead><tr>"
+        "<h2>Cycle incident (9 étapes)</h2><div class='table-scroll' role='region' aria-label='Tableau de preuves ou étapes' tabindex='0'><table><thead><tr>"
         "<th>Étape</th><th>Source attendue</th><th>Preuve</th></tr></thead>"
         "<tbody>" + stage_rows + "</tbody></table></div>"
         " <span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
+        + render_story_context(cockpit) + render_runtime_refusals() +
         "<details open><summary>Registre des preuves attendues</summary>"
         "<p>Chaque ligne est une demande de preuve, pas une pièce collectée. "
         "Les champs observed_at, source_id et content_sha256 doivent être "
         "contrôlés indépendamment avant toute qualification. "
         "Aucun dépôt, appel sortant ou validation automatique ici.</p>"
-        "<div class='table-scroll'><table><thead><tr><th>Point de contrôle</th><th>Preuve exigée</th>"
+        "<div class='table-scroll' role='region' aria-label='Tableau de preuves ou étapes' tabindex='0'><table><thead><tr><th>Point de contrôle</th><th>Preuve exigée</th>"
         "<th>Source attendue</th><th>Métadonnées requises</th>"
         "<th>État</th></tr></thead><tbody>" + evidence_rows + "</tbody></table></div></details>"
         "<section aria-label='Fiche de décision opérationnelle'>"
@@ -198,7 +200,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(evidence["requested_count"]) + "</strong>. "
         "Prochaine action : collecte manuelle en lecture seule, "
         "puis vérification indépendante.</p>"
-        "<h2 id='itil'>Transitions ITIL (8)</h2><div class='table-scroll'><table><thead><tr>"
+        "<h2 id='itil'>Transitions ITIL (8)</h2><div class='table-scroll' role='region' aria-label='Tableau de preuves ou étapes' tabindex='0'><table><thead><tr>"
         "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
         "</tr></thead><tbody>" + transition_rows + "</tbody></table></div>"
         "<div id='verdict' class='warning'><strong>Décision opérateur :</strong> "
