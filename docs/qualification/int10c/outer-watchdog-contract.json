@@ -1,0 +1,28 @@
+{
+  "status": "BLOCKED_CAPABILITY",
+  "launch_authorized": false,
+  "provider": null,
+  "required": {
+    "autonomous_expiry": "outside VM and runner; armed before boot",
+    "identity": [
+      "reservation",
+      "vm_uuid",
+      "creation_generation"
+    ],
+    "authority": "authenticated scoped control plane",
+    "guest_renewal": false,
+    "expiry_action": "force stop and remove exclusively owned resources",
+    "absence_observer": "independent authenticated inventory",
+    "inventory": [
+      "vm",
+      "disks",
+      "snapshots",
+      "nics",
+      "private_network",
+      "volumes",
+      "external_reservations"
+    ],
+    "failure": "durable quarantine; NOT_QUALIFIED; no release"
+  },
+  "evidence": null
+}
