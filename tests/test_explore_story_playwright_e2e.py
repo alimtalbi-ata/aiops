@@ -197,8 +197,6 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "git_sha": os.environ.get("GITHUB_SHA"),
             "screenshot_file": "explore-story-ci-simulated.png",
             "screenshot_sha256": hashlib.sha256(screenshot).hexdigest(),
-            "desktop_screenshot_file": "acme-cockpit-desktop-ci-simulated.png",
-            "desktop_screenshot_sha256": hashlib.sha256(desktop_png).hexdigest(),
             "runtime_authenticated": False,
             "production_qualified": False,
             "live_remediation_authorized": False,
