@@ -77,3 +77,28 @@ class AuthorityReadersTests(unittest.TestCase):
     def test_stale(self):
         self.rows['policy']['observed_at']='2026-11-18T09:00:00.123455Z'
         self.assertEqual(self.run_adapter()['reason'],'STALE_OBSERVATION')
+
+    def test_invalid_inputs_never_read(self):
+        for case in ('identity','intent','clock','registry','duplicate_source',
+                     'missing_registry','missing_policy','bool_policy','readers','policies'):
+            with self.subTest(case=case):
+                self.setUp()
+                registry={a:a+'-001' for a in self.rows}
+                policies={v:30 for v in registry.values()}
+                clock='2026-11-18T09:00:30.123456Z'
+                if case=='identity': self.e['tenant_id']='OTHER'
+                if case=='intent': self.i['effect_allowed']=True
+                if case=='clock': clock='2026-02-30T09:00:00Z'
+                if case=='registry': registry['core']=None
+                if case=='duplicate_source': registry['core']=registry['twin']
+                if case=='missing_registry': registry=None
+                if case=='missing_policy': policies.pop('core-001')
+                if case=='bool_policy': policies['core-001']=True
+                if case=='readers': self.readers['core']=None
+                if case=='policies': policies=None
+                result=collect_prepared(self.e,self.i,self.readers,policies,
+                    as_of_utc=clock,source_registry=registry)
+                self.assertIn(result['qualification'],('BLOCK','REJECT'))
+                self.assertIsNone(result['context'])
+                self.assertFalse(result['runtime_attested'])
+                self.assertEqual(self.calls,[])

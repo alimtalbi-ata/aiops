@@ -1,7 +1,7 @@
 """Offline injected readback adapter; no transport, authentication or positive authority."""
 from copy import deepcopy
 
-from .acme_runtime_context import qualify_context, digest, AUTHORITIES
+from .acme_runtime_context import qualify_context, digest, AUTHORITIES, _id
 
 
 def collect_prepared(expected, intent, readers, policies, *, as_of_utc, source_registry=None):
@@ -17,6 +17,16 @@ def collect_prepared(expected, intent, readers, policies, *, as_of_utc, source_r
     if not isinstance(readers, dict) or set(readers) != set(AUTHORITIES) or any(
             not callable(v) for v in readers.values()):
         return refuse('READERS_INVALID', True)
+    # Reuse the qualified identity, intent, clock and registry shape checks.
+    preflight = qualify({})
+    if preflight['reason'] != 'AUTHORITY_MISSING:core':
+        return preflight
+    if source_registry is None:
+        return refuse('SOURCE_REGISTRY_MISSING')
+    if not all(_id(v) for v in source_registry.values()) or len(set(source_registry.values())) != len(AUTHORITIES):
+        return refuse('SOURCE_REGISTRY_INVALID', True)
+    if any(type(policies.get(v)) is not int or policies[v] < 0 for v in source_registry.values()):
+        return refuse('FRESHNESS_POLICY_MISSING')
     rows = {}
     for authority in AUTHORITIES:
         try:

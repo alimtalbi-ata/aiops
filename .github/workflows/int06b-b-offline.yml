@@ -1,0 +1,30 @@
+name: INT-06B B offline qualification
+on:
+  push:
+    branches:
+      - integration/aiops2-int06b-b-20261118
+permissions:
+  contents: read
+jobs:
+  int06b-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exact SHA and mandatory tests without skips
+        env:
+          PYTHONPATH: app
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python - <<'PY'
+          import unittest
+          for pattern, minimum in [('test_acme_runtime_context.py', 15), ('test_acme_authority_readers.py', 7)]:
+              suite = unittest.defaultTestLoader.discover('tests', pattern=pattern)
+              result = unittest.TextTestRunner(verbosity=2).run(suite)
+              print(pattern, 'executed=', result.testsRun, 'skips=', len(result.skipped), flush=True)
+              if not result.wasSuccessful() or result.skipped or result.testsRun < minimum or result.expectedFailures:
+                  raise SystemExit(1)
+          PY
