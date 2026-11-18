@@ -68,3 +68,17 @@ def validate_manifest(manifest, *, expected_sha, intent, independently_read):
     require(type(terminal) is dict and terminal == manifest.get("terminal") and terminal.get("identity") == identity and terminal.get("source") == "CORE" and terminal.get("status") == "RESOLVED" and type(terminal.get("version")) is int and terminal["version"] > v and type(terminal.get("sequence")) is int and terminal["sequence"] > seq and utc(terminal.get("observed_at")) >= previous, "terminal_unqualified")
     require(independently_read.get("terminal_readback_sha256") == digest(terminal), "terminal_readback_missing")
     return {"qualification": "CONTRACT_ONLY", "runtime_attested": False, "resolution_authorized": False}
+
+def refuse_unattested_context(context):
+    """Actual no-effect activity boundary. No positive authorization exists in INT-06A."""
+    if type(context) is not dict:
+        raise ValueError("context_missing")
+    if (context.get("schema") != "aiops.acme.runtime-context.v1"
+            or context.get("scope") != "RUNTIME_SANDBOX"
+            or context.get("binding_status") != "UNBOUND"
+            or context.get("runtime_freshness") != "UNKNOWN"
+            or context.get("runtime_attested") is not False
+            or context.get("live_remediation_authorized") is not False
+            or context.get("qualification") not in ("BLOCK", "REJECT")):
+        raise ValueError("context_unqualified")
+    raise ValueError("context_" + context["qualification"].lower())
