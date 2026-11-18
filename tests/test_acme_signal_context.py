@@ -56,3 +56,33 @@ class SignalContextTests(unittest.TestCase):
         b = self.normalize([{**self.event, "severity": "warning"}])["signals"][0]
         self.assertEqual(a["signal_id"], b["signal_id"])
         self.assertNotEqual(a["provenance"]["event_sha256"], b["provenance"]["event_sha256"])
+
+    def test_tenant_run_attempt_identity_is_explicitly_unbound(self):
+        result = build_signal_context(self.twin)
+        self.assertEqual(result["incident_id"], "ACME-DEMO-SAN-001")
+        self.assertEqual(result["impact_incident_id"], "ACME-DEMO-PAY-002")
+        self.assertIsNone(result["tenant_id"])
+        self.assertIsNone(result["attempt_id"])
+        self.assertEqual(result["binding_status"], "UNBOUND")
+        self.assertTrue(result["run_id"].startswith("SIM-ACME-"))
+
+    def test_tampered_twin_identity_or_digest_rejected(self):
+        import copy
+        for key, value in [("tenant_id", "tenant-real"), ("attempt_id", "attempt-real"),
+                           ("run_id", "RUN-123"), ("source_sha256", "0" * 64),
+                           ("incident_id", "INC-OTHER"), ("observed_at", "2026-10-25T09:00:00Z"),
+                           ("freshness", "FRESH"), ("binding_status", "BOUND")]:
+            with self.subTest(key=key):
+                twin = copy.deepcopy(self.twin)
+                twin[key] = value
+                with self.assertRaises(ValueError):
+                    normalize_signals([self.event], twin, as_of_utc=CLOCK)
+
+    def test_event_provenance_binds_source_and_timestamp(self):
+        signal = self.normalize([self.event])["signals"][0]
+        p = signal["provenance"]
+        self.assertEqual(p["source"], "GRAFANA_FIXTURE")
+        self.assertEqual(p["observed_at"], CLOCK)
+        self.assertEqual(p["source_ref"], "inline://synthetic/GRAFANA_FIXTURE/test")
+        self.assertEqual(len(p["event_sha256"]), 64)
+        self.assertEqual(p["twin_source_sha256"], self.twin["source_sha256"])

@@ -17,7 +17,6 @@ from typing import Any
 from portal.acme_fixture_contract import load_fixture_bytes, validate_fixture
 from portal.acme_twin_provenance import build_twin_evidence
 from portal.acme_twin_consumer import project_twin_consumer
-from portal.acme_signal_context import build_signal_context
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -178,7 +177,6 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "live_remediation_authorized": False,
     }
     model["twin_consumer"] = project_twin_consumer(model)
-    model["signal_context"] = build_signal_context(model["twin_evidence"])
     return model
 
 
