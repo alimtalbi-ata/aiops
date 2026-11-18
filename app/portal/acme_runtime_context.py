@@ -24,7 +24,7 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False).encode()).hexdigest()
 
 
-def qualify_context(expected, intent, readbacks, policies, *, as_of_utc):
+def qualify_context(expected, intent, readbacks, policies, *, as_of_utc, source_registry=None):
     """Validate proposed normalized envelopes, not actual server wire formats.
 
     No network or authority injection can promote this result to runtime PASS.
@@ -51,7 +51,10 @@ def qualify_context(expected, intent, readbacks, policies, *, as_of_utc):
         now = _utc(as_of_utc)
     except ValueError:
         return stop('CLOCK_INVALID')
+    if source_registry is not None and (not isinstance(source_registry, dict) or set(source_registry) != set(AUTHORITIES)):
+        return stop('SOURCE_REGISTRY_INVALID')
     seen = set()
+    refs = set()
     evidence = []
     for authority in AUTHORITIES:
         row = readbacks.get(authority)
@@ -65,15 +68,22 @@ def qualify_context(expected, intent, readbacks, policies, *, as_of_utc):
         source = row['source_id']
         if not _id(source) or source in seen or not isinstance(row['source_ref'], str) or not row['source_ref'].strip():
             return stop('PROVENANCE_INVALID')
+        if row['source_ref'] in refs:
+            return stop('SOURCE_REF_COLLISION')
+        refs.add(row['source_ref'])
+        if source_registry is not None and source_registry[authority] != source:
+            return stop('SOURCE_NOT_REGISTERED:' + authority)
         seen.add(source)
         content = row['content']
+        if isinstance(content, dict) and (content.get('scope', 'RUNTIME_SANDBOX') != 'RUNTIME_SANDBOX' or any(content.get(k, False) is not False for k in ('runtime_attested', 'live_remediation_authorized', 'human_approved', 'execution_allowed', 'effect_allowed'))):
+            return stop('UNQUALIFIED_CONTENT_CLAIM')
         if not isinstance(content, dict) or any(content.get(k) != expected[k] for k in IDENTITY) or any(content.get(k) != intent[k] for k in RECEIPT) or content.get('idempotency_key') != intent['idempotency_key']:
             return stop('IDENTITY_MISMATCH:' + authority)
         try:
             if digest(content) != row['content_sha256']:
                 return stop('DIGEST_MISMATCH')
             age = (now - _utc(row['observed_at'])).total_seconds()
-        except (ValueError, TypeError, OverflowError):
+        except (ValueError, TypeError, OverflowError, RecursionError):
             return stop('PROVENANCE_INVALID')
         if age < 0:
             return stop('FUTURE_OBSERVATION')
@@ -83,11 +93,15 @@ def qualify_context(expected, intent, readbacks, policies, *, as_of_utc):
         if age > limit:
             return stop('STALE_OBSERVATION', False)
         evidence.append({k: row[k] for k in keys - {'content'}})
+    if source_registry is None:
+        return stop('SOURCE_REGISTRY_MISSING', False)
     return dict(result, context=dict(expected), evidence=evidence)
 
 
-def read_context(expected, intent, readers, policies, *, as_of_utc):
+def read_context(expected, intent, readers, policies, *, as_of_utc, source_registry=None):
     """Injected zero-argument consumers only; no HTTP or credentials here."""
+    if not isinstance(readers, dict) or set(readers) - set(AUTHORITIES) or any(not callable(v) for v in readers.values()):
+        return qualify_context(expected, intent, None, policies, as_of_utc=as_of_utc, source_registry=source_registry)
     readbacks = {}
     for authority in AUTHORITIES:
         reader = readers.get(authority)
@@ -96,4 +110,4 @@ def read_context(expected, intent, readers, policies, *, as_of_utc):
                 readbacks[authority] = reader()
             except (TimeoutError, ConnectionError, OSError):
                 readbacks[authority] = None
-    return qualify_context(expected, intent, readbacks, policies, as_of_utc=as_of_utc)
+    return qualify_context(expected, intent, readbacks, policies, as_of_utc=as_of_utc, source_registry=source_registry)

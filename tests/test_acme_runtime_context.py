@@ -10,8 +10,9 @@ class RuntimeContextTests(unittest.TestCase):
         content = dict(self.e, **self.i)
         self.rows = {a:dict(authority=a, scope='RUNTIME_SANDBOX', source_id=a+'-001', source_ref='fixture:'+a, observed_at='2026-10-25T09:00:00Z', snapshot_id='SNAP-001', content_sha256=digest(content), content=copy.deepcopy(content)) for a in AUTHORITIES}
         self.p = {a+'-001':60 for a in AUTHORITIES}
+        self.registry = {a:a+'-001' for a in AUTHORITIES}
     def qualify(self):
-        return qualify_context(self.e,self.i,self.rows,self.p,as_of_utc='2026-10-25T09:00:30Z')
+        return qualify_context(self.e,self.i,self.rows,self.p,as_of_utc='2026-10-25T09:00:30Z',source_registry=self.registry)
     def test_nominal_never_attests(self):
         r=self.qualify(); self.assertEqual(r['reason'],'INJECTED_READBACKS_NOT_ATTESTED'); self.assertEqual(len(r['evidence']),3); self.assertFalse(r['runtime_attested']); self.assertEqual(r['runtime_freshness'],'UNKNOWN'); self.assertEqual(r['qualification'],'BLOCK')
     def test_adverse(self):
@@ -30,3 +31,28 @@ class RuntimeContextTests(unittest.TestCase):
     def test_reader_timeout(self):
         def fail(): raise TimeoutError()
         r=read_context(self.e,self.i,{'core':lambda:self.rows['core'],'twin':fail},self.p,as_of_utc='2026-10-25T09:00:30Z'); self.assertEqual(r['reason'],'AUTHORITY_MISSING:twin')
+
+    def test_registry_missing(self):
+        self.registry=None
+        self.assertEqual(self.qualify()['reason'],'SOURCE_REGISTRY_MISSING')
+    def test_registry_mismatch(self):
+        self.registry['twin']='OTHER'
+        self.assertEqual(self.qualify()['reason'],'SOURCE_NOT_REGISTERED:twin')
+    def test_ref_collision(self):
+        self.rows['twin']['source_ref']=self.rows['core']['source_ref']
+        self.assertEqual(self.qualify()['reason'],'SOURCE_REF_COLLISION')
+    def test_nested_story_and_positive_claims(self):
+        for k,v in [('scope','STORY_OFFLINE'),('runtime_attested',True),('human_approved',True),('live_remediation_authorized',True)]:
+            with self.subTest(k=k):
+                self.setUp()
+                c=self.rows['twin']['content']; c[k]=v
+                self.rows['twin']['content_sha256']=digest(c)
+                self.assertEqual(self.qualify()['reason'],'UNQUALIFIED_CONTENT_CLAIM')
+    def test_invalid_reader(self):
+        r=read_context(self.e,self.i,{'core':42},self.p,as_of_utc='2026-10-25T09:00:30Z',source_registry=self.registry)
+        self.assertEqual(r['qualification'],'REJECT')
+    def test_freshness_boundary(self):
+        self.p={a+'-001':30 for a in AUTHORITIES}
+        self.assertEqual(self.qualify()['reason'],'INJECTED_READBACKS_NOT_ATTESTED')
+        self.p['twin-001']=29
+        self.assertEqual(self.qualify()['reason'],'STALE_OBSERVATION')
