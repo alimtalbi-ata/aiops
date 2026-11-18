@@ -1,0 +1,49 @@
+"""Test-only Linux child supervision primitive. No spawn or automatic invocation.
+For a future separately authorized runner, on its own unreaped child only.
+"""
+import os
+import select
+import signal
+import subprocess
+import time
+
+def stop_child(child, *, deadline, grace=2.0):
+    """Use pidfd for stable signal identity; never fall back to numeric PID kill."""
+    if type(child) is not subprocess.Popen:
+        raise ValueError("owned_popen_required")
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        return "NOT_QUALIFIED"
+    if deadline <= time.monotonic() or not 0 < grace <= 5:
+        return "NOT_QUALIFIED"
+    # Caller must exclusively own child lifecycle: no competing wait/reap thread.
+    if child.poll() is not None:
+        return "CHILD_REAPED"
+    try:
+        fd = os.pidfd_open(child.pid)
+    except OSError:
+        return "NOT_QUALIFIED"
+    try:
+        poller = select.poll()
+        poller.register(fd, select.POLLIN)
+        def wait_until(end):
+            remaining = min(end, deadline) - time.monotonic()
+            if remaining <= 0:
+                return False
+            if not poller.poll(int(remaining * 1000)):
+                return False
+            return child.poll() is not None
+        for sig,end in ((signal.SIGTERM,time.monotonic()+grace),
+                        (signal.SIGKILL,deadline)):
+            if time.monotonic() >= deadline:
+                return "NOT_QUALIFIED"
+            try:
+                signal.pidfd_send_signal(fd,sig)
+            except ProcessLookupError:
+                pass
+            if wait_until(end):
+                return "CHILD_REAPED"
+        return "NOT_QUALIFIED"
+    except OSError:
+        return "NOT_QUALIFIED"
+    finally:
+        os.close(fd)
