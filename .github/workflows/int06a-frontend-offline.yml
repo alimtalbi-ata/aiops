@@ -13,7 +13,6 @@ jobs:
     timeout-minutes: 10
     env:
       PYTHONPATH: app
-      AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int06a-ux
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,9 +23,11 @@ jobs:
       - run: node --test tests/test_portal_incident_filters.cjs tests/test_portal_run_selection.cjs tests/test_portal_usability_client.cjs
       - run: python -m playwright install --with-deps chromium
       - run: python -m unittest discover -s tests -p 'test_int06a_frontend_browser.py' -v
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int06a-ux
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: int06a-ux-${{ github.sha }}
           path: ${{ runner.temp }}/int06a-ux
-          if-no-files-found: warn
+          if-no-files-found: error

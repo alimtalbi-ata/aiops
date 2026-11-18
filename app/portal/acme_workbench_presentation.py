@@ -44,3 +44,30 @@ def render_story_context(cockpit):
             "<p>États de preuve : MISSING = absente ; UNKNOWN = non qualifiée ; "
             "FAIL = contrôle négatif attesté ; PASS = contrôle positif attesté par le serveur. "
             "Aucun PASS runtime attribué ici.</p></section>")
+
+
+def render_runtime_refusals(context=None):
+    """Presentation of B's refusal-only result, never a receipt verifier.
+
+    No external payload is attached to the offline cockpit. A future server
+    adapter may supply its own validated result; this function grants no rights.
+    """
+    state = "MISSING" if context is None else "UNKNOWN"
+    decision = "UNKNOWN"
+    if isinstance(context, dict) and (
+        context.get("schema") == "aiops.acme.runtime-context.v1"
+        and context.get("scope") == "RUNTIME_SANDBOX"
+        and context.get("binding_status") == "UNBOUND"
+        and context.get("runtime_attested") is False
+        and context.get("live_remediation_authorized") is False
+        and context.get("runtime_freshness") == "UNKNOWN"
+    ):
+        if context.get("qualification") == "BLOCK":
+            decision = "BLOCK"
+        elif context.get("qualification") == "REJECT":
+            decision = "REJECT"
+            state = "FAIL"
+    return ("<p>Validation contexte B : " + state + " — " + decision
+            + " (non attesté runtime).</p>"
+            "<p>Terminal C : MISSING — aucun reçu terminal indépendant qualifié.</p>"
+            "<p>Qualification runtime : UNKNOWN · LIVE : NO-GO.</p>")

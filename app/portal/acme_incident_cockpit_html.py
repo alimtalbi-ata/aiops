@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from html import escape
-from portal.acme_workbench_presentation import render_story_context
+from portal.acme_workbench_presentation import render_story_context, render_runtime_refusals
 
 from portal.acme_evidence_collection_plan import EVIDENCE_REQUIREMENTS
 
@@ -165,7 +165,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         " <span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
-        + render_story_context(cockpit) +
+        + render_story_context(cockpit) + render_runtime_refusals() +
         "<details open><summary>Registre des preuves attendues</summary>"
         "<p>Chaque ligne est une demande de preuve, pas une pièce collectée. "
         "Les champs observed_at, source_id et content_sha256 doivent être "
