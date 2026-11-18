@@ -191,3 +191,43 @@ test("valid Story auto-advance, pause and replay follow server cursor contract",
   assert.match(h.get("story-status").textContent, /1\/3/);
   assert.equal(typeof h.timer(), "function");
 });
+
+test("pending refresh clears all previous presentation and rejects late JSON after mode switch", async () => {
+  let finish, calls = 0;
+  const h = harness(async (_, opts) => {
+    const p = JSON.parse(opts.body);
+    if (++calls === 1) return {ok:true,json:async()=>envelope(p.action,p.mode,0)};
+    return {ok:true,json:()=>new Promise(resolve=>{finish=resolve;})};
+  });
+  h.get("story-token").value = "viewer";
+  await h.get("start").click();
+  assert.match(h.get("scenario").textContent,/SAN-FABRIC-A/);
+  const pending = h.get("advance").click();
+  assert.match(h.get("story-status").textContent,/en cours/);
+  for (const id of ["scenario","source","step-title"]) assert.match(h.get(id).textContent,/UNKNOWN/);
+  assert.equal(h.get("timeline").children.length,1);
+  assert.match(h.get("timeline").children[0].textContent,/UNKNOWN/);
+  assert.equal(h.timer(),null);
+  await flush();
+  h.get("mode-story").click();
+  finish(envelope("advance","explore",1));
+  await pending;
+  assert.match(h.get("story-status").textContent,/mode modifié/);
+  assert.equal(h.get("timeline").children.length,1);
+  assert.equal(h.timer(),null);
+});
+test("old rejection cannot clear newer successful view", async () => {
+  let rejectOld, calls=0;
+  const h=harness(async (_,opts)=>{
+    const p=JSON.parse(opts.body);
+    if (++calls===1) return new Promise((_,reject)=>{rejectOld=reject;});
+    return {ok:true,json:async()=>envelope(p.action,p.mode,0)};
+  });
+  h.get("story-token").value="viewer";
+  const old=h.get("start").click();
+  await h.get("pause").click();
+  rejectOld(new Error("late failure"));
+  await old;
+  assert.match(h.get("story-status").textContent,/SIMULATED_TARGET/);
+  assert.equal(h.get("timeline").children.length,3);
+});
