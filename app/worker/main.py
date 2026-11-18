@@ -102,7 +102,8 @@ async def execute_stage(a):
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:
             post_json(CORE,f'/api/runs/{rid}/demo-artifacts',{'artifact_type':'stage','title':stage,'sequence_no':completed['sequence'],'caption':f'{stage} — {mode} — evidence linked','payload':{'scenario_id':scenario,'synthetic':True}},token=ADMIN)
-        return completed
+        return {'run_id':rid,'stage':stage,'status':'PASS',
+                'version':completed['version'],'sequence':completed['sequence']}
     except Exception as exc:
         try: call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_FAILED','event_key':f'{stage}:FAIL','status':'FAIL','confidence':0,'payload':{'error':str(exc)[:500],'attempt':activity.info().attempt}})
         finally: raise
@@ -112,11 +113,23 @@ async def finish_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/comm
 class IncidentWorkflow:
  @workflow.run
  async def run(self,args):
-  r=await workflow.execute_activity(start_run,args,start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY);v=r['version']
+  r=await workflow.execute_activity(start_run,args,start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY)
+  v=r.get('version') if isinstance(r,dict) else None
+  if type(v) is not int or v < 0: raise ValueError('unqualified_start_run_version')
   for stage in STAGES:
-   r=await workflow.execute_activity(execute_stage,{'stage':stage,'run_id':args['run_id'],'version':v,'mode':args['mode'],'scenario_id':args['scenario_id']},start_to_close_timeout=datetime.timedelta(seconds=60),retry_policy=RETRY);v=r['version']
-   if r.get('status')=='BLOCKED': return {'run_id':args['run_id'],'status':'BLOCKED','final_version':v}
-  f=await workflow.execute_activity(finish_run,{'run_id':args['run_id'],'version':v},start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY);return {'run_id':args['run_id'],'final_version':f['version'],'status':f['status']}
+   prior_version=v
+   r=await workflow.execute_activity(execute_stage,{'stage':stage,'run_id':args['run_id'],'version':v,'mode':args['mode'],'scenario_id':args['scenario_id']},start_to_close_timeout=datetime.timedelta(seconds=60),retry_policy=RETRY)
+   if (not isinstance(r,dict) or r.get('run_id')!=args['run_id']
+       or r.get('stage')!=stage or r.get('status') not in ('PASS','BLOCKED')
+       or type(r.get('version')) is not int or r['version']<=prior_version):
+    raise ValueError('unqualified_stage_transition_receipt')
+   v=r['version']
+   if r['status']=='BLOCKED': return {'run_id':args['run_id'],'status':'BLOCKED','final_version':v,'blocked_stage':stage}
+  f=await workflow.execute_activity(finish_run,{'run_id':args['run_id'],'version':v},start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY)
+  if (not isinstance(f,dict) or f.get('status')!='RESOLVED'
+      or type(f.get('version')) is not int or f['version']<=v):
+   raise ValueError('unqualified_terminal_transition_receipt')
+  return {'run_id':args['run_id'],'final_version':f['version'],'status':'RESOLVED'}
 @app.get('/health')
 def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
