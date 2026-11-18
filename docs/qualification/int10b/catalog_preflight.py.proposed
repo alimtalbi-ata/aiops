@@ -28,6 +28,11 @@ TRIGGERS = (
 TRIGGERS += tuple((t,'trg_immutable_'+t,'reject_immutable_mutation',False)
                   for t in ('analysis_records','critique_records','policy_decisions','approval_records'))
 
+TRIGGERS += (
+    ('run_events','trg_events_immutable','prevent_append_only',False),
+    ('evidence','trg_evidence_immutable','prevent_append_only',False),
+)
+
 # Ordered column pairs; selected composite bindings, not full schema equivalence.
 FOREIGN_KEYS = (
     ('critique_records','analysis_id,run_id','analysis_records','analysis_id,run_id'),
@@ -79,6 +84,19 @@ def preflight(c):
     for table,trigger,function,deferred in TRIGGERS:
         if actual.get((table,trigger)) != (function,deferred,deferred,'O','aiops'):
             raise AssertionError('trigger configuration mismatch: '+table+'.'+trigger)
+    baseline=c.execute("""
+        select cl.relname,t.tgname,t.tgtype,t.tgqual is null,t.tgnargs
+        from pg_trigger t join pg_class cl on cl.oid=t.tgrelid
+        join pg_namespace n on n.oid=cl.relnamespace
+        where n.nspname='aiops' and not t.tgisinternal
+          and ((cl.relname='run_events' and t.tgname='trg_events_immutable')
+            or (cl.relname='evidence' and t.tgname='trg_evidence_immutable'))
+    """).fetchall()
+    if {tuple(r) for r in baseline} != {
+        ('run_events','trg_events_immutable',27,True,0),
+        ('evidence','trg_evidence_immutable',27,True,0),
+    }:
+        raise AssertionError('baseline append-only trigger shape mismatch')
     valid=c.execute("""
         select exists(select 1 from pg_index i
           join pg_class idx on idx.oid=i.indexrelid
@@ -86,7 +104,13 @@ def preflight(c):
           join pg_namespace n on n.oid=rel.relnamespace
           where n.nspname='aiops' and rel.relname='run_events'
             and idx.relname='ux_run_events_event_key'
-            and i.indisunique and i.indisvalid and i.indisready)
+            and i.indisunique and i.indisvalid and i.indisready
+            and i.indislive and i.indimmediate and not i.indnullsnotdistinct
+            and i.indnkeyatts=2 and i.indnatts=2 and i.indexprs is null
+            and pg_get_indexdef(i.indexrelid,1,false)='run_id'
+            and pg_get_indexdef(i.indexrelid,2,false)='event_key'
+            and pg_get_expr(i.indpred,i.indrelid,false)='(event_key IS NOT NULL)'
+            and exists(select 1 from pg_am am where am.oid=idx.relam and am.amname='btree'))
     """).fetchone()[0]
     if valid is not True:
         raise AssertionError('event key index missing or invalid')
