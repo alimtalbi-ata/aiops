@@ -1,0 +1,1 @@
+C22: six ASCII source files independently hashed; Git blob SHA1 matches all six, SHA256 recorded. No import, AST or execution performed. C20 CI confirmed by QA/SRE 6988592289, independent job readback pending. Central executor choice still pending; no launcher or watchdog activated. C12/B10 retained. NOT READY, RT10 NO-GO.

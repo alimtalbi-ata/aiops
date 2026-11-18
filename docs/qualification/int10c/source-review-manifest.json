@@ -1,42 +1,55 @@
 {
-  "status": "TEXT_MATCH_ONLY",
+  "status": "GIT_BLOB_HASH_VERIFIED",
   "commit": "1116aecb133c24395420eebd2035fafff5ef22df",
   "inputs": [
     {
       "path": "docs/qualification/int10c/runner_composition.py.proposed",
       "blob": "690cbfc5677ed33b59586f1e3b6b835a8978895c",
-      "text_match": true,
-      "sha256": null
+      "bytes": 2707,
+      "sha256": "6771323c340f555a0c65a335cf3aa72d6aa7835a4b0d34f166d01c8bb9d94735",
+      "git_sha1_verified": true,
+      "text_match": true
     },
     {
       "path": "docs/qualification/int10c/linux_child_supervision.py.proposed",
       "blob": "914ba5dc436e16fca37719b0b4b0222bf29d2b45",
-      "text_match": true,
-      "sha256": null
+      "bytes": 1776,
+      "sha256": "b8cc06d9100410e5711dd3fb47daf838009f239e1dee95e4bb44bc6a6f0b6d1b",
+      "git_sha1_verified": true,
+      "text_match": true
     },
     {
       "path": "docs/qualification/int10c/watchdog_policy.py.proposed",
       "blob": "cb7a66b9c1076b5ae61def9aa4441c94b35f2c45",
-      "text_match": true,
-      "sha256": null
+      "bytes": 1044,
+      "sha256": "362e2b73f921b530b87018d03c81fb8ce59809661dea4151c015af327e8eb0f8",
+      "git_sha1_verified": true,
+      "text_match": true
     },
     {
       "path": "docs/qualification/int10c/cgroup_cleanup.py.proposed",
       "blob": "859195bac6f8aabc514e65c5f933a73191332bc2",
-      "text_match": true,
-      "sha256": null
+      "bytes": 2028,
+      "sha256": "4d3cb7b2ff3f5e68c786d3a12e1c3dc6d0c8796ade6a668c919a4e9ad496ad37",
+      "git_sha1_verified": true,
+      "text_match": true
     },
     {
       "path": "docs/qualification/int10c/placement_admission.py.proposed",
       "blob": "e00aff0c89e450ecd9d4e86a0160b915ce3288a8",
-      "text_match": true,
-      "sha256": null
+      "bytes": 1841,
+      "sha256": "7311df9fe537c69d7cbe50c3f2a4f8ef6063ab69ba3ba5929bc4f73aea4b366e",
+      "git_sha1_verified": true,
+      "text_match": true
     },
     {
       "path": "docs/qualification/int10c/source_static_check.py.proposed",
       "blob": "506d82fadd437fc0e79cffe392e3f1823185efde",
-      "text_match": true,
-      "sha256": null
+      "bytes": 841,
+      "sha256": "f8773b8a55b2bf4c36eb6729254026a7668ac7874d59df59a199644924bcaa9f",
+      "git_sha1_verified": true,
+      "text_match": true
     }
-  ]
+  ],
+  "method": "ASCII fetched text identical via file/blob; independent SHA1 Git object and SHA256, algorithm checked against abc vectors; AST pending."
 }
