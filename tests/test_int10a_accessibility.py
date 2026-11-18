@@ -55,9 +55,37 @@ class PopulatedAudit(unittest.TestCase):
                 self.assertFalse(page.evaluate("document.documentElement.scrollWidth>innerWidth"), overflow)
                 self.assertEqual(page.locator("#same-run-history").count(),1)
                 self.assertEqual(page.locator("#hitl-inbox-title").count(),1)
+                inbox=page.get_by_role("region",name="HITL Inbox — consultation offline")
+                self.assertEqual(inbox.count(),1)
+                self.assertEqual(inbox.get_by_role("heading",level=4).count(),1)
+                self.assertEqual(inbox.locator("dt").count(),6)
+                self.assertEqual(inbox.locator("dd").count(),6)
+                self.assertEqual(inbox.locator("button,a,input,select,textarea").count(),0)
+                history=page.locator("#same-run-history")
+                self.assertEqual(history.get_by_role("list").count(),1)
+                self.assertGreater(history.get_by_role("listitem").count(),0)
+                summary=history.locator("summary")
+                summary.focus()
+                page.keyboard.press("Enter")
+                self.assertFalse(history.evaluate("e=>e.open"))
+                self.assertTrue(summary.evaluate("e=>document.activeElement===e"))
+                page.keyboard.press("Space")
+                self.assertTrue(history.evaluate("e=>e.open"))
+                self.assertTrue(summary.evaluate("e=>document.activeElement===e"))
+                ax=page.context.new_cdp_session(page)
+                tree=ax.send("Accessibility.getFullAXTree")["nodes"]
+                ax.detach()
+                exposed=[dict(role=n.get("role",{}).get("value"),name=n.get("name",{}).get("value"))
+                         for n in tree if not n.get("ignored")]
+                self.assertIn(dict(role="region",name="HITL Inbox — consultation offline"),exposed)
+                self.assertTrue(any(n["role"]=="heading" and n["name"]=="HITL Inbox — consultation offline" for n in exposed))
+                ax_path=out/f"populated-ax-{width}-{repetition}.json"
+                ax_path.write_text(json.dumps(exposed,ensure_ascii=False,indent=2),encoding="utf-8")
                 page.evaluate("scrollTo(0,0)")
                 png=page.screenshot(path=str(out/f"populated-{width}-{repetition}.png"),full_page=True)
                 records.append(dict(width=width,repetition=repetition,sha256=hashlib.sha256(png).hexdigest(),
-                    height=page.evaluate("document.documentElement.scrollHeight"),overflow=False))
+                    height=page.evaluate("document.documentElement.scrollHeight"),overflow=False,
+                    ax_sha256=hashlib.sha256(ax_path.read_bytes()).hexdigest(),
+                    native_zoom="NOT_TESTED",real_assistive_technology="NOT_TESTED"))
             browser.close()
         (out/"populated.json").write_text(json.dumps(dict(executed_sha=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),scope="STORY_OFFLINE",runtime_attested=False,rows=records),indent=2))
