@@ -33,9 +33,10 @@ def model(f,e,*,mode="DEMO",second=None,prefix=None,final=None):
         p=validate_postcheck(intent=f.i,independently_read=e["independent"]["content"])
         if p!={"qualification":"CONTRACT_ONLY","runtime_attested":False,"finish_authorized":False}: return result
         if e["postcheck"]["content"]["verified"] is not True: return result
-        if not history_pair(prefix,final): return result
+        if prefix['phase']!='PREFIX' or not prefix['events']: return result
     except (ValueError,TypeError,KeyError,AttributeError): return result
     trace.append(("hypothetical_preterminal",None))
+    if not history_pair(prefix,final): return result
     q,_=CollectorTests().invoke(f,e,second)
     trace.append(("final",q["reason"]))
     result["final_consistent"]=q["reason"]=="OFFLINE_CONTINUITY_CONSISTENT_NOT_ATTESTED"
