@@ -1,0 +1,65 @@
+"""Inert SQL fixture helpers. No connection provisioning, no authority."""
+from uuid import uuid4
+from hashlib import sha256
+from time import monotonic, sleep
+from psycopg.types.json import Jsonb
+
+class RejectFixtures:
+    def seed_reject_pending(self):
+        k='B9-'+uuid4().hex
+        run,ev,an,cr,p,ap,event=[k+'-'+s for s in ('run','ev','an','cr','p','ap','event')]
+        h=sha256(p.encode()).hexdigest()
+        evidence=Jsonb([ev])
+        with self.connect() as c:
+            c.execute("insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) values (%s,'DEMO','B9-STRUCTURAL','WAITING',%s)",(run,run))
+            c.execute("insert into aiops.evidence(evidence_id,source,claim,confidence,payload_hash,provenance) values (%s,'B9-FIXTURE','synthetic only',1,%s,%s)",(ev,sha256(ev.encode()).hexdigest(),Jsonb({'run_id':run,'synthetic':True})))
+            c.execute("""insert into aiops.analysis_records
+                (analysis_id,run_id,idempotency_key,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status)
+                values (%s,%s,%s,1,'fixture','fixture','fixture','fixture',%s,%s,%s,1,'VALID')""",
+                (an,run,an,evidence,sha256(ev.encode()).hexdigest(),Jsonb({'recommended_actions':[{'action_id':'fixture','risk_tier':'LOW','advisory_only':True,'requires_human_approval':True,'target_ci_id':'fixture'}]})))
+            c.execute("""insert into aiops.critique_records
+                (critique_id,idempotency_key,analysis_id,run_id,contract_version,provider,model,validated,evidence_ids,output,diagnostic_confidence)
+                values (%s,%s,%s,%s,'fixture','fixture','fixture',true,%s,'{}',1)""",(cr,cr,an,run,evidence))
+            c.execute("""insert into aiops.action_proposals
+                (proposal_id,run_id,analysis_id,critique_id,source_action_id,proposal_revision,target_ci_id,action_type,risk_tier,evidence_ids,preconditions,expected_postconditions,proposal_hash,status)
+                values (%s,%s,%s,%s,'fixture',1,'fixture','SIMULATE','LOW',%s,'["fixture"]','["fixture"]',%s,'PROPOSED')""",(p,run,an,cr,evidence,h))
+            c.execute("""insert into aiops.approval_records
+                (approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,nonce,expires_at,audit)
+                values (%s,%s,%s,'fixture-not-human','fixture','REJECT',%s,clock_timestamp()+interval '5 minutes',%s)""",(ap,p,h,ap,Jsonb({'synthetic':True,'authenticated':False})))
+            c.execute("update aiops.action_proposals set status='REJECTED' where proposal_id=%s",(p,))
+            c.execute("""insert into aiops.hitl_decision_outbox
+                (event_id,proposal_id,run_id,proposal_hash,proposal_revision,decision,source_status,approval_id)
+                values (%s,%s,%s,%s,1,'REJECT','REJECTED',%s)""",(event,p,run,h,ap))
+        return event
+
+    def seed_eighth_expired_lease(self):
+        event=self.seed_reject_pending()
+        # Short test leases exercise SQL boundary only, NOT historical 30s contract.
+        for i in range(1,9):
+            token=uuid4().hex
+            with self.connect() as c:
+                c.execute("""update aiops.hitl_decision_outbox set status='LEASED',attempts=%s,
+                    lease_owner='fixture',lease_token=%s,lease_until=clock_timestamp()+interval '2 seconds'
+                    where event_id=%s""",(i,token,event))
+            deadline=monotonic()+10
+            while True:
+                with self.connect() as c:
+                    expired=c.execute("select clock_timestamp()>lease_until from aiops.hitl_decision_outbox where event_id=%s",(event,)).fetchone()[0]
+                if expired:
+                    break
+                if monotonic()>deadline:
+                    raise AssertionError('fixture lease expiry timeout')
+                sleep(.05)
+        return event,event
+
+    def insert_fixture_receipt(self,c,event):
+        # Structural pair test only: deliberately not canonical receipt/digest.
+        row=c.execute("""select run_id,proposal_id,proposal_hash,proposal_revision,lease_owner,lease_token,lease_until
+            from aiops.hitl_decision_outbox where event_id=%s""",(event,)).fetchone()
+        run,p,h,rev,owner,token,expiry=row
+        c.execute("""insert into aiops.hitl_reject_terminal_receipts
+            (event_id,tenant_id,run_id,proposal_id,proposal_hash,proposal_revision,actor_id,lease_owner,
+             lease_token_sha256,attempts,lease_expired_at,dead_at,receipt_payload,receipt_sha256)
+            values (%s,'ACME-TEST',%s,%s,%s,%s,%s,%s,%s,8,%s,clock_timestamp(),%s,%s)""",
+            (event,run,p,h,rev,owner,owner,sha256(token.encode()).hexdigest(),expiry,
+             Jsonb({'fixture_only':True,'authenticated':False}),sha256(event.encode()).hexdigest()))
