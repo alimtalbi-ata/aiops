@@ -206,3 +206,16 @@ hr { border: 0; border-top: 1px solid var(--ai-border); }
   .portal-run-filter { grid-template-columns: 1fr; }
   .portal-run-filter label { grid-column: auto; }
 }
+
+/* NOC operator workspace: initial trust states are not live metrics. */
+.noc-workspace-summary,.noc-workspace-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0; }
+.noc-workspace-summary article,.noc-task { min-width:0;padding:16px;border:1px solid var(--ai-border);border-radius:12px;background:rgba(17,24,39,.72); }
+.noc-workspace-summary strong,.noc-workspace-summary span { display:block; }
+.noc-workspace-summary span { margin-top:8px;color:var(--ai-muted);font-size:12px; }
+.noc-task h3 { margin:0 0 12px; }
+.noc-task pre { white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto; }
+.noc-task input,.noc-operator-access input { max-width:100%;box-sizing:border-box; }
+.noc-contract { padding:12px;border:1px solid var(--ai-border);border-radius:10px; }
+.noc-contract summary { cursor:pointer; }
+.noc-operator-access { margin:16px 0; }
+@media(max-width:900px) { .noc-workspace-summary,.noc-workspace-grid { grid-template-columns:1fr; } }
