@@ -82,3 +82,16 @@ def test_golden_nominal_admission_in_cockpit():
     assert "Admission : REJECT — UNKNOWN" in html
     assert "HISTORICAL_PREDICATE_REFUSED" in html
     assert "core-source" not in html
+
+
+def test_same_run_source_provenance_and_scope():
+    snapshot, rows = fixture(True)
+    model = project_synthetic_incident_cockpit(build_acme_impact_read_model())
+    html = render_synthetic_cockpit_html(model, offline_journey=(snapshot, rows, ATTEMPT), offline_events=[{"payload":{"message":"UNRELATED-OFFLINE"}}])
+    assert html.count("id='same-run-history'") == 1
+    for event_id in snapshot["source_event_ids"]:
+        assert event_id in html
+    assert html.index("same-run-history") < html.index("UNRELATED-OFFLINE")
+    assert "non reliés au Same-Run" in html
+    assert "Référentiel STORY_OFFLINE" in html
+    assert "UNKNOWN pour ce Run" in html

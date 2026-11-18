@@ -163,7 +163,7 @@ def evidence_catalog(items):
 
 def render_offline_evidence(events=None, evidence=None):
     """Optional injected presentation inputs, not a B/C projection or transport."""
-    return ("<details><summary>Observations et marqueurs — offline, non attestés</summary>"
+    return ("<details><summary>Observations et marqueurs — offline, non attestés, non reliés au Same-Run</summary>"
             "<p>UNKNOWN — aucune qualification runtime. NO-GO LIVE.</p>"
             + evidence_catalog(evidence)
             + "".join(event_facts(e) for e in (events[:60] if isinstance(events, list) else []))
@@ -180,7 +180,7 @@ def render_same_run_journey(inputs=None):
         value = project_journey(snapshot, rows, attempt)
     except (HTTPException, ValueError, TypeError, KeyError, AttributeError, OverflowError):
         return "<p>Same-Run Journey : UNKNOWN — entrée refusée.</p>"
-    parts = ["<details><summary>Same-Run Journey — UNBOUND / UNKNOWN</summary>",
+    parts = ["<details id='same-run-history'><summary>Same-Run Journey — UNBOUND / UNKNOWN</summary>",
              "<p>Historique injecté distinct du scénario Story ; aucun rapprochement attesté.</p><dl>"]
     for key in ("tenant_id","incident_id","run_id","attempt_id","ticket_id","readback_authority","event_digest_kind"):
         parts.append("<dt>"+safe(key)+"</dt><dd>"+safe(value.get(key))+"</dd>")
@@ -189,8 +189,9 @@ def render_same_run_journey(inputs=None):
         parts.append("<li>"+safe(row["sequence"])+" · "+safe(row["stage"])+" / "+safe(row["event_type"])
                      +" — statut historique non attesté : "+safe(row["status"])
                      +"<br>occurred_at_utc : "+safe(row["occurred_at_utc"])
+                     +"<br>source_event_id : "+safe(row.get("source_event_id"))
                      +"<br>SHA-256 : "+safe(row["record_sha256"])+"</li>")
-    parts.append("</ol><p>Impact Payments distinct / Twin / Analyst / Critic / Policy / HITL / Worker / Postcheck : UNKNOWN pour ce Run. Ticket simulé uniquement ; aucun effet attesté.</p></details>")
+    parts.append("</ol><p>Couverture du Run — hors chronologie : SAN / Impact Payments distinct / Twin / Analyst / Critic / Policy / HITL / Worker / Postcheck : UNKNOWN pour ce Run. Ticket simulé uniquement ; aucun effet attesté.</p><p>Les identifiants source et empreintes proviennent du projecteur historique ; aucune signature ni autorité runtime.</p></details>")
     return "".join(parts)
 
 def render_san_scenario(inputs=None):

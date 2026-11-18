@@ -154,7 +154,7 @@ def render_synthetic_cockpit_html(cockpit: dict, *, offline_collector_result=Non
         + safe(cockpit["incident_id"]) + "</code> · Payments P2 : <code>"
         + safe(cockpit["business_impact_incident_id"]) + "</code></p>"
         "<p>Chemin d'impact : " + safe(" → ".join(cockpit["business_impact_path"]))
-        + "</p><details class='secondary-detail'><summary>Chronologie explicative — 9 étapes UNKNOWN, pas événements observés</summary>"
+        + "</p><details class='secondary-detail'><summary>Référentiel STORY_OFFLINE — 9 étapes UNKNOWN, pas événements observés</summary>"
         "<p>Neuf étapes attendues, aucune horodatée ni attestée. "
         "La prochaine vérification ne constitue pas une action exécutée.</p>"
         "<p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Chronologie métier' tabindex='0'><table><thead><tr><th scope='col'>Étape métier</th><th scope='col'>Source attendue</th>"
@@ -166,7 +166,7 @@ def render_synthetic_cockpit_html(cockpit: dict, *, offline_collector_result=Non
         " <span id='evidence' aria-hidden='true'></span><h2 id='workbench' tabindex='-1'>Evidence Workbench — lecture seule</h2>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
-        + render_story_context(cockpit) + render_runtime_refusals() + render_collector_result(offline_collector_result, admission=offline_admission, preterminal=offline_preterminal) + render_offline_evidence(offline_events, offline_evidence) + render_same_run_journey(offline_journey) +
+        + render_story_context(cockpit) + render_runtime_refusals() + render_collector_result(offline_collector_result, admission=offline_admission, preterminal=offline_preterminal) + render_same_run_journey(offline_journey) + render_offline_evidence(offline_events, offline_evidence) +
         "<details><summary>Registre des preuves attendues — 9 MISSING</summary>"
         "<p>Chaque ligne est une demande de preuve, pas une pièce collectée. "
         "Les champs observed_at, source_id et content_sha256 doivent être "
