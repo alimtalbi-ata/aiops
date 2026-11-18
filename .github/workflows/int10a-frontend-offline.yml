@@ -30,6 +30,9 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_explore_story_playwright_e2e.py' -v
         env:
           AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int08a-historical
+      - run: python -m unittest discover -s tests -p 'test_int10a_accessibility.py' -v
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int10a-populated
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -37,4 +40,5 @@ jobs:
           path: |
             ${{ runner.temp }}/int08a
             ${{ runner.temp }}/int08a-historical
+            ${{ runner.temp }}/int10a-populated
           if-no-files-found: error
