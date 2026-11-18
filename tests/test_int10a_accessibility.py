@@ -81,8 +81,6 @@ class PopulatedAudit(unittest.TestCase):
                 self.assertTrue(any(n["role"]=="heading" and n["name"]=="HITL Inbox — consultation offline" for n in exposed))
                 ax_path=out/f"populated-ax-{width}-{repetition}.json"
                 ax_path.write_text(json.dumps(exposed,ensure_ascii=False,indent=2),encoding="utf-8")
-                page.evaluate("window.scrollTo({top:0,left:0,behavior:'instant'})")
-                page.wait_for_function("window.scrollY === 0 && window.scrollX === 0")
                 page.evaluate("() => document.fonts.ready")
                 metrics_js="""() => {
                     const root=document.documentElement, body=document.body;
@@ -94,9 +92,31 @@ class PopulatedAudit(unittest.TestCase):
                         devicePixelRatio,contentBottom:Math.max(0,...rects),
                         visualHeight:visualViewport.height,visualScale:visualViewport.scale};
                 }"""
-                page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
-                before=page.evaluate(metrics_js)
-                self.assertEqual(before["scrollY"],0)
+                # Observe natural settling after keyboard interaction, before resetting scroll.
+                trace=[]
+                def settle_at_origin():
+                    previous=None
+                    stable=0
+                    for frame in range(180):
+                        page.evaluate("() => new Promise(resolve => requestAnimationFrame(resolve))")
+                        sample=page.evaluate(metrics_js)
+                        focus=page.evaluate("() => ({tag:document.activeElement.tagName,id:document.activeElement.id,text:document.activeElement.textContent.slice(0,120),x:scrollX})")
+                        trace.append(dict(frame=frame,metrics=sample,focus=focus))
+                        stable=stable+1 if (sample,focus)==previous else 1
+                        previous=(sample,focus)
+                        if stable>=12:
+                            return sample,focus
+                    self.fail("layout/scroll/focus did not settle: "+str(trace[-12:]))
+                trace_path=out/f"populated-settle-{width}-{repetition}.json"
+                try:
+                    settle_at_origin()
+                    page.evaluate("window.scrollTo({top:0,left:0,behavior:'instant'})")
+                    before,focus_before=settle_at_origin()
+                    self.assertEqual(before["scrollY"],0)
+                    self.assertEqual(focus_before["x"],0)
+                    self.assertTrue(summary.evaluate("e=>document.activeElement===e"))
+                finally:
+                    trace_path.write_text(json.dumps(trace,ensure_ascii=False,indent=2),encoding="utf-8")
                 png=page.screenshot(path=str(out/f"populated-{width}-{repetition}.png"),full_page=True,scale="css")
                 after=page.evaluate(metrics_js)
                 self.assertEqual(png[:8],bytes.fromhex("89504e470d0a1a0a"))
@@ -110,6 +130,7 @@ class PopulatedAudit(unittest.TestCase):
                     height=after["scrollHeight"],overflow=False,
                     png_width=png_width,png_height=png_height,metrics_before=before,metrics_after=after,
                     png_dom_delta=png_height-after["scrollHeight"],bottom_geometry_covered=True,
+                    settle_sha256=hashlib.sha256(trace_path.read_bytes()).hexdigest(),
                     ax_sha256=hashlib.sha256(ax_path.read_bytes()).hexdigest(),
                     native_zoom="NOT_TESTED",real_assistive_technology="NOT_TESTED"))
             browser.close()
