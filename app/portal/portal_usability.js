@@ -49,10 +49,40 @@
     applyFilter();
     return true;
   }
-  if (typeof module !== "undefined" && module.exports) module.exports = { mount };
+  function matchesIncident(text, priority, query, selected) {
+    return (!selected || priority === selected) && String(text).toLowerCase().includes(String(query).trim().toLowerCase());
+  }
+  function mountIncidents(doc) {
+    const controls = doc.getElementById("incident-filters");
+    const catalogue = doc.getElementById("incident-catalogue");
+    const search = doc.getElementById("incident-search");
+    const severity = doc.getElementById("incident-severity");
+    const reset = doc.getElementById("incident-reset");
+    const count = doc.getElementById("incident-count");
+    if (!controls || !catalogue || !search || !severity || !reset || !count) return false;
+    if (mounted.has(controls)) return true;
+    mounted.add(controls);
+    const cards = Array.from(catalogue.querySelectorAll("[data-demo-priority]"));
+    function apply() {
+      let visible = 0;
+      for (const card of cards) {
+        card.hidden = !matchesIncident(card.textContent, card.dataset.demoPriority, search.value, severity.value);
+        if (!card.hidden) visible++;
+      }
+      count.textContent = visible + " / " + cards.length + " scénarios DEMO" + (visible ? "" : " — aucun résultat");
+    }
+    search.addEventListener("input", apply);
+    severity.addEventListener("change", apply);
+    reset.addEventListener("click", () => { search.value = ""; severity.value = ""; apply(); search.focus(); });
+    controls.hidden = false;
+    apply();
+    return true;
+  }
+  function mountAll(doc) { mount(doc); mountIncidents(doc); }
+  if (typeof module !== "undefined" && module.exports) module.exports = { mount, mountIncidents, matchesIncident };
   if (root && root.document) {
     if (root.document.readyState === "loading") {
-      root.document.addEventListener("DOMContentLoaded", () => mount(root.document), { once: true });
-    } else mount(root.document);
+      root.document.addEventListener("DOMContentLoaded", () => mountAll(root.document), { once: true });
+    } else mountAll(root.document);
   }
 }(typeof window !== "undefined" ? window : null));
