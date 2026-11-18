@@ -594,9 +594,9 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         # json.loads preserves lone escaped UTF-16 surrogates, although they
         # are not valid Unicode scalars. Reject nested values and object keys.
         for raw in (
-            b'{"state":"PASS","note":"\ud800"}',
-            b'{"state":"PASS","\udc00":"ambiguous"}',
-            b'{"state":"PASS","nested":{"issuer":"\udfff"}}',
+            br'{"state":"PASS","note":"\ud800"}'',
+            br'{"state":"PASS","\udc00":"ambiguous"}'',
+            br'{"state":"PASS","nested":{"issuer":"\udfff"}}'',
         ):
             with self.subTest(raw=raw):
                 with self.assertRaisesRegex(
@@ -605,7 +605,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         # Valid escaped surrogate pairs remain accepted.
         self.assertEqual(
             decode_authority_json(
-                b'{"state":"PASS","note":"\ud83d\ude80"}')["note"],
+                br'{"state":"PASS","note":"\ud83d\ude80"}'')["note"],
             "\U0001f680")
 
 
