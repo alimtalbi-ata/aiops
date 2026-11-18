@@ -1,0 +1,40 @@
+name: INT09A isolated frontend
+on:
+  push:
+    branches: [integration/aiops2-int09-a-20261118]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: app
+      C_CONTRACT_PATH: ${{ github.workspace }}/app/worker/int06a_contract.py
+    steps:
+      - uses: actions/checkout@v4
+      - run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "PyJWT[crypto]==2.10.1" "uvicorn==0.35.0" "playwright==1.55.0"
+      - run: python -m unittest discover -s tests -p 'test_int08a_runtime_workbench.py' -v
+      - run: python -m unittest discover -s tests -p 'test_int08a_evidence_port.py' -v
+      - run: node --test tests/test_portal_explore_story_client.cjs
+      - run: python -m pip install pytest==8.3.5
+      - run: python -m pytest -q tests/test_int09a_connect.py
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m unittest discover -s tests -p 'test_int08a_accessibility.py' -v
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int08a
+      - run: python -m unittest discover -s tests -p 'test_explore_story_playwright_e2e.py' -v
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int08a-historical
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: int09a-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/int08a
+            ${{ runner.temp }}/int08a-historical
+          if-no-files-found: error
