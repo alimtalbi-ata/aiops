@@ -171,3 +171,25 @@ def test_existing_glpi_handoff_navigation():
     assert "TENANT_ACL_NOT_QUALIFIED" in html
     assert "Association ticket/Run : NOT_INSTALLED" in html
     assert "Aucun ticket réel ni droit HITL déduit" in html
+
+
+@pytest.mark.parametrize("case", ["nominal","foreign","prefix","terminal_drift"])
+def test_existing_golden_final_readback_rendered(case, monkeypatch):
+    import test_int09c_golden_final as golden
+    from portal.acme_runtime_workbench import render_collector_result
+    original = golden.collect
+    captured = []
+    def observe(*args, **kwargs):
+        result = original(*args, **kwargs)
+        captured.append(deepcopy(result))
+        return result
+    monkeypatch.setattr(golden, "collect", observe)
+    golden.test_golden_final(case)
+    assert len(captured) == 1
+    result = captured[0]
+    before = deepcopy(result)
+    html = render_collector_result(result)
+    assert "Qualification finale" in html
+    assert "NO-GO" in html
+    assert "OFFLINE_CONTINUITY_CONSISTENT_NOT_ATTESTED" in html if case == "nominal" else "OFFLINE_CONTINUITY_CONSISTENT_NOT_ATTESTED" not in html
+    assert result == before
