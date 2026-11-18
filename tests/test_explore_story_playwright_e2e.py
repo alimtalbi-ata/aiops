@@ -468,7 +468,18 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertTrue(self.page.locator("body").evaluate(
             "el => el.scrollWidth <= window.innerWidth"
         ), "cockpit creates page-level horizontal overflow on mobile")
+        # Native collapsed details have no measurable table scroll layout.
+        # Open them through the user-facing summaries before checking geometry.
+        for details in self.page.locator("details").all():
+            if details.locator("div.table-scroll").count():
+                if not details.evaluate("el => el.open"):
+                    details.locator("summary").click()
+                self.assertTrue(details.evaluate("el => el.open"))
+        self.assertTrue(self.page.locator("body").evaluate(
+            "el => el.scrollWidth <= window.innerWidth"
+        ), "expanded cockpit creates page-level horizontal overflow on mobile")
         for wrapper in self.page.locator("div.table-scroll").all():
+            expect(wrapper).to_be_visible()
             self.assertGreaterEqual(
                 wrapper.evaluate("el => el.scrollWidth"),
                 wrapper.evaluate("el => el.clientWidth"),
