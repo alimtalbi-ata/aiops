@@ -25,6 +25,7 @@ def render_collector_result(result=None, *, admission=None, preterminal=None):
     parts=["<section class='story-context' aria-label='Résultat collecteur offline'>",
            "<h3>RUNTIME_SANDBOX — UNBOUND</h3>",
            "<p>STORY_OFFLINE / SIMULATED : contexte distinct.</p>",
+           render_hitl_inbox(admission),
            render_phase_identity_comparison(admission, preterminal),
            render_phase("Admission", "ADMISSION", admission),
            render_phase("Préterminal", "PRETERMINAL", preterminal),
@@ -111,3 +112,31 @@ def render_phase_identity_comparison(admission, preterminal):
     if a is not None and p is not None:
         state = "Identités déclarées concordantes" if a == p else "UNKNOWN — identités divergentes"
     return "<p>Comparaison admission / préterminal : "+state+" ; continuité causale UNKNOWN, aucune fusion des historiques.</p>"
+
+
+def render_hitl_inbox(admission=None):
+    """Historical #194 presentation only; no IAM, transport or approval action."""
+    proposal = None
+    if (isinstance(admission, dict)
+            and admission.get("contract_status") == "CONTRACT_ONLY"
+            and admission.get("qualification") == "BLOCK"
+            and admission.get("reason") == "ADMISSION_CONSISTENT_NOT_ATTESTED"
+            and "projection incompatible" not in render_phase("Admission", "ADMISSION", admission)):
+        projection = admission.get("projection")
+        if isinstance(projection, dict):
+            identity = projection.get("identity")
+            if isinstance(identity, dict):
+                candidate = identity.get("proposal_id")
+                if isinstance(candidate, str) and 0 < len(candidate) <= 512:
+                    proposal = candidate
+    parts = ["<section aria-labelledby='hitl-inbox-title'><h4 id='hitl-inbox-title'>HITL Inbox — consultation offline</h4>",
+             "<p>STORY_OFFLINE / CONTRACT_ONLY — aucune approbation ni exécution attestée. Ownership UNKNOWN / UNBOUND.</p>"]
+    if proposal is None:
+        parts.append("<p>Proposition UNKNOWN — aucune ligne qualifiée.</p>")
+    else:
+        parts.append("<dl><dt>Proposition déclarée</dt><dd>"+escape(proposal)+"</dd>"
+                     "<dt>Risque</dt><dd>UNKNOWN</dd><dt>Action</dt><dd>UNKNOWN</dd>"
+                     "<dt>CI cible</dt><dd>UNKNOWN</dd><dt>État HITL</dt><dd>UNKNOWN</dd>"
+                     "<dt>Preuves</dt><dd>Voir la provenance Admission ci-dessous ; non attestée.</dd></dl>")
+    parts.append("</section>")
+    return "".join(parts)
