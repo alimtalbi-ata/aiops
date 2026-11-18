@@ -8,7 +8,8 @@ from worker.acme_simulated_hitl import verify_no_effect_receipt
 def qualify_continuity(expected, intent, readbacks, policies, *, as_of_utc,
                        source_registry, prepared, terminal, receipt,
                        c_manifest, independently_read, expected_sha,
-                       validate_postcheck, validate_manifest):
+                       validate_postcheck, validate_manifest, continuity_sources,
+                       history, postcheck, terminal_readback):
     """C predicates are injected as real functions, never as verdict documents."""
     base = qualify_context(expected, intent, readbacks, policies,
                            as_of_utc=as_of_utc, source_registry=source_registry)
@@ -19,7 +20,18 @@ def qualify_continuity(expected, intent, readbacks, policies, *, as_of_utc,
                     reason=reason, context=None, evidence=[])
     if any(x is None for x in (prepared, terminal, receipt, c_manifest, independently_read)):
         return refuse('CONTINUITY_EVIDENCE_MISSING', False)
+    if any(x is None for x in (history, postcheck, terminal_readback)):
+        return refuse('CONTINUITY_EVIDENCE_MISSING', False)
     try:
+        roles = ('history', 'postcheck', 'terminal')
+        if type(continuity_sources) is not dict or set(continuity_sources) != set(roles):
+            return refuse('CONTINUITY_SOURCE_MISSING', False)
+        from .acme_runtime_context import _id
+        if not all(_id(v) for v in continuity_sources.values()):
+            return refuse('CONTINUITY_SOURCE_INVALID')
+        if any(type(policies.get(v)) is not int or policies[v] < 0
+               for v in continuity_sources.values()):
+            return refuse('FRESHNESS_POLICY_MISSING', False)
         # Work with immutable-by-value snapshots; never mutate caller documents.
         prepared, terminal, receipt, c_manifest, independently_read = deepcopy(
             (prepared, terminal, receipt, c_manifest, independently_read))
@@ -40,7 +52,7 @@ def qualify_continuity(expected, intent, readbacks, policies, *, as_of_utc,
             if not observed <= collected <= now:
                 return refuse('OBSERVATION_COLLECTION_ORDER')
             age = now - observed
-            if age > timedelta(seconds=policies[source_registry['core']]):
+            if age > timedelta(seconds=policies[source_registry['core'] if row is prepared else continuity_sources['terminal']]):
                 return refuse('STALE_MANIFEST', False)
             if type(row['version']) is not int or row['version'] < 0:
                 return refuse('VERSION_INVALID')
@@ -59,14 +71,14 @@ def qualify_continuity(expected, intent, readbacks, policies, *, as_of_utc,
                 or terminal['snapshot_id'] == prepared['snapshot_id']
                 or not isinstance(terminal['snapshot_id'],str) or not terminal['snapshot_id']
                 or terminal['version'] <= prepared['version']
-                or _utc(terminal['observed_at']) < _utc(prepared['observed_at'])):
+                or _utc(terminal['observed_at']) <= _utc(prepared['observed_at'])):
             return refuse('TERMINAL_CONTINUITY_MISMATCH')
         if not verify_no_effect_receipt(receipt, seven) or type(receipt['effect_receipts']) is not int:
             return refuse('RECEIPT_INVALID')
         import hashlib
         nonce = readbacks['twin']['content'].get('approval_nonce')
-        if (not isinstance(nonce,str) or not nonce
-                or receipt['twin_approval_nonce_sha256'] != hashlib.sha256(nonce.encode('utf-8')).hexdigest()
+        if (type(nonce) is not str or not nonce or not nonce.isascii()
+                or receipt['twin_approval_nonce_sha256'] != hashlib.sha256(nonce.encode('ascii')).hexdigest()
                 or receipt['core_request_sha256'] != core.get('request_sha256')
                 or receipt['core_source_event_ids'] != core.get('source_event_ids')):
             return refuse('RECEIPT_PREPARED_MISMATCH')
@@ -81,6 +93,28 @@ def qualify_continuity(expected, intent, readbacks, policies, *, as_of_utc,
                     'receipt_sha256':receipt['receipt_sha256']}
                 or c_manifest.get('worker_receipt') != receipt):
             return refuse('TERMINAL_READBACK_MISMATCH')
+        if terminal_readback != actual:
+            return refuse('TERMINAL_READBACK_CHANGED')
+        for role, row in zip(roles, (history, postcheck, actual)):
+            if (type(row) is not dict or row.get('identity') != seven
+                    or row.get('parent_snapshot_id') != prepared['snapshot_id']
+                    or row.get('impact_incident_id') != expected['impact_incident_id']
+                    or row.get('source_id') != continuity_sources[role]):
+                return refuse('CONTINUITY_SOURCE_BINDING')
+            observed = _utc(row.get('observed_at'))
+            if observed > now:
+                return refuse('FUTURE_OBSERVATION')
+            if now - observed > timedelta(seconds=policies[continuity_sources[role]]):
+                return refuse('STALE_CONTINUITY_SOURCE', False)
+        times = [_utc(x['observed_at']) for x in (prepared, history, postcheck, actual)]
+        if not all(a < b for a,b in zip(times,times[1:])):
+            return refuse('CONTINUITY_TIME_ORDER')
+        if (history.get('receipt_sha256') != receipt['receipt_sha256']
+                or postcheck.get('history_sha256') != digest(history)
+                or postcheck.get('verified') is not True
+                or actual.get('postcheck_sha256') != digest(postcheck)
+                or independently_read.get('history_sha256') != digest(history)):
+            return refuse('CONTINUITY_DIGEST_MISMATCH')
         post = validate_postcheck(intent=intent, independently_read=independently_read)
         final = validate_manifest(c_manifest, expected_sha=expected_sha, intent=intent,
                                   independently_read=independently_read)

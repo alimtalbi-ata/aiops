@@ -56,12 +56,24 @@ class ContinuityTests(unittest.TestCase):
         images={k:'sha256:'+'b'*64 for k in ('core','twin','policy','worker','evidence','postgres','temporal','temporal_postgres')}
         transitions=[dict(identity=seven,stage=stage,status='PASS',version=n,sequence=n,
             observed_at='2026-11-18T09:00:10Z',source='CORE') for n,stage in enumerate(c.STAGES,2)]
+        self.sources={k:k+'-001' for k in ('history','postcheck','terminal')}
+        self.policies.update({v:30 for v in self.sources.values()})
+        common=dict(identity=seven,parent_snapshot_id=self.e['snapshot_id'],
+                    impact_incident_id=self.e['impact_incident_id'])
+        self.history=dict(common,source_id=self.sources['history'],
+            observed_at='2026-11-18T09:00:05Z',receipt_sha256=self.receipt['receipt_sha256'])
+        self.postcheck=dict(common,source_id=self.sources['postcheck'],
+            observed_at='2026-11-18T09:00:15Z',history_sha256=digest(self.history),verified=True)
+        actual.update(source_id=self.sources['terminal'],postcheck_sha256=digest(self.postcheck))
+        self.terminal['payload']['terminal_readback_sha256']=digest(actual)
+        self.seal(self.terminal)
+        self.second=deepcopy(actual)
         self.sha='c'*40
         self.manifest=dict(scope='RUNTIME_SANDBOX',executed_sha=self.sha,runtime_attested=False,
-            identity=seven,images=images,worker_receipt=deepcopy(self.receipt),history_sha256='d'*64,
+            identity=seven,images=images,worker_receipt=deepcopy(self.receipt),history_sha256=digest(self.history),
             transitions=transitions,terminal=deepcopy(actual))
         self.independent=dict(identity=seven,executed_sha=self.sha,scope='RUNTIME_SANDBOX',images=deepcopy(images),
-            worker_receipt_sha256=self.receipt['receipt_sha256'],history_sha256='d'*64,
+            worker_receipt_sha256=self.receipt['receipt_sha256'],history_sha256=digest(self.history),
             transitions_sha256=digest(transitions),critic_decision='ALLOW',twin_state='QUALIFIED',
             policy_decision='SIMULATE',hitl_valid=True,external_effect_count=0,postcheck_verified=True,
             terminal=actual,terminal_readback_sha256=digest(actual))
@@ -73,7 +85,9 @@ class ContinuityTests(unittest.TestCase):
         r=qualify_continuity(self.e,self.i,self.rows,self.policies,as_of_utc=clock,
             source_registry=self.registry,prepared=self.prepared,terminal=self.terminal,
             receipt=self.receipt,c_manifest=self.manifest,independently_read=self.independent,
-            expected_sha=self.sha,validate_postcheck=c.validate_postcheck,validate_manifest=c.validate_manifest)
+            expected_sha=self.sha,validate_postcheck=c.validate_postcheck,validate_manifest=c.validate_manifest,
+            continuity_sources=self.sources,history=self.history,postcheck=self.postcheck,
+            terminal_readback=self.second)
         self.assertEqual(r['reason'],reason)
         self.assertIn(r['qualification'],('BLOCK','REJECT'))
         self.assertEqual((r['binding_status'],r['runtime_freshness']),('UNBOUND','UNKNOWN'))
@@ -87,7 +101,7 @@ class ContinuityTests(unittest.TestCase):
         for case,reason in [('identity','IDENTITY_MISMATCH'),('digest','MANIFEST_DIGEST_MISMATCH'),
             ('manifest','AUTHORITY_MANIFEST_MISMATCH'),('parent','TERMINAL_CONTINUITY_MISMATCH'),
             ('version','TERMINAL_CONTINUITY_MISMATCH'),('collection','OBSERVATION_COLLECTION_ORDER'),
-            ('receipt','RECEIPT_INVALID'),('postcheck','CONTINUITY_INVALID'),('history','CONTINUITY_INVALID'),
+            ('receipt','RECEIPT_INVALID'),('postcheck','CONTINUITY_INVALID'),('history','CONTINUITY_DIGEST_MISMATCH'),
             ('missing','CONTINUITY_EVIDENCE_MISSING')]:
             with self.subTest(case=case):
                 self.setUp()
@@ -110,3 +124,41 @@ class ContinuityTests(unittest.TestCase):
     def test_collection_not_manifest_digest(self):
         self.prepared['collected_at']='2026-11-18T09:00:02Z'
         self.check('OFFLINE_CONTINUITY_CONSISTENT_NOT_ATTESTED')
+
+    def test_v4_arbitrations(self):
+        for case,reason in (
+            ('equal_time','TERMINAL_CONTINUITY_MISMATCH'),
+            ('nonce_unicode','RECEIPT_PREPARED_MISMATCH'),
+            ('nonce_empty','RECEIPT_PREPARED_MISMATCH'),
+            ('nonce_changed','RECEIPT_PREPARED_MISMATCH'),
+            ('second_changed','TERMINAL_READBACK_CHANGED'),
+            ('second_missing','CONTINUITY_EVIDENCE_MISSING'),
+            ('policy_missing','FRESHNESS_POLICY_MISSING'),
+            ('history_stale','STALE_CONTINUITY_SOURCE'),
+            ('postcheck_stale','STALE_CONTINUITY_SOURCE'),
+            ('terminal_stale','STALE_MANIFEST'),
+            ('history_changed','CONTINUITY_DIGEST_MISMATCH'),
+            ('postcheck_changed','CONTINUITY_DIGEST_MISMATCH'),
+            ('history_equal_time','CONTINUITY_TIME_ORDER')):
+            with self.subTest(case=case):
+                self.setUp()
+                if case=='equal_time':
+                    self.terminal['observed_at']=self.prepared['observed_at']; self.seal(self.terminal)
+                if case.startswith('nonce_'):
+                    twin=self.rows['twin']['content']
+                    twin['approval_nonce']={'nonce_unicode':'é','nonce_empty':'','nonce_changed':' nonce-001'}[case]
+                    self.rows['twin']['content_sha256']=digest(twin)
+                    core=self.rows['core']['content']
+                    core['authority_manifest']={a:digest(self.rows[a]) for a in ('twin','policy')}
+                    self.rows['core']['content_sha256']=digest(core)
+                    self.prepared['payload']={'core_sha256':digest(self.rows['core']),'authority_manifest':core['authority_manifest']}
+                    self.seal(self.prepared)
+                if case=='second_changed': self.second['version']+=1
+                if case=='second_missing': self.second=None
+                if case=='policy_missing': del self.policies[self.sources['history']]
+                if case in ('history_stale','postcheck_stale','terminal_stale'):
+                    self.policies[self.sources[case.split('_')[0]]]=0
+                if case=='history_changed': self.history['extra']='changed'
+                if case=='postcheck_changed': self.postcheck['extra']='changed'
+                if case=='history_equal_time': self.history['observed_at']=self.prepared['observed_at']
+                self.check(reason)

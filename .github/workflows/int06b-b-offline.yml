@@ -2,7 +2,7 @@ name: INT-06B B offline qualification
 on:
   push:
     branches:
-      - integration/aiops2-int06b-b-20261118
+      - qualification/int06bc-b-v4-offline
 permissions:
   contents: read
 jobs:
@@ -28,7 +28,7 @@ jobs:
           test "$(git -C pinned-c rev-parse HEAD)" = "3f68cfd81d2e75c27fc6d84c78c74c1a2297fd28"
           python - <<'PY'
           import unittest
-          for pattern, minimum in [('test_acme_runtime_context.py', 15), ('test_acme_authority_readers.py', 7), ('test_acme_authority_continuity.py', 4)]:
+          for pattern, minimum in [('test_acme_runtime_context.py', 15), ('test_acme_authority_readers.py', 7), ('test_acme_authority_continuity.py', 5)]:
               suite = unittest.defaultTestLoader.discover('tests', pattern=pattern)
               result = unittest.TextTestRunner(verbosity=2).run(suite)
               print(pattern, 'executed=', result.testsRun, 'skips=', len(result.skipped), flush=True)
