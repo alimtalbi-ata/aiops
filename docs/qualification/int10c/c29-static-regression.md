@@ -1,0 +1,3 @@
+# C29 static regression gate
+Central6990790252: suspend provider-specific speculation. B23 actual authority remains BLOCKED_CAPABILITY. C27/C28 exact jobs135110082553/135111491855 verified 364+469 x3 each, 14 checksums each, archives14468871432/14468087381 metadata only.
+Six static tests pin C28 supervisor blob and inspect AST, observation exception path, post-stop ownership recheck, readback-only quarantine, explicit states and separate result fields. No import or execution of proposed source; structural checks not behavioral proof; CI pending. No provider implementation or authorization. Infrastructure owner must identify actual platform, trust root, lease, inventory, quarantine and permissions. C12/B10 unchanged. RT10 NO-GO.
