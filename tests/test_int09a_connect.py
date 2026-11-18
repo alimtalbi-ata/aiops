@@ -25,3 +25,18 @@ def test_foreign_run_refused():
     assert "entrée refusée" in html
     assert RUN not in html
     assert "MISSING" in render_same_run_journey()
+
+def test_actual_phase_refusals_connected():
+    from portal.acme_int08_phases import admission_v1, preterminal_v1
+    from portal.acme_runtime_workbench import render_collector_result
+    now="2026-11-18T09:00:00Z"
+    a=admission_v1({}, {}, None, None, {k:k+"-source" for k in ("core","twin","policy","critic","hitl")},{},as_of_utc=now)
+    p=preterminal_v1({}, {}, {"contract_status":"CONTRACT_ONLY"}, {}, {}, {}, {}, {},as_of_utc=now)
+    html=render_collector_result(admission=a,preterminal=p)
+    assert "Admission : BLOCK — UNKNOWN" in html
+    assert "Préterminal : REJECT — UNKNOWN" in html
+    assert "Qualification finale</h4><p>MISSING" in html
+    assert "NO-GO" in html
+    assert "projection incompatible" in render_collector_result(admission=p)
+    a["execution_allowed"]=True
+    assert "projection incompatible" in render_collector_result(admission=a)
