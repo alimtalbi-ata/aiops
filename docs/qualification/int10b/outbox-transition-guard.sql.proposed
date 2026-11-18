@@ -1,0 +1,33 @@
+-- PROPOSED / NOT_TESTED. After B3 only. No active migration.
+begin;
+create function aiops.int10b_guard_reject_outbox() returns trigger language plpgsql as $$
+begin
+ if TG_OP='INSERT' then
+   if NEW.status<>'PENDING' or NEW.attempts<>0 then raise exception 'outbox must start PENDING'; end if;
+   return NEW;
+ end if;
+ if (NEW.event_id,NEW.proposal_id,NEW.run_id,NEW.proposal_hash,NEW.proposal_revision,NEW.decision,NEW.source_status,NEW.approval_id,NEW.created_at,NEW.available_at)
+ is distinct from (OLD.event_id,OLD.proposal_id,OLD.run_id,OLD.proposal_hash,OLD.proposal_revision,OLD.decision,OLD.source_status,OLD.approval_id,OLD.created_at,OLD.available_at) then
+ raise exception 'outbox identity immutable'; end if;
+ if OLD.status in ('DELIVERED','DEAD') then raise exception 'terminal outbox immutable'; end if;
+ if NEW.status='LEASED' and OLD.status in ('PENDING','LEASED') then
+   if NEW.attempts<>OLD.attempts+1 or NEW.attempts>8
+   or NEW.lease_token is not distinct from OLD.lease_token
+   or NEW.lease_owner is null or NEW.lease_token is null
+   or NEW.lease_until<=clock_timestamp()
+   or (OLD.status='PENDING' and OLD.available_at>clock_timestamp())
+   or (OLD.status='LEASED' and OLD.lease_until>=clock_timestamp()) then
+      raise exception 'invalid lease transition'; end if;
+ elsif OLD.status='LEASED' and NEW.status in ('DELIVERED','DEAD') then
+   if (NEW.attempts,NEW.lease_owner,NEW.lease_token,NEW.lease_until) is distinct from
+      (OLD.attempts,OLD.lease_owner,OLD.lease_token,OLD.lease_until) then raise exception 'terminal fence changed'; end if;
+   if NEW.status='DELIVERED' and OLD.lease_until<=clock_timestamp() then raise exception 'expired ACK'; end if;
+   if NEW.status='DEAD' and (OLD.attempts<>8 or OLD.lease_until>clock_timestamp()) then raise exception 'premature DEAD'; end if;
+ else raise exception 'invalid outbox transition';
+ end if;
+ return NEW;
+end $$;
+create trigger trg_int10b_outbox_transition before insert or update on aiops.hitl_decision_outbox for each row execute function aiops.int10b_guard_reject_outbox();
+-- Does not authenticate caller/token, enforce exact lease duration, or authenticate ownership.
+-- Historical idempotent terminal reads perform no UPDATE and remain conceptually compatible.
+commit;
