@@ -116,7 +116,11 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:816/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-portal:
-    build: {context: ./app, dockerfile: portal/Dockerfile}
+    build:
+      context: ./app
+      dockerfile: portal/Dockerfile
+      additional_contexts:
+        noc_scripts: ./scripts
     container_name: aiops2-portal
     restart: unless-stopped
     environment:
