@@ -1,0 +1,144 @@
+{
+  "checkpoint": "e5b2576fce208b31849d8eb633970f6992a284d7",
+  "baseline": "7fa2781c2705b5a7920695aa67d34f657f78ab03",
+  "golden": "f594d04e02abde19b2299fbb523bf9d0d0e360b8",
+  "central_comment": 6987088818,
+  "status": "PROPOSED_NOT_TESTED",
+  "files": [
+    {
+      "path": "docs/qualification/int10b/009_ai_decision_ledger.sql.reference",
+      "sha": "bfed91982654b6baf0026408fa5134a22af421bb",
+      "size": 23994
+    },
+    {
+      "path": "docs/qualification/int10b/010_evidence_identity.sql.reference",
+      "sha": "1ddafd94639af60ce38b6df0acafd7f63d6b4af2",
+      "size": 763
+    },
+    {
+      "path": "docs/qualification/int10b/012_itsm_xref_read.sql.reference",
+      "sha": "9408dcf9d92d5bfbdb75968a5a0b0a55f2985457",
+      "size": 2555
+    },
+    {
+      "path": "docs/qualification/int10b/013_actor_delegation_replay_ledger.sql.reference",
+      "sha": "375a9f07edad24877f27276ba2fa87614026f491",
+      "size": 4293
+    },
+    {
+      "path": "docs/qualification/int10b/acme-positive-review.md",
+      "sha": "357ed2ff310c31ce233147cbbca903a3e75fa63e",
+      "size": 2583
+    },
+    {
+      "path": "docs/qualification/int10b/acme-positive.sql.proposed",
+      "sha": "a893abe732581ba7fe51430f6776559871804db6",
+      "size": 9141
+    },
+    {
+      "path": "docs/qualification/int10b/acme_sandbox_int09.py.proposed",
+      "sha": "b7fbdbf0b592e1342ecc396b0023d9d0a45968fc",
+      "size": 33397
+    },
+    {
+      "path": "docs/qualification/int10b/b10-runner-review.md",
+      "sha": "88832ddfdc56331f102c61e77f3a06faff19747f",
+      "size": 1778
+    },
+    {
+      "path": "docs/qualification/int10b/b11-contention-review.md",
+      "sha": "e3558aba57fc968b1adf462941e0e40530336cf7",
+      "size": 1326
+    },
+    {
+      "path": "docs/qualification/int10b/b9-fixture-review.md",
+      "sha": "4f881a5c6f4d0e98fb00441a188e4e7a1d2d0f25",
+      "size": 1198
+    },
+    {
+      "path": "docs/qualification/int10b/core-pg16-adaptation.md",
+      "sha": "d6794ab0f32b0300ae7e4682a23c170092d28056",
+      "size": 2793
+    },
+    {
+      "path": "docs/qualification/int10b/decision-ledger-minimal.sql.proposed",
+      "sha": "409ed32ffd81a82039ee4dd3c84d4ca6d356317f",
+      "size": 13469
+    },
+    {
+      "path": "docs/qualification/int10b/ledger-static-review.md",
+      "sha": "570b394b987727200b1cd7005d2120ad67b25040",
+      "size": 1960
+    },
+    {
+      "path": "docs/qualification/int10b/negative-pg16-runner-contract.md",
+      "sha": "278f53aec91e8e4693428527a23f7dfad16c5dbd",
+      "size": 1590
+    },
+    {
+      "path": "docs/qualification/int10b/outbox-terminal.sql.proposed",
+      "sha": "1f9a5ba1cdb3da11327796e06a363fcd3b5b0d5b",
+      "size": 6688
+    },
+    {
+      "path": "docs/qualification/int10b/outbox-transition-guard.sql.proposed",
+      "sha": "451d7e9a9c7d73555983ce18dde7ea938b1bc60c",
+      "size": 2260
+    },
+    {
+      "path": "docs/qualification/int10b/ownership-lifecycle-design.md",
+      "sha": "7fc266137cc46393308f5fef9199f3b67e5df25f",
+      "size": 3515
+    },
+    {
+      "path": "docs/qualification/int10b/ownership-observations.sql.proposed",
+      "sha": "9603bd72b4a0b86923d8254cb6205ef963d32d5a",
+      "size": 3830
+    },
+    {
+      "path": "docs/qualification/int10b/ownership-terminal-review.md",
+      "sha": "00f3ecff42bd4c809bc61d78bf5704757de56312",
+      "size": 2568
+    },
+    {
+      "path": "docs/qualification/int10b/pg16-test-source-review.md",
+      "sha": "14529044bfff133ac4c854320f02ecdd150364e4",
+      "size": 1242
+    },
+    {
+      "path": "docs/qualification/int10b/reject_fixtures.py.proposed",
+      "sha": "bb4d480deebde095e36ca5c213fc927e92f601ab",
+      "size": 4810
+    },
+    {
+      "path": "docs/qualification/int10b/runner_support.py.proposed",
+      "sha": "dd7660bf346e141cff850ae2079375ae3827c4df",
+      "size": 2295
+    },
+    {
+      "path": "docs/qualification/int10b/sql-dependency-map.md",
+      "sha": "8b9e69bb9e51fa58b55b835bb50cc5f167fbaaf0",
+      "size": 4629
+    },
+    {
+      "path": "docs/qualification/int10b/test_contention_pg16.py.proposed",
+      "sha": "d2a539209ec8808ffa6357395ff3f95c49d29520",
+      "size": 4011
+    },
+    {
+      "path": "docs/qualification/int10b/test_negative_pg16.py.proposed",
+      "sha": "a3f177ef6fe73aaa5674add30fd49dbd4f60089f",
+      "size": 4742
+    },
+    {
+      "path": "docs/qualification/int10b/test_positive_pg16.py.proposed",
+      "sha": "ba799bd915a3ddc7686b7c24513ddb9b7c9bb6ae",
+      "size": 7831
+    }
+  ],
+  "superseded_path": "docs/qualification/int10b/test_negative_pg16.py.proposed",
+  "replacement": "B12 revised negative test source; its exact SHA available from B12 tree",
+  "candidate_pair": "C12/B10 remains proposed; no automatic replacement",
+  "runtime": "BLOCKED",
+  "rt10": "NO-GO"
+}

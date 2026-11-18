@@ -5,6 +5,10 @@ from uuid import uuid4
 import psycopg
 
 class NegativeContract:
+    def assert_guard(self, error, message):
+        self.assertEqual(error.sqlstate, 'P0001')
+        self.assertEqual(error.diag.message_primary, message)
+
     def test_ownership_fork_and_revocation(self):
         rid='B8-'+uuid4().hex
         now=datetime.now(timezone.utc)-timedelta(seconds=10)
@@ -26,17 +30,18 @@ class NegativeContract:
             try:
                 return append(2,first)
             except psycopg.Error as exc:
-                if exc.sqlstate not in ('P0001','23505','40001'):
-                    raise
+                self.assert_guard(exc,'ownership chain invalid')
                 return None
         with ThreadPoolExecutor(max_workers=2) as pool:
             winners=[x for x in pool.map(compete,range(2)) if x]
         self.assertEqual(len(winners),1)
-        with self.assertRaises(psycopg.Error):
+        with self.assertRaises(psycopg.Error) as err:
             append(3,winners[0],tenant='FOREIGN')
+        self.assert_guard(err.exception,"ownership identity absent")
         revoked=append(3,winners[0],'REVOKED')
-        with self.assertRaises(psycopg.Error):
+        with self.assertRaises(psycopg.Error) as err:
             append(4,revoked)
+        self.assert_guard(err.exception,"ownership revoked")
         with self.connect() as c:
             self.assertEqual(c.execute("""select event_type from aiops.int10b_ownership_observation
                 where resource_kind='run' and resource_id=%s order by observation_version desc""",(rid,)).fetchall(),
@@ -49,26 +54,30 @@ class NegativeContract:
         def update(statement, args=()):
             with self.connect() as c:
                 c.execute(statement,(*args,event))
-        with self.assertRaises(psycopg.Error):
+        with self.assertRaises(psycopg.Error) as err:
             update("update aiops.hitl_decision_outbox set status='DEAD' where event_id=%s")
+        self.assert_guard(err.exception,"invalid outbox transition")
         update("""update aiops.hitl_decision_outbox set status='LEASED',attempts=1,
             lease_owner='fixture',lease_token=%s,lease_until=clock_timestamp()+interval '30 seconds'
             where event_id=%s""",(uuid4().hex,))
-        with self.assertRaises(psycopg.Error):
+        with self.assertRaises(psycopg.Error) as err:
             update("""update aiops.hitl_decision_outbox set attempts=2,lease_token=%s,
                 lease_until=clock_timestamp()+interval '30 seconds' where event_id=%s""",(uuid4().hex,))
+        self.assert_guard(err.exception,"invalid lease transition")
         update("update aiops.hitl_decision_outbox set status='DELIVERED',delivered_at=clock_timestamp() where event_id=%s")
-        with self.assertRaises(psycopg.Error):
+        with self.assertRaises(psycopg.Error) as err:
             update("update aiops.hitl_decision_outbox set status='LEASED',delivered_at=null where event_id=%s")
+        self.assert_guard(err.exception,"terminal outbox immutable")
         with self.connect() as c:
             self.assertEqual(c.execute("select status,attempts from aiops.hitl_decision_outbox where event_id=%s",(event,)).fetchone(),('DELIVERED',1))
 
     def test_dead_requires_atomic_receipt(self):
         # Fixture must reach eight genuine expired leases through B6, no trigger bypass.
         event, receipt=self.seed_eighth_expired_lease()
-        with self.assertRaises(psycopg.Error):
+        with self.assertRaises(psycopg.Error) as err:
             with self.connect() as c:
                 c.execute("update aiops.hitl_decision_outbox set status='DEAD' where event_id=%s",(event,))
+        self.assert_guard(err.exception,"DEAD and terminal receipt must commit together")
         with self.connect() as c:
             self.assertEqual(c.execute("select status from aiops.hitl_decision_outbox where event_id=%s",(event,)).fetchone(),('LEASED',))
         with self.connect() as c:
