@@ -27,6 +27,17 @@ class PortalThemeTests(unittest.TestCase):
         self.assertIn("--ai-blue: #38bdf8", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
+    def test_shared_shell_palette_aliases(self):
+        css = self.client.get("/assets/aiops-theme.css").text
+        for alias, canonical in {
+            "bg": "bg", "card": "surface", "text": "text",
+            "muted": "muted", "line": "border", "hero": "bg-soft",
+            "c": "violet",
+        }.items():
+            with self.subTest(alias=alias):
+                self.assertIn(f"--{alias}: var(--ai-{canonical});", css)
+                self.assertIn(f"--ai-{canonical}:", css)
+
     def test_all_portal_html_surfaces_load_shared_theme(self):
         for path in ("/", "/itsm", "/runs/RUN-73AFC6FF9315376C", "/demo/explore-story", "/demo/acme-impact"):
             with self.subTest(path=path):
