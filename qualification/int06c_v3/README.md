@@ -1,0 +1,1 @@
+B base 08efe73e00197c5fc074d44063be577ef4b988cb; C exact blobs 3f68cfd81d2e75c27fc6d84c78c74c1a2297fd28. Offline contract exercise, B BLOCK never authorizes C runtime. Provisional continuity envelope, synthetic image and manifest SHA, not transport or actual Temporal history. Malformed input may raise; no mutation API. Reproduce using workflow command. No positive authority.

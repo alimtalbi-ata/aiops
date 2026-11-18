@@ -1,0 +1,30 @@
+name: INT06C V3 offline
+on:
+  push:
+    branches: [qualification/int06c-v3-offline]
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Exact sources and tests
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p proof
+          git rev-parse HEAD > proof/executed_sha
+          while read -r sha path; do test "$(git hash-object "$path")" = "$sha"; done < qualification/int06c_v3/source-pins.txt
+          cp qualification/int06c_v3/source-pins.txt proof/
+          PYTHONPATH=app:tests:qualification/int06c_v3 python -m unittest -v test_acme_runtime_context test_acme_authority_readers test_worker_acme_simulated_hitl test_int06c_v3 2>&1 | tee proof/tests.txt
+          ! grep -E 'skipped|expected failure|unexpected success' proof/tests.txt
+          (cd proof && sha256sum executed_sha source-pins.txt tests.txt > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: int06c-v3-${{ github.sha }}
+          path: proof/
