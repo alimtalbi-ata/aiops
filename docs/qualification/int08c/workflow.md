@@ -1,0 +1,22 @@
+# C04–C07 audit et cible
+Source app/worker/main.py: FastAPI startup lance worker_main, reconnect 5s; /api/execution/start POST token, quatre champs run_id/mode/scenario_id/version, workflow id=run_id, duplicate 409 sans attestation; /inspect GET describe/history original args, EXISTS_UNATTESTED. Start/inspect Client.connect(TEMP) default; worker namespace default sauf flag 1. /health ne prouve pas polling.
+Enregistrement réel par défaut: execute_stage,start_run,finish_run; flag 1 exige acme-int06 + aiops2-temporal:7233, ajoute acme_no_effect_activity qui lève ApplicationError nonretryable sandbox_authorities_unavailable; non planifiée par IncidentWorkflow. RETRY 1s x2 max10s 3 tentatives; start/finish 30s, stage 60s start-to-close; HTTP 15s dans call, appels synchrones dans async, pas de deadline globale explicite. Retry STAGE_STARTED/COMPLETE stables mais Evidence/Twin/checkpoint et réponse perdue non prouvés idempotents. Séquence stricte non vérifiée par boucle (version oui). LIVE actuellement crée STAGE_STARTED puis BLOCK; futur interdit avant start. DEMO/REPLAY/STORY -> OBSERVE policy; SIMULATION n'est pas mode Core. Pas de fallback LIVE.
+| Cible | Stage réel / point | Autorité future et gap |
+|---|---|---|
+| Incident SAN, impact Payments | NORMALIZE/CORRELATE/CMDB | IDs source durables et impact lié; fixtures actuellement |
+| Core PREPARED | avant OBSERVE, après START | absent comme contrat d'autorité attempt; arbitrer ordre persistance |
+| Twin | OBSERVE | synthetic-event existant, lecture indépendante manquante |
+| Contexte | RAG | preuve synthétique seulement |
+| Analyst | DGX_ANALYST | fixture déterministe, aucun DGX live |
+| Critic | DGX_CRITIC | réel gate absent, policy payload critic_validated=True aujourd'hui |
+| Policy | POLICY | POST check puis gate; refus réel possible, readback absent |
+| HITL simulé | HITL | pas d'approval indépendante, nonce ASCII, TTL et replay barrier nécessaires |
+| Worker no-effect | REMEDIATE | activité optionnelle non planifiée, receipt strict via simulate_no_effect après autorité ratifiée |
+| Receipt + History | après REMEDIATE avant VERIFY | PRE_RESOLUTION, pas preuve terminal; history export brut signé/lié à workflow execution ID |
+| Postcheck | VERIFY | baseline refuse, autorité externe requise |
+| Réconciliation | RECONCILE puis LEARN | ne jamais passer si VERIFY non qualifié |
+| Terminal + relecture | finish_run puis readback | commande RESOLVE générique 403; futur transition interne atomique ratifiée, double lecture et digest; pas de succès public avant relecture |
+## Raccord INT07
+app/worker/int07_offline_collector.collect: capture Core/Twin/Policy via collect_prepared double Core; 8 observers prepared/receipt/history/postcheck/terminal/terminal_readback/manifest/independent; source_registry distinct, freshness par source, UTC et digest enveloppes, double terminal identique; qualify_continuity B et vrais C validate_postcheck/validate_manifest, B vérifie receipt. Ne pas dupliquer. Séparer pré-terminal gate futur et collecteur final: collect exige terminal déjà existant, donc ne peut autoriser FINISH (cycle logique); ne jamais créer terminal fictif pour le satisfaire. Prévoir interface pré-terminal ratifiée avec preuves no-effect, history prefix, postcheck indépendant, identité/version/sequence strictes. Finalisation atomique interne Core seulement, CAS, idempotency intent, outbox; état de publication reste UNKNOWN/BLOCK jusqu'à readback. Si réponse perdue read-only reconcile, jamais second effet. Aucun second workflow.
+## Gaps P0
+Transport GET attempt-scoped Core/Twin/Policy et terminal, registry authentifié, ACL read-only, service identity/mTLS et clés éphémères; pas de code API/auth ici. Persistance 000–013 uniquement; proposer (sans SQL appliqué) relations attempt, source event, snapshot, approval nonce unique, receipt, terminal/outbox, contraintes tenant/run/version/sequence et digest; migration review Core/DB, transaction et rollback test séparés. Schéma strict versionné externe pour provenance image/exec/VM, ne pas étendre receipt v1; définir snapshot/impact et source time distinct collection. Historique Temporal prefix vs final append-only, hashes séparés. Autorité postcheck externe et preuve isolation runtime absentes. Namespace unique start/inspect/worker à ratifier (acme-int08 vs fence acme-int06); task queue et readiness réels. Auth Core generic RESOLVE reste interdit. Aucun passage runtime autorisé.

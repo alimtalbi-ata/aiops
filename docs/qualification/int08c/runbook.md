@@ -1,0 +1,15 @@
+# Runbook futur — ne rien exécuter sous INT08C
+1. GO séparé architecte: exact SHA runtime approuvé, inventaire pins, changements P0, VM ID, owner et fenêtre, sécurité réseau. Tout UNKNOWN bloque.
+2. Préparer VM offline, vérifier identité, horloge UTC, absence secrets/volumes/routes externes; import archives approuvées, comparer digests et plateforme. Vérifier compose final via config et politique ACL hors runtime. Ce scaffold est volontairement non lançable.
+3. Après GO lancement distinct seulement: initialiser PG dédiés par migrations ratifiées, vérifier DB UUID/schema/roles; Temporal bootstrap namespace/queue et readiness; Core/Twin/Policy/Evidence/Copilot puis Worker/Portal/collecteur. Contrôler activity registration depuis history/poller réel, pas /health. Ne pas activer flag avant correction namespace.
+4. Injecter une fois SAN P1 / Payments P2, relever sept IDs tenant incident run attempt proposal ticket approval + impact/snapshot; preuve Core/Twin/Policy indépendante, source refs, UTC et digests. Capturer history brut, start args, workflow execution ID/attempts, versions+séquences, PREPARED/receipt/postcheck/terminal et deux lectures. Observer externe comptes effets, ACL, réseau, DB sandbox; aucune écriture réelle externe. Verify/finish seulement via contrat futur ratifié. Si refus, garder BLOCK/UNKNOWN.
+5. Exécuter matrice adverses avec nouveaux attempts/runs, isolation contrôlée et fault injection locale (pas PROD); retry 3 max et réponse perdue, vérifier idempotence et replay déterministe SDK. Trois exécutions nominales indépendantes avec même image/config, IDs différents et résultat normalisé comparable, preuves brutes et hashes propres. Ne pas confondre fixtures et history.
+6. Stop: suspendre injection, laisser ou annuler workflows selon plan autorisé, exporter history et logs avant extinction, révoquer tokens, arrêter services et volumes uniquement au lab UUID, vérifier aucun container/network/volume restant, détruire VM/disques, observer teardown signé hors VM. Pas de prune global. En incident isolation: couper VM immédiatement, conserver artefacts forensic. Rollback = destruction sandbox, jamais restauration PROD.
+7. Manifest export: schema versionné, env UUID, exact executed SHA et mapping image digests/config IDs, raw files hashes, source auth/clock, 7 IDs + impact snapshot, history prefix/final, postcheck, terminal readbacks, mesure effets/isolation, teardown. Vérifier strict JSON doublons, chemins, digests, chronologie via B/C; signatures/provenance à arbitrer. Aucune positive authority de validate_manifest actuelle.
+## Gates
+G04 continuité parent/version/temps/digests: tests B/C offline; runtime UNKNOWN.
+G05 appels vrais validateurs: INT07 collector; runtime UNKNOWN.
+G06 négatifs identité/fraîcheur/digest: offline; runtime UNKNOWN.
+G07 stop downstream: boucle réelle AST + stubs; pas exécution Temporal, PARTIAL.
+G08 LIVE protection et préflight isolation: offline limite, runtime UNKNOWN.
+G10 trois répétitions offline CI; futur trois runs runtime indépendants, UNKNOWN.
