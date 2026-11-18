@@ -25,6 +25,20 @@ class Int05Audit(unittest.TestCase):
                 row = {"width":width,"page":name,"overflow":self.page.evaluate("document.documentElement.scrollWidth > innerWidth"),"tab":[],"reverse_tab":[],"tables":[]}
                 png = self.page.screenshot(path=str(output/f"{width}-{name}.png"),full_page=True,animations="disabled")
                 row["sha256"] = hashlib.sha256(png).hexdigest()
+                row["initial_height"] = self.page.evaluate("document.documentElement.scrollHeight")
+                if name == "cockpit":
+                    row["verdict_bottom"] = self.page.locator(".demo-cards").evaluate("e=>e.getBoundingClientRect().bottom")
+                    self.assertLessEqual(row["verdict_bottom"],844 if width==320 else 900)
+                    for detail in self.page.locator("details").all():
+                        if not detail.evaluate("e=>e.open"):
+                            detail.locator("summary").focus()
+                            self.page.keyboard.press("Enter")
+                            self.assertTrue(detail.evaluate("e=>e.open"))
+                    self.page.evaluate("scrollTo(0,0)")
+                    self.assertEqual(self.page.locator("table tbody").evaluate_all("es=>es.map(e=>e.rows.length)"),[9,9,9,8])
+                    expanded = self.page.screenshot(path=str(output/f"{width}-{name}-expanded.png"),full_page=True,animations="disabled")
+                    row["expanded_sha256"] = hashlib.sha256(expanded).hexdigest()
+                    row["expanded_height"] = self.page.evaluate("document.documentElement.scrollHeight")
                 info = """() => {const e=document.activeElement,s=getComputedStyle(e);return {tag:e.tagName,id:e.id,label:e.getAttribute('aria-label'),href:e.getAttribute('href'),outline:s.outlineStyle,outlineColor:s.outlineColor,outlineWidth:s.outlineWidth}}"""
                 for key, field in (("Tab","tab"),("Shift+Tab","reverse_tab")):
                     for _ in range(40):
