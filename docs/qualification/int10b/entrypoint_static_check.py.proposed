@@ -1,0 +1,30 @@
+"""Inert static inspection only; no Core import or execution."""
+import ast
+import hashlib
+CANDIDATE_COMMIT = 'cf98853c2ff361fef773d45ff3ddc5b16ec5f765'
+CANDIDATE_BLOB = 'b7fbdbf0b592e1342ecc396b0023d9d0a45968fc'
+CANDIDATE_SHA256 = '53fe4281eac68615c145983bc62e57521b8968b6fa1c909f534a27bc63f131eb'
+IMPORTS = {'hashlib','hmac','datetime','json','os','re','urllib.parse',
+           'fastapi','fastapi.responses','pydantic','psycopg.types.json'}
+
+def inspect_candidate(raw: bytes):
+    if type(raw) is not bytes or hashlib.sha256(raw).hexdigest()!=CANDIDATE_SHA256:
+        raise AssertionError('candidate content mismatch')
+    header = b'blob '+str(len(raw)).encode('ascii')+b'\0'
+    if hashlib.sha1(header+raw).hexdigest()!=CANDIDATE_BLOB:
+        raise AssertionError('candidate blob mismatch')
+    tree=ast.parse(raw, filename='isolated_core_candidate.py')
+    imports=set()
+    for node in ast.walk(tree):
+        if isinstance(node,ast.Import):
+            imports.update(alias.name for alias in node.names)
+        elif isinstance(node,ast.ImportFrom):
+            if node.level:
+                raise AssertionError('relative import prohibited')
+            imports.add(node.module)
+    if imports!=IMPORTS:
+        raise AssertionError('candidate import set mismatch')
+    return tree
+
+def entrypoint_status():
+    return 'BLOCKED_HISTORICAL_GATES'
