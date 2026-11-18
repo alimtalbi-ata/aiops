@@ -63,3 +63,37 @@ class FencedTerminalTests(unittest.IsolatedAsyncioTestCase):
             await recover_fenced_terminal("TEN-1","EV-1",BODY,terminal=core)
         self.assertTrue((await recover_fenced_terminal("TEN-1","EV-1",BODY,terminal=core))["idempotent"])
         self.assertEqual(calls,[BODY,BODY])
+
+    async def test_scripted_current_fence_only(self):
+        # An explicit test oracle, NOT a Core transaction or persisted ownership.
+        current = dict(BODY, lease_token="y"*43)
+        calls = []
+        async def core(tenant, event, body):
+            calls.append((tenant,event,dict(body)))
+            if (tenant,event,body) != ("TEN-1","EV-1",current):
+                return 200, dict(schema=CORE_SCHEMA,status="UNKNOWN",
+                                 execution_allowed=False,effect_allowed=False)
+            return 200,receipt()
+        for tenant,event,body in (
+            ("TEN-1","EV-1",BODY),
+            ("TEN-2","EV-1",current),
+            ("TEN-1","EV-2",current),
+            ("TEN-1","EV-1",dict(current,owner="worker-2")),
+            ("TEN-1","EV-1",dict(current,proposal_revision=2)),
+            ("TEN-1","EV-1",dict(current,proposal_hash="c"*64)),
+        ):
+            with self.subTest(tenant=tenant,event=event), self.assertRaises(UnqualifiedTerminal):
+                await recover_fenced_terminal(tenant,event,body,terminal=core)
+        result = await recover_fenced_terminal("TEN-1","EV-1",current,terminal=core)
+        self.assertEqual(result["status"],"DEAD")
+        self.assertEqual(calls[0][2]["lease_token"],"x"*43)
+        self.assertEqual(calls[-1][2]["lease_token"],"y"*43)
+
+    async def test_callback_mutation_cannot_rebind_receipt(self):
+        original = dict(BODY)
+        async def core(tenant,event,body):
+            body["proposal_revision"] = 2
+            return 200,receipt(proposal_revision=2)
+        with self.assertRaises(UnqualifiedTerminal):
+            await recover_fenced_terminal("TEN-1","EV-1",original,terminal=core)
+        self.assertEqual(original,BODY)

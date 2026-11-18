@@ -54,3 +54,20 @@ class RecoveryOffline(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await deliver_core_reject_once(**args), [])
         self.assertEqual(len(signals), 1)
         self.assertEqual(core.committed, {"EV-1"})
+
+    async def test_distinct_worker_claim_owner_mismatch_never_signals(self):
+        leased = claim()
+        core = SyntheticCorePost([leased, leased])
+        signals = []
+        async def signal(*args):
+            signals.append(args)
+        async def contender(owner):
+            return await deliver_core_reject_once(tenant_id=TENANT, owner=owner,
+                                                    post=core.post, signal=signal)
+        # Scripted duplicate claim projection, not genuine database contention.
+        results = await asyncio.gather(contender(OWNER), contender("svc-other"),
+                                       return_exceptions=True)
+        self.assertEqual(len(results[0]), 1)
+        self.assertIsInstance(results[1], UnqualifiedNotification)
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(sum(path.endswith("/ack") for path, _ in core.calls), 1)
