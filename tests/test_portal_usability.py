@@ -91,6 +91,30 @@ class PortalUsabilityTests(unittest.TestCase):
             self.assertFalse(may_read_incident(principal, "tenant-a"))
 
 
+    def test_operator_session_prototype(self):
+        from portal.operator_session import OperatorSessions
+        from portal.incident_read_policy import IncidentReadPrincipal
+        now = [0]
+        sessions = OperatorSessions(clock=lambda: now[0])
+        principal = IncidentReadPrincipal("operator-1", "tenant-a", "N1")
+        token = sessions.issue(principal)
+        self.assertEqual(sessions.resolve(token), principal)
+        self.assertIsNone(sessions.resolve("invalid"))
+        sessions.revoke(token)
+        self.assertIsNone(sessions.resolve(token))
+        token = sessions.issue(principal)
+        now[0] += 900
+        self.assertIsNone(sessions.resolve(token))
+        token = sessions.issue(principal)
+        for _ in range(35):
+            now[0] += 800
+            self.assertEqual(sessions.resolve(token), principal)
+        now[0] += 800
+        self.assertIsNone(sessions.resolve(token))
+        with self.assertRaises(ValueError):
+            sessions.issue(IncidentReadPrincipal("operator-1", "tenant-a", "UNKNOWN"))
+
+
 
 if __name__ == "__main__":
     unittest.main()
