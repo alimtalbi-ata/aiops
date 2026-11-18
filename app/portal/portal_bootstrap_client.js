@@ -70,7 +70,7 @@
     if (rows && states.runs === "READABLE_UNVERIFIED" && data.runs &&
         Array.isArray(data.runs.items)) {
       rows.replaceChildren();
-      for (const run of data.runs.items.slice(0, 15)) {
+      for (const run of data.runs.items) {
         if (!run || typeof run.run_id !== "string") continue;
         const tr = document.createElement("tr");
         for (const field of ["run_id", "mode", "status", "overall_confidence", "scenario_id"]) {

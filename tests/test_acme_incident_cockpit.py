@@ -123,7 +123,10 @@ def test_customer_walkthrough_has_five_working_anchor_targets_and_safe_verdict()
     assert page.status_code == 200
     anchors = Anchors()
     anchors.feed(page.text)
-    assert anchors.targets == ["impact", "evidence", "decision", "itil", "verdict"]
+    assert anchors.targets == ["impact", "workbench", "decision", "itil", "verdict"]
+    # Preserve the historical direct-link target while the guided journey uses Workbench.
+    assert "evidence" in anchors.ids
+    assert "workbench" in anchors.ids
     assert set(anchors.targets).issubset(anchors.ids)
     assert page.text.index("id='decision'") < page.text.index("id='itil'")
     assert page.text.index("id='itil'") < page.text.index("id='verdict'")

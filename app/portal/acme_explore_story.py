@@ -30,18 +30,18 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACME — Explore / Story (simulation)</title>
 <style>
-body{margin:0;background:#081522;color:#ecf4ff;font:15px/1.5 system-ui,sans-serif}
+body{margin:0;background:#080b14;color:#f4f7ff;font:15px/1.5 system-ui,sans-serif}
 main{max-width:1100px;margin:auto;padding:24px}
-a{color:#90d5ff}header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.panel{background:#10243a;border:1px solid #2a4b65;border-radius:14px;padding:18px;margin:14px 0}
-button{background:#2878b7;color:white;border:0;border-radius:8px;padding:10px 14px;margin:4px;cursor:pointer}
+a{color:#38bdf8}a:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.panel{background:#111827;border:1px solid #2a4b65;border-radius:14px;padding:18px;margin:14px 0}
+button{background:#6d28d9;color:white;border:0;border-radius:8px;padding:10px 14px;margin:4px;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:3px solid #ffda7a}
 button[aria-pressed=true]{background:#16634d}
 input{background:#06111e;color:white;border:1px solid #63839a;padding:10px;border-radius:8px}
 .muted{color:#adc1d1}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 ol{padding-left:28px}li{padding:6px}li.current{color:#ffda7a;font-weight:bold}
 strong{overflow-wrap:anywhere}#source{overflow-wrap:anywhere}#step-detail{white-space:pre-wrap}
-</style></head><body><main>
+@media(max-width:650px){main{padding:12px}.panel{padding:12px}.grid{grid-template-columns:minmax(0,1fr)}input{max-width:100%;box-sizing:border-box}}</style></head><body><main>
 <header><a href="/">← Portail unique</a><a href="/demo/acme-impact">Graphe ACME (simulation)</a></header>
 <h1>ACME · Explore / Story</h1>
 <p>SIMULATED_TARGET — même fixture SAN P1 → Payments P2 dans les deux modes.
