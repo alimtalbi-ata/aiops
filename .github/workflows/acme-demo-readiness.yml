@@ -2,6 +2,8 @@ name: ACME golden demo readiness (offline)
 on:
   pull_request:
     paths:
+      - 'app/worker/acme_simulated_hitl.py'
+      - 'tests/test_worker_acme_simulated_hitl.py'
       - 'scripts/acme_demo_readiness.py'
       - 'scripts/acme_receipt_model.py'
       - 'tests/test_acme_demo_readiness.py'
@@ -61,6 +63,8 @@ jobs:
           PY
       - name: Contract tests (fixture driven, no external API)
         run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
+      - name: Worker no-effect contract (in-memory authority fixtures)
+        run: python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v
       - name: CLI gate self-check and negative receipts
         run: |
           set -eu
