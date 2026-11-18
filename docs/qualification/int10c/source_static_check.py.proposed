@@ -1,0 +1,17 @@
+"""Inert static verifier: no imports of inspected modules or execution."""
+import ast
+import hashlib
+
+def inspect_bytes(raw, *, expected_blob, expected_sha256):
+    if type(raw) is not bytes:
+        raise ValueError("raw_bytes_required")
+    if hashlib.sha256(raw).hexdigest() != expected_sha256:
+        raise ValueError("content_sha256")
+    header = ("blob %d" % len(raw)).encode("ascii") + bytes([0])
+    if hashlib.sha1(header+raw).hexdigest() != expected_blob:
+        raise ValueError("git_blob")
+    tree = ast.parse(raw.decode("utf-8"))
+    return {"imports":[ast.unparse(n) for n in ast.walk(tree)
+                       if isinstance(n,(ast.Import,ast.ImportFrom))],
+            "callables":[n.name+"("+ast.unparse(n.args)+")"
+                         for n in tree.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))]}

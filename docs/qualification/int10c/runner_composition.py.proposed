@@ -19,8 +19,12 @@ def compose_run(plan, *, expected_c_sha, expected_b_sha, validate_plan,
     inventory = []
     outcome = "NOT_QUALIFIED"
     cleanup = False
+    # Admission must be read-only; outer supervisor owns partial reservations.
+    if boundary.assert_disposable(plan, deadline=work_deadline) is not True:
+        raise ValueError("domain_not_admitted")
+    if time.monotonic() >= work_deadline:
+        raise TimeoutError("admission_budget")
     try:
-        boundary.assert_disposable(plan, deadline=work_deadline)
         for kind in ("postgres", "core", "temporal", "worker"):
             if time.monotonic() >= work_deadline:
                 raise TimeoutError("work_budget")
@@ -40,6 +44,8 @@ def compose_run(plan, *, expected_c_sha, expected_b_sha, validate_plan,
             boundary.destroy_owned(tuple(reversed(inventory)), deadline=deadline)
             cleanup = boundary.verify_domain_absent(deadline=deadline) is True
         finally:
+            if not cleanup:
+                outcome = "NOT_QUALIFIED"
             boundary.record_outcome(outcome, cleanup, deadline=deadline)
     return {"status":"CANDIDATE_ONLY","outcome":outcome,
             "cleanup_reported":cleanup,"runtime_attested":False,

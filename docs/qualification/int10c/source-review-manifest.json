@@ -1,0 +1,32 @@
+{
+  "status": "REVIEW_INPUTS_ONLY",
+  "commit": "04519de7bbc692457e650f0d5d1b589f85f6de89",
+  "inputs": [
+    {
+      "path": "docs/qualification/int10c/runner_composition.py.proposed",
+      "blob": "c8d03fd616598606ed6ccf034e458fe15b5c0c8b",
+      "sha256": null
+    },
+    {
+      "path": "docs/qualification/int10c/linux_child_supervision.py.proposed",
+      "blob": "914ba5dc436e16fca37719b0b4b0222bf29d2b45",
+      "sha256": null
+    },
+    {
+      "path": "docs/qualification/int10c/watchdog_policy.py.proposed",
+      "blob": "cb7a66b9c1076b5ae61def9aa4441c94b35f2c45",
+      "sha256": null
+    },
+    {
+      "path": "docs/qualification/int10c/cgroup_cleanup.py.proposed",
+      "blob": "859195bac6f8aabc514e65c5f933a73191332bc2",
+      "sha256": null
+    },
+    {
+      "path": "docs/qualification/int10c/placement_admission.py.proposed",
+      "blob": "e00aff0c89e450ecd9d4e86a0160b915ce3288a8",
+      "sha256": null
+    }
+  ],
+  "note": "Fetched blob identifiers only; raw bytes and SHA256 pending static verification. Runner entry is predecessor, not corrected source."
+}
