@@ -19,6 +19,14 @@ class AccessibilityAudit(unittest.TestCase):
                 self.assertEqual(self.page.evaluate("document.activeElement.className"),"skip-link")
                 self.page.keyboard.press("Enter")
                 self.assertEqual(self.page.evaluate("document.activeElement.id"),"main-content")
+                if name=="acme-incident-cockpit":
+                    links=self.page.get_by_role("navigation",name="Parcours guidé de démonstration").get_by_role("link")
+                    self.assertEqual(links.count(),5)
+                    for link in links.all():
+                        target=link.get_attribute("href")[1:]
+                        link.focus()
+                        self.page.keyboard.press("Enter")
+                        self.assertEqual(self.page.evaluate("document.activeElement.id"),target)
                 if name=="acme-impact":
                     links=self.page.get_by_role("navigation",name="Accès rapide aux preuves").get_by_role("link")
                     self.assertEqual(links.count(),5)
@@ -51,6 +59,9 @@ class AccessibilityAudit(unittest.TestCase):
                         for _ in range(40):
                             self.page.keyboard.press(key)
                             row["keys"].append(self.page.evaluate("""()=>{let e=document.activeElement,s=getComputedStyle(e);return {tag:e.tagName,id:e.id,label:e.getAttribute('aria-label'),outline:s.outline,rect:e.getBoundingClientRect().toJSON()}}"""))
+                    for observation in row["keys"]:
+                        if observation["tag"]!="BODY":
+                            self.assertIn("solid",observation["outline"])
                     row["styles"]=self.page.locator("h1,h2,h3,p,a,th,td,summary,dt,dd,small").evaluate_all("""es=>es.filter(e=>e.getClientRects().length).map(e=>{let s=getComputedStyle(e),p=e;while(p&&getComputedStyle(p).backgroundColor==='rgba(0, 0, 0, 0)')p=p.parentElement;return {tag:e.tagName,color:s.color,background:p?getComputedStyle(p).backgroundColor:null,size:s.fontSize,weight:s.fontWeight}})""")
                     row["regions"]=self.page.locator("[role=region]").evaluate_all("es=>es.filter(e=>e.getClientRects().length).map(e=>({label:e.getAttribute(\"aria-label\"),width:e.clientWidth,extent:e.scrollWidth}))")
                     row["headings"]=self.page.locator("h1,h2,h3,h4").all_text_contents()
@@ -60,5 +71,11 @@ class AccessibilityAudit(unittest.TestCase):
             self.page.set_viewport_size({"width":width,"height":720})
             for name in ("explore-story","acme-impact","acme-incident-cockpit"):
                 self.page.goto(self.base+"/demo/"+name)
+                self.assertFalse(self.page.evaluate("document.documentElement.scrollWidth>innerWidth"))
+                for detail in self.page.locator("details").all():
+                    if not detail.evaluate("e=>e.open"):
+                        detail.locator("summary").focus()
+                        self.page.keyboard.press("Enter")
+                        self.assertTrue(detail.evaluate("e=>e.open"))
                 self.assertFalse(self.page.evaluate("document.documentElement.scrollWidth>innerWidth"))
         (out/"audit.json").write_text(json.dumps(dict(executed_sha=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),scope="STORY_OFFLINE",runtime_attested=False,rows=rows),indent=2))
