@@ -1,0 +1,57 @@
+"""Inert runner support. No DSN, no provisioning, no entrypoint.
+Requires separately authorized disposable PG16 fixture and isolated module.
+"""
+from contextlib import contextmanager
+from contextvars import ContextVar
+from types import SimpleNamespace
+from unittest.mock import patch
+
+_fault = ContextVar('int10b_fault', default=None)
+
+class ConnectionProxy:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, *args, **kwargs):
+        fault = _fault.get()
+        if fault and isinstance(sql,str) and sql.startswith(fault['prefix']):
+            if fault['hits']:
+                raise AssertionError('fault matched more than once')
+            fault['hits'] += 1
+            return SimpleNamespace(rowcount=0)
+        return self.connection.execute(sql,*args,**kwargs)
+
+class RunnerSupport:
+    @contextmanager
+    def suppress_update(self, table):
+        prefixes = {'incidents':"update aiops.incidents set state='RESOLVED',",
+                    'runs':"update aiops.runs set status='RESOLVED',"}
+        fault={'prefix':prefixes[table],'hits':0}
+        token=_fault.set(fault)
+        try:
+            yield
+            if fault['hits']!=1:
+                raise AssertionError('expected exactly one injected UPDATE')
+        finally:
+            _fault.reset(token)
+
+    @contextmanager
+    def candidate_db(self):
+        # The supplied context MUST rollback on exception, including commit failure.
+        with self.connect() as c:
+            yield ConnectionProxy(c)
+
+    @contextmanager
+    def bind_candidate_db(self):
+        # No gate or auth bypass here. Future authorized test harness must
+        # separately supply isolated test-local entrypoint binding.
+        with patch.object(self.core,'db',self.candidate_db):
+            yield
+
+    def assert_fixture_identity(self, connection, expected_database, expected_role):
+        # Sanity check only, not proof that a database is disposable.
+        version, database, role = connection.execute(
+            "select current_setting('server_version_num')::int,current_database(),current_user"
+        ).fetchone()
+        if not 160000 <= version < 170000 or database != expected_database or role != expected_role:
+            raise AssertionError('fixture identity mismatch')
