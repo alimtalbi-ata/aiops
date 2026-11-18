@@ -88,26 +88,32 @@
     if (!rows || !input || !status || mounted.has(rows)) return false;
     mounted.add(rows);
     let selectedRow = null;
+    let selectedId = null;
+    const originalId = row => row.cells[0]?.childNodes === undefined ? row.cells[0]?.textContent : Array.from(row.cells[0].childNodes).filter(n => n.nodeType === 3).map(n => n.textContent).join('');
     function sync() {
-      if (selectedRow && !rows.contains(selectedRow)) {
+      if (selectedRow && (!rows.contains(selectedRow) || originalId(selectedRow) !== selectedId)) {
         input.value = "";
         selectedRow = null;
+        selectedId = null;
         status.textContent = "UNKNOWN — inventaire remplacé ; sélection effacée.";
       }
       for (const row of Array.from(rows.rows)) {
         if (row.cells.length !== 5) continue;
         const cell = row.cells[0];
-        if (cell.querySelector("button[data-run-select]")) continue;
-        const id = cell.textContent;
+        const existing = cell.querySelector("button[data-run-select]");
+        const id = originalId(row);
+        if (existing && existing.getAttribute("data-run-select") === id) continue;
+        if (existing) existing.remove();
         if (!selectableRunId(id)) continue;
         const button = doc.createElement("button");
         button.type = "button";
-        button.setAttribute("data-run-select", "");
+        button.setAttribute("data-run-select", id);
         button.textContent = "Sélectionner";
         button.setAttribute("aria-label", "Sélectionner " + id + " pour une lecture autorisée");
         button.addEventListener("click", () => {
-          if (!rows.contains(row) || row.hidden) return;
+          if (!rows.contains(row) || row.hidden || originalId(row) !== id) return;
           selectedRow = row;
+          selectedId = id;
           input.value = id;
           status.textContent = "Run sélectionné — authentification et ACL toujours requises.";
           input.focus();
@@ -115,8 +121,8 @@
         cell.appendChild(button);
       }
     }
-    input.addEventListener("input", () => { selectedRow = null; });
-    if (root && root.MutationObserver) new root.MutationObserver(sync).observe(rows, {childList:true,subtree:true});
+    input.addEventListener("input", () => { selectedRow = null; selectedId = null; status.textContent = "UNKNOWN — identifiant saisi manuellement ; ACL requise."; });
+    if (root && root.MutationObserver) new root.MutationObserver(sync).observe(rows, {childList:true,subtree:true,characterData:true});
     sync();
     return true;
   }
