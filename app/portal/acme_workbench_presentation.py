@@ -77,7 +77,7 @@ def safe(x):
     return escape(str(x)[:700]) if isinstance(x, (str, int, float, bool)) and x != "" else "MISSING"
 
 def event_facts(e):
-    """Render only bounded, recorded Core event data; never invent AI rationale."""
+    """Render bounded injected event fields without asserting Core authority."""
     e = e if isinstance(e, dict) else {}
     payload = e.get("payload") if isinstance(e.get("payload"), dict) else {}
     refs = e.get("evidence_ids") if isinstance(e.get("evidence_ids"), list) else []
@@ -124,19 +124,22 @@ def event_facts(e):
 def evidence_catalog(items):
     """Distinguish stage receipts from actual technical observations, without fabrication."""
     if not isinstance(items,list) or not items:
-        return '<p>Aucune preuve détaillée liée à ce run.</p>'
+        return '<p>Aucune preuve détaillée liée à ce run — MISSING.</p>'
     valid = [e for e in items[:200] if isinstance(e,dict) and isinstance(e.get("evidence_id"), str) and 0 < len(e["evidence_id"]) <= 128 and all(c.isascii() and (c.isalnum() or c in "-_") for c in e["evidence_id"])]
-    valid = list({e["evidence_id"]: e for e in valid}.values())
+    if len({e["evidence_id"] for e in valid}) != len(valid):
+        return "<p>Identifiants de preuve dupliqués — UNKNOWN.</p>"
     markers = [e for e in valid if isinstance(e.get("provenance"),dict) and
                e["provenance"].get("record_type") == "stage_marker"]
     observations = [e for e in valid if e not in markers]
+    technical = [e for e in observations if isinstance(e.get("provenance"), dict) and e["provenance"].get("record_type") == "observation"]
+    other = [e for e in observations if e not in technical]
     if not valid:
         return "<p>Aucune preuve exploitable — UNKNOWN.</p>"
     parts=['<p><strong>Inventaire :</strong> '+str(len(markers))+
-           ' marqueur(s) d’exécution · '+str(len(observations))+
-           ' autre(s) enregistrement(s) (nature à vérifier).</p>']
+           ' marqueur(s) d’exécution · '+str(len(technical))+
+           ' observation(s) déclarée(s) · '+str(len(other))+' autre(s) enregistrement(s) (nature à vérifier).</p>']
     if markers and not observations:
-        parts.append('<p><strong>Attention :</strong> ces enregistrements attestent uniquement le passage '+
+        parts.append('<p><strong>Attention :</strong> ces enregistrements déclarent uniquement le passage '+
                      'des étapes. Ils ne démontrent pas une dégradation SAN ou son lien causal avec Payments.</p>')
     parts.append('<p>Entrées offline non attestées. Les payloads bruts ne sont pas exposés.</p>')
     for e in observations + markers:
@@ -145,7 +148,7 @@ def evidence_catalog(items):
             continue
         prov=e.get("provenance") if isinstance(e.get("provenance"),dict) else {}
         marker=prov.get("record_type") == "stage_marker"
-        kind="Marqueur d’exécution — non probant pour le diagnostic" if marker else "Enregistrement à qualifier"
+        kind="Marqueur d’exécution — non probant pour le diagnostic" if marker else ("Observation déclarée — non attestée" if e in technical else "Enregistrement à qualifier")
         parts.append('<details id="proof-'+eid+'"><summary><strong>'+safe(kind)+'</strong> · '+
                      safe(eid)+' · '+safe(e.get("source"))+' · '+safe(e.get("claim"))+'</summary>'+
                      '<p><strong>observed_at — Observé :</strong> '+safe(e.get("observed_at"))+
