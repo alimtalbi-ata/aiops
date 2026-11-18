@@ -7,7 +7,7 @@ from worker.int07_offline_collector import collect
 from worker.int06a_contract import STAGES
 from test_int09b_preterminal import chain, invoke
 
-@pytest.mark.parametrize("case", ["nominal","foreign","prefix","terminal_drift"])
+@pytest.mark.parametrize("case", ["nominal","foreign","prefix","terminal_drift","receipt_drift","history_link_drift","terminal_parent_drift","manifest_sha_drift","independent_sha_drift"])
 def test_golden_final(case):
     f=chain()
     expected,intent,admission,second,registry,phase,sources,policies=f
@@ -35,6 +35,11 @@ def test_golden_final(case):
     vals=dict(prepared=prepared,receipt=receipt,history=history,postcheck=post,terminal=terminal,terminal_readback=actual,manifest=manifest,independent=independent)
     if case=="foreign": vals["terminal"]=deepcopy(terminal); vals["terminal"]["identity"]=dict(ident,tenant_id="FOREIGN"); seal(vals["terminal"])
     if case=="prefix": vals["history"]=dict(history,prefix_sha256="0"*64)
+    if case=="receipt_drift": vals["receipt"]=dict(receipt,receipt_sha256="0"*64)
+    if case=="history_link_drift": vals["postcheck"]=dict(post,history_sha256="0"*64)
+    if case=="terminal_parent_drift": vals["terminal"]=dict(terminal,parent_snapshot_id="FOREIGN-SNAP"); seal(vals["terminal"])
+    if case=="manifest_sha_drift": vals["manifest"]=dict(manifest,executed_sha="d"*40)
+    if case=="independent_sha_drift": vals["independent"]=dict(independent,executed_sha="d"*40)
     env={k:dict(source_id="final-"+k,observed_at="2026-11-18T12:00:22Z",content=v,content_sha256=digest(v)) for k,v in vals.items()}
     reg={k:registry[k] for k in rows}|{k:v["source_id"] for k,v in env.items()}
     policies.update({v:300 for v in reg.values()})
