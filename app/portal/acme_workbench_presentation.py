@@ -184,7 +184,11 @@ def render_same_run_journey(inputs=None):
              "<p>Historique injecté distinct du scénario Story ; aucun rapprochement attesté.</p><dl>"]
     for key in ("tenant_id","incident_id","run_id","attempt_id","ticket_id","readback_authority","event_digest_kind"):
         parts.append("<dt>"+safe(key)+"</dt><dd>"+safe(value.get(key))+"</dd>")
-    parts.append("</dl><ol>")
+    parts.append("<dt>Impact indépendant</dt><dd>UNKNOWN</dd>"
+                 "<dt>Horodatage snapshot Core</dt><dd>MISSING</dd>"
+                 "<dt>Autorité ticket</dt><dd>"+safe(value.get("ticket_authority"))+"</dd>"
+                 "<dt>État Run historique simulé</dt><dd>"+safe(value.get("run_status"))+"</dd>"
+                 "</dl><p>Policy indépendante : UNKNOWN. HITL négatif : aucun lien incident/attempt attesté.</p><ol>")
     for row in value["timeline"]:
         parts.append("<li>"+safe(row["sequence"])+" · "+safe(row["stage"])+" / "+safe(row["event_type"])
                      +" — statut historique non attesté : "+safe(row["status"])

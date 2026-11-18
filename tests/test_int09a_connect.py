@@ -112,3 +112,30 @@ def test_existing_b_chain_phase_identity_comparison():
     assert "identités divergentes" in render_collector_result(admission=admission, preterminal=preterminal)
     preterminal["execution_allowed"] = True
     assert "Identités déclarées concordantes" not in render_collector_result(admission=admission, preterminal=preterminal)
+
+
+def test_historical_wire_missing_fields_not_inferred():
+    snapshot, rows = fixture(True)
+    html = render_same_run_journey((snapshot, rows, ATTEMPT))
+    assert "Impact indépendant</dt><dd>UNKNOWN" in html
+    assert "Horodatage snapshot Core</dt><dd>MISSING" in html
+    assert "SIMULATED_ONLY" in html
+    assert "Policy indépendante : UNKNOWN" in html
+    assert "HITL négatif : aucun lien incident/attempt attesté" in html
+
+def test_actual_c_collector_in_existing_workbench():
+    from test_int07_offline_collector import CollectorTests
+    from test_int09b_admission_nominal import fixture as golden, call
+    from test_int09b_preterminal import chain, invoke
+    collector = CollectorTests()
+    f, e = collector.fixture()
+    result, _ = collector.invoke(f, e)
+    assert result["reason"] == "OFFLINE_CONTINUITY_CONSISTENT_NOT_ATTESTED"
+    model = project_synthetic_incident_cockpit(build_acme_impact_read_model())
+    html = render_synthetic_cockpit_html(model, offline_collector_result=result,
+        offline_admission=call(golden()), offline_preterminal=invoke(chain()))
+    assert "Qualification finale" in html
+    assert "OFFLINE_CONTINUITY_CONSISTENT_NOT_ATTESTED" in html
+    assert "continuité causale UNKNOWN" in html
+    assert "PROD / LIVE : NO-GO" in html
+    assert "RESOLVED" not in html
