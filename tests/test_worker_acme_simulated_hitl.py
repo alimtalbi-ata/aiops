@@ -551,7 +551,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
 
 
 
-    def test_37_malformed_twin_impact_claim_denied_before_temporal_receipt(self):
+    def test_reuse_37_malformed_twin_impact_claim_denied_before_temporal_receipt(self):
         # A signed, independently fetched Twin response is not a license to
         # accept malformed topology data. Python membership checks alone
         # would accept these as long as Payments was also present.
@@ -590,7 +590,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
 
 
 
-    def test_38_unpaired_unicode_surrogates_denied_before_temporal_receipt(self):
+    def test_reuse_38_unpaired_unicode_surrogates_denied_before_temporal_receipt(self):
         # json.loads preserves lone escaped UTF-16 surrogates, although they
         # are not valid Unicode scalars. Reject nested values and object keys.
         for raw in (
@@ -629,6 +629,25 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                 INTENT, get=get, now=lambda: next(clock)))
         self.assertEqual(calls, ["core", "twin", "policy"] * 2)
 
+
+
+    def test_reuse_strict_effect_count(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        identity = {k: INTENT[k] for k in (
+            "attempt_id", "tenant_id", "incident_id", "run_id",
+            "proposal_id", "ticket_id", "approval_id")}
+        for value in (False, 0.0):
+            forged = dict(receipt, effect_receipts=value)
+            body = {k: v for k, v in forged.items() if k != "receipt_sha256"}
+            forged["receipt_sha256"] = hashlib.sha256(json.dumps(
+                body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")).hexdigest()
+            with self.subTest(value=value):
+                self.assertTrue(receipt_digest_valid(forged))
+                self.assertFalse(verify_no_effect_receipt(forged, identity))
 
 
 if __name__ == '__main__':
