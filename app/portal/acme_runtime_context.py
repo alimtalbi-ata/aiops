@@ -2,7 +2,7 @@
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 IDENTITY = ('tenant_id', 'incident_id', 'impact_incident_id', 'run_id', 'attempt_id')
 RECEIPT = ('tenant_id', 'incident_id', 'run_id', 'attempt_id', 'proposal_id', 'ticket_id', 'approval_id')
@@ -15,7 +15,7 @@ def _id(v):
 
 
 def _utc(v):
-    if not isinstance(v, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', v):
+    if not isinstance(v, str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z', v):
         raise ValueError('INVALID_UTC')
     return datetime.fromisoformat(v.replace('Z', '+00:00'))
 
@@ -82,15 +82,15 @@ def qualify_context(expected, intent, readbacks, policies, *, as_of_utc, source_
         try:
             if digest(content) != row['content_sha256']:
                 return stop('DIGEST_MISMATCH')
-            age = (now - _utc(row['observed_at'])).total_seconds()
+            age = now - _utc(row['observed_at'])
         except (ValueError, TypeError, OverflowError, RecursionError):
             return stop('PROVENANCE_INVALID')
-        if age < 0:
+        if age < timedelta(0):
             return stop('FUTURE_OBSERVATION')
         limit = policies.get(source)
         if type(limit) is not int or limit < 0:
             return stop('FRESHNESS_POLICY_MISSING', False)
-        if age > limit:
+        if age.days * 86400 * 1000000 + age.seconds * 1000000 + age.microseconds > limit * 1000000:
             return stop('STALE_OBSERVATION', False)
         evidence.append({k: row[k] for k in keys - {'content'}})
     if source_registry is None:

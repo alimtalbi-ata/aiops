@@ -56,3 +56,41 @@ class RuntimeContextTests(unittest.TestCase):
         self.assertEqual(self.qualify()['reason'],'INJECTED_READBACKS_NOT_ATTESTED')
         self.p['twin-001']=29
         self.assertEqual(self.qualify()['reason'],'STALE_OBSERVATION')
+
+    def test_utc_precision_preserved(self):
+        for fraction in ('', '.1', '.12', '.123', '.1234', '.12345', '.123456'):
+            with self.subTest(fraction=fraction):
+                self.setUp()
+                stamp='2026-10-25T09:00:00'+fraction+'Z'
+                self.rows['twin']['observed_at']=stamp
+                r=self.qualify()
+                self.assertEqual(r['reason'],'INJECTED_READBACKS_NOT_ATTESTED')
+                self.assertEqual(r['evidence'][1]['observed_at'],stamp)
+                self.assertFalse(r['runtime_attested'])
+                self.assertEqual(r['binding_status'],'UNBOUND')
+                self.assertEqual(r['runtime_freshness'],'UNKNOWN')
+
+    def test_fractional_freshness_and_future(self):
+        for stamp,reason in [
+            ('2026-10-25T09:00:00.123456Z','INJECTED_READBACKS_NOT_ATTESTED'),
+            ('2026-10-25T09:00:00.123455Z','STALE_OBSERVATION'),
+            ('2026-10-25T09:00:00.123457Z','INJECTED_READBACKS_NOT_ATTESTED'),
+            ('2026-10-25T09:00:30.123457Z','FUTURE_OBSERVATION')]:
+            with self.subTest(stamp=stamp):
+                self.setUp()
+                self.p['twin-001']=30
+                self.rows['twin']['observed_at']=stamp
+                r=qualify_context(self.e,self.i,self.rows,self.p,as_of_utc='2026-10-25T09:00:30.123456Z',source_registry=self.registry)
+                self.assertEqual(r['reason'],reason)
+                self.assertEqual(r['qualification'],'REJECT' if reason=='FUTURE_OBSERVATION' else 'BLOCK')
+                self.assertEqual(r['runtime_freshness'],'UNKNOWN')
+
+    def test_utc_invalid_observation_and_clock(self):
+        for stamp in ('2026-02-29T09:00:00Z','2026-04-31T09:00:00Z','2026-10-25T24:00:00Z','2026-10-25T09:00:60Z','2026-10-25T09:00:00.1234567Z','2026-10-25T09:00:00.Z','2026-10-25T09:00:00+00:00','2026-10-25T09:00:00z','2026-10-25T09:00:00Z '):
+            with self.subTest(stamp=stamp):
+                self.setUp()
+                self.rows['twin']['observed_at']=stamp
+                self.assertEqual(self.qualify()['reason'],'PROVENANCE_INVALID')
+                r=qualify_context(self.e,self.i,self.rows,self.p,as_of_utc=stamp,source_registry=self.registry)
+                self.assertEqual(r['reason'],'CLOCK_INVALID')
+                self.assertEqual(r['qualification'],'REJECT')
