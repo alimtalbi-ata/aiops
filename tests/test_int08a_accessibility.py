@@ -15,6 +15,10 @@ class AccessibilityAudit(unittest.TestCase):
             self.page.set_viewport_size({"width":width,"height":900})
             for name in ("explore-story","acme-impact","acme-incident-cockpit"):
                 self.page.goto(self.base+"/demo/"+name)
+                self.page.keyboard.press("Tab")
+                self.assertEqual(self.page.evaluate("document.activeElement.className"),"skip-link")
+                self.page.keyboard.press("Enter")
+                self.assertEqual(self.page.evaluate("document.activeElement.id"),"main-content")
                 if name=="explore-story":
                     self.page.locator("#story-token").fill(historical.VIEWER)
                     self.page.locator("#start").focus()
@@ -39,5 +43,13 @@ class AccessibilityAudit(unittest.TestCase):
                             self.page.keyboard.press(key)
                             row["keys"].append(self.page.evaluate("""()=>{let e=document.activeElement,s=getComputedStyle(e);return {tag:e.tagName,id:e.id,label:e.getAttribute('aria-label'),outline:s.outline,rect:e.getBoundingClientRect().toJSON()}}"""))
                     row["styles"]=self.page.locator("h1,h2,h3,p,a,th,td,summary,dt,dd,small").evaluate_all("""es=>es.filter(e=>e.getClientRects().length).map(e=>{let s=getComputedStyle(e),p=e;while(p&&getComputedStyle(p).backgroundColor==='rgba(0, 0, 0, 0)')p=p.parentElement;return {tag:e.tagName,color:s.color,background:p?getComputedStyle(p).backgroundColor:null,size:s.fontSize,weight:s.fontWeight}})""")
+                    row["regions"]=self.page.locator("[role=region]").evaluate_all("es=>es.filter(e=>e.getClientRects().length).map(e=>({label:e.getAttribute(\"aria-label\"),width:e.clientWidth,extent:e.scrollWidth}))")
+                    row["headings"]=self.page.locator("h1,h2,h3,h4").all_text_contents()
                     rows.append(row)
+        # CSS viewport equivalence, not native browser zoom certification.
+        for width in (640,320):
+            self.page.set_viewport_size({"width":width,"height":720})
+            for name in ("explore-story","acme-impact","acme-incident-cockpit"):
+                self.page.goto(self.base+"/demo/"+name)
+                self.assertFalse(self.page.evaluate("document.documentElement.scrollWidth>innerWidth"))
         (out/"audit.json").write_text(json.dumps(dict(executed_sha=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),scope="STORY_OFFLINE",runtime_attested=False,rows=rows),indent=2))

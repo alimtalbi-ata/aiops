@@ -22,6 +22,9 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_int08a_accessibility.py' -v
         env:
           AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int08a
+      - run: python -m unittest discover -s tests -p 'test_explore_story_playwright_e2e.py' -v
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int08a-historical
       - uses: actions/upload-artifact@v4
         if: always()
         with:

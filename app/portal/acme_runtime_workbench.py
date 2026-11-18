@@ -25,9 +25,11 @@ def render_collector_result(result=None):
     parts=["<section class='story-context' aria-label='Résultat collecteur offline'>",
            "<h3>RUNTIME_SANDBOX — UNBOUND</h3>",
            "<p>STORY_OFFLINE / SIMULATED : contexte distinct.</p>",
-           "<p>"+escape(status)+" — "+text(reason)+"</p>",
+           "<p>Admission : MISSING — projection B attendue.</p>",
+           "<p>Préterminal : MISSING — projection B attendue.</p>",
+           "<h4>Qualification finale</h4><p>"+escape(status)+" — "+text(reason)+"</p>",
            "<p>CONTRACT_ONLY — cohérence offline, aucune exécution attestée.</p>" if coherent else "<p>Contrat terminal : MISSING ou UNKNOWN.</p>",
-           "<dl>"]
+           "<details><summary>Identités et provenance disponibles — non attestées</summary><dl>"]
     for k in ("tenant_id","incident_id","impact_incident_id","run_id","attempt_id","snapshot_id","proposal_id","ticket_id","approval_id"):
         parts.append(item(k,context.get(k) if k not in ("proposal_id","ticket_id","approval_id") else None))
     parts.append(item("Fraîcheur runtime","UNKNOWN"))
@@ -43,5 +45,5 @@ def render_collector_result(result=None):
                 parts.append(item(k,v))
             parts.append("</dl>")
     else: parts.append("<p>MISSING</p>")
-    parts.append("<p>Qualification runtime : UNKNOWN. PROD / LIVE : NO-GO. Aucun ACK ni effet attesté.</p></section>")
+    parts.append("</details><p>Qualification runtime : UNKNOWN. PROD / LIVE : NO-GO. Aucun ACK ni effet attesté.</p></section>")
     return "".join(parts)

@@ -41,7 +41,7 @@ input{background:#06111e;color:white;border:1px solid #63839a;padding:10px;borde
 .muted{color:#adc1d1}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 ol{padding-left:28px}li{padding:6px}li.current{color:#ffda7a;font-weight:bold}
 strong{overflow-wrap:anywhere}#source{overflow-wrap:anywhere}#step-detail{white-space:pre-wrap}
-@media(max-width:650px){main{padding:12px}.panel{padding:12px}.grid{grid-template-columns:minmax(0,1fr)}input{max-width:100%;box-sizing:border-box}}</style></head><body><main>
+@media(max-width:650px){main{padding:12px}.panel{padding:12px}.grid{grid-template-columns:minmax(0,1fr)}input{max-width:100%;box-sizing:border-box}} .skip-link{position:absolute;left:1rem;top:-10rem;background:#111827;color:#38bdf8;padding:.5rem}.skip-link:focus{top:0;z-index:2}main:focus{outline:3px solid #38bdf8;outline-offset:2px}button{min-height:24px}#step-detail{overflow-wrap:anywhere}</style></head><body><a class="skip-link" href="#main-content">Aller au contenu</a><main id="main-content" tabindex="-1">
 <header><a href="/">← Portail unique</a><a href="/demo/acme-impact">Graphe ACME (simulation)</a></header>
 <h1>ACME · Explore / Story</h1>
 <p>SIMULATED_TARGET — même fixture SAN P1 → Payments P2 dans les deux modes.
