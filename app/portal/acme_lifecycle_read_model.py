@@ -6,6 +6,7 @@ never promotes missing evidence to success or simulation to LIVE authority.
 from __future__ import annotations
 
 from portal.acme_impact_read_model import build_acme_impact_read_model
+from portal.acme_twin_consumer import project_twin_consumer
 
 STAGES = (
     ("detect", "OBSERVABILITY", "grafana"),
@@ -55,8 +56,12 @@ def project_synthetic_incident_lifecycle(impact: dict) -> dict:
             "operational_transition_authorized": False,
             "reason": "INDEPENDENT_RUNTIME_EVIDENCE_MISSING",
         })
+    twin = project_twin_consumer(impact)
+    if impact.get("twin_consumer") != twin:
+        raise ValueError("twin_consumer_mismatch")
     return {
         "schema": "aiops.synthetic-incident-itil-lifecycle.v1",
+        "twin_consumer": twin,
         "mode": "DEMO",
         "provenance": "LOCAL_SYNTHETIC_FIXTURE",
         "source_sha256": impact["source_sha256"],

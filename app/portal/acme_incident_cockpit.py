@@ -32,6 +32,7 @@ def project_synthetic_incident_cockpit(impact: dict) -> dict:
         raise ValueError("synthetic_cockpit_projection_mismatch")
     return {
         "schema": "aiops.synthetic-incident-cockpit.v1",
+        "twin_consumer": lifecycle["twin_consumer"],
         "mode": "DEMO",
         "provenance": "LOCAL_SYNTHETIC_FIXTURE",
         "source_sha256": lifecycle["source_sha256"],
