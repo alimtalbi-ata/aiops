@@ -70,7 +70,7 @@ class SignalContextTests(unittest.TestCase):
         import copy
         for key, value in [("tenant_id", "tenant-real"), ("attempt_id", "attempt-real"),
                            ("run_id", "RUN-123"), ("source_sha256", "0" * 64),
-                           ("incident_id", "INC-OTHER"), ("observed_at", "2026-10-25T09:00:00Z"),
+                           ("incident_id", "INC-OTHER"), ("impact_incident_id", "INC-OTHER"), ("observed_at", "2026-10-25T09:00:00Z"),
                            ("freshness", "FRESH"), ("binding_status", "BOUND")]:
             with self.subTest(key=key):
                 twin = copy.deepcopy(self.twin)

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import re
+from portal.acme_fixture_contract import SOURCE_INCIDENT_ID, TARGET_INCIDENT_ID
 
 SCHEMA = "aiops.acme.signal-context.v1"
 FIELDS = {"source", "event_id", "namespace", "ci_id", "state", "severity", "observed_at"}
@@ -43,8 +44,8 @@ def normalize_signals(events, twin, *, as_of_utc, max_age_seconds=MAX_AGE_SECOND
             or twin.get("core_run_id") is not None or twin.get("resource_id") is not None
             or twin.get("service_id") is not None or twin.get("source_sha") is not None
             or twin.get("observed_at") is not None or twin.get("freshness") != "UNKNOWN"
-            or twin.get("run_id") != expected_run or not isinstance(incident_id, str)
-            or not isinstance(impact_incident_id, str)):
+            or expected_run is None or twin.get("run_id") != expected_run
+            or incident_id != SOURCE_INCIDENT_ID or impact_incident_id != TARGET_INCIDENT_ID):
         raise ValueError("invalid_signal_scope")
     ids = {n["node_id"] for n in twin["nodes"]}
     affected = set(twin["impact"]["affected_ci_ids"])
