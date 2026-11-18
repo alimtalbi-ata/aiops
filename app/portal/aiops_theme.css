@@ -235,3 +235,15 @@ hr { border: 0; border-top: 1px solid var(--ai-border); }
 .incident-explorer-filters :disabled { opacity:.65;cursor:not-allowed; }
 .incident-empty { padding:20px;border:1px dashed var(--ai-border);border-radius:10px; }
 @media(max-width:700px){.incident-explorer-filters{grid-template-columns:1fr}}
+
+/* Convergence compatibility: preserve semantic cards and avoid stacked sticky bars on small screens. */
+.card strong { font-size: inherit !important; letter-spacing: inherit; }
+.card span, .card label { text-transform: none; letter-spacing: normal; }
+.kpi .tile strong, .card .metric-value { font-size: clamp(25px, 3vw, 32px) !important; letter-spacing: -.04em; }
+.portal-workspace-nav { max-width: 100%; overflow-x: auto; }
+:focus-visible { outline: 2px solid var(--ai-blue); outline-offset: 3px; }
+@media (max-width: 768px) {
+  header, .portal-workspace-nav { position: static !important; }
+  main { min-width: 0; }
+  .panel, .card { min-width: 0; overflow-wrap: anywhere; }
+}
