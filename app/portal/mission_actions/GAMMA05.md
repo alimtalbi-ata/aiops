@@ -1,0 +1,22 @@
+# GAMMA05 — TEAM C audit and acceptance
+
+Baseline C be9888257b9b2d0478261fcbbc193cfb135ee5e8; CENTRAL reports SIM01 and SIM02 Desktop PASS. Static review of ContextActions.tsx and providers.ts; no independent browser measurement. Freeze deployed GAMMA04 AUTH02. No API changes, build, deployment or new POST authorized by this audit.
+
+## Findings and proposed changes
+| Priority | Finding from source | Candidate correction | Acceptance |
+|---|---|---|---|
+| P0 | Native buttons support keyboard, but disabling every button while busy can lose focus; no explicit focus restoration. | Preserve initiating control focus when possible; announce pending and completion, restore focus only if still in same context and user has not moved. | Tab/Shift+Tab logical; Enter/Space activates once; visible focus; no focus theft on completion or context change. |
+| P0 | Status displays raw SIMULATED/BLOCKED/UNKNOWN; generic network error and disabled buttons do not explain authority. | Keep machine state and existing selectors, add French explanation and authority reason; separate viewer, qualified DEMO operator, no operational authority. | Viewer cannot execute; configured operator can simulate only; unknown never interpreted as success, no automatic retry. |
+| P0 | Execution has clear hypothetical heading, but evidence uses recursive generic dl; flags render Oui/Non without semantic grouping. | Dedicated synthetic receipt/evidence presentation, explicit actual recovery UNKNOWN and runtime/ITIL/LIVE prohibitions; preserve SHA and existing UI labels. | Exact same SHA in execution and evidence; before DEGRADED, hypothetical after HEALTHY; no genuine recovery claim or Twin mutation. |
+| P1 | Action buttons in unstyled div and before/after drawer-kpis; long SHA wraps but complete component reflow unverified. | Scoped wrapping controls, min-width 0, stacked before/after on narrow screens, adequate targets, wrap digests. | 320/360/390 CSS px, no page horizontal overflow, targets >=24px WCAG minimum (44px design goal), 200% zoom, no clipped evidence. |
+| P0 | Reply keyed by provider and selection, receipt memory keyed by snapshot; no explicit invalidation for failed subsequent simulation or mode re-entry with reused provider. | Test lifecycle with CENTRAL composition; scope receipt to session and run/source; invalidate stale receipt on failed/uncertain execution or authority change; preserve evidence across same-session navigation. | Context switch aborts stale UI replies; operational has no DEMO receipt; new session cannot inherit receipt; no extra POST. |
+| P1 | Generic structured result can expose technical field labels and long nested details. | Human-readable summary first, details secondary, explicit absent versus unknown versus blocked. | Screen reader announces status once; unknown/absent distinguishable without color; no token or payload dump. |
+
+## Ownership / coordination
+C owns frontend/mission-control/src/actions and tests/mission_actions. A owns shell navigation/focus/viewport and mode selector; CENTRAL owns Integrated composition, provider lifecycle and auth; B owns Twin data/ACL. D owns browser tests. No edits outside scope. Preserve API routes, request schemas, policy and tenant boundaries; keep existing locator names until D agrees migration.
+
+## SIM02 Mobile proposal for D
+Separate explicitly authorized mobile run, exactly one armed simulation POST (not an automatic rerun of desktop), same private credentials and origin restrictions, no retry or repeat, all other writes blocked. Before/after health 6 apps/7 targets by CENTRAL. At 390 CSS px (additional read-only reflow 320/360), verify viewer disabled action, qualified operator enabled, keyboard focus and visible mode, before/after semantic blocks, actual recovery UNKNOWN, receipt SHA matching API and Evidence, unchanged Twin IDs and states from GET snapshot, operational return clears receipt. Check no horizontal page overflow, wrapped digest, touch targets; no screenshot/trace/token disclosure. Offline validate_sim01.py remains required. Report exact SHA/image, project, exit and sanitized phases. Mobile execution requires separate CENTRAL GO; audit only.
+
+## Limitations
+No runtime dimensions/focus measured, no browser or unit tests run for this audit. Findings are source-level risks, not reproduced defects. Proposed changes require coordinated candidate overlay; no rebuild/redeploy of GAMMA04. LIVE NO-GO.
