@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
-CONTAINER="\${AIOPS_PORTAL_CONTAINER:-aiops2-rebuild-portal}"
+CONTAINER="${AIOPS_PORTAL_CONTAINER:-aiops2-rebuild-portal}"
 TARGET_PORT=7770
 SERVICE="aiops2-portal"
 fail(){ echo "FAIL|$1"; exit 1; }
@@ -19,7 +19,7 @@ IMAGE_BEFORE="$(docker inspect -f '{{.Image}}' "$CONTAINER")"
 [[ "$OLD_PORT" != "$TARGET_PORT" ]] || { echo "PORTAL_ALREADY_ON_7770=PASS"; exit 0; }
 IFS=',' read -r -a FILES <<< "$CONFIGS"
 COMPOSE_ARGS=()
-for file in "\${FILES[@]}"; do
+for file in "${FILES[@]}"; do
   [[ -f "$file" ]] || fail "compose_file_missing"
   COMPOSE_ARGS+=(-f "$file")
 done
@@ -41,11 +41,11 @@ echo "BUILD=false"
 echo "OTHER_SERVICES_TOUCHED=false"
 rollback(){
   echo "CUTOVER_FAILED_ROLLBACK_BEGIN"
-  AIOPS_PORTAL_HOST_PORT="$OLD_PORT" docker compose --project-directory "$WORKDIR" -p "$PROJECT" "\${COMPOSE_ARGS[@]}" up -d --no-deps --no-build "$SERVICE" || true
+  AIOPS_PORTAL_HOST_PORT="$OLD_PORT" docker compose --project-directory "$WORKDIR" -p "$PROJECT" "${COMPOSE_ARGS[@]}" up -d --no-deps --no-build "$SERVICE" || true
   echo "ROLLBACK_REQUESTED|port=$OLD_PORT"
 }
 trap rollback ERR
-AIOPS_PORTAL_HOST_PORT="$TARGET_PORT" docker compose --project-directory "$WORKDIR" -p "$PROJECT" "\${COMPOSE_ARGS[@]}" up -d --no-deps --no-build "$SERVICE"
+AIOPS_PORTAL_HOST_PORT="$TARGET_PORT" docker compose --project-directory "$WORKDIR" -p "$PROJECT" "${COMPOSE_ARGS[@]}" up -d --no-deps --no-build "$SERVICE"
 IMAGE_AFTER="$(docker inspect -f '{{.Image}}' "$CONTAINER")"
 [[ "$IMAGE_AFTER" == "$IMAGE_BEFORE" ]] || fail "image_changed"
 docker inspect "$CONTAINER" > /tmp/aiops2-portal-7770-after.json
@@ -53,7 +53,9 @@ python3 - /tmp/aiops2-portal-7770-before.json /tmp/aiops2-portal-7770-after.json
 import json,sys
 a=json.load(open(sys.argv[1]))[0]
 b=json.load(open(sys.argv[2]))[0]
-assert a["Config"]["Env"] == b["Config"]["Env"], "environment_changed"
+def env(x):
+    return sorted(v for v in x["Config"]["Env"] if not v.startswith("AIOPS_PORTAL_HOST_PORT="))
+assert env(a)==env(b), "environment_changed_outside_port"
 def mounts(x):
     return sorted((m["Type"],m["Source"],m["Destination"],m["RW"]) for m in x["Mounts"])
 assert mounts(a)==mounts(b), "mounts_changed"
@@ -71,7 +73,7 @@ curl -fsS --max-time 5 "http://127.0.0.1:$TARGET_PORT/" -o /dev/null
 docker port "$CONTAINER" 777/tcp | grep -q ":$TARGET_PORT$" || fail "published_port_mismatch"
 trap - ERR
 echo "IMAGE_UNCHANGED=PASS"
-echo "ENV_UNCHANGED=PASS"
+echo "ENV_UNCHANGED_EXCEPT_PORT=PASS"
 echo "MOUNTS_UNCHANGED=PASS"
 echo "NETWORKS_UNCHANGED=PASS"
 echo "PORTAL_HEALTH=PASS"
