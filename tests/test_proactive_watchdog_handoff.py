@@ -25,7 +25,7 @@ def test_watchdog_publishes_fresh_observation_once(tmp_path):
     root.mkdir(parents=True)
     sha="a"*40
     (root/"candidate.json").write_text(json.dumps({"observed_at":utc_now(),"state":"BUILD_ELIGIBLE","sha":sha,"deploy_authorized":False}))
-    with patch.object(watchdog.Path,"home",return_value=tmp_path),patch.object(watchdog.subprocess,"run") as run:
+    with patch.object(watchdog.Path,"home",return_value=tmp_path),patch.object(watchdog.subprocess,"run",return_value=subprocess.CompletedProcess(["gh","api"],0,json.dumps({"id":101,"user":{"login":"alimtalbi-ata"}}),"")) as run:
         watchdog.main()
         watchdog.main()
     assert run.call_count==1
@@ -108,7 +108,7 @@ def test_handoff_publishes_only_fresh_eligible_candidate_and_rechecks_head(tmp_p
     root.mkdir(parents=True)
     sha="b"*40
     (root/"candidate.json").write_text(json.dumps({"observed_at":utc_now(),"state":"BUILD_ELIGIBLE","sha":sha,"pr":818,"deploy_authorized":False}))
-    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"check_output",return_value=gh_pr(sha)),patch.object(handoff.subprocess,"run") as run:
+    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"check_output",return_value=gh_pr(sha)),patch.object(handoff.subprocess,"run",return_value=subprocess.CompletedProcess(["gh","api"],0,json.dumps({"id":102,"user":{"login":"alimtalbi-ata"}}),"")) as run:
         handoff.main()
     assert run.call_count==1
     assert json.loads((root/f"build-handoff-{sha}.json").read_text())["status"]=="PUBLISHED"
