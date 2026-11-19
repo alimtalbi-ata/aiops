@@ -41,6 +41,14 @@ class UpdateDiscoveryTests(unittest.TestCase):
     def test_bad_digest(self):
         self.assertEqual(self.run_case(manifest=self.manifest(artifact_digest="sha256:bad"))["state"],"UPDATE_BLOCKED")
 
-    def test_api_failure_is_fail_closed(self):\n        with tempfile.TemporaryDirectory() as tmp:\n            with patch.object(update.Path,"home",return_value=Path(tmp)),patch.object(update,"get",side_effect=OSError("API unavailable")):\n                update.main()\n            result=json.loads((Path(tmp)/".local/state/aiops2-proactive/update-candidate.json").read_text())\n            self.assertEqual(result["state"],"UPDATE_BLOCKED")\n            self.assertIs(result["activation_authorized"],False)\n\n    def test_non_object_manifest(self):
+    def test_api_failure_is_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(update.Path,"home",return_value=Path(tmp)),patch.object(update,"get",side_effect=OSError("API unavailable")):
+                update.main()
+            result=json.loads((Path(tmp)/".local/state/aiops2-proactive/update-candidate.json").read_text())
+            self.assertEqual(result["state"],"UPDATE_BLOCKED")
+            self.assertIs(result["activation_authorized"],False)
+
+    def test_non_object_manifest(self):
         raw=base64.b64encode(json.dumps(["not","object"]).encode()).decode()
         self.assertEqual(self.run_case(manifest=raw)["state"],"UPDATE_BLOCKED")
