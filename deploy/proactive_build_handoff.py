@@ -66,9 +66,12 @@ def main():
             atomic(receipt,{"status":"OBSOLETE_SHA","sha":sha,"marker":marker,"deploy_authorized":False})
             return
         try:
-            subprocess.run(["gh","issue","comment","804","--repo",REPO,"--body",body],check=True,timeout=30,capture_output=True)
-        except (OSError,subprocess.SubprocessError):
+            posted=subprocess.run(["gh","api","--method","POST",f"repos/{REPO}/issues/804/comments","-f",f"body={body}"],check=True,timeout=30,capture_output=True,text=True)
+            payload=json.loads(posted.stdout)
+            if not isinstance(payload.get("id"),int) or payload.get("user",{}).get("login")!=EXPECTED_AUTHOR:
+                raise ValueError("comment POST receipt did not match expected author/id")
+        except (OSError,ValueError,json.JSONDecodeError,subprocess.SubprocessError):
             atomic(receipt,{"status":"PUBLICATION_UNCERTAIN","sha":sha,"marker":marker,"deploy_authorized":False})
             raise
-        atomic(receipt,{"status":"PUBLISHED","sha":sha,"marker":marker,"deploy_authorized":False})
+        atomic(receipt,{"status":"PUBLISHED","sha":sha,"marker":marker,"comment_id":payload["id"],"deploy_authorized":False})
 if __name__=="__main__": main()
