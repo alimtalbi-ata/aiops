@@ -69,7 +69,7 @@ def main():
             payload=json.loads(posted.stdout)
             if not isinstance(payload.get("id"),int) or payload.get("user",{}).get("login")!=EXPECTED_AUTHOR:
                 raise ValueError("comment POST receipt did not match expected author/id")
-        except (OSError,ValueError,json.JSONDecodeError,subprocess.SubprocessError):
+        except (OSError,TypeError,AttributeError,ValueError,json.JSONDecodeError,subprocess.SubprocessError):
             atomic(receipt,{"status":"PUBLICATION_UNCERTAIN","marker":marker})
             raise
         atomic(receipt,{"status":"PUBLISHED","marker":marker,"comment_id":payload["id"]})
