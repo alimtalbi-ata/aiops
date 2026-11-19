@@ -5,6 +5,7 @@ export type Command = "inspect" | "rag" | "start" | "advance" | "pause" | "reset
 export type Reply = { state: "SIMULATED" | "OBSERVED" | "BLOCKED" | "UNKNOWN"; detail: unknown; http?: number };
 export interface ActionProvider {
   readonly mode: Mode;
+  readonly canSimulate?: boolean;
   invoke(selection: Selection, command: Command, signal: AbortSignal): Promise<Reply>;
 }
 export const commands: Record<View, readonly Command[]> = {
@@ -15,5 +16,5 @@ export const commands: Record<View, readonly Command[]> = {
 };
 export const labels: Record<Command,string> = {
   inspect:"Inspecter", rag:"Références RAG", start:"Démarrer", advance:"Avancer",
-  pause:"Pause", reset:"Réinitialiser", replay:"Rejouer", execute:"Exécuter", approve:"Approuver", reject:"Refuser"
+  pause:"Pause", reset:"Réinitialiser", replay:"Rejouer", execute:"Simuler (sans action réelle)", approve:"Approuver", reject:"Refuser"
 };
