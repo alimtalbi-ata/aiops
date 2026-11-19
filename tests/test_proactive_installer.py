@@ -13,10 +13,18 @@ def test_installer_restores_original_crontab_after_partial_write_failure(tmp_pat
     crontab.write_text(original)
 
     commands={
-      "id":"#!/bin/sh\\necho aiops\\n",
-      "hostname":"#!/bin/sh\\necho srv-deb-05\\n",
-      "flock":"#!/bin/sh\\nexit 0\\n",
-      "gh":"#!/bin/sh\\nexit 0\\n",
+      "id":"""#!/bin/sh
+echo aiops
+""",
+      "hostname":"""#!/bin/sh
+echo srv-deb-05
+""",
+      "flock":"""#!/bin/sh
+exit 0
+""",
+      "gh":"""#!/bin/sh
+exit 0
+""",
       "python3":"""#!/bin/sh
 if [ "$1" = "-m" ]; then exit 0; fi
 mkdir -p "$HOME/.local/state/aiops2-proactive"
