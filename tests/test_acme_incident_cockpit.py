@@ -123,7 +123,10 @@ def test_customer_walkthrough_has_five_working_anchor_targets_and_safe_verdict()
     assert page.status_code == 200
     anchors = Anchors()
     anchors.feed(page.text)
-    assert anchors.targets == ["impact", "evidence", "decision", "itil", "verdict"]
+    assert anchors.targets == ["impact", "evidence", "impact", "workbench", "decision", "itil", "verdict"]
+    # Preserve the historical direct-link target while the guided journey uses Workbench.
+    assert "evidence" in anchors.ids
+    assert "workbench" in anchors.ids
     assert set(anchors.targets).issubset(anchors.ids)
     assert page.text.index("id='decision'") < page.text.index("id='itil'")
     assert page.text.index("id='itil'") < page.text.index("id='verdict'")
@@ -254,3 +257,53 @@ def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
     assert "focus-visible" in page.text
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
+
+
+def test_cockpit_cross_navigation_connects_existing_operator_surfaces():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    for href in (
+        "/#noc", "/demo/explore-story", "/demo/acme-impact",
+        "/#incidents", "/#runs", "#evidence",
+    ):
+        assert f'href="{href}"' in page.text or f"href='{href}'" in page.text
+    assert "Navigation espace opérateur" in page.text
+    assert "href='#evidence'>Workbench</a>" in page.text
+    assert "Aller au parcours SAN vers Payments" in page.text
+    assert "assets/aiops-theme.css" in page.text
+    assert "NO-GO LIVE" in page.text
+
+
+def test_team_c_run_journey_is_joined_to_existing_twin_without_fabricated_execution():
+    impact = build_acme_impact_read_model()
+    cockpit = project_synthetic_incident_cockpit(impact)
+    journey = cockpit["run_journey"]
+    assert journey["run"]["run_id"] == impact["twin_evidence"]["run_id"]
+    assert journey["run"]["run_id"] == cockpit["twin_consumer"]["story_identity"]["run_id"]
+    assert journey["run"]["incident_id"] == cockpit["incident_id"]
+    assert journey["run"]["tenant_id"] is None
+    assert journey["run"]["executed_sha"] is None
+    assert journey["run"]["idempotency_key"] == journey["run"]["attempt_id"]
+    assert journey["provenance"]["source_sha256"] == impact["source_sha256"]
+    assert len(journey["stage_plan"]) == 17
+    assert all(x["status"] == "NOT_RUN" and x["evidence_state"] == "MISSING" for x in journey["stage_plan"])
+    assert journey["receipt"] is None
+    assert journey["hitl"]["kind"] == "SIMULATED_NOT_REQUESTED"
+    assert journey["hitl"]["approval_id"] is None
+    assert journey["worker"]["executor"] == "NOT_INVOKED"
+    assert journey["policy"]["decision"] == "DENY_LIVE_ACTION"
+
+
+def test_team_c_run_journey_is_visible_in_existing_operator_cockpit():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "Run Journey SAN P1" in page.text
+    assert "0/17 étapes exécutées" in page.text
+    assert "SIMULATED_NOT_REQUESTED" in page.text
+    assert "NOT_INVOKED" in page.text
+    assert "NOT_RUN" in page.text
+    assert "NO-GO LIVE" in page.text
