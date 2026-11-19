@@ -54,3 +54,6 @@ AIOPS_QA_CAPTURE=1 AIOPS_QA_ARTIFACT_DIR=artifacts/team-d \
 - No LIVE action, external ticket write, deployment, or Debian mutation is performed.
 
 Use the matrix in the TEAM D report to classify each case PASS / FAIL / BLOCKED / NOT_RUN.
+
+
+The isolated GitHub Actions workflow is `.github/workflows/team-d-playwright.yml`. It runs against a disposable local FastAPI process with upstream services unreachable; inspect the JUnit artifact before assigning a PASS/FAIL verdict.
