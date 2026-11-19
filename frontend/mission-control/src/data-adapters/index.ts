@@ -21,12 +21,17 @@ async function read<T>(path: string, mode: HealthMode, source: string, options: 
     });
     if (response.status !== 200 && response.status !== 503)
       return unavailable(mode, source, "HTTP_" + response.status);
-    const body = await response.json();
+    let body;
+    try { body = await response.json(); } catch (error) {
+      if (options.signal?.aborted) throw error;
+      return unavailable(mode, source, "INVALID_RESPONSE");
+    }
+    if (!body || typeof body !== "object") return unavailable(mode, source, "INVALID_RESPONSE");
     if (body.mode !== mode || body.source !== source || body.tenant_acl_qualified !== false ||
         !Number.isFinite(body.retrieved_at)) return unavailable(mode, source, "INVALID_RESPONSE");
     if (body.state === "UNKNOWN" && body.data === null && typeof body.reason === "string")
       return body as Result<T>;
-    if (response.ok && body.state === "AVAILABLE" && body.reason === null && body.data !== null)
+    if (response.ok && body.state === "AVAILABLE" && body.reason === null && body.data !== null && typeof body.data === "object")
       return body as Result<T>;
     return unavailable(mode, source, "INVALID_RESPONSE");
   } catch (error) {
@@ -121,7 +126,8 @@ export async function readAvailabilityHistory(options: Options, minutes = 60): P
       d.series.some(s => !Array.isArray(s.points) || s.points.length !== minutes+1 ||
         s.points.some((p,i) => !p || p.at !== d.start+i*60 || ![0,1,null].includes(p.up)) ||
         s.expected !== minutes+1 || s.observed !== s.points.filter(p => p.up !== null).length ||
-        s.coverage !== s.observed/s.expected) ||
+        s.coverage !== s.observed/s.expected ||
+        s.last_evaluated_at !== lastEvaluation(s.points, p => p.up)) ||
       d.coverage !== d.series.reduce((n,s)=>n+s.observed,0)/(jobs.length*(minutes+1)))
     return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
   return r;
@@ -147,7 +153,8 @@ export async function readTechnicalHistory(metric: TechnicalMetric, options: Opt
       jobs.some(j=>d.series.filter(s=>s&&s.job===j).length!==1) ||
       d.series.some(s=>!Array.isArray(s.points)||s.points.length!==minutes+1||
         s.points.some((p,i)=>!p||p.at!==d.start+i*60||(p.value!==null&&(!Number.isFinite(p.value)||p.value<0))) ||
-        s.coverage!==s.points.filter(p=>p.value!==null).length/(minutes+1)))
+        s.coverage!==s.points.filter(p=>p.value!==null).length/(minutes+1) ||
+        s.last_evaluated_at!==lastEvaluation(s.points,p=>p.value)))
     return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
   return r;
 }
@@ -182,8 +189,10 @@ export async function readAggregateKpis<G extends AggregateGroup>(group:G,option
         return s.unit!==unit||!Array.isArray(s.points)||s.points.length!==minutes+1||
           s.points.some((p,i)=>!p||p.at!==d.start+i*60||(p.value!==null&&
             (!Number.isFinite(p.value)||p.value<0||(unit==="percent"?p.value>100:unit==="binary"?p.value!==0&&p.value!==1:!Number.isInteger(p.value)))))||
-          s.value!==s.points[minutes].value||s.coverage!==s.points.filter(p=>p.value!==null).length/(minutes+1);
-      })) return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
+          s.value!==s.points[minutes].value||s.coverage!==s.points.filter(p=>p.value!==null).length/(minutes+1)||
+          s.last_evaluated_at!==lastEvaluation(s.points,p=>p.value)||
+          (s.reason==="AMBIGUOUS_SERIES"?s.coverage!==0:s.reason!==(s.value===null?"NO_CURRENT_SAMPLE":null));
+      }) || !Number.isFinite(d.coverage) || Math.abs(d.coverage-d.series.reduce((n,s)=>n+s.coverage,0)/names.length)>1e-12) return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
   return r;
 }
 
@@ -193,4 +202,9 @@ export function aggregateSeries<G extends AggregateGroup>(result: Result<Aggrega
 }
 export function aggregateValue<G extends AggregateGroup>(result: Result<AggregateHistory<G>>, metric: AggregateMetric<G>): number|null {
   return aggregateSeries(result,metric)?.value ?? null;
+}
+
+function lastEvaluation<P extends {at:number}>(points: P[], value:(p:P)=>number|null):number|null {
+  for(let i=points.length-1;i>=0;i--) if(value(points[i])!==null) return points[i].at;
+  return null;
 }
