@@ -128,7 +128,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<header><a href='/'>AIOPS2 Portal</a><nav class='portal-cross-nav' aria-label='Navigation espace opérateur'>"
         "<a href='/#noc'>Cockpit NOC</a><a href='/demo/explore-story'>Explore / Story</a>"
         "<a href='/demo/acme-impact'>Digital Twin</a><a href='/#incidents'>Incidents</a>"
-        "<a href='/#runs'>Runs</a><a href='#workbench'>Workbench</a></nav></header>"
+        "<a href='/#runs'>Runs</a><a href='#evidence'>Workbench</a></nav></header>"
         "<h1>AIOPS2 — Cockpit incident → ITIL</h1>"
         "<p class='warning'><strong>DEMO SYNTHÉTIQUE — NO-GO LIVE.</strong> "
         "Aucune preuve runtime authentifiée, aucun ticket GLPI modifié, "

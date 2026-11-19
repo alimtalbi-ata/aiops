@@ -266,10 +266,11 @@ def test_cockpit_cross_navigation_connects_existing_operator_surfaces():
     assert page.status_code == 200
     for href in (
         "/#noc", "/demo/explore-story", "/demo/acme-impact",
-        "/#incidents", "/#runs", "#workbench",
+        "/#incidents", "/#runs", "#evidence",
     ):
         assert f'href="{href}"' in page.text or f"href='{href}'" in page.text
     assert "Navigation espace opérateur" in page.text
+    assert "href='#evidence'>Workbench</a>" in page.text
     assert "Aller au parcours SAN vers Payments" in page.text
     assert "assets/aiops-theme.css" in page.text
     assert "NO-GO LIVE" in page.text
