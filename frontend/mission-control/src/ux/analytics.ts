@@ -21,19 +21,28 @@ export function topologyLayout(services: readonly TwinService[]) {
  }));
  return {positions,width:Math.max(460,columns.length*230+30),height:Math.max(300,...[...rows.values()].map(n=>n*112+60))};
 }
-export type Sample={slot:number;rpm:number;errors:number;p95:number;health:Health};
+export type Sample={slot:number;rpm:number|null;errors:number|null;p95:number|null;health:Health};
+export const known=(v:number|null|undefined):v is number=>typeof v==='number'&&Number.isFinite(v);
+export const metric=(v:number|null|undefined,suffix='')=>known(v)?v.toLocaleString('fr-FR')+suffix:'—';
+export function sumKnown(values:(number|null)[]):number|null {
+ return values.length&&values.every(known)?values.reduce<number>((a,v)=>a+v!,0):null;
+}
+export function weightedErrors(samples:Sample[]):number|null {
+ if(!samples.length||!samples.every(s=>known(s.rpm)&&known(s.errors)))return null;
+ const rpm=sumKnown(samples.map(s=>s.rpm));
+ return rpm&&rpm>0?samples.reduce((a,s)=>a+s.rpm!*s.errors!,0)/rpm:null;
+}
 export function syntheticSeries(service:TwinService,count:number):Sample[]{
  return Array.from({length:Math.max(0,Math.min(48,Math.floor(count)))},(_,i)=>{
   const factor=0.75+((i*7+service.id.length)%11)/20;
-  const errors=Number((service.errors*factor).toFixed(2));
-  return {slot:i,rpm:Math.round(service.rpm*factor),errors,p95:Math.round(service.p95*factor),health:errors>=5?'critical':errors>=1?'degraded':'healthy'};
+  const errors=known(service.errors)?Number((service.errors*factor).toFixed(2)):null;
+  return {slot:i,rpm:known(service.rpm)?Math.round(service.rpm*factor):null,errors,p95:known(service.p95)?Math.round(service.p95*factor):null,health:errors===null||service.health==='UNKNOWN'?'UNKNOWN':errors>=5?'critical':errors>=1?'degraded':'healthy'};
  });
 }
 export function aggregateSeries(services:readonly TwinService[],count:number){
  const series=services.map(s=>syntheticSeries(s,count));
  return Array.from({length:Math.max(0,Math.min(48,Math.floor(count)))},(_,i)=>{
-  const rpm=series.reduce((sum,s)=>sum+s[i].rpm,0);
-  const errors=rpm?series.reduce((sum,s)=>sum+s[i].rpm*s[i].errors,0)/rpm:0;
-  return {slot:i,rpm,errors:Number(errors.toFixed(2))};
+  const samples=series.map(s=>s[i]);
+  return {slot:i,rpm:sumKnown(samples.map(s=>s.rpm)),errors:weightedErrors(samples)};
  });
 }
