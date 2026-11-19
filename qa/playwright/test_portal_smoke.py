@@ -11,7 +11,8 @@ from playwright.sync_api import Page, expect, sync_playwright
 
 BASE_URL = os.getenv("AIOPS_QA_BASE_URL", "http://127.0.0.1:17777").rstrip("/")
 ARTIFACT_DIR = Path(os.getenv("AIOPS_QA_ARTIFACT_DIR", "artifacts/team-d"))
-VIEWPORTS = [(1440, 1000)]
+VIEWPORTS = [(1280, 900), (1440, 1000), (1920, 1080)]
+ISOLATED_PROBES = os.getenv("AIOPS_QA_ISOLATED_PROBES", "0") == "1"
 DENY_ONLY_ENDPOINTS = [
     ("GET", "/api/portal/bootstrap"),
     ("GET", "/api/portal/components"),
@@ -63,7 +64,7 @@ def _same_origin_links(page: Page) -> list[str]:
 
 
 def _safe_screenshot(page: Page, route: str, width: int) -> None:
-    if os.getenv("AIOPS_QA_CAPTURE", "0") != "1":
+    if not ISOLATED_PROBES or urlparse(BASE_URL).hostname not in ('127.0.0.1', 'localhost') or os.getenv("AIOPS_QA_CAPTURE", "0") != "1":
         return
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     # Mask all user-editable fields, including password/token inputs.
@@ -154,6 +155,7 @@ def test_run_selection_is_local_and_does_not_trigger_mutation(page: Page):
 
 
 @pytest.mark.api
+@pytest.mark.skipif(not ISOLATED_PROBES or urlparse(BASE_URL).hostname not in ('127.0.0.1', 'localhost'), reason='Explicit isolated loopback opt-in required for anonymous API probes')
 @pytest.mark.parametrize(("method", "path"), DENY_ONLY_ENDPOINTS)
 def test_unauthenticated_sensitive_endpoints_fail_closed(page: Page, method: str, path: str):
     # No bearer/token is supplied. Any 2xx response is a boundary failure.
