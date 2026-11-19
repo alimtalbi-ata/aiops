@@ -1,5 +1,5 @@
-export type Health = 'healthy' | 'degraded' | 'critical';
-export interface TwinService { id:string; name:string; health:Health; rpm:number; p95:number; errors:number; calls:string[]; }
+export type Health = 'healthy' | 'degraded' | 'critical' | 'UNKNOWN';
+export interface TwinService { id:string; name:string; health:Health; rpm:number|null; p95:number|null; errors:number|null; calls:string[]; }
 export const demoServices: TwinService[] = [
 {id:'gateway',name:'API Gateway',health:'healthy',rpm:4200,p95:110,errors:0.2,calls:['checkout','catalog','auth']},
 {id:'checkout',name:'Checkout',health:'degraded',rpm:1200,p95:480,errors:2.4,calls:['payment','inventory']},
