@@ -43,7 +43,7 @@ def check_story_contract(value):
         assert item["run_id"] == run["run_id"]
         assert item["attempt_id"] == run["attempt_id"]
         assert re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
-        assert re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z", item["observed_at"])
+        assert re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z", item["observed_at"])
     intel = value["intelligence"]
     assert intel["provider"] == "DETERMINISTIC_RULES_NOT_LLM"
     assert intel["analyst_status"] == "HYPOTHESIS_ONLY"
