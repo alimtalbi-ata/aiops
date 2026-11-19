@@ -121,5 +121,19 @@ class TwinDependentsTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             potential_dependents(snapshot,"missing")
 
+class IntegratedTwinTests(unittest.TestCase):
+    def test_real_calculation_on_synthetic_graph(self):
+        with TestClient(main.app) as c:
+            with patch("portal.main.get_json", side_effect=AssertionError("no upstream")):
+                self.assertEqual(c.get("/demo/twin").status_code, 200)
+                self.assertEqual(len(c.get("/api/demo/twin/graph").json()["nodes"]), 5)
+                for root in ("ACME-SAN-FABRIC-A", "ACME-SAN-FABRIC-B"):
+                    r = c.get("/api/demo/twin/dependents/" + root)
+                    self.assertEqual(r.status_code, 200)
+                    self.assertEqual(len(r.json()["affected"]), 4)
+                    self.assertFalse(r.json()["live_remediation_authorized"])
+                self.assertEqual(c.get("/api/demo/twin/dependents/missing").status_code, 404)
+                self.assertEqual(c.post("/api/demo/twin/graph").status_code, 405)
+
 if __name__ == "__main__":
     unittest.main()
