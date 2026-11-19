@@ -91,3 +91,25 @@ def test_provider_modules_are_not_shadowed():
     assert callable(acme.project_acme)
     assert callable(technical.technical_series)
     assert callable(k.read_kpis)
+
+def test_invalid_upstream_samples(monkeypatch):
+    import pytest
+    monkeypatch.setattr(k.time,"time",lambda:6000)
+    for name, stamp, value in [
+        ("aiops2_fs_lab_used_percent",6000,"101"),
+        ("aiops2_fs_lab_alert_firing",6000,"2"),
+        ("aiops2_fs_lab_used_percent",6000,"NaN"),
+        ("aiops2_fs_lab_used_percent",5999,"92"),
+    ]:
+        payload={"status":"success","data":{"resultType":"matrix","result":[
+            {"metric":{"__name__":name},"values":[[stamp,value]]}
+        ]}}
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def read(self,size): return json.dumps(payload).encode()
+        class Opener:
+            def open(self,url,timeout): return Response()
+        monkeypatch.setattr(k.urllib.request,"build_opener",lambda *args:Opener())
+        with pytest.raises(ValueError):
+            k.read_kpis("fs-lab",md.PROM,md.NoRedirect,1)
