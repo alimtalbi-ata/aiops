@@ -32,11 +32,16 @@ test('SIM02 mobile read-only authority and responsive inventory',async({page},in
   expect(j.mode==='DEMO'&&j.runtime_attested===false&&j.live_remediation_authorized===false&&a.schema==='aiops.mission-actions.operator-session.v1'&&a.mode==='DEMO'&&a.simulation_authorized===true&&a.tenant_acl_qualified===false&&a.runtime_attested===false&&a.live_remediation_authorized===false).toBe(true);
   const nav=page.getByRole('navigation',{name:'Navigation'});
   const buttons=nav.getByRole('button');await check(buttons).toHaveCount(9);
-  for(let i=0;i<9;i++){
-   mark('VIEW_'+(i+1));await buttons.nth(i).click();
+  for(const width of [320,360,390]){
+   await page.setViewportSize({width,height:800});
+   for(let i=0;i<9;i++){
+   mark('WIDTH_'+width+'_VIEW_'+(i+1));await buttons.nth(i).click();
    await check(buttons.nth(i)).toHaveAttribute('aria-current','page');
    await check(page.getByRole('heading',{level:1})).toBeVisible();
    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
+   await expect.poll(()=>buttons.nth(i).evaluate(el=>{const r=el.getBoundingClientRect();return r.width>=24&&r.height>=24;})).toBe(true);
+   await buttons.nth(i).focus();await check(buttons.nth(i)).toBeFocused();
+   }
   }
   mark('SIMULATION_BUTTON_NO_CLICK');await nav.getByRole('button',{name:'Automatisation',exact:true}).click();
   await check(page.locator('[aria-label="Actions execution"]').getByRole('button',{name:'Simuler (sans action réelle)'})).toBeEnabled();
