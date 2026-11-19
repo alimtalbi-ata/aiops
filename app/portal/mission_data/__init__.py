@@ -174,3 +174,19 @@ def technical(metric: Literal["scrape-duration", "scrape-samples"],
     except (OSError, ValueError, KeyError, TypeError, OverflowError, AttributeError, IndexError):
         return _noc_json_response(envelope("PLATFORM", "prometheus", "UPSTREAM_UNAVAILABLE"), status_code=503)
     return _noc_json_response(envelope("PLATFORM", "prometheus", None, data))
+
+@router.get("/kpis/{group}")
+def kpis(group: Literal["core", "evidence", "twin", "fs-lab", "services"],
+         minutes: int = Query(60, ge=1, le=1440),
+         authorization: str | None = Header(default=None)):
+    denied = auth_error(authorization)
+    if denied is not None:
+        return denied
+    from portal.mission_data.kpis import authorized, read_kpis
+    if not authorized(group):
+        return _noc_json_response(envelope("PLATFORM", "prometheus", "AGGREGATE_AUTHORIZATION_NOT_QUALIFIED"), status_code=503)
+    try:
+        data = read_kpis(group, PROM, NoRedirect, minutes)
+    except (OSError, ValueError, KeyError, TypeError, OverflowError, AttributeError, IndexError):
+        return _noc_json_response(envelope("PLATFORM", "prometheus", "UPSTREAM_UNAVAILABLE"), status_code=503)
+    return _noc_json_response(envelope("PLATFORM", "prometheus", None, data))
