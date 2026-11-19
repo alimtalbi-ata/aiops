@@ -432,14 +432,19 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertIn("GO — scénario synthétique", self.page.locator("body").inner_text())
         self.assertIn("UNKNOWN — preuves runtime", self.page.locator("body").inner_text())
         self.assertIn("NO-GO LIVE", self.page.locator("body").inner_text())
-        self.assertEqual(self.page.locator("table").count(), 4)
-        # Check each semantic table independently, not just the total number
-        # of rows; a missing lifecycle stage cannot hide behind another table.
+        self.assertEqual(self.page.locator("table").count(), 5)
         self.assertEqual(
             [table.locator("tbody tr").count()
-             for table in self.page.locator("table").all()],
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
             [9, 9, 9, 8],
         )
+        twin = self.page.locator("#twin-evidence-plan")
+        self.assertEqual(twin.count(), 1)
+        self.assertEqual(twin.locator("tbody tr").count(), 6)
+        for row in twin.locator("tbody tr").all():
+            expect(row.locator("td").last).to_have_text("MISSING")
+        expect(twin).to_contain_text("DEPENDENCY_HEALTH")
+        expect(twin).to_contain_text("REDUNDANCY_HEALTH")
         self.assertEqual(self.page.locator("form").count(), 0)
         self.assertEqual(self.page.locator("script").count(), 0)
 
@@ -576,7 +581,21 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         body = self.page.locator("body").inner_text()
         for verdict in ("GO — scénario synthétique", "UNKNOWN — preuves runtime", "NO-GO LIVE"):
             self.assertIn(verdict, body)
-        self.assertEqual([t.locator("tbody tr").count() for t in self.page.locator("table").all()], [9, 9, 9, 8])
+        self.assertEqual(self.page.locator("table").count(), 5)
+        self.assertEqual(
+            [table.locator("tbody tr").count()
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
+            [9, 9, 9, 8],
+        )
+        twin = self.page.locator("#twin-evidence-plan")
+        self.assertEqual(twin.count(), 1)
+        self.assertEqual(twin.locator("tbody tr").count(), 6)
+        for row in twin.locator("tbody tr").all():
+            expect(row.locator("td").last).to_have_text("MISSING")
+        expect(twin).to_contain_text("DEPENDENCY_HEALTH")
+        expect(twin).to_contain_text("REDUNDANCY_HEALTH")
+        self.assertEqual(self.page.locator("form").count(), 0)
+        self.assertEqual(self.page.locator("script").count(), 0)
         capture("cockpit")
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         receipt = {"schema": "aiops.responsive-showrun.v1", "executed_sha": sha,
