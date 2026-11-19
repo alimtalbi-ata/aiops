@@ -11,12 +11,14 @@ exec 9>"$state/install.lock"
 flock -n 9
 tmp="$(mktemp -d "$root/.stage.XXXXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
-for f in proactive_candidate.py proactive_watchdog.py; do
+for f in proactive_candidate.py proactive_watchdog.py proactive_build_handoff.py; do
   gh api --method GET -H 'Accept: application/vnd.github.raw+json' "repos/alimtalbi-ata/aiops/contents/deploy/$f?ref=$sha" > "$tmp/$f"
 done
 python3 -m py_compile "$tmp/"*.py
 rm -rf "$tmp/__pycache__"
-if [[ ! -d "$root/$sha" ]]; then mv "$tmp" "$root/$sha"; fi
+if [[ ! -d "$root/$sha" ]]; then mv "$tmp" "$root/$sha"; else
+  for f in proactive_candidate.py proactive_watchdog.py proactive_build_handoff.py; do cmp "$tmp/$f" "$root/$sha/$f"; done
+fi
 python3 "$root/$sha/proactive_candidate.py"
 python3 - "$state/candidate.json" <<'PY'
 import json,sys
@@ -28,6 +30,6 @@ old="$(mktemp "$state/crontab.XXXXXXXX")"
 if ! crontab -l > "$old"; then echo "Cannot read existing crontab" >&2; exit 1; fi
 new="$(mktemp "$state/crontab-new.XXXXXXXX")"
 grep -v '# AIOPS2_PROACTIVE_OBSERVER_V1$' "$old" > "$new" || [[ $? == 1 ]]
-printf '%s\n' "* * * * * /usr/bin/python3 -B $root/$sha/proactive_candidate.py >> $state/discovery.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" "*/2 * * * * /usr/bin/python3 -B $root/$sha/proactive_watchdog.py >> $state/watchdog.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" >> "$new"
+printf '%s\n' "* * * * * /usr/bin/python3 -B $root/$sha/proactive_candidate.py >> $state/discovery.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" "*/2 * * * * /usr/bin/python3 -B $root/$sha/proactive_watchdog.py >> $state/watchdog.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" "*/2 * * * * /usr/bin/python3 -B $root/$sha/proactive_build_handoff.py >> $state/handoff.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" >> "$new"
 crontab "$new"
 echo "Observer installed at $sha; backup=$old; no deployment enabled"
