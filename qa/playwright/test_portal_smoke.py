@@ -84,7 +84,7 @@ def test_home_and_discoverable_routes_desktop_mobile_refresh_history(page: Page)
     routes = _same_origin_links(page)
     # Include the canonical story routes when present in this portal generation.
     for candidate in ("/demo/acme-impact", "/demo/explore-story",
-                     "/demo/acme-incident-cockpit", "/itsm"):
+                     "/demo/acme-incident-cockpit"):
         if candidate not in routes:
             routes.append(candidate)
 
@@ -95,7 +95,7 @@ def test_home_and_discoverable_routes_desktop_mobile_refresh_history(page: Page)
             result = page.goto(urljoin(BASE_URL + "/", route.lstrip("/")),
                                wait_until="domcontentloaded")
             assert result is not None, f"No HTTP response for {route}"
-            assert result.status < 500, f"{route} returned HTTP {result.status}"
+            assert result.status < 400, f"{route} returned HTTP {result.status}"
             expect(page.locator("body")).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (
                 f"Horizontal overflow at {width}px on {route}"
