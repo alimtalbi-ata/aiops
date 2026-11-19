@@ -9,16 +9,30 @@ def test_installer_restores_original_crontab_after_partial_write_failure(tmp_pat
     home=tmp_path/"home"
     home.mkdir()
     crontab=tmp_path/"crontab"
-    original="* * * * * /usr/bin/keep-this-job\n17 * * * * /usr/bin/backup\n"
+    original="* * * * * /usr/bin/keep-this-job\\n17 * * * * /usr/bin/backup\\n"
     crontab.write_text(original)
 
     commands={
-      "id":"#!/bin/sh\necho aiops\n",
-      "hostname":"#!/bin/sh\necho srv-deb-05\n",
-      "flock":"#!/bin/sh\nexit 0\n",
-      "gh":"#!/bin/sh\nexit 0\n",
-      "python3":"#!/bin/sh\nif [ \"$1\" = \"-m\" ]; then exit 0; fi\nmkdir -p \"$HOME/.local/state/aiops2-proactive\"\nprintf '{\\"state\\":\\"CI_PENDING\\",\\"deploy_authorized\\":false}' > \"$HOME/.local/state/aiops2-proactive/candidate.json\"\n",
-      "crontab":"#!/bin/bash\nif [[ \"$1\" == \"-l\" ]]; then cat \"$FAKE_CRONTAB\"; exit 0; fi\ncount=0; [[ -f \"$FAKE_COUNT\" ]] && count=$(cat \"$FAKE_COUNT\"); count=$((count+1)); echo \"$count\" > \"$FAKE_COUNT\"\ncp \"$1\" \"$FAKE_CRONTAB\"\nif [[ \"$count\" == 1 ]]; then exit 42; fi\n"
+      "id":"#!/bin/sh\\necho aiops\\n",
+      "hostname":"#!/bin/sh\\necho srv-deb-05\\n",
+      "flock":"#!/bin/sh\\nexit 0\\n",
+      "gh":"#!/bin/sh\\nexit 0\\n",
+      "python3":"""#!/bin/sh
+if [ "$1" = "-m" ]; then exit 0; fi
+mkdir -p "$HOME/.local/state/aiops2-proactive"
+cat > "$HOME/.local/state/aiops2-proactive/candidate.json" <<'JSON'
+{"state":"CI_PENDING","deploy_authorized":false}
+JSON
+""",
+      "crontab":"""#!/bin/bash
+if [[ "$1" == "-l" ]]; then cat "$FAKE_CRONTAB"; exit 0; fi
+count=0
+[[ -f "$FAKE_COUNT" ]] && count=$(cat "$FAKE_COUNT")
+count=$((count+1))
+echo "$count" > "$FAKE_COUNT"
+cp "$1" "$FAKE_CRONTAB"
+if [[ "$count" == 1 ]]; then exit 42; fi
+"""
     }
     for name,body in commands.items():
         path=fakebin/name
