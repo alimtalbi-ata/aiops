@@ -25,6 +25,24 @@ class TwinConsumerTests(unittest.TestCase):
         self.assertFalse(v["runtime_attested"])
         self.assertEqual(v["binding"]["binding_status"], "UNBOUND")
 
+    def test_evidence_collection_plan_is_structural_and_unexecuted(self):
+        v = project_twin_consumer(self.model)
+        plan = v["evidence_collection_plan"]
+        rows = plan["affected_ci_observations"]
+        self.assertEqual(plan["scope"], "STORY_OFFLINE")
+        self.assertFalse(plan["execution_authorized"])
+        self.assertEqual(rows[0]["ci_id"], v["structural_impact"]["root_node_id"])
+        self.assertEqual(rows[0]["minimum_dependency_hops"], 0)
+        self.assertEqual({r["ci_id"] for r in rows}, set(v["structural_impact"]["affected_ci_ids"]))
+        self.assertEqual(rows, sorted(rows, key=lambda r: (r["minimum_dependency_hops"], r["ci_id"])))
+        self.assertEqual({r["ci_id"]: r["structural_path_count"] for r in rows},
+                         v["structural_impact"]["path_count_by_ci"])
+        self.assertTrue(all(r["observation_status"] == "MISSING" for r in rows))
+        self.assertEqual([r["ci_id"] for r in plan["alternative_dependency_observations"]],
+                         v["structural_impact"]["alternative_dependency_ids"])
+        self.assertTrue(all(r["observation_status"] == "MISSING"
+                            for r in plan["alternative_dependency_observations"]))
+
     def test_identity_and_authority_rejections(self):
         for key, value in (("tenant_id", " acme "), ("attempt_id", "attempt-1"), ("core_run_id", "core-1"), ("freshness", "FRESH"), ("observed_at", "2026-11-18T12:00:00Z"), ("runtime_attested", True), ("source_sha256", "0" * 64)):
             with self.subTest(key=key):

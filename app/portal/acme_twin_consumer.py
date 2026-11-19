@@ -85,8 +85,33 @@ def project_twin_consumer(impact: dict) -> dict:
     alternate = sorted({b for a, b in pairs if a in reached and b not in reached})
     if alternate != graph["alternative_dependency_ids"]:
         raise ValueError("twin_alternative_mismatch")
+    # Evidence collection ordered by structural distance, not inferred severity.
+    hops = {root: 0}
+    pending = deque([root])
+    while pending:
+        dependency = pending.popleft()
+        for consumer in sorted(reverse[dependency]):
+            if consumer not in hops:
+                hops[consumer] = hops[dependency] + 1
+                pending.append(consumer)
     return {
         "schema": "aiops.acme.twin-consumer.v1",
+        "evidence_collection_plan": {
+            "scope": "STORY_OFFLINE",
+            "ordering": "STRUCTURAL_DISTANCE_NOT_SEVERITY",
+            "affected_ci_observations": [
+                {"ci_id": n, "minimum_dependency_hops": hops[n],
+                 "structural_path_count": counts[n],
+                 "required_observation": "DEPENDENCY_HEALTH",
+                 "observation_status": "MISSING"}
+                for n in sorted(reached, key=lambda n: (hops[n], n))
+            ],
+            "alternative_dependency_observations": [
+                {"ci_id": n, "required_observation": "REDUNDANCY_HEALTH",
+                 "observation_status": "MISSING"} for n in alternate
+            ],
+            "execution_authorized": False,
+        },
         "story_identity": {k: twin[k] for k in ("namespace", "incident_id", "impact_incident_id", "run_id", "source_sha256")},
         "binding": {k: twin[k] for k in ("scope", "binding_status", "tenant_id", "attempt_id", "core_run_id", "resource_id", "service_id")},
         "freshness": {"status": "UNKNOWN", "observed_at": None, "age_seconds": None, "reason": "NO_RUNTIME_OBSERVATION"},
