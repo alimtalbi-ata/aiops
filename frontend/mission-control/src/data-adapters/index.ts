@@ -151,3 +151,38 @@ export async function readTechnicalHistory(metric: TechnicalMetric, options: Opt
     return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
   return r;
 }
+
+export const aggregateMetrics = {
+  core: ["aiops_runs_total","aiops_runs_running","aiops_runs_blocked","aiops_runs_resolved"],
+  evidence: ["aiops_evidence_total"],
+  twin: ["aiops_twin_nodes","aiops_twin_degraded","aiops_twin_failed"],
+  "fs-lab": ["aiops2_fs_lab_used_percent","aiops2_fs_lab_alert_firing"],
+  services: ["aiops_worker_up","aiops_policy_up"]
+} as const;
+export type AggregateGroup = keyof typeof aggregateMetrics;
+export type AggregateMetric<G extends AggregateGroup> = typeof aggregateMetrics[G][number];
+export type AggregateHistory<G extends AggregateGroup> = {
+  group: G; start: number; end: number; step_seconds: 60; coverage: number;
+  classification: "PLATFORM_AGGREGATES_UNPARTITIONED"; freshness: "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME";
+  series: {metric: AggregateMetric<G>; unit: "count"|"binary"|"percent"; value: number|null; points: MetricPoint[];
+    coverage: number; last_evaluated_at: number|null; reason: null|"NO_CURRENT_SAMPLE"|"AMBIGUOUS_SERIES"}[];
+};
+export async function readAggregateKpis<G extends AggregateGroup>(group:G,options:Options,minutes=60):Promise<Result<AggregateHistory<G>>> {
+  if (!Number.isInteger(minutes)||minutes<1||minutes>1440) return unavailable("PLATFORM","prometheus","INVALID_WINDOW");
+  const r=await read<AggregateHistory<G>>("kpis/"+group+"?minutes="+minutes,"PLATFORM","prometheus",options);
+  if (r.state==="UNKNOWN") return r;
+  const d=r.data;
+  const names: readonly string[]=aggregateMetrics[group];
+  if (!d||d.group!==group||d.classification!=="PLATFORM_AGGREGATES_UNPARTITIONED"||
+      d.freshness!=="QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME"||d.step_seconds!==60||
+      !Number.isFinite(d.start)||d.end-d.start!==minutes*60||!Array.isArray(d.series)||d.series.length!==names.length||
+      names.some(n=>d.series.filter(s=>s&&s.metric===n).length!==1)||
+      d.series.some(s=>{
+        const unit=s.metric.endsWith("_percent")?"percent":s.metric.endsWith("_up")||s.metric.endsWith("_alert_firing")?"binary":"count";
+        return s.unit!==unit||!Array.isArray(s.points)||s.points.length!==minutes+1||
+          s.points.some((p,i)=>!p||p.at!==d.start+i*60||(p.value!==null&&
+            (!Number.isFinite(p.value)||p.value<0||(unit==="percent"?p.value>100:unit==="binary"?p.value!==0&&p.value!==1:!Number.isInteger(p.value)))))||
+          s.value!==s.points[minutes].value||s.coverage!==s.points.filter(p=>p.value!==null).length/(minutes+1);
+      })) return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
+  return r;
+}
