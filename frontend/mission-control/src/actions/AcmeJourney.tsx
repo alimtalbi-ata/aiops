@@ -55,7 +55,7 @@ export function AcmeJourney({viewerToken,operatorToken}:{viewerToken:string;oper
    })();
    return()=>controller.abort();
  },[provider,viewerToken]);
- const selection:Selection|undefined=j&&chosen?{view,runId:j.run_id,id:view==="incident"?j.incident_id:view==="ci"?ci:view==="scenario"?j.scenario_id:j.run_id}:undefined;
+ const selection:Selection|undefined=j&&chosen?{view,runId:j.run_id,sourceSha256:j.source_sha256,id:view==="incident"?j.incident_id:view==="ci"?ci:view==="scenario"?j.scenario_id:j.run_id}:undefined;
  return <section className="panel" aria-label="Parcours ACME synthétique">
    <h2>ACME · parcours DEMO isolé</h2>
    <p>Aucune preuve runtime, approbation réelle ou écriture GLPI.</p>
