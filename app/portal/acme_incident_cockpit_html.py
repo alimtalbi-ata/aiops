@@ -209,9 +209,9 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         " <span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
         "<h3>Plan de preuves Digital Twin</h3>"
         "<p>STORY_OFFLINE — distance structurelle, pas gravité. Aucune collecte exécutée.</p>"
-        "<table id='twin-evidence-plan'><thead><tr><th>CI</th><th>Distance</th><th>Chemins</th>"
+        "<div class='table-scroll' role='region' aria-label='Plan de preuves Digital Twin' tabindex='0'><table id='twin-evidence-plan'><thead><tr><th>CI</th><th>Distance</th><th>Chemins</th>"
         "<th>Observation requise</th><th>État</th></tr></thead><tbody>"
-        + twin_rows + "</tbody></table>"
+        + twin_rows + "</tbody></table></div>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
         + render_story_context(cockpit) + render_runtime_refusals() +

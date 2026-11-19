@@ -72,7 +72,17 @@ def test_canonical_operator_cockpit_page_contains_all_gates_and_no_actions():
     assert "DENY_LIVE_ACTION" in page.text
     assert "0 / 9" in page.text
     # 9 lifecycle + 8 ITIL + 9 customer timeline + 9 evidence requirements.
-    assert page.text.count("<tr><th scope='row'>") == 35
+    before, twin_and_after = page.text.split("<table id='twin-evidence-plan'>", 1)
+    twin_table, after = twin_and_after.split("</table>", 1)
+    assert (before + after).count("<tr><th scope='row'>") == 35
+    plan = project_synthetic_incident_cockpit(build_acme_impact_read_model())["twin_consumer"]["evidence_collection_plan"]
+    expected = plan["affected_ci_observations"] + plan["alternative_dependency_observations"]
+    assert twin_table.count("<tr><th scope='row'>") == len(expected)
+    assert twin_table.count("<td>MISSING</td>") == len(expected)
+    from html import escape
+    for row in expected:
+        assert "<th scope='row'>" + escape(row["ci_id"]) + "</th>" in twin_table
+    assert plan["execution_authorized"] is False
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
     with patch("portal.acme_impact_read_model.build_acme_impact_read_model",
@@ -247,7 +257,7 @@ def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
     assert page.status_code == 200
     parser = TableWrappers()
     parser.feed(page.text)
-    assert parser.wrapper_count == parser.table_count == 4
+    assert parser.wrapper_count == parser.table_count == 5
     assert parser.stack == []
     assert "Résumé de qualification" in page.text
     assert "GO — scénario synthétique" in page.text
