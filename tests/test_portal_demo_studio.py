@@ -100,8 +100,7 @@ class DemoStudioTests(unittest.TestCase):
 
 class TwinDependentsTests(unittest.TestCase):
     def test_reverse_diamond_cycle_and_simulation_direction(self):
-        with patch.dict(os.environ, {"AIOPS_ADMIN_TOKEN": "test-only"}):
-            from twin.main import potential_dependents
+        from twin.dependents import potential_dependents
         nodes = [{"node_id": n} for n in ("san","storage","vm1","vm2","pay","sim","unknown")]
         edges = [
             ("a","storage","san","PATH"), ("b","vm1","storage","USES"),
