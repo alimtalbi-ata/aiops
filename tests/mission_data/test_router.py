@@ -12,11 +12,12 @@ def test_contract(monkeypatch):
     app = FastAPI()
     app.include_router(md.router)
     client = TestClient(app)
-    path = "/api/mission-data/health?job=aiops2-core&mode=LIVE"
+    path = "/api/mission-data/health?job=aiops2-core&mode=PLATFORM"
     headers = {"Authorization": "Bearer test-token"}
     assert client.get(path).status_code == 401
     assert not calls
-    assert client.get(path.replace("LIVE", "DEMO"), headers=headers).status_code == 503
+    assert client.get(path.replace("PLATFORM", "DEMO"), headers=headers).status_code == 503
+    assert client.get(path.replace("PLATFORM", "LIVE"), headers=headers).status_code == 503
     assert not calls
     response = client.get(path, headers=headers)
     assert response.status_code == 200
