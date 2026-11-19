@@ -19,9 +19,7 @@ class DemoStudioTests(unittest.TestCase):
         self.client.close()
 
     def test_demo_studio_is_static_french_presenter_aid(self):
-        with patch("portal.demo_studio.PAGE", wraps=__import__(
-            "portal.demo_studio", fromlist=["PAGE"]).PAGE):
-            response = self.client.get("/demo/studio")
+        response = self.client.get("/demo/studio")
         self.assertEqual(response.status_code, 200)
         self.assertIn("ACME · Incident majeur SAN", response.text)
         self.assertIn("DEMO STUDIO · SYNTHETIC ONLY", response.text)
