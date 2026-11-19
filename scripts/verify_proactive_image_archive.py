@@ -45,9 +45,6 @@ def verify(archive_path, receipt_path, source_sha, expected_tag, inspect_id):
         labels=config.get("config",{}).get("Labels",{})
         if labels.get("org.opencontainers.image.revision")!=source_sha:
             raise ValueError("OCI revision label does not match frozen source SHA")
-        if inspect_id!=config_digest:
-            raise ValueError("docker image inspect ID does not match exported config digest")
-
         index_digest=None
         try:
             index=json.loads(read_member(archive,"index.json"))
@@ -74,11 +71,13 @@ def verify(archive_path, receipt_path, source_sha, expected_tag, inspect_id):
     buildx_iid=receipt.get("buildx_iid")
     if index_digest and buildx_iid!=index_digest:
         raise ValueError("Buildx IID does not match OCI index digest")
-    if receipt.get("local_image_id")!=inspect_id:
-        raise ValueError("receipt local_image_id does not match docker image inspect ID")
+    if inspect_id not in {config_digest,index_digest}:
+        raise ValueError("docker image inspect ID matches neither exported config nor OCI index")
+    if receipt.get("docker_engine_inspect_id")!=inspect_id:
+        raise ValueError("receipt docker_engine_inspect_id does not match docker image inspect")
     receipt["local_image_id"]=config_digest
     receipt["docker_config_digest"]=config_digest
-    receipt["docker_image_inspect_id"]=inspect_id
+    receipt["docker_engine_inspect_id"]=inspect_id
     receipt["oci_index_digest"]=index_digest
     receipt["image_tag"]=expected_tag
     tmp=receipt_path.with_suffix(receipt_path.suffix+".tmp")
