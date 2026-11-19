@@ -4,7 +4,9 @@ Run on approved test checkout, not production image. Node 22. From qa/mission-co
 umask 077
 npm install --package-lock-only --ignore-scripts
 npm ci
+npm audit --audit-level=high
 npx playwright install chromium
+BASE_URL='<approved origin>' npm run preflight
 BASE_URL='<approved origin>' UI_PATH='/mission-control' npm test
 ```
 Lock generation is provisional until reviewed and committed. UI_PATH must be confirmed by CENTRAL. No secrets for this suite; no authenticated tests, no simulation POST. Browser blocks non-read methods. Reports/traces may contain sensitive server data: keep private, never publish raw artifacts. This suite is runtime only; no mocks and no runtime PASS claimed.
@@ -21,3 +23,6 @@ No production secrets or network for unit tests. ACME official fixture required.
 
 ## ACME viewer read-only
 Set QA_VIEWER_TOKEN through an approved local secret mechanism, never on a command line or in Git. Run `npm test -- acme-readonly.spec.cjs` with BASE_URL HTTPS or loopback only. No redirects, no traces/screenshots/video for this authenticated API test. Keep all reports private; sanitize before sharing. Missing viewer skips the test, not PASS. No POST or execution. The API checks synthetic classification, incident/run/source binding, affected CI IDs, missing evidence, LIVE ACL refusal. Remove token from environment after testing.
+
+## Container discovery and security gate
+Mount the entire assembled checkout at /work (not just qa/mission-control), workdir /work/qa/mission-control. Use matching Playwright image mcr.microsoft.com/playwright:v1.55.1-noble, subject to CENTRAL approval. Verify both ../../tests/e2e/mission-control and package.json exist before installing. Run preflight and confirm both spec files appear for both projects. Stop on discovery failure or high audit findings. Proposed 1.55.1 pin addresses the known pre-1.55.1 browser-download TLS verification advisory; actual two findings must be identified using npm audit --json, not assumed resolved. Generate and commit lockfile on approved network, then use npm ci for repeat runs. Collect artifacts/ relative to QA workdir, private only. Do not use npm audit fix --force.
