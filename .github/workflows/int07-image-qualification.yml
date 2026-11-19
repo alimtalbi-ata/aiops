@@ -11,6 +11,8 @@ permissions:
   contents: read
   actions: read
   packages: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: int07-image-qualification-636205a7-ghcr-v2
@@ -56,6 +58,7 @@ jobs:
           printf '%s\n' "${QUALIFIER_SHA}" > "${RECEIPT_DIR}/qualifier-sha.txt"
 
       - name: Build exact INT07 image using pinned qualifier
+        id: publish-image
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,6 +77,14 @@ jobs:
           test -n "${REGISTRY_DIGEST}"
           printf '%s\n' "${REGISTRY_IMAGE}:${SOURCE_SHA}" > "${RECEIPT_DIR}/registry-image-ref.txt"
           printf '%s\n' "${REGISTRY_DIGEST}" > "${RECEIPT_DIR}/registry-manifest-digest.txt"
+          echo "digest=${REGISTRY_DIGEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Attest published INT07 image provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}/aiops-portal-int07
+          subject-digest: ${{ steps.publish-image.outputs.digest }}
+          push-to-registry: true
 
       - name: Start the exact built image
         shell: bash
