@@ -11,7 +11,7 @@ CATALOG = {
     "evidence": ("aiops_evidence_total",),
     "twin": ("aiops_twin_nodes","aiops_twin_degraded","aiops_twin_failed"),
     "fs-lab": ("aiops2_fs_lab_used_percent","aiops2_fs_lab_alert_firing"),
-    "services": ("aiops_worker_up","aiops_policy_up"),
+    "services": ("aiops_worker_up","aiops_policy_up","aiops_portal_up"),
 }
 
 def authorized(group):
