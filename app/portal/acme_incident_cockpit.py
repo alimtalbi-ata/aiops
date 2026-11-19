@@ -5,14 +5,19 @@ No runtime proof, authenticated user action or execution capability is implied.
 """
 from __future__ import annotations
 
+from portal.acme_signal_context import build_signal_context
 from portal.acme_lifecycle_read_model import project_synthetic_incident_lifecycle
 from portal.acme_itil_readiness import assess_synthetic_itil_readiness
 from portal.acme_evidence_collection_plan import plan_synthetic_evidence_collection
 from portal.acme_analyst_critic_review import review_synthetic_analyst_critic
+from portal.acme_run_journey_projection import project_team_c_run_journey
 
 
 def project_synthetic_incident_cockpit(impact: dict) -> dict:
     lifecycle = project_synthetic_incident_lifecycle(impact)
+    signal = build_signal_context(impact["twin_evidence"])
+    if impact.get("signal_context") != signal:
+        raise ValueError("signal_context_snapshot_mismatch")
     readiness = assess_synthetic_itil_readiness(lifecycle)
     evidence = plan_synthetic_evidence_collection(lifecycle)
     review = review_synthetic_analyst_critic(impact)
@@ -30,8 +35,10 @@ def project_synthetic_incident_cockpit(impact: dict) -> dict:
             or evidence.get("outbound_collection_enabled") is not False
             or evidence.get("temporal_execution_enabled") is not False):
         raise ValueError("synthetic_cockpit_projection_mismatch")
-    return {
+    result = {
         "schema": "aiops.synthetic-incident-cockpit.v1",
+        "twin_consumer": lifecycle["twin_consumer"],
+        "signal_context": signal,
         "mode": "DEMO",
         "provenance": "LOCAL_SYNTHETIC_FIXTURE",
         "source_sha256": lifecycle["source_sha256"],
@@ -46,3 +53,5 @@ def project_synthetic_incident_cockpit(impact: dict) -> dict:
         "live_remediation_authorized": False,
         "overall_qualification": "UNKNOWN",
     }
+    result["run_journey"] = project_team_c_run_journey(impact, result)
+    return result
