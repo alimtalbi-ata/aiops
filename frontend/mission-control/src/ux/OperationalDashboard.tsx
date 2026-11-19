@@ -1,0 +1,35 @@
+import {useState} from 'react';
+import {metric,known} from './analytics';
+import {availabilityStats,difference,severityRank,type OperationalData,type Observation,type CIView} from './operational';
+const time=(at:number)=>new Date(at*1000).toISOString().slice(11,16)+' UTC';
+export function TimeSeries({points,label,unit}:{points:Observation[];label:string;unit:string}){
+ const [window,setWindow]=useState(60),[cursor,setCursor]=useState(0);
+ const end=points[points.length-1]?.at;
+ const visible=points.filter(p=>end!==undefined&&p.at>=end-window*60);
+ const values=visible.map(p=>p.value).filter(known);
+ const max=Math.max(1,...values),start=visible[0]?.at??0;
+ const x=(at:number)=>20+560*(at-start)/Math.max(1,(end??start)-start);
+ const y=(v:number)=>100-90*v/max;
+ const index=Math.min(cursor,Math.max(0,visible.length-1)),selected=visible[index];
+ return <section className="ux-panel"><h2>{label}</h2><label>Fenêtre <select value={window} onChange={e=>{setWindow(Number(e.target.value));setCursor(0)}}>{[15,30,60,1440].map(n=><option key={n} value={n}>{n} min</option>)}</select></label>
+ {!values.length?<p>UNKNOWN — aucune observation disponible</p>:<svg viewBox="0 0 600 120" role="img" aria-label={label+' · '+unit}>{visible.map((p,i)=>{const prev=visible[i-1];return known(p.value)?<g key={p.at}>{prev&&known(prev.value)&&p.at-prev.at===60&&<line x1={x(prev.at)} y1={y(prev.value)} x2={x(p.at)} y2={y(p.value)} stroke="var(--ux-accent)" strokeWidth="2"/>}<circle cx={x(p.at)} cy={y(p.value)} r="2" fill="var(--ux-accent)"><title>{time(p.at)+' · '+metric(p.value, ' '+unit)}</title></circle></g>:null})}{selected&&<line x1={x(selected.at)} x2={x(selected.at)} y1="5" y2="110" stroke="var(--ux-muted)" strokeDasharray="4 4"/>}</svg>}
+ {selected&&<><input aria-label="Créneau inspecté" type="range" min={0} max={Math.max(0,visible.length-1)} value={index} onChange={e=>setCursor(Number(e.target.value))}/><p>{time(selected.at)} · {metric(selected.value,' '+unit)}</p></>}<small>{values.length}/{visible.length} observations · temps d’évaluation, pas temps de collecte</small></section>
+}
+export function AvailabilityPanel({data}:{data:OperationalData['availability']}){
+ const [minutes,setMinutes]=useState(60);
+ if(!data||data.state==='UNKNOWN')return <section className="ux-panel"><h2>Disponibilité technique</h2><p>UNKNOWN · {data?.reason??'Historique non fourni'}</p></section>;
+ const rows=data.data.series.map(s=>({...s,points:s.points.slice(-(minutes+1))}));
+ return <section className="ux-panel"><h2>Disponibilité technique · Prometheus</h2><p>UP / DOWN / UNKNOWN · ne mesure pas la santé métier</p><label>Fenêtre <select value={minutes} onChange={e=>setMinutes(Number(e.target.value))}>{[15,30,60,1440].map(n=><option key={n} value={n}>{n} min</option>)}</select></label><div className="ux-scroll"><table className="ux-availability"><tbody>{rows.map(s=>{const stats=availabilityStats(s.points);return <tr key={s.job}><th scope="row">{s.job}</th><td>{metric(stats.upRatio===null?null:stats.upRatio*100,'%')} UP observé · {stats.observed}/{stats.expected}</td><td><div className="ux-availability-cells">{s.points.map(p=><span key={p.at} data-up={p.up===null?'UNKNOWN':p.up} title={time(p.at)+' '+(p.up===null?'UNKNOWN':p.up?'UP':'DOWN')} aria-label={time(p.at)+' '+(p.up===null?'UNKNOWN':p.up?'UP':'DOWN')}/>)}</div></td></tr>})}</tbody></table></div><small>Vert UP · rouge DOWN · hachuré UNKNOWN. Source : {data.source}</small></section>
+}
+export function CIInspection({ci}:{ci:CIView}){return <section className="ux-panel"><h2>Configuration item</h2><dl>{Object.entries({Identifiant:ci.node_id,Type:ci.type,Site:ci.site,État:ci.state,Santé:ci.health,Confiance:ci.confidence,Criticité:ci.criticality}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v??'UNKNOWN'}</dd></div>)}</dl></section>}
+export function OperationalDashboard({data,mode,onSelect}:{data:OperationalData;mode:'operational'|'demo';onSelect:(id:string)=>void}){
+ const [job,setJob]=useState('');
+ const technical=(data.technical??[]).flatMap(r=>r.state==='AVAILABLE'?r.data.series.map(s=>({...s,metric:r.data.metric,unit:r.data.unit,source:r.source})):[]);
+ const jobs=[...new Set(technical.map(s=>s.job))];
+ const active=jobs.includes(job)?job:jobs[0];
+ const incidents=(data.incidents??[]).filter(i=>mode==='demo'||!i.synthetic).slice().sort((a,b)=>severityRank(a.severity)-severityRank(b.severity));
+ return <><section className="ux-panel"><h2>KPI métier et techniques</h2>{(['business','technical'] as const).map(kind=><div key={kind}><h3>{kind==='business'?'Santé métier':'Indicateurs techniques'}</h3><div className="ux-kpis">{(data.kpis??[]).filter(k=>k.kind===kind).map(k=><div className="ux-metric" key={k.id}><small>{k.label}</small><strong>{metric(k.value,' '+k.unit)}</strong><small>{k.source}</small></div>)}</div>{!data.kpis?.some(k=>k.kind===kind)&&<p>UNKNOWN · indicateurs non fournis</p>}</div>)}</section>
+ <AvailabilityPanel data={data.availability}/><section className="ux-panel"><h2>Collecte technique · maximum par job</h2>{jobs.length?<label>Job <select value={active} onChange={e=>setJob(e.target.value)}>{jobs.map(j=><option key={j}>{j}</option>)}</select></label>:<p>UNKNOWN · historiques non fournis</p>}{data.technical?.map((r,i)=>r.state==='UNKNOWN'?<p key={i}>{r.source} · {r.reason}</p>:null)}<div className="ux-grid">{technical.filter(s=>s.job===active).map(s=><TimeSeries key={s.metric} points={s.points} label={(s.metric==='scrape-duration'?'Durée de collecte':'Échantillons collectés')+' · '+s.source} unit={s.unit}/>)}</div></section>
+ <section className="ux-panel"><h2>Incidents par criticité</h2>{incidents.length?incidents.map(i=><div className="ux-row" key={i.incident_id}><strong>{i.severity}</strong><span>{i.title??i.incident_id} · {i.state??'UNKNOWN'} {i.synthetic?'· SYNTHÉTIQUE':''}</span>{i.service_id&&<button onClick={()=>onSelect(i.service_id!)}>Inspecter CI</button>}</div>):<p>{data.incidents===undefined?'UNKNOWN · incidents non fournis':'Aucun incident fourni dans ce mode'}</p>}</section>
+ <section className="ux-panel"><h2>Observations avant / après</h2>{data.comparisons?.length?data.comparisons.map(c=><div key={c.id}><h3>{c.label}</h3><div className="ux-grid"><p>Avant · {time(c.before.at)} · {metric(c.before.value,' '+c.unit)}</p><p>Après · {time(c.after.at)} · {metric(c.after.value,' '+c.unit)}</p></div><p>Écart : {metric(difference(c),' '+c.unit)} · {c.source} · aucune causalité attestée</p></div>):<p>UNKNOWN · aucune paire d’observations fournie</p>}</section></>
+}
