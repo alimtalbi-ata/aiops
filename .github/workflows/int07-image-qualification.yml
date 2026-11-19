@@ -24,7 +24,7 @@ jobs:
       SOURCE_SHA: 636205a7b24de08ff6c52e4b956a42904b58cee9
       QUALIFIER_SHA: 4ea75a4fbd977a79777d660e5b6de77652ca9593
       IMAGE_TAG: aiops2-portal-qualification:636205a7b24de08ff6c52e4b956a42904b58cee9
-      RECEIPT_DIR: ${{ runner.temp }}/int07-qualification
+      RECEIPT_DIR: ${{ github.workspace }}/int07-qualification
     steps:
       - name: Checkout frozen INT07 source
         uses: actions/checkout@v4
@@ -172,6 +172,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: int07-image-qualification-${{ github.run_id }}
-          path: ${{ runner.temp }}/int07-qualification/
+          path: ${{ github.workspace }}/int07-qualification/
           if-no-files-found: error
           retention-days: 30
