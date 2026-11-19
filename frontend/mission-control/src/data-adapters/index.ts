@@ -75,3 +75,31 @@ export type TwinGraph = { nodes: TwinNode[]; edges: TwinEdge[] };
 export type Incident = { incident_id: string; title: string; severity: string; state: string; service_id: string | null; synthetic: boolean };
 export type EvidenceItem = { evidence_id: string; source: string; observed_at: string | null; known_at: string; claim: string; confidence: number; payload_hash: string };
 export type DatasetMap = { core: CoreKpis; "fs-lab": { series: MetricSeries[] }; evidence: { items: EvidenceItem[] }; incidents: { items: Incident[] }; twin: TwinGraph; impact: { root: string; affected: { node_id: string; depth: number }[] }; logs: never; traces: never; noc: never };
+
+export type AcmeProvenance = { source: "LOCAL_SYNTHETIC_FIXTURE"; source_ref: string; source_sha256: string; observed_at: null; freshness: "UNKNOWN"; scope: "STORY_OFFLINE" };
+export type AcmeSnapshot = {
+  classification: "SYNTHETIC_SIMULATION_ONLY"; source_sha256: string; source_artifact: string;
+  observed_at: null; freshness: "UNKNOWN"; runtime_attested: false; live_remediation_authorized: false;
+  kpis: { ci_count: number; incident_count: number; affected_ci_count: number; runtime_open_incidents: null };
+  graph: { nodes: { node_id: string; type: string; name: string; state: "UNKNOWN"; health: null; provenance: AcmeProvenance }[];
+    edges: { source_id: string; target_id: string; relation_type: "DEPENDS_ON"; provenance: AcmeProvenance }[] };
+  impact: { path: string[]; affected_ci_ids: string[]; operational_impact: "UNKNOWN" };
+  incidents: { incident_id: string; severity: "P1"|"P2"; role: string }[];
+  history: { sequence: number; cue: string; service: string; status: "MISSING"; observed_at: null }[];
+};
+export async function readAcmeDemo(options: Options): Promise<Result<AcmeSnapshot>> {
+  const r = await read<AcmeSnapshot>("acme?mode=DEMO", "DEMO", "acme", options);
+  if (r.state === "UNKNOWN") return r;
+  const d = r.data;
+  if (!d || d.classification !== "SYNTHETIC_SIMULATION_ONLY" || d.runtime_attested !== false ||
+      d.live_remediation_authorized !== false || d.observed_at !== null || d.freshness !== "UNKNOWN" ||
+      !/^[a-f0-9]{64}$/.test(d.source_sha256) || !d.kpis || d.kpis.runtime_open_incidents !== null ||
+      !Array.isArray(d.graph?.nodes) || !Array.isArray(d.graph?.edges) ||
+      !Array.isArray(d.incidents) || !Array.isArray(d.history) ||
+      d.graph.nodes.some(n => !n || n.health !== null || n.state !== "UNKNOWN" || n.provenance?.source_sha256 !== d.source_sha256) ||
+      d.graph.edges.some(e => !e || e.relation_type !== "DEPENDS_ON" || e.provenance?.source_sha256 !== d.source_sha256) ||
+      d.history.some(h => !h || h.status !== "MISSING" || h.observed_at !== null) ||
+      d.impact?.operational_impact !== "UNKNOWN")
+    return unavailable("DEMO", "acme", "INVALID_RESPONSE");
+  return r;
+}
