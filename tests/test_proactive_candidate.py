@@ -26,3 +26,35 @@ def test_success_conclusion_is_not_eligible_until_check_completed():
     assert m.classify(pr,checks)=="CI_PENDING"
     completed=[dict(c,status="completed") for c in checks]
     assert m.classify(pr,completed)=="BUILD_ELIGIBLE"
+
+
+def test_fetch_check_runs_reads_all_pages(monkeypatch):
+    import json
+    sha="d"*40
+    first=[{"id":i,"name":f"check-{i}"} for i in range(100)]
+    second=[{"id":100,"name":"check-100"}]
+    pages=[{"total_count":101,"check_runs":first},{"total_count":101,"check_runs":second}]
+    calls=[]
+    def fake_check_output(args,timeout):
+        calls.append(args)
+        return json.dumps(pages).encode()
+    monkeypatch.setattr(m.subprocess,"check_output",fake_check_output)
+    checks=m.fetch_check_runs(sha)
+    assert len(checks)==101
+    assert checks[-1]["id"]==100
+    assert "--paginate" in calls[0] and "--slurp" in calls[0]
+
+
+def test_fetch_check_runs_rejects_incomplete_or_duplicate_pages(monkeypatch):
+    import json
+    import pytest
+    sha="e"*40
+    cases=[
+        [{"total_count":2,"check_runs":[{"id":1}]}],
+        [{"total_count":2,"check_runs":[{"id":1}]},{"total_count":2,"check_runs":[{"id":1}]}],
+        [{"total_count":2,"check_runs":[{"id":1}]},{"total_count":3,"check_runs":[{"id":2}]}],
+    ]
+    for pages in cases:
+        monkeypatch.setattr(m.subprocess,"check_output",lambda args,timeout,p=pages:json.dumps(p).encode())
+        with pytest.raises(ValueError):
+            m.fetch_check_runs(sha)
