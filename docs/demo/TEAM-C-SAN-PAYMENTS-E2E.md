@@ -1,86 +1,68 @@
-# TEAM C — SAN P1 → Payments : parcours intelligent explicable
+# TEAM C — SAN P1 → Payments : Run Journey relié au cockpit existant
 
-**État au 2026-11-19 :** contrat et scénario **PROPOSED** ; intégration RUNTIME_SANDBOX **NOT_TESTED / BLOCKED**. Ce document ne transforme pas les reçus fixture ou CI offline en attestation runtime.
+**État :** projection STORY_OFFLINE raccordée au cockpit ACME existant. Aucun Run Core ni attempt runtime n'est créé. Le reçu d'exécution est absent ; les 17 étapes restent NOT_RUN/MISSING.
 
-## 1. Périmètre et réutilisation
+## 1. Sources et réutilisation
 
-- **#818 (INT-07 / ABC)** : réutiliser les projections Twin, provenance, Analyst/Critic et collecteur offline. La revue Analyst/Critic actuellement lue annonce explicitement `DETERMINISTIC_RULES_NOT_LLM`, `HYPOTHESIS_ONLY`, `HOLD_FOR_HUMAN_REVIEW` et `DENY_LIVE_ACTION` : c'est une trace explicable synthétique, pas une invocation LLM ni une autorisation.
-- **#813 / #805** : réutiliser le modèle Pydantic strict, le reçu V1, les 17 stages, les fixtures versionnées et le garde-fou Worker no-effect. Le reçu V1 est structurel ; il n'atteste pas à lui seul le SHA exécuté ni les liens cryptographiques inter-étapes.
-- **Worker / Temporal** : réutiliser `IncidentWorkflow` et l'activité simulée existante uniquement dans la pile isolée autorisée. L'enregistrement no-effect est opt-in ; dans l'état lu, il refuse les autorités sandbox non attestées. Ne pas exposer de readbacks fournis par l'appelant comme autorité.
-- **Policy / HITL** : décision par défaut fail-closed. HITL est une approbation simulée émise par `TWIN_ACME_SIMULATED`, jamais une approbation humaine réelle.
+- #818 / ACME fixture read model : source unique des octets fixture, digest SHA-256, Run simulé `SIM-ACME-*`, incident SAN P1 et incident Payments P2.
+- Twin provenance / consumer : fournit le Run de scénario, les citations source_ref, le graphe structurel et le statut UNBOUND.
+- Analyst/Critic existant : `DETERMINISTIC_RULES_NOT_LLM`, hypothèse uniquement, objection explicite, `HOLD_FOR_HUMAN_REVIEW`.
+- Policy existante : `DENY_LIVE_ACTION`; aucune autorisation d'effet.
+- Cockpit existant / #822 : la projection `run_journey` est intégrée au même objet de cockpit et affichée dans `/demo/acme-incident-cockpit`. Aucun portail, endpoint ou orchestrateur parallèle.
+- HITL/Temporal : le cockpit ne les invoque pas. Il affiche `SIMULATED_NOT_REQUESTED` et `NOT_INVOKED`, sans inventer d'approval ID ni de workflow ID.
 
-Aucun second orchestrateur, aucun endpoint live nouveau, aucun appel Core/GLPI réel, aucun ticket métier réel.
+## 2. Identité et idempotence
 
-## 2. Contrat de liaison
+- `run_id` est repris directement de `twin_evidence.run_id` et doit égaler `SIM-ACME-<16 premiers caractères du digest fixture en majuscules>`.
+- `attempt_id` est une clé de corrélation synthétique dérivée du même digest : `ACME-SIM-<16 caractères>`. Elle n'est **pas** un Core attempt. `idempotency_key == attempt_id` dans le seul espace STORY_OFFLINE.
+- `tenant_id=null`, `core_run_id=null`, `twin_evidence.attempt_id=null`, `binding_status=UNBOUND`. Aucun rattachement ACME-TEST ou production.
+- `source_sha256` est l'empreinte des octets de la fixture ; ce n'est ni un Git SHA ni un SHA d'exécutable. `executed_sha=null`, `expected_sha=null`, `source_git_sha=null`.
+- Aucun horodatage d'exécution n'est fabriqué : `collected_at=null`, `observed_at=null`. Les données de scénario horodatées ailleurs restent explicitement une horloge fixe de démo.
 
-Le JSON Schema compagnon définit une enveloppe additive autour du reçu V1. Il lie :
-1. Run : `run_id`, `incident_id`, `attempt_id`, tenant, scénario, clé idempotente ;
-2. code exécuté : `executed_sha` comparé par le vérificateur à un `expected_sha` de confiance ;
-3. intelligence : hypothèses Analyst, objections Critic, références Evidence et limites d'autorité ;
-4. Policy/HITL : raison, décision, identité d'approbation simulée, interdiction des effets ;
-5. Worker : workflow Temporal, task queue isolée, activité no-effect ;
-6. reçu V1 : digest SHA-256 et set exact des 17 étapes ;
-7. attestations par étape : issuer, digest, UTC, run_id et attempt_id identiques ;
-8. provenance : source fixture ou readback sandbox authentifié, sans mélange de namespaces.
+## 3. Run Journey v2 et 17 étapes
 
-**Règles d'identité :**
-- `STORY_OFFLINE` : `run_id=SIM-ACME-*`, `tenant_id=null`, `attempt_id=ACME-SIM-[A-F0-9]{16}`. Ces identités restent non liées et ne sont jamais promues en `ACME-TEST`.
-- `RUNTIME_SANDBOX` : tenant exact `ACME-TEST`, scénario exact `ACME-SAN-PAYMENTS`, ticket `SIM-GLPI-*`, approbation `SIM-APP-*`. Les identifiants doivent être relus depuis les autorités indépendantes ; ne pas les inventer ni les déduire d'une fixture.
-- L'idempotency key est l'`attempt_id` pour rester aligné sur le contrat Worker existant. Même clé + même intention = replay sans nouvel effet ; même clé + intention différente = rejet.
-- Tous les timestamps sont UTC explicites avec suffixe `Z`. Horodatage futur, périmé, sans timezone ou désaccord entre étapes = BLOCK.
+Le contrat `aiops.team-c.san-payments-run-journey.v2` est un adaptateur en lecture seule. Il reprend le Run Twin existant, les identifiants incident, le digest fixture, les hypothèses Analyst, objections Critic et raisons Policy. Les références Evidence pointent vers les citations de provenance déjà fournies par le consommateur Twin.
 
-Le schéma n'est pas un validateur runtime : la comparaison de `executed_sha == expected_sha`, le calcul des digests sur octets canoniques, les jointures d'identité et la preuve d'origine doivent être exécutés par le vérificateur autorisé. Tant que ce vérificateur n'existe pas, résultat = NOT_ATTESTED.
+Les 17 étapes du reçu V1 sont exposées comme un **plan**, pas comme un reçu :
+`capability_simulator`, `capability_core`, `capability_twin`, `capability_policy`, `capability_worker`, `simulator_start`, `pre_resolution_core`, `pre_resolution_twin`, `pre_resolution_policy`, `pre_resolution_worker`, `worker_no_effect`, `core_finalization`, `post_resolution_core`, `post_resolution_twin`, `post_resolution_policy`, `post_resolution_worker`, `resolved`.
 
-## 3. Séquence de démonstration
+Chaque étape est `status=NOT_RUN`, `evidence_state=MISSING`, `sha256=null`, `observed_at=null`. `receipt=null`. Aucune étape PASS, aucun reçu V1 et aucun ticket SIM-GLPI ne sont inventés.
 
-| Étape | Acteur | Entrée / sortie attendue | Garde |
-|---|---|---|---|
-| 01 | NOC / Simulator | incident SAN P1 synthétique, tenant et signaux | source fixture étiquetée |
-| 02 | Twin | chemin SAN → stockage → service Payments | graphe structurel, causalité UNKNOWN |
-| 03 | Evidence | références, SHA-256 source, UTC/fraîcheur | pas de provenance implicite |
-| 04 | Analyst | hypothèses, confiance, vérifications demandées | HYPOTHESIS_ONLY |
-| 05 | Critic | objections indépendantes et preuves manquantes | HOLD_FOR_HUMAN_REVIEW |
-| 06 | Policy | DENY_LIVE_ACTION ou SIMULATE | aucun bypass |
-| 07 | HITL | décision TWIN_ACME_SIMULATED | human_approval_claimed=false |
-| 08 | Worker / Temporal | workflow isolé, attempt_id, no-effect receipt | aucun effet métier |
-| 09 | Core / Evidence | Run et Evidence reliés par IDs exacts | aucune jointure par nom seul |
-| 10 | Reçu | 17 stages + digests + SHA + UTC | vérification fail-closed |
-| 11 | Workbench | Run, Evidence, simulation et limites dans une chronologie | un Run canonique |
-| 12 | Verdict | GO_SIMULATION_ONLY seulement si toutes preuves qualifiées | LIVE = NO_GO |
+## 4. Contrôles positifs et négatifs
 
-Le reçu V1 impose les 17 étapes suivantes : `capability_simulator`, `capability_core`, `capability_twin`, `capability_policy`, `capability_worker`, `simulator_start`, `pre_resolution_core`, `pre_resolution_twin`, `pre_resolution_policy`, `pre_resolution_worker`, `worker_no_effect`, `core_finalization`, `post_resolution_core`, `post_resolution_twin`, `post_resolution_policy`, `post_resolution_worker`, `resolved`. Une étape absente, dupliquée, non PASS ou rattachée à un autre Run/attempt rejette le reçu.
+**Positifs :**
+- Run Journey utilise exactement le Run ID du Twin existant et du consumer Twin.
+- Run / attempt / idempotency key stables et dérivés du même digest fixture.
+- Incident ID égal à celui du cockpit ; digest identique sur impact, cockpit et provenance.
+- 17 noms d'étape uniques et complets, toutes NOT_RUN/MISSING.
+- L'UI affiche le même Run/attempt, l'absence de SHA exécuté, l'absence de tenant, de reçu et d'invocation Temporal.
 
-## 4. Tests d'acceptation
+**Négatifs :**
+- refus de scope/tenant/runtime binding inattendu ;
+- refus de digest fixture divergent ou Run ID Twin non correspondant ;
+- refus d'Analyst/Critic/Policy non qualifié ou d'effet LIVE ;
+- refus d'un reçu présent dans la projection STORY_OFFLINE ;
+- refus de toute étape PASS, preuve MISSING transformée en attestée, identité Run/attempt divergente ;
+- refus d'un approval HITL ou d'un workflow Temporal présenté comme exécuté.
 
-**Positifs**
-- fixture STORY_OFFLINE valide, 17 étapes PASS, IDs et SHA conformes ;
-- hypothèse Analyst accompagnée d'au moins une référence Evidence ;
-- objection Critic conservée, indépendance runtime explicitement false ;
-- décision Policy DENY_LIVE_ACTION, HITL simulé, Worker no-effect ;
-- UTC cohérent, digest 64 hex, SHA exécuté 40 hex et même identité sur les 17 attestations ;
-- replay idempotent de même attempt sans nouvel effet.
+## 5. Frontières de qualification
 
-**Négatifs / fail-closed**
-- tentative de tenant ACME-TEST dans STORY_OFFLINE ou promotion SIM-ACME vers Core ;
-- ticket non SIM-GLPI, approval non SIM-APP, issuer HITL non simulé ;
-- LIVE, human_approval_claimed=true, execution_allowed=true, effect_allowed=true ;
-- Critic absent, objections vides, preuve non référencée ou provenance fixture présentée comme runtime ;
-- SHA exécuté différent de expected_sha, digest altéré, étape dupliquée/manquante ou identité inter-étapes divergente ;
-- timestamp non UTC, futur, stale, ou horloges contradictoires ;
-- clé idempotente réutilisée avec payload différent ;
-- capability Core/Twin/Policy/Worker absente, readback non authentifié, Temporal history non vérifiable ;
-- tout effet Docker, Core write non autorisé, GLPI réel ou action métier LIVE.
+| Couche | État |
+|---|---|
+| Fixture / Twin / Analyst / Critic / Policy | STORY_OFFLINE, synthétique |
+| Run ID | SIM-ACME, non Core |
+| Attempt ID | corrélation synthétique, non Core |
+| Evidence | citations de fixture, pas de preuve runtime |
+| HITL | simulé non demandé, aucune approbation |
+| Worker / Temporal | non invoqué |
+| 17 étapes | plan NOT_RUN/MISSING |
+| Reçu exécution | absent |
+| RUNTIME_SANDBOX | BLOCKED / NOT_TESTED |
+| LIVE / production | NO-GO |
 
-## 5. Démonstration contrôlée et verdict
+## 6. Sécurité et livraison
 
-Le parcours immédiatement démontrable est **STORY_OFFLINE** : il présente hypothèses, objections, preuves synthétiques, décision Policy/HITL et les 17 étapes comme scénario contractuel. Il doit afficher visiblement `LOCAL_SYNTHETIC_FIXTURE`, `runtime_attested=false`, fraîcheur UNKNOWN et `LIVE=NO_GO`.
-
-Le parcours **RUNTIME_SANDBOX** reste BLOCKED tant que les cinq capacités, l'identité du SHA exécuté, les readbacks authentifiés indépendants, la liaison Temporal/Core/Twin et le reçu runtime exact ne sont pas produits dans la pile jetable. Le collecteur offline ne constitue pas cette preuve. Aucun déploiement Debian n'est demandé ici.
-
-## 6. Limites, dépendances et sortie
-
-- Dépendances : #818 (base candidate ABC), #813 (orchestration/reçu), #805 (modèle strict), #802 (gate 17 stages).
-- Aucun statut CI exact-SHA n'a été observé dans les status contexts au moment de préparation ; tests locaux/runtimes non exécutés dans cette session.
-- Le SHA du code exécuté doit être celui de la pile sandbox, non le SHA de cette PR documentaire.
-- La présente PR ajoute contrat, scénario et tests statiques uniquement ; elle ne modifie pas l'orchestrateur, Worker, Policy, Temporal, Debian ou GLPI.
-- Draft only ; revue CENTRAL requise avant toute promotion. Aucun merge sans CENTRAL.
+- Aucun appel Core/GLPI réel, aucune écriture métier, aucun ticket réel.
+- Aucun bypass Policy/HITL, aucune invocation Worker/Temporal.
+- Aucun changement d'orchestrateur, aucun déploiement Debian, aucun cutover 7770.
+- La PR reste Draft et attend la revue CENTRAL. Le PASS des tests offline ne qualifie ni runtime ni portail déployé.
