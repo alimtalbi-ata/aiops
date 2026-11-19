@@ -39,6 +39,8 @@ def journey(authorization: str | None = Header(default=None)):
             "mode": "DEMO", "runtime_attested": False,
             "live_remediation_authorized": False, "cockpit": cockpit,
             "decision_preview": impact["decision_preview"],
+            "twin": impact.get("twin_consumer"),
+            "affected_cis": impact.get("affected_cis", []),
         })
     except (ValueError, KeyError, TypeError):
         raise HTTPException(503, "synthetic_journey_unqualified")
