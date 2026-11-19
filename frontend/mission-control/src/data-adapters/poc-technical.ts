@@ -1,11 +1,12 @@
 import {readPocSnapshot,type PocSnapshot} from './poc-platform';
-import {readPlatformSummary,readAvailabilityHistory,readTechnicalHistory,readAggregateKpis,aggregateValue,type Options,type Result,type PlatformSummary,type AvailabilityHistory,type TechnicalHistory} from './index';
+import {readPlatformSummary,readAvailabilityHistory,readTechnicalHistory,readAggregateKpis,aggregateValue,type Options,type Result,type PlatformSummary,type AvailabilityHistory,type TechnicalHistory,type AggregateHistory} from './index';
 
 export type PocTechnical = {
   snapshot: PocSnapshot|null;
   platform: Result<PlatformSummary>;
   availability: Result<AvailabilityHistory>;
   technical: Result<TechnicalHistory>[];
+  aggregateHistory?: {core:Result<AggregateHistory<'core'>>;evidence:Result<AggregateHistory<'evidence'>>;twin:Result<AggregateHistory<'twin'>>;fs:Result<AggregateHistory<'fs-lab'>>;services:Result<AggregateHistory<'services'>>};
   kpis: {id:string;label:string;value:number|null;unit:string;source:string;kind:'technical';reason:string|null}[];
 };
 const denied = <T>():Result<T> => ({mode:'PLATFORM',source:'prometheus',retrieved_at:null,tenant_acl_qualified:false,state:'UNKNOWN',reason:'VIEWER_REQUIRED',data:null});
@@ -29,7 +30,7 @@ export async function loadPocTechnical(options:Options, minutes=60):Promise<PocT
     id,label,value,unit,source:'Prometheus · agrégats non partitionnés',kind:'technical' as const,
     reason:value!==null?null:r===null?'VIEWER_REQUIRED':r.reason??'NO_CURRENT_SAMPLE'
   });
-  return {snapshot,platform,availability,technical:[duration,samples],kpis:[
+  return {snapshot,platform,availability,technical:[duration,samples],aggregateHistory:{core:core??denied<AggregateHistory<'core'>>(),evidence:evidence??denied<AggregateHistory<'evidence'>>(),twin:twin??denied<AggregateHistory<'twin'>>(),fs:fs??denied<AggregateHistory<'fs-lab'>>(),services:sv??denied<AggregateHistory<'services'>>()},kpis:[
     kpi('runs','Runs',core?aggregateValue(core,'aiops_runs_total'):null,'count',core),
     kpi('running','En cours',core?aggregateValue(core,'aiops_runs_running'):null,'count',core),
     kpi('blocked','Bloqués',core?aggregateValue(core,'aiops_runs_blocked'):null,'count',core),
