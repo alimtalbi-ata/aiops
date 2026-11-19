@@ -26,8 +26,13 @@ test('runtime ACME browser read-only navigation and viewer isolation',async({pag
   const nav=page.getByRole('navigation',{name:'Navigation'});
   await check(nav).toBeVisible();
   const go=async name=>{await nav.getByRole('button',{name,exact:true}).click();await check(page.getByRole('heading',{level:1,name,exact:true})).toBeVisible();};
+  mark('MODE_SELECTOR');
+  const mode=page.locator('select:has(option[value="demo"]):has(option[value="operational"])');
+  await check(mode).toHaveCount(1);
+  await check(mode).toHaveValue('operational');
   mark('DEMO_MODE');
-  await page.getByLabel('Mode',{exact:true}).selectOption('demo');
+  await mode.selectOption('demo');
+  await check(mode).toHaveValue('demo');
   mark('VIEWER_FORM');
   await page.getByText('Accès viewer / DEMO',{exact:true}).click();
   await page.getByLabel('Viewer',{exact:true}).fill(token);
@@ -49,7 +54,7 @@ test('runtime ACME browser read-only navigation and viewer isolation',async({pag
   mark('EVIDENCE');await go('Evidence');await check(page.getByRole('heading',{name:'Checkpoints synthétiques'})).toBeVisible();await check(page.getByText(/MISSING/).first()).toBeVisible();
   mark('ITSM');await go('ITSM');await check(page.getByRole('link',{name:'Ouvrir ITSM'})).toHaveAttribute('href','/itsm');
   mark('OPERATIONAL_RETURN');
-  await page.getByLabel('Mode',{exact:true}).selectOption('operational');await go('Incidents');await check(page.getByText(/Autorité acteur \/ tenant non qualifiée/)).toBeVisible();await check(page.getByText(j.incident_id,{exact:true})).toHaveCount(0);
+  await mode.selectOption('operational');await check(mode).toHaveValue('operational');await go('Incidents');await check(page.getByText(/Autorité acteur \/ tenant non qualifiée/)).toBeVisible();await check(page.getByText(j.incident_id,{exact:true})).toHaveCount(0);
   mark('WRITE_GUARD');
   expect(writes).toEqual([]);
  }catch{throw Error('Authenticated browser qualification failed at '+phase+'; reproduce privately without publishing credentials or payloads');}
