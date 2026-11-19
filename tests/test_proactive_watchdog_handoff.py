@@ -50,6 +50,8 @@ def test_watchdog_fails_closed_on_stale_or_future_observation(tmp_path):
     root=tmp_path/".local/state/aiops2-proactive"
     root.mkdir(parents=True)
     for stamp in [(dt.datetime.now(dt.timezone.utc)-dt.timedelta(minutes=10)).isoformat(),(dt.datetime.now(dt.timezone.utc)+dt.timedelta(minutes=2)).isoformat()]:
+        for receipt in root.glob("reported-*.json"):
+            receipt.unlink()
         (root/"candidate.json").write_text(json.dumps({"observed_at":stamp,"state":"BUILD_ELIGIBLE","sha":"a"*40,"deploy_authorized":False}))
         with patch.object(watchdog.Path,"home",return_value=tmp_path),patch.object(watchdog.subprocess,"run") as run:
             watchdog.main()
