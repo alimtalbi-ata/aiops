@@ -257,3 +257,19 @@ def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
     assert "focus-visible" in page.text
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
+
+
+def test_cockpit_cross_navigation_connects_existing_operator_surfaces():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    for href in (
+        "/#noc", "/demo/explore-story", "/demo/acme-impact",
+        "/#incidents", "/#runs", "#workbench",
+    ):
+        assert f'href="{href}"' in page.text or f"href='{href}'" in page.text
+    assert "Navigation espace opérateur" in page.text
+    assert "Aller au parcours SAN vers Payments" in page.text
+    assert "assets/aiops-theme.css" in page.text
+    assert "NO-GO LIVE" in page.text
