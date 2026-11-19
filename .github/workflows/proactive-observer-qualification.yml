@@ -55,12 +55,12 @@ jobs:
 
       - name: Compile observer scripts
         working-directory: orchestrator
-        run: python -m py_compile deploy/proactive_candidate.py deploy/proactive_watchdog.py deploy/proactive_build_handoff.py deploy/proactive_update_discovery.py && bash -n deploy/install-proactive-observer.sh deploy/rollback-proactive-observer.sh
+        run: python -m py_compile deploy/proactive_candidate.py deploy/proactive_watchdog.py deploy/proactive_build_handoff.py deploy/proactive_update_discovery.py scripts/verify_proactive_image_archive.py && bash -n deploy/install-proactive-observer.sh deploy/rollback-proactive-observer.sh
 
       - name: Run candidate and update discovery tests explicitly
         working-directory: orchestrator
         run: |
-          python -m pytest -q -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py tests/test_proactive_watchdog_handoff.py tests/test_proactive_rollback.py tests/test_proactive_installer.py
+          python -m pytest -q -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py tests/test_proactive_watchdog_handoff.py tests/test_proactive_rollback.py tests/test_proactive_installer.py tests/test_proactive_image_archive.py
 
       - name: Build frozen INT07 image on GitHub-hosted runner
         working-directory: source
@@ -70,6 +70,11 @@ jobs:
       - name: Export exact built image for independent QA
         run: |
           docker save "aiops2-portal-qualification:$SOURCE_SHA" -o "$GITHUB_WORKSPACE/int07-image.tar"
+
+      - name: Verify receipt against exported Docker config and OCI index
+        run: |
+          docker_id="$(docker image inspect --platform linux/amd64 --format '{{.Id}}' "aiops2-portal-qualification:$SOURCE_SHA")"
+          python3 "$GITHUB_WORKSPACE/orchestrator/scripts/verify_proactive_image_archive.py" "$GITHUB_WORKSPACE/int07-image.tar" "$GITHUB_WORKSPACE/int07-build-receipt.json" "$SOURCE_SHA" "aiops2-portal-qualification:$SOURCE_SHA" "$docker_id"
           sha256sum "$GITHUB_WORKSPACE/int07-image.tar" > "$GITHUB_WORKSPACE/int07-image.tar.sha256"
 
       - name: Upload exact-SHA build package
