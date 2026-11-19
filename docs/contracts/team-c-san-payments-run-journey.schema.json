@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/alimtalbi-ata/aiops/blob/main/docs/contracts/team-c-san-payments-run-journey.schema.json",
-  "title": "AIOPS2 Team C SAN P1 to Payments Run Journey",
+  "title": "AIOPS2 Team C SAN P1 to Payments Run Journey projection",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,24 +14,18 @@
     "hitl",
     "worker",
     "receipt",
-    "stage_evidence",
+    "stage_plan",
     "provenance"
   ],
   "properties": {
     "schema": {
-      "const": "aiops.team-c.san-payments-run-journey.v1"
+      "const": "aiops.team-c.san-payments-run-journey.v2"
     },
     "scope": {
-      "enum": [
-        "STORY_OFFLINE",
-        "RUNTIME_SANDBOX"
-      ]
+      "const": "STORY_OFFLINE"
     },
     "mode": {
-      "enum": [
-        "DEMO",
-        "SIMULATION"
-      ]
+      "const": "DEMO"
     },
     "run": {
       "type": "object",
@@ -48,7 +42,7 @@
       "properties": {
         "run_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^SIM-ACME-[A-F0-9]{16}$"
         },
         "attempt_id": {
           "type": "string",
@@ -59,17 +53,13 @@
           "minLength": 1
         },
         "tenant_id": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "null"
         },
         "scenario_id": {
           "const": "ACME-SAN-PAYMENTS"
         },
         "executed_sha": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{40}$"
+          "type": "null"
         },
         "idempotency_key": {
           "type": "string",
@@ -113,13 +103,10 @@
                 "minLength": 1
               },
               "confidence": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1
+                "type": "null"
               },
               "evidence_refs": {
                 "type": "array",
-                "minItems": 1,
                 "items": {
                   "type": "string",
                   "minLength": 1
@@ -144,7 +131,6 @@
         },
         "evidence_refs": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "type": "string",
             "minLength": 1
@@ -163,17 +149,13 @@
       ],
       "properties": {
         "decision": {
-          "enum": [
-            "DENY_LIVE_ACTION",
-            "SIMULATE"
-          ]
+          "const": "DENY_LIVE_ACTION"
         },
         "reason_codes": {
           "type": "array",
           "minItems": 1,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           }
         },
         "execution_allowed": {
@@ -196,11 +178,10 @@
       ],
       "properties": {
         "kind": {
-          "const": "SIMULATED"
+          "const": "SIMULATED_NOT_REQUESTED"
         },
         "approval_id": {
-          "type": "string",
-          "pattern": "^SIM-APP-[A-Za-z0-9][A-Za-z0-9_-]*$"
+          "type": "null"
         },
         "issuer": {
           "const": "TWIN_ACME_SIMULATED"
@@ -226,15 +207,13 @@
       ],
       "properties": {
         "executor": {
-          "const": "TEMPORAL"
+          "const": "NOT_INVOKED"
         },
         "workflow_id": {
-          "type": "string",
-          "minLength": 1
+          "type": "null"
         },
         "task_queue": {
-          "type": "string",
-          "minLength": 1
+          "type": "null"
         },
         "isolated": {
           "const": true
@@ -243,118 +222,14 @@
           "const": true
         },
         "runtime_attested": {
-          "type": "boolean"
+          "const": false
         }
       }
     },
     "receipt": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "schema",
-        "sha256",
-        "status",
-        "reason",
-        "ticket_id",
-        "stages"
-      ],
-      "properties": {
-        "schema": {
-          "const": "aiops.debian-acme-sim-e2e.v1"
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        },
-        "status": {
-          "const": "PASS"
-        },
-        "reason": {
-          "const": "SIMULATED_SANDBOX_ONLY"
-        },
-        "ticket_id": {
-          "type": "string",
-          "pattern": "^SIM-GLPI-[A-Za-z0-9][A-Za-z0-9_-]*$"
-        },
-        "stages": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "capability_simulator",
-            "capability_core",
-            "capability_twin",
-            "capability_policy",
-            "capability_worker",
-            "simulator_start",
-            "pre_resolution_core",
-            "pre_resolution_twin",
-            "pre_resolution_policy",
-            "pre_resolution_worker",
-            "worker_no_effect",
-            "core_finalization",
-            "post_resolution_core",
-            "post_resolution_twin",
-            "post_resolution_policy",
-            "post_resolution_worker",
-            "resolved"
-          ],
-          "properties": {
-            "capability_simulator": {
-              "const": "PASS"
-            },
-            "capability_core": {
-              "const": "PASS"
-            },
-            "capability_twin": {
-              "const": "PASS"
-            },
-            "capability_policy": {
-              "const": "PASS"
-            },
-            "capability_worker": {
-              "const": "PASS"
-            },
-            "simulator_start": {
-              "const": "PASS"
-            },
-            "pre_resolution_core": {
-              "const": "PASS"
-            },
-            "pre_resolution_twin": {
-              "const": "PASS"
-            },
-            "pre_resolution_policy": {
-              "const": "PASS"
-            },
-            "pre_resolution_worker": {
-              "const": "PASS"
-            },
-            "worker_no_effect": {
-              "const": "PASS"
-            },
-            "core_finalization": {
-              "const": "PASS"
-            },
-            "post_resolution_core": {
-              "const": "PASS"
-            },
-            "post_resolution_twin": {
-              "const": "PASS"
-            },
-            "post_resolution_policy": {
-              "const": "PASS"
-            },
-            "post_resolution_worker": {
-              "const": "PASS"
-            },
-            "resolved": {
-              "const": "PASS"
-            }
-          }
-        }
-      }
+      "type": "null"
     },
-    "stage_evidence": {
+    "stage_plan": {
       "type": "array",
       "minItems": 17,
       "maxItems": 17,
@@ -364,15 +239,14 @@
         "required": [
           "stage",
           "status",
-          "issuer",
-          "sha256",
-          "observed_at",
+          "evidence_state",
           "run_id",
-          "attempt_id"
+          "attempt_id",
+          "sha256",
+          "observed_at"
         ],
         "properties": {
           "stage": {
-            "type": "string",
             "enum": [
               "capability_simulator",
               "capability_core",
@@ -394,28 +268,24 @@
             ]
           },
           "status": {
-            "const": "PASS"
+            "const": "NOT_RUN"
           },
-          "issuer": {
-            "type": "string",
-            "minLength": 1
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "observed_at": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+          "evidence_state": {
+            "const": "MISSING"
           },
           "run_id": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^SIM-ACME-[A-F0-9]{16}$"
           },
           "attempt_id": {
             "type": "string",
             "pattern": "^ACME-SIM-[A-F0-9]{16}$"
+          },
+          "sha256": {
+            "type": "null"
+          },
+          "observed_at": {
+            "type": "null"
           }
         }
       }
@@ -426,108 +296,28 @@
       "required": [
         "source_kind",
         "source_sha256",
+        "source_git_sha",
         "expected_sha",
         "collected_at"
       ],
       "properties": {
         "source_kind": {
-          "enum": [
-            "LOCAL_SYNTHETIC_FIXTURE",
-            "AUTHENTICATED_SANDBOX_READBACK"
-          ]
+          "const": "LOCAL_SYNTHETIC_FIXTURE"
         },
         "source_sha256": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
+        "source_git_sha": {
+          "type": "null"
+        },
         "expected_sha": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{40}$"
+          "type": "null"
         },
         "collected_at": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+          "type": "null"
         }
       }
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "scope": {
-            "const": "STORY_OFFLINE"
-          }
-        },
-        "required": [
-          "scope"
-        ]
-      },
-      "then": {
-        "properties": {
-          "mode": {
-            "const": "DEMO"
-          },
-          "run": {
-            "properties": {
-              "tenant_id": {
-                "type": "null"
-              },
-              "run_id": {
-                "pattern": "^SIM-ACME-"
-              }
-            }
-          },
-          "worker": {
-            "properties": {
-              "runtime_attested": {
-                "const": false
-              }
-            }
-          },
-          "provenance": {
-            "properties": {
-              "source_kind": {
-                "const": "LOCAL_SYNTHETIC_FIXTURE"
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "scope": {
-            "const": "RUNTIME_SANDBOX"
-          }
-        },
-        "required": [
-          "scope"
-        ]
-      },
-      "then": {
-        "properties": {
-          "mode": {
-            "const": "SIMULATION"
-          },
-          "run": {
-            "properties": {
-              "tenant_id": {
-                "const": "ACME-TEST"
-              }
-            }
-          },
-          "provenance": {
-            "properties": {
-              "source_kind": {
-                "const": "AUTHENTICATED_SANDBOX_READBACK"
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
+  }
 }
