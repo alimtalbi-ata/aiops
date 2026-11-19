@@ -10,11 +10,11 @@ async function request(path: string, token: string, signal: AbortSignal, body?: 
   const data: Json = await response.json();
   return {http:response.status, data, ok:response.ok};
 }
-export function demoProvider(token: string): ActionProvider {
+export function demoProvider(token: string, operatorToken?: string): ActionProvider {
   let cursor = 0, snapshot = "";
-  return {mode:"DEMO", async invoke(selection, command, signal) {
+  return {mode:"DEMO", canSimulate: Boolean(operatorToken), async invoke(selection, command, signal) {
     if (!token) return blocked("VIEWER_REQUIRED");
-    if (["execute","approve","reject"].includes(command)) return blocked("NO_RUNTIME_AUTHORITY");
+    if (["approve","reject"].includes(command)) return blocked("NO_RUNTIME_AUTHORITY");
     const r = await request("journey",token,signal);
     if (!r.ok) return {state:"BLOCKED",detail:r.data,http:r.http};
     const j = r.data;
@@ -26,6 +26,18 @@ export function demoProvider(token: string): ActionProvider {
       : selection.view in ids ? ids[selection.view] === selection.id : selection.id === j.run_id;
     if (!matches || (selection.runId !== undefined && selection.runId !== j.run_id))
       return blocked("SELECTION_NOT_BOUND_TO_DEMO_FIXTURE");
+    if (command === "execute") {
+      if (selection.view !== "execution" || !operatorToken) return blocked("DEMO_OPERATOR_REQUIRED");
+      const sim = await request("demo/simulation",operatorToken,signal,{
+        incident_id:j.incident_id,run_id:j.run_id,source_sha256:j.source_sha256
+      });
+      const d=sim.data;
+      const valid=sim.ok && d.schema==="aiops.acme-demo-simulation-pipeline.v1" &&
+        d.run_id===j.run_id && d.incident_id===j.incident_id && d.source_sha256===j.source_sha256 &&
+        d.mode==="DEMO" && d.actual_recovery_state==="UNKNOWN" && d.runtime_execution_performed===false &&
+        d.temporal_execution_performed===false && d.glpi_write_performed===false && d.live_remediation_authorized===false;
+      return {state:valid?"SIMULATED":sim.ok?"UNKNOWN":"BLOCKED",detail:valid?d:{reason:d.reason??d.detail??"SIMULATION_UNQUALIFIED"},http:sim.http};
+    }
     if (snapshot !== j.source_sha256) {cursor=0; snapshot=j.source_sha256;}
     if (command === "rag" && selection.view === "ci") {
       const rag = await request("rag?asset="+encodeURIComponent(selection.id),token,signal);
