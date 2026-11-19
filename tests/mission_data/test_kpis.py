@@ -46,3 +46,25 @@ def test_history(monkeypatch):
     assert c["reason"]=="AMBIGUOUS_SERIES" and c["value"] is None
     assert e["reason"]=="NO_CURRENT_SAMPLE" and e["coverage"]==0
     assert d["coverage"]==3/12
+
+def test_portal_catalog_and_history(monkeypatch):
+    assert k.CATALOG["services"] == ("aiops_worker_up","aiops_policy_up","aiops_portal_up")
+    monkeypatch.setattr(k.time,"time",lambda:6000)
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self,*args): pass
+        def read(self,size):
+            return json.dumps({"status":"success","data":{"resultType":"matrix","result":[
+                {"metric":{"__name__":"aiops_portal_up"},"values":[[6000,"1"]]}
+            ]}}).encode()
+    class Opener:
+        def open(self,url,timeout):
+            assert "aiops_portal_up" in url
+            return Response()
+    monkeypatch.setattr(k.urllib.request,"build_opener",lambda *args:Opener())
+    d=k.read_kpis("services",md.PROM,md.NoRedirect,1)
+    portal=d["series"][2]
+    assert portal["value"]==1 and portal["unit"]=="binary"
+    assert portal["points"]==[{"at":5940,"value":None},{"at":6000,"value":1}]
+    assert d["series"][0]["value"] is None
+    assert d["coverage"]==1/6
