@@ -1,4 +1,5 @@
 import {useEffect,useMemo,useState} from "react";
+import {RagExplorer} from "./RagExplorer";
 import {ContextActions} from "./ContextActions";
 import {demoProvider} from "./providers";
 type Journey={schema:string;mode:string;incident_id:string;run_id:string;source_sha256:string;affected_ci_ids:string[];runtime_attested:boolean;live_remediation_authorized:boolean};
@@ -29,6 +30,7 @@ function Connected({viewerToken}:{viewerToken:string}) {
  <h3>Policy</h3><ContextActions provider={provider} selection={{view:"policy",id:journey.run_id,runId:journey.run_id,sourceSha256:journey.source_sha256}}/>
  <h3>Références RAG</h3><label>CI <select value={asset} onChange={e=>setAsset(e.target.value)}>{journey.affected_ci_ids.map(id=><option key={id}>{id}</option>)}</select></label>
  {asset&&<ContextActions key={asset} provider={provider} selection={{view:"ci",id:asset,runId:journey.run_id,sourceSha256:journey.source_sha256}}/>}
+ {asset&&<RagExplorer viewerToken={viewerToken} asset={asset}/>}
  <h3>Evidence</h3><ContextActions provider={provider} selection={{view:"evidence",id:journey.run_id,runId:journey.run_id,sourceSha256:journey.source_sha256}}/>
  <p>Temporal / GLPI / n8n : intégration runtime UNKNOWN. Rétablissement réel UNKNOWN.</p>
  </div>}
