@@ -85,5 +85,17 @@ class DemoStudioTests(unittest.TestCase):
         self.assertIn('step!==5&&decision!=="refused"', GOLDEN_SCRIPT)
 
 
+    def test_replay_controls_and_gate(self):
+        from portal.demo_studio import GOLDEN_SCRIPT
+        response = self.client.get("/demo/golden")
+        self.assertEqual(response.status_code, 200)
+        for marker in ('id="play"', 'id="speed"', 'id="journal"', "prefers-reduced-motion"):
+            self.assertIn(marker, response.text)
+        self.assertIn('if(step===3||step===5||decision==="refused")pause()', GOLDEN_SCRIPT)
+        self.assertIn('setInterval(()=>by("next").click()', GOLDEN_SCRIPT)
+        self.assertIn('clearInterval(timer)', GOLDEN_SCRIPT)
+        self.assertIn('HITL : refus simulé', GOLDEN_SCRIPT)
+
+
 if __name__ == "__main__":
     unittest.main()
