@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   actions: read
+  packages: write
 
 concurrency:
   group: int07-image-qualification-636205a7
@@ -62,6 +63,15 @@ jobs:
           bash ../orchestrator/scripts/proactive_portal_build.sh "${SOURCE_SHA}" | tee "${RECEIPT_DIR}/build.json"
           docker image inspect --format '{{.Id}}' "${IMAGE_TAG}" > "${RECEIPT_DIR}/image-id.txt"
           test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "${IMAGE_TAG}")" = "${SOURCE_SHA}"
+          REGISTRY_IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/aiops-portal-int07"
+          printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          docker tag "${IMAGE_TAG}" "${REGISTRY_IMAGE}:${SOURCE_SHA}"
+          docker push "${REGISTRY_IMAGE}:${SOURCE_SHA}" 2>&1 | tee "${RECEIPT_DIR}/registry-push.log"
+          docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "${REGISTRY_IMAGE}:${SOURCE_SHA}" > "${RECEIPT_DIR}/registry-repodigests.txt"
+          REGISTRY_DIGEST="$(sed -n 's/.*@\(sha256:[0-9a-f]*\).*/\1/p' "${RECEIPT_DIR}/registry-repodigests.txt" | head -n 1)"
+          test -n "${REGISTRY_DIGEST}"
+          printf '%s\n' "${REGISTRY_IMAGE}:${SOURCE_SHA}" > "${RECEIPT_DIR}/registry-image-ref.txt"
+          printf '%s\n' "${REGISTRY_DIGEST}" > "${RECEIPT_DIR}/registry-manifest-digest.txt"
 
       - name: Start the exact built image
         shell: bash
@@ -167,7 +177,8 @@ jobs:
             "image_tag":os.environ["IMAGE_TAG"],
             "local_image_id":read("image-id.txt"),
             "image_archive_sha256":read("image-archive.sha256"),
-            "registry_manifest_digest":None,
+            "registry_image_ref":read("registry-image-ref.txt"),
+            "registry_manifest_digest":read("registry-manifest-digest.txt"),
             "playwright":pw,
             "deploy_authorized":False,
             "promotion_authorized":False,
