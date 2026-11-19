@@ -664,10 +664,6 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertNotIn("run_id", response.json())
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
     def test_11_itsm_has_no_page_overflow_at_320px(self):
         """The existing ITSM handoff must fit the viewport; table scroll is local."""
         self.page.set_viewport_size({"width": 320, "height": 800})
@@ -696,3 +692,9 @@ if __name__ == "__main__":
         self.assertTrue(table_region.evaluate("el => el.scrollWidth >= el.clientWidth"))
         self.assertIn("UNKNOWN", self.page.locator("body").inner_text())
         self.assertIn("NOT_INSTALLED", self.page.locator("body").inner_text())
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+
+
