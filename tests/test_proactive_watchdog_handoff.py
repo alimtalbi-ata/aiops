@@ -136,3 +136,30 @@ def test_handoff_reconciles_uncertain_marker_without_blind_repost(tmp_path):
     assert run.call_count==1
     assert run.call_args.args[0][:2]==["gh","api"]
     assert json.loads(receipt.read_text())["status"]=="PUBLISHED"
+
+
+def test_watchdog_escalates_after_three_complete_zero_match_scans(tmp_path):
+    root=tmp_path/".local/state/aiops2-proactive"
+    root.mkdir(parents=True)
+    sha="9"*40
+    (root/"candidate.json").write_text(json.dumps({"observed_at":utc_now(),"state":"CI_PENDING","sha":sha,"deploy_authorized":False}))
+    marker_id=__import__("hashlib").sha256(f"CI_PENDING:{sha}".encode()).hexdigest()[:24]
+    receipt=root/f"reported-{marker_id}.json"
+    receipt.write_text(json.dumps({"status":"PUBLICATION_UNCERTAIN","marker":f"[AIOPS2-WATCHDOG:{marker_id}]"}))
+    with patch.object(watchdog.Path,"home",return_value=tmp_path),patch.object(watchdog.subprocess,"run",return_value=completed_pages([])) as run:
+        watchdog.main()
+        watchdog.main()
+        watchdog.main()
+    assert run.call_count==3
+    assert json.loads(receipt.read_text())["status"]=="MANUAL_ESCALATION_REQUIRED"
+
+
+def test_handoff_rechecks_head_after_reservation_before_post(tmp_path):
+    root=tmp_path/".local/state/aiops2-proactive"
+    root.mkdir(parents=True)
+    sha="8"*40
+    (root/"candidate.json").write_text(json.dumps({"observed_at":utc_now(),"state":"BUILD_ELIGIBLE","sha":sha,"pr":818,"deploy_authorized":False}))
+    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"check_output",side_effect=[gh_pr(sha),gh_pr("7"*40)]),patch.object(handoff.subprocess,"run") as run:
+        handoff.main()
+    assert run.call_count==0
+    assert json.loads((root/f"build-handoff-{sha}.json").read_text())["status"]=="OBSOLETE_SHA"
