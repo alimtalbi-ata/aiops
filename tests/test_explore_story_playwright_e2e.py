@@ -432,12 +432,13 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertIn("GO — scénario synthétique", self.page.locator("body").inner_text())
         self.assertIn("UNKNOWN — preuves runtime", self.page.locator("body").inner_text())
         self.assertIn("NO-GO LIVE", self.page.locator("body").inner_text())
-        self.assertEqual(self.page.locator("table").count(), 4)
+        self.assertEqual(self.page.locator("table").count(), 5)
+        self._assert_twin_evidence_table()
         # Check each semantic table independently, not just the total number
         # of rows; a missing lifecycle stage cannot hide behind another table.
         self.assertEqual(
             [table.locator("tbody tr").count()
-             for table in self.page.locator("table").all()],
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
             [9, 9, 9, 8],
         )
         self.assertEqual(self.page.locator("form").count(), 0)
@@ -461,7 +462,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(self.page.locator(".demo-card").count(), 3)
         self.assertEqual(
             [table.locator("tbody tr").count()
-             for table in self.page.locator("table").all()],
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
             [9, 9, 9, 8],
         )
         self.assertIn("NO-GO LIVE", self.page.locator("#verdict").inner_text())
@@ -576,7 +577,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         body = self.page.locator("body").inner_text()
         for verdict in ("GO — scénario synthétique", "UNKNOWN — preuves runtime", "NO-GO LIVE"):
             self.assertIn(verdict, body)
-        self.assertEqual([t.locator("tbody tr").count() for t in self.page.locator("table").all()], [9, 9, 9, 8])
+        self.assertEqual([t.locator("tbody tr").count() for t in self.page.locator("table:not(#twin-evidence-plan)").all()], [9, 9, 9, 8])
+        self._assert_twin_evidence_table()
         capture("cockpit")
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         receipt = {"schema": "aiops.responsive-showrun.v1", "executed_sha": sha,
@@ -585,6 +587,15 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                    "runtime_authenticated": False, "production_qualified": False,
                    "live_remediation_authorized": False}
         (output / f"{prefix}.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+    def _assert_twin_evidence_table(self):
+        twin = self.page.locator("#twin-evidence-plan")
+        self.assertEqual(twin.count(), 1)
+        rows = twin.locator("tbody tr")
+        self.assertGreater(rows.count(), 0)
+        for row in rows.all():
+            self.assertEqual(row.locator("td").last.inner_text().strip(), "MISSING")
+        expect(self.page.locator("#run-journey")).to_contain_text("DENY_LIVE_ACTION")
 
     def test_09_showrun_320_1(self):
         self._responsive_showrun(320, 1)
