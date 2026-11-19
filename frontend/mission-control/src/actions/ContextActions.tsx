@@ -21,13 +21,14 @@ export function ContextActions({provider,selection}:{provider:ActionProvider;sel
     }
   }
   const visible=reply?.key===key && reply.provider===provider?reply.value:null;
-  return <div className="mission-context-actions" aria-label={"Actions "+selection.view}>
+  return <div className="mission-context-actions" style={{minWidth:0,overflowWrap:"anywhere"}} aria-label={"Actions "+selection.view}>
     <small>{provider.mode==="DEMO"?"DEMO · simulation uniquement":"OPÉRATIONNEL · autorité requise"}</small>
-    <div>{commands[selection.view].map(command=><button type="button" key={command}
-      disabled={busy || !selection.id || ["approve","reject"].includes(command) || (command==="execute" && !provider.canSimulate) ||
+    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>{commands[selection.view].map(command=><button type="button" key={command} style={{minHeight:44,maxWidth:"100%",whiteSpace:"normal",overflowWrap:"anywhere"}}
+      aria-disabled={busy || undefined}
+      disabled={!selection.id || ["approve","reject"].includes(command) || (command==="execute" && !provider.canSimulate) ||
         (provider.mode==="OPERATIONAL" && (selection.view!=="run" || command!=="inspect"))}
-      onClick={()=>void invoke(command)}>{labels[command]}</button>)}</div>
-    <p role="status">{busy?"Interrogation…":visible?visible.state:"Aucune réponse métier"}</p>
+      onClick={()=>{if(!busy)void invoke(command);}}>{labels[command]}</button>)}</div>
+    <p role="status" aria-live="polite">{busy?"Interrogation…":visible?visible.state:"Aucune réponse métier"}</p>
     {visible && <details open><summary>Résultat et provenance {visible.http? "· HTTP "+visible.http:""}</summary>
       <StructuredResult detail={visible.detail}/></details>}
   </div>;
@@ -53,7 +54,7 @@ function StructuredResult({detail}:{detail:unknown}) {
     const receipt=sim?.receipt as Record<string,unknown>|undefined;
     return <section aria-label="Résultat de simulation">
       <h4>Effet hypothétique — aucune action réelle</h4>
-      <div className="drawer-kpis"><div>Avant <StructuredResult detail={receipt?.before}/></div>
+      <div className="drawer-kpis" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%, 220px),1fr))",gap:12}}><div>Avant <StructuredResult detail={receipt?.before}/></div>
       <div>Après hypothétique <StructuredResult detail={receipt?.hypothetical_after}/></div></div>
       <p>Rétablissement réel : inconnu · Temporal : non exécuté</p>
       <h4>Reçu synthétique</h4><code style={{overflowWrap:"anywhere"}}>{String(sim?.receipt_sha256??"Absent")}</code>
