@@ -42,5 +42,18 @@ class DemoStudioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+    def test_decision_cockpit_static_chain(self):
+        with patch("portal.main.get_json", side_effect=AssertionError("no upstream")), patch("portal.main.post_json", side_effect=AssertionError("no upstream")), patch("portal.acme_impact_read_model.build_acme_impact_read_model", side_effect=AssertionError("no fixture")):
+            response = self.client.get("/demo/decision-cockpit")
+        self.assertEqual(response.status_code, 200)
+        for stage in ("Analyst", "Critic", "Policy", "HITL", "Simulation", "Verification"):
+            self.assertIn("<h2>" + stage + "</h2>", response.text)
+        self.assertEqual(response.text.count("Preuve runtime : <strong>MISSING</strong>"), 6)
+        self.assertIn("LIVE BLOQUÉ", response.text)
+        self.assertIn("NON EFFECTUÉE", response.text)
+        self.assertIn("default-src 'none'", response.headers["content-security-policy"])
+        self.assertIn('href="/demo/decision-cockpit"', self.client.get("/demo/studio").text)
+
+
 if __name__ == "__main__":
     unittest.main()
