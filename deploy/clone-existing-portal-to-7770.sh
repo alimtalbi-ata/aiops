@@ -2,9 +2,9 @@
 set -Eeuo pipefail
 umask 077
 export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
-SOURCE="\${AIOPS_PORTAL_SOURCE:-aiops2-rebuild-portal}"
-CANDIDATE="\${AIOPS_PORTAL_CANDIDATE:-aiops2-portal-7770-candidate}"
-PORT="\${AIOPS_PORTAL_TARGET_PORT:-7770}"
+SOURCE="${AIOPS_PORTAL_SOURCE:-aiops2-rebuild-portal}"
+CANDIDATE="${AIOPS_PORTAL_CANDIDATE:-aiops2-portal-7770-candidate}"
+PORT="${AIOPS_PORTAL_TARGET_PORT:-7770}"
 SNAP="/tmp/aiops2-portal-clone-$$.json"
 trap 'rm -f "$SNAP"' EXIT
 fail(){ echo "FAIL|$1"; exit 1; }
