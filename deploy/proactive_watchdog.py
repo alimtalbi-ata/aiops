@@ -28,7 +28,10 @@ def reconcile(receipt, marker):
     elif len(matches)==1:
         atomic(receipt,{"status":"AUTHOR_CONFLICT","marker":marker,"comment_id":matches[0].get("id")})
     else:
-        atomic(receipt,{"status":"PUBLICATION_UNCERTAIN","marker":marker,"match_count":0,"reconciled_at":dt.datetime.now(dt.timezone.utc).isoformat()})
+        previous=json.loads(receipt.read_text())
+        attempts=int(previous.get("reconciliation_attempts",0))+1
+        status="MANUAL_ESCALATION_REQUIRED" if attempts>=3 else "PUBLICATION_UNCERTAIN"
+        atomic(receipt,{"status":status,"marker":marker,"match_count":0,"reconciliation_attempts":attempts,"reconciled_at":dt.datetime.now(dt.timezone.utc).isoformat()})
 
 def main():
     os.umask(0o077)
