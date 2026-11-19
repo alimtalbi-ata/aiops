@@ -15,7 +15,7 @@ JOBS = ("aiops2-core", "aiops2-worker", "aiops2-twin", "aiops2-policy", "aiops2-
 PROM = "http://aiops2-rebuild-prometheus:9090"
 Mode = Literal["LIVE", "DEMO"]
 HealthMode = Literal["PLATFORM", "LIVE", "DEMO"]
-Dataset = Literal["core", "fs-lab", "evidence", "logs", "traces", "twin", "impact", "noc"]
+Dataset = Literal["incidents", "core", "fs-lab", "evidence", "logs", "traces", "twin", "impact", "noc"]
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -92,3 +92,35 @@ def dataset(dataset: Dataset, mode: Mode, authorization: str | None = Header(def
         return denied
     # Shared viewer authentication cannot authorize tenant records or raw telemetry.
     return _noc_json_response(envelope(mode, dataset, "TENANT_ACL_NOT_QUALIFIED"), status_code=503)
+
+@router.get("/health/jobs")
+def health_jobs(authorization: str | None = Header(default=None)):
+    denied = auth_error(authorization)
+    if denied is not None:
+        return denied
+    # Fixed query only. Do not expose arbitrary target labels or scrape URLs.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    try:
+        query = 'min by (job) (up{job=~"aiops2-core|aiops2-worker|aiops2-twin|aiops2-policy|aiops2-evidence|aiops2-portal"})'
+        with opener.open(PROM + "/api/v1/query?" + urllib.parse.urlencode({"query": query}), timeout=3) as response:
+            raw = response.read(262145)
+        if len(raw) > 262144:
+            raise ValueError("oversize")
+        body = json.loads(raw)
+        if body["status"] != "success" or body["data"]["resultType"] != "vector":
+            raise ValueError("invalid result")
+        observed = {}
+        for row in body["data"]["result"]:
+            job = row["metric"]["job"]
+            stamp, value = map(float, row["value"])
+            if job not in JOBS or job in observed or not math.isfinite(stamp) or stamp > time.time()+5 or value not in (0,1):
+                raise ValueError("invalid sample")
+            observed[job] = {"job": job, "status": "UP" if value == 1 else "DOWN", "at": stamp, "reason": None}
+    except (OSError, ValueError, KeyError, TypeError, OverflowError, AttributeError, IndexError):
+        return _noc_json_response(envelope("PLATFORM", "prometheus", "UPSTREAM_UNAVAILABLE"), status_code=503)
+    items = [observed.get(job, {"job": job, "status": "UNKNOWN", "at": None, "reason": "NO_SAMPLES"}) for job in JOBS]
+    return _noc_json_response(envelope("PLATFORM", "prometheus", None, {
+        "items": items, "classification": "PLATFORM_TECHNICAL_ONLY",
+        "freshness": "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME",
+        "counts": {status: sum(item["status"] == status for item in items) for status in ("UP","DOWN","UNKNOWN")}
+    }))
