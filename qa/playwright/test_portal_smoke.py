@@ -167,3 +167,20 @@ def test_unauthenticated_sensitive_endpoints_fail_closed(page: Page, method: str
         f"{method} {path} unexpectedly returned HTTP {response.status}"
     )
     assert not (200 <= response.status < 300)
+
+
+@pytest.mark.browser
+def test_offline_run_journey_visible_and_unexecuted(page: Page):
+    response = page.goto(BASE_URL + "/demo/acme-incident-cockpit", wait_until="domcontentloaded")
+    assert response is not None and response.status == 200
+    journey = page.locator("#run-journey")
+    expect(journey).to_be_visible()
+    details = journey.locator("details")
+    details.locator("summary").click()
+    rows = details.locator("ol > li")
+    expect(rows).to_have_count(17)
+    for row in rows.all():
+        expect(row).to_contain_text("NOT_RUN")
+        expect(row).to_contain_text("MISSING")
+    page.reload(wait_until="domcontentloaded")
+    expect(page.locator("#run-journey")).to_be_visible()
