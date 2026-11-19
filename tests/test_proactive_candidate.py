@@ -43,6 +43,7 @@ def test_fetch_check_runs_reads_all_pages(monkeypatch):
     assert len(checks)==101
     assert checks[-1]["id"]==100
     assert "--paginate" in calls[0] and "--slurp" in calls[0]
+    assert calls[0][-1].endswith("check-runs?per_page=100&filter=all")
 
 
 def test_fetch_check_runs_rejects_incomplete_or_duplicate_pages(monkeypatch):
@@ -58,3 +59,11 @@ def test_fetch_check_runs_rejects_incomplete_or_duplicate_pages(monkeypatch):
         monkeypatch.setattr(m.subprocess,"check_output",lambda args,timeout,p=pages:json.dumps(p).encode())
         with pytest.raises(ValueError):
             m.fetch_check_runs(sha)
+
+
+def test_latest_attempt_pending_overrides_earlier_success():
+    sha="f"*40
+    pr={"state":"open","head":{"sha":sha,"repo":{"full_name":m.REPO}}}
+    checks=[{"id":i,"name":n,"head_sha":sha,"app":{"slug":"github-actions"},"status":"completed","conclusion":"success"} for i,n in enumerate(sorted(m.REQUIRED))]
+    pending=dict(checks[0],id=999,status="in_progress",conclusion=None)
+    assert m.classify(pr,[pending]+checks)=="CI_PENDING"
