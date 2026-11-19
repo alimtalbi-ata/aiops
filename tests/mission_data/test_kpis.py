@@ -68,3 +68,26 @@ def test_portal_catalog_and_history(monkeypatch):
     assert portal["points"]==[{"at":5940,"value":None},{"at":6000,"value":1}]
     assert d["series"][0]["value"] is None
     assert d["coverage"]==1/6
+
+def test_default_deny_all_groups(monkeypatch):
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN","viewer")
+    monkeypatch.setenv("AIOPS_MISSION_AGGREGATE_GROUPS","*")
+    def forbidden(*args):
+        raise AssertionError("upstream must not be reached")
+    monkeypatch.setattr(k,"read_kpis",forbidden)
+    app=FastAPI()
+    app.include_router(md.router)
+    client=TestClient(app)
+    headers={"Authorization":"Bearer viewer"}
+    for group in k.CATALOG:
+        response=client.get("/api/mission-data/kpis/"+group,headers=headers)
+        assert response.status_code==503
+        assert response.json()["reason"]=="AGGREGATE_AUTHORIZATION_NOT_QUALIFIED"
+    assert client.get("/api/mission-data/kpis/other",headers=headers).status_code==422
+    assert client.get("/api/mission-data/kpis/core?minutes=1441",headers=headers).status_code==422
+
+def test_provider_modules_are_not_shadowed():
+    from portal.mission_data import acme, technical
+    assert callable(acme.project_acme)
+    assert callable(technical.technical_series)
+    assert callable(k.read_kpis)
