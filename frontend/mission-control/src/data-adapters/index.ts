@@ -126,3 +126,28 @@ export async function readAvailabilityHistory(options: Options, minutes = 60): P
     return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
   return r;
 }
+
+export type TechnicalMetric = "scrape-duration" | "scrape-samples";
+export type TechnicalHistory = {
+  metric: TechnicalMetric; prometheus_metric: string; unit: "seconds"|"samples";
+  series: { job: Job; points: MetricPoint[]; coverage: number; last_evaluated_at: number|null }[];
+  start: number; end: number; step_seconds: 60; aggregation: "MAX_BY_JOB";
+  classification: "PLATFORM_TECHNICAL_ONLY"; freshness: "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME";
+};
+export async function readTechnicalHistory(metric: TechnicalMetric, options: Options, minutes=60): Promise<Result<TechnicalHistory>> {
+  if (!Number.isInteger(minutes)||minutes<1||minutes>1440) return unavailable("PLATFORM","prometheus","INVALID_WINDOW");
+  const r=await read<TechnicalHistory>("technical/"+metric+"?minutes="+minutes,"PLATFORM","prometheus",options);
+  if (r.state==="UNKNOWN") return r;
+  const d=r.data;
+  if (!d || d.metric!==metric || d.prometheus_metric!==(metric==="scrape-duration"?"scrape_duration_seconds":"scrape_samples_scraped") ||
+      d.unit!==(metric==="scrape-duration"?"seconds":"samples") ||
+      d.classification!=="PLATFORM_TECHNICAL_ONLY" || d.freshness!=="QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME" ||
+      d.aggregation!=="MAX_BY_JOB" || d.step_seconds!==60 || !Number.isFinite(d.start) || d.end-d.start!==minutes*60 ||
+      !Array.isArray(d.series)||d.series.length!==jobs.length ||
+      jobs.some(j=>d.series.filter(s=>s&&s.job===j).length!==1) ||
+      d.series.some(s=>!Array.isArray(s.points)||s.points.length!==minutes+1||
+        s.points.some((p,i)=>!p||p.at!==d.start+i*60||(p.value!==null&&(!Number.isFinite(p.value)||p.value<0))) ||
+        s.coverage!==s.points.filter(p=>p.value!==null).length/(minutes+1)))
+    return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
+  return r;
+}
