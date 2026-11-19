@@ -12,6 +12,7 @@ async function request(path: string, token: string, signal: AbortSignal, body?: 
 }
 export function demoProvider(token: string, operatorToken?: string): ActionProvider {
   let cursor = 0, snapshot = "";
+  let receipt: Json | undefined;
   return {mode:"DEMO", canSimulate: Boolean(operatorToken), async invoke(selection, command, signal) {
     if (!token) return blocked("VIEWER_REQUIRED");
     if (["approve","reject"].includes(command)) return blocked("NO_RUNTIME_AUTHORITY");
@@ -26,6 +27,7 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
       : selection.view in ids ? ids[selection.view] === selection.id : selection.id === j.run_id;
     if (!matches || (selection.runId !== undefined && selection.runId !== j.run_id))
       return blocked("SELECTION_NOT_BOUND_TO_DEMO_FIXTURE");
+    if (snapshot !== j.source_sha256) {cursor=0; snapshot=j.source_sha256; receipt=undefined;}
     if (command === "execute") {
       if (selection.view !== "execution" || !operatorToken) return blocked("DEMO_OPERATOR_REQUIRED");
       const sim = await request("demo/simulation",operatorToken,signal,{
@@ -36,9 +38,13 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
         d.run_id===j.run_id && d.incident_id===j.incident_id && d.source_sha256===j.source_sha256 &&
         d.mode==="DEMO" && d.actual_recovery_state==="UNKNOWN" && d.runtime_execution_performed===false &&
         d.temporal_execution_performed===false && d.glpi_write_performed===false && d.live_remediation_authorized===false;
+      if(valid && !signal.aborted) receipt=d;
       return {state:valid?"SIMULATED":sim.ok?"UNKNOWN":"BLOCKED",detail:valid?d:{reason:d.reason??d.detail??"SIMULATION_UNQUALIFIED"},http:sim.http};
     }
-    if (snapshot !== j.source_sha256) {cursor=0; snapshot=j.source_sha256;}
+    if (command === "glpi" && selection.view === "itsm") {
+      const g=await request("glpi",token,signal);
+      return {state:g.ok?"UNKNOWN":"BLOCKED",detail:{reason:g.data.reason??g.data.detail??"GLPI_NOT_QUALIFIED",connection_state:g.data.connection_state??"UNKNOWN"},http:g.http};
+    }
     if (command === "rag" && selection.view === "ci") {
       const rag = await request("rag?asset="+encodeURIComponent(selection.id),token,signal);
       return {state:rag.ok && rag.data.state==="SYNTHETIC_REFERENCE_ONLY" && rag.data.asset===selection.id &&
@@ -57,9 +63,9 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
     }
     const c=j.cockpit;
     const projections: Record<string,unknown> = {
-      incident:c?.lifecycle, ci:j.affected_ci_ids, run:c, scenario:{id:j.scenario_id,run:j.run_id},
-      analysis:c?.analyst_critic_review, critic:c?.analyst_critic_review, policy:j.decision_preview?.policy,
-      hitl:c?.itil_readiness, execution:j.decision_preview?.remediation_preview, evidence:c?.evidence_plan
+      incident:c?.lifecycle, ci:{selected:selection.id,affected:j.affected_cis,twin:j.twin}, run:c, scenario:{id:j.scenario_id,run:j.run_id},
+      analysis:j.decision_preview?.analyst, critic:j.decision_preview?.critic, policy:j.decision_preview?.policy,
+      hitl:c?.itil_readiness, execution:j.decision_preview?.remediation_preview, evidence:{plan:c?.evidence_plan, simulation_receipt:receipt?.simulation??null, evidence_gate:receipt?.evidence_gate??null}, itsm:c?.itil_readiness
     };
     const detail=projections[selection.view];
     return {state:detail==null?"UNKNOWN":"SIMULATED",detail:detail??{reason:"PROJECTION_MISSING"},http:r.http};
