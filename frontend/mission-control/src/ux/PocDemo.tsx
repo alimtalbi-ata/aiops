@@ -4,14 +4,15 @@ import {demoServices,upstreamImpact} from './model';
 import {syntheticSeries} from './analytics';
 import type {MissionControlProps,MissionPage} from './contract';
 import './poc-demo.css';
+import {PocTechnical,type PocTechnicalData} from './PocTechnical';
 
 const history=Object.fromEntries(demoServices.map(s=>[s.id,syntheticSeries(s,24)]));
 const incident='POC-DEMO-001';
 const run='POC-RUN-001';
 const events=Object.fromEntries(demoServices.map(s=>[s.id,[{id:s.id,time:'T0 · fictif',title:'Observation synthétique',detail:s.health}]]));
 const context={mode:'demo' as const,workspace:'Commerce POC',environment:'Simulation locale',source:'Fixtures synthétiques · aucune connexion runtime'};
-type Props={pages?:MissionControlProps['pages']};
-export function PocDemo({pages}:Props={}){
+type Props={pages?:MissionControlProps['pages'];technical?:PocTechnicalData};
+export function PocDemo({pages,technical}:Props={}){
  const [page,setPage]=useState<MissionPage>('Vue globale');
  const [selected,setSelected]=useState<string|null>(null);
  const [preview,setPreview]=useState(false);
@@ -22,5 +23,5 @@ export function PocDemo({pages}:Props={}){
  'Evidence':()=> <Panel title="Checkpoints synthétiques"><p>{incident} / {run} · aucune preuve runtime.</p><Timeline events={[{id:'1',time:'T0 · fictif',title:'Observation',detail:'Fixture locale'},{id:'2',time:'T1 · fictif',title:'Analyse',detail:'Hypothèse illustrative'},{id:'3',time:'Non exécuté',title:'Preuve de rétablissement',detail:'MISSING'}]}/>{preview&&<p>Prévisualisation locale consultée · aucun reçu serveur.</p>}</Panel>,
  'ITSM':()=> <Panel title="ITSM · aperçu synthétique"><p>{incident} · ticket réel UNKNOWN · aucun handoff effectué.</p><p>GLPI / Temporal / n8n : intégrations non qualifiées dans ce POC local.</p></Panel>
  };
- return <div className="ux-poc-demo"><MissionControl services={demoServices} history={history} events={events} context={context} page={page} onPageChange={p=>{setPage(p);setSelected(null)}} selectedServiceId={selected} onSelectionChange={setSelected} pages={{...fallback,...pages}}/></div>;
+ return <div className="ux-poc-demo">{technical&&<div className="ux-root ux-poc-real" data-theme="dark"><PocTechnical data={technical} page={page} navigate={p=>{setPage(p);setSelected(null)}}/></div>}<MissionControl services={demoServices} history={history} events={events} context={context} page={page} onPageChange={p=>{setPage(p);setSelected(null)}} selectedServiceId={selected} onSelectionChange={setSelected} pages={{...fallback,...pages}}/></div>;
 }
