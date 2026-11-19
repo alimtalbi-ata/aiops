@@ -56,10 +56,11 @@ AIOPS_PORTAL_HOST_PORT="$TARGET_PORT" docker compose --project-directory "$WORKD
 IMAGE_AFTER="$(docker inspect -f '{{.Image}}' "$CONTAINER")"
 [[ "$IMAGE_AFTER" == "$IMAGE_BEFORE" ]] || fail "image_changed"
 docker inspect "$CONTAINER" > /tmp/aiops2-portal-7770-after.json
-python3 - /tmp/aiops2-portal-7770-before.json /tmp/aiops2-portal-7770-after.json <<'PY'
+python3 - "$PROJECT" /tmp/aiops2-portal-7770-before.json /tmp/aiops2-portal-7770-after.json <<'PY'
 import json,sys
-a=json.load(open(sys.argv[1]))[0]
-b=json.load(open(sys.argv[2]))[0]
+project=sys.argv[1]
+a=json.load(open(sys.argv[2]))[0]
+b=json.load(open(sys.argv[3]))[0]
 def env(x):
     return sorted(v for v in x["Config"]["Env"] if not v.startswith("AIOPS_PORTAL_HOST_PORT="))
 assert env(a)==env(b), "environment_changed_outside_port"
@@ -68,7 +69,7 @@ def mounts(x):
 assert mounts(a)==mounts(b), "mounts_changed"
 assert sorted(a["NetworkSettings"]["Networks"])==sorted(b["NetworkSettings"]["Networks"]), "networks_changed"
 assert b["State"]["Running"], "portal_not_running"
-assert b["Config"]["Labels"].get("com.docker.compose.project")=="aiops2-rebuild"
+assert b["Config"]["Labels"].get("com.docker.compose.project")==project
 assert b["Config"]["Labels"].get("com.docker.compose.service")=="aiops2-portal"
 PY
 for i in $(seq 1 30); do
