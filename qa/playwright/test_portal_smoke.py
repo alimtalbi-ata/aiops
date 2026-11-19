@@ -184,3 +184,19 @@ def test_offline_run_journey_visible_and_unexecuted(page: Page):
         expect(row).to_contain_text("MISSING")
     page.reload(wait_until="domcontentloaded")
     expect(page.locator("#run-journey")).to_be_visible()
+
+
+@pytest.mark.browser
+def test_twin_evidence_plan_remains_unobserved(page: Page):
+    response = page.goto(BASE_URL + "/demo/acme-incident-cockpit", wait_until="domcontentloaded")
+    assert response is not None and response.status == 200
+    table = page.locator("#twin-evidence-plan")
+    expect(table).to_be_visible()
+    rows = table.locator("tbody tr")
+    assert rows.count() > 0
+    for row in rows.all():
+        expect(row.locator("td").last).to_have_text("MISSING")
+    journey = page.locator("#run-journey")
+    expect(journey).to_contain_text("DENY_LIVE_ACTION")
+    expect(journey).to_contain_text("NOT_INVOKED")
+    expect(journey).to_contain_text("0/17")
