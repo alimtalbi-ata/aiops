@@ -175,7 +175,7 @@ jobs:
               "metadata": {"invocationId": f"https://github.com/{repo}/actions/runs/{run_id}/attempts/{attempt}"}
             }
           }
-          Path(os.environ["RUNNER_TEMP"], "int07-source-bound-provenance.json").write_text(json.dumps(predicate, indent=2) + "\\n")
+          Path(os.environ["RUNNER_TEMP"], "int07-source-bound-provenance.json").write_text(json.dumps(predicate, indent=2) + "\n")
           PY
 
       - name: Attest exact INT07 source and qualifier materials
