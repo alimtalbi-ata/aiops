@@ -1,7 +1,7 @@
 export type Mode = "DEMO" | "OPERATIONAL";
-export type View = "incident" | "ci" | "run" | "scenario" | "analysis" | "critic" | "policy" | "hitl" | "execution" | "evidence";
+export type View = "incident" | "ci" | "run" | "scenario" | "analysis" | "critic" | "policy" | "hitl" | "execution" | "evidence" | "itsm";
 export type Selection = { view: View; id: string; runId?: string };
-export type Command = "inspect" | "rag" | "start" | "advance" | "pause" | "reset" | "replay" | "execute" | "approve" | "reject";
+export type Command = "inspect" | "rag" | "start" | "advance" | "pause" | "reset" | "replay" | "execute" | "approve" | "reject" | "glpi";
 export type Reply = { state: "SIMULATED" | "OBSERVED" | "BLOCKED" | "UNKNOWN"; detail: unknown; http?: number };
 export interface ActionProvider {
   readonly mode: Mode;
@@ -12,9 +12,9 @@ export const commands: Record<View, readonly Command[]> = {
   incident: ["inspect"], ci: ["inspect","rag"], run: ["inspect"],
   scenario: ["inspect","start","advance","pause","reset","replay"],
   analysis: ["inspect"], critic: ["inspect"], policy: ["inspect"],
-  hitl: ["inspect","approve","reject"], execution: ["inspect","execute"], evidence: ["inspect"],
+  hitl: ["inspect","approve","reject"], execution: ["inspect","execute"], evidence: ["inspect"], itsm: ["inspect","glpi"],
 };
 export const labels: Record<Command,string> = {
   inspect:"Inspecter", rag:"Références RAG", start:"Démarrer", advance:"Avancer",
-  pause:"Pause", reset:"Réinitialiser", replay:"Rejouer", execute:"Simuler (sans action réelle)", approve:"Approuver", reject:"Refuser"
+  pause:"Pause", reset:"Réinitialiser", replay:"Rejouer", execute:"Simuler (sans action réelle)", approve:"Approuver", reject:"Refuser", glpi:"Relire le statut GLPI"
 };
