@@ -2,14 +2,14 @@ export const jobs = ["aiops2-core", "aiops2-worker", "aiops2-twin", "aiops2-poli
 export type Job = typeof jobs[number];
 export type Mode = "LIVE" | "DEMO";
 export type HealthMode = Mode | "PLATFORM";
-export type Dataset = "core" | "fs-lab" | "evidence" | "logs" | "traces" | "twin" | "impact" | "noc";
+export type Dataset = "incidents" | "core" | "fs-lab" | "evidence" | "logs" | "traces" | "twin" | "impact" | "noc";
 export type Point = { at: number; up: 0 | 1 };
 export type Health = { job: Job; points: Point[]; classification: "PLATFORM_TECHNICAL_ONLY"; freshness: "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME" };
 export type Result<T> = { mode: HealthMode; source: string; retrieved_at: number | null; tenant_acl_qualified: false } & (
   { state: "AVAILABLE"; reason: null; data: T } |
   { state: "UNKNOWN"; reason: string; data: null }
 );
-type Options = { token: string; signal?: AbortSignal };
+export type Options = { token: string; signal?: AbortSignal };
 function unavailable<T>(mode: HealthMode, source: string, reason: string): Result<T> {
   return { mode, source, retrieved_at: null, tenant_acl_qualified: false, state: "UNKNOWN", reason, data: null };
 }
@@ -45,6 +45,33 @@ export function readHealth(job: Job, mode: HealthMode, options: Options, minutes
     return result;
   });
 }
-export function readDataset(dataset: Dataset, mode: Mode, options: Options): Promise<Result<never>> {
+export function readDataset<K extends Dataset>(dataset: K, mode: Mode, options: Options): Promise<Result<DatasetMap[K]>> {
   return read<never>("datasets/" + encodeURIComponent(dataset) + "?" + new URLSearchParams({ mode }), mode, dataset, options).then(result => result.state === "UNKNOWN" ? result : unavailable<never>(mode, dataset, "UNQUALIFIED_DATA"));
 }
+
+export type JobStatus = { job: Job; status: "UP" | "DOWN"; at: number; reason: null } | { job: Job; status: "UNKNOWN"; at: null; reason: "NO_SAMPLES" };
+export type PlatformSummary = { items: JobStatus[]; counts: Record<"UP"|"DOWN"|"UNKNOWN", number>; classification: "PLATFORM_TECHNICAL_ONLY"; freshness: "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME" };
+export async function readPlatformSummary(options: Options): Promise<Result<PlatformSummary>> {
+  const r = await read<PlatformSummary>("health/jobs", "PLATFORM", "prometheus", options);
+  if (r.state === "UNKNOWN") return r;
+  const d = r.data;
+  if (!d || d.classification !== "PLATFORM_TECHNICAL_ONLY" || d.freshness !== "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME" ||
+      !Array.isArray(d.items) || d.items.length !== jobs.length || !d.counts ||
+      jobs.some(job => d.items.filter(i => i && i.job === job).length !== 1) ||
+      d.items.some(i => i.status === "UNKNOWN" ? i.at !== null || i.reason !== "NO_SAMPLES" :
+        !["UP","DOWN"].includes(i.status) || !Number.isFinite(i.at) || i.reason !== null) ||
+      (["UP","DOWN","UNKNOWN"] as const).some(s => d.counts[s] !== d.items.filter(i => i.status === s).length))
+    return unavailable("PLATFORM", "prometheus", "INVALID_RESPONSE");
+  return r;
+}
+// Proposed presentation contracts, not a claim of authorized upstream availability.
+// Null values denote missing observations, never zero.
+export type MetricPoint = { at: number; value: number | null };
+export type MetricSeries = { id: string; label: string; unit: string; points: MetricPoint[]; source: string };
+export type CoreKpis = { runs_total: number; running: number; blocked: number; resolved: number; open_incidents: number; open_p1: number };
+export type TwinNode = { node_id: string; type: string; name: string; site: string | null; state: string; criticality: string | number | null; health: number | null; confidence: number | null };
+export type TwinEdge = { edge_id: string; source_id: string; target_id: string; relation_type: string; redundancy: unknown; confidence: number | null };
+export type TwinGraph = { nodes: TwinNode[]; edges: TwinEdge[] };
+export type Incident = { incident_id: string; title: string; severity: string; state: string; service_id: string | null; synthetic: boolean };
+export type EvidenceItem = { evidence_id: string; source: string; observed_at: string | null; known_at: string; claim: string; confidence: number; payload_hash: string };
+export type DatasetMap = { core: CoreKpis; "fs-lab": { series: MetricSeries[] }; evidence: { items: EvidenceItem[] }; incidents: { items: Incident[] }; twin: TwinGraph; impact: { root: string; affected: { node_id: string; depth: number }[] }; logs: never; traces: never; noc: never };
