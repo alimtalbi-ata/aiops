@@ -15,3 +15,8 @@ export function availabilityStats(points:AvailabilityPoint[]){
 }
 export function difference(c:Comparison){return c.before.value===null||c.after.value===null||!Number.isFinite(c.before.value)||!Number.isFinite(c.after.value)||c.after.at<=c.before.at?null:c.after.value-c.before.value;}
 export function severityRank(s:string){const ranks:Record<string,number>={P1:0,CRITICAL:0,P2:1,HIGH:1,P3:2,MEDIUM:2,P4:3,LOW:3};return ranks[s.toUpperCase()]??4;}
+
+export type PlatformSummary={items:({job:string;status:'UP'|'DOWN';at:number;reason:null}|{job:string;status:'UNKNOWN';at:null;reason:'NO_SAMPLES'})[];counts:Record<'UP'|'DOWN'|'UNKNOWN',number>;classification:'PLATFORM_TECHNICAL_ONLY';freshness:'QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME'};
+export function platformKpis(result:ReadResult<PlatformSummary>|undefined):OperationalKpi[]{
+ return (['UP','DOWN','UNKNOWN'] as const).map(status=>({id:'platform-'+status,label:'Jobs techniques '+status,value:result?.state==='AVAILABLE'&&result.mode==='PLATFORM'?result.data.counts[status]:null,unit:'jobs',source:result?.source??'Source non fournie',kind:'technical'}));
+}
