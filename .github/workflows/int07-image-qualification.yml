@@ -140,6 +140,53 @@ jobs:
           (out / "playwright-results.json").write_text(json.dumps(results, indent=2) + "\n")
           PY
 
+      - name: Generate source-bound SLSA provenance predicate
+        id: source-predicate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          source = os.environ["SOURCE_SHA"]
+          qualifier = os.environ["QUALIFIER_SHA"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          ref = os.environ["GITHUB_REF"]
+          run_id = os.environ["GITHUB_RUN_ID"]
+          attempt = os.environ["GITHUB_RUN_ATTEMPT"]
+          workflow = ".github/workflows/int07-image-qualification.yml"
+          predicate = {
+            "buildDefinition": {
+              "buildType": "https://actions.github.io/buildtypes/workflow/v1",
+              "externalParameters": {
+                "source": {"repository": f"https://github.com/{repo}", "ref": source},
+                "qualifier": {"repository": f"https://github.com/{repo}", "ref": qualifier}
+              },
+              "internalParameters": {
+                "github": {"event_name": os.environ["GITHUB_EVENT_NAME"], "runner_environment": os.environ["RUNNER_ENVIRONMENT"]}
+              },
+              "resolvedDependencies": [
+                {"uri": f"git+https://github.com/{repo}@{source}", "digest": {"gitCommit": source}},
+                {"uri": f"git+https://github.com/{repo}@{qualifier}", "digest": {"gitCommit": qualifier}}
+              ]
+            },
+            "runDetails": {
+              "builder": {"id": f"https://github.com/{repo}/{workflow}@{ref}"},
+              "metadata": {"invocationId": f"https://github.com/{repo}/actions/runs/{run_id}/attempts/{attempt}"}
+            }
+          }
+          Path(os.environ["RUNNER_TEMP"], "int07-source-bound-provenance.json").write_text(json.dumps(predicate, indent=2) + "\\n")
+          PY
+
+      - name: Attest exact INT07 source and qualifier materials
+        uses: actions/attest@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}/aiops-portal-int07
+          subject-digest: ${{ steps.publish-image.outputs.digest }}
+          predicate-type: https://slsa.dev/provenance/v1
+          predicate-path: ${{ runner.temp }}/int07-source-bound-provenance.json
+          push-to-registry: true
+
       - name: Export immutable image archive and calculate artifact digest
         if: always()
         shell: bash
