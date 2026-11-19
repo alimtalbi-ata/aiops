@@ -31,7 +31,10 @@ def reconcile(receipt, marker, sha):
     elif len(matches)==1:
         atomic(receipt,{"status":"AUTHOR_CONFLICT","sha":sha,"marker":marker,"comment_id":matches[0].get("id")})
     else:
-        atomic(receipt,{"status":"PUBLICATION_UNCERTAIN","sha":sha,"marker":marker,"match_count":0,"reconciled_at":dt.datetime.now(dt.timezone.utc).isoformat()})
+        previous=json.loads(receipt.read_text())
+        attempts=int(previous.get("reconciliation_attempts",0))+1
+        status="MANUAL_ESCALATION_REQUIRED" if attempts>=3 else "PUBLICATION_UNCERTAIN"
+        atomic(receipt,{"status":status,"sha":sha,"marker":marker,"match_count":0,"reconciliation_attempts":attempts,"reconciled_at":dt.datetime.now(dt.timezone.utc).isoformat()})
 
 def main():
     os.umask(0o077)
@@ -58,6 +61,10 @@ def main():
             return
         body=f"{marker}\nTeam C: qualify isolated build for PR #818 at exact SHA; publish image provenance. Team D: independently verify evidence. No runtime deployment or promotion authorized by this task."
         atomic(receipt,{"status":"STARTED","sha":sha,"marker":marker,"deploy_authorized":False})
+        # A second HEAD check narrows the race between initial eligibility and POST.
+        if current_pr_head()!=sha:
+            atomic(receipt,{"status":"OBSOLETE_SHA","sha":sha,"marker":marker,"deploy_authorized":False})
+            return
         try:
             subprocess.run(["gh","issue","comment","804","--repo",REPO,"--body",body],check=True,timeout=30,capture_output=True)
         except (OSError,subprocess.SubprocessError):
