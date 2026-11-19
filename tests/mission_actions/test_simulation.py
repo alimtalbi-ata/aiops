@@ -9,13 +9,13 @@ def client():
     return TestClient(app)
 
 def test_viewer_cannot_simulate(monkeypatch):
-    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "viewer-test-token")
-    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "operator-test-token")
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "viewer-test-token-000000000000000000")
+    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "operator-test-token-000000000000000000")
     monkeypatch.delenv("AIOPS_INTERNAL_TOKEN", raising=False)
     def forbidden():
         raise AssertionError("pipeline must not execute")
     monkeypatch.setattr(module, "run_acme_demo_simulation", forbidden)
-    assert client().post("/api/mission-actions/demo/simulation", json={}, headers={"Authorization":"Bearer viewer-test-token"}).status_code == 401
+    assert client().post("/api/mission-actions/demo/simulation", json={}, headers={"Authorization":"Bearer viewer-test-token-000000000000000000"}).status_code == 401
 
 def test_context_mismatch_before_simulation(monkeypatch):
     monkeypatch.setattr(module, "require_demo_operator", lambda _: None)
