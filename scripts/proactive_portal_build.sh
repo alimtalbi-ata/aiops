@@ -17,7 +17,7 @@ python3 - "$sha" "$docker_image_id" "$buildx_iid" "$tag" <<'PY'
 import json,sys
 print(json.dumps({
     "source_sha":sys.argv[1],
-    "local_image_id":sys.argv[2],
+    "docker_engine_inspect_id":sys.argv[2],
     "buildx_iid":sys.argv[3],
     "image_tag":sys.argv[4],
     "state":"BUILD_PASS",
