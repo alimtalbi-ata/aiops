@@ -86,7 +86,7 @@ def test_handoff_marks_uncertain_publication_without_blind_retry(tmp_path):
         except OSError:
             pass
     assert run.call_count == 2
+    assert run.call_args_list[0].args[0][:3] == ["gh", "issue", "comment"]
     assert run.call_args_list[1].args[0][:2] == ["gh", "api"]
-    assert all(call.args[0][:2] != ["gh", "issue"] for call in run.call_args_list)
     receipt = json.loads((root / f"build-handoff-{sha}.json").read_text())
     assert receipt["status"] == "PUBLICATION_UNCERTAIN"
