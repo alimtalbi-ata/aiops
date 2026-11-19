@@ -33,7 +33,7 @@ def make_archive(tmp_path):
     receipt_path=tmp_path/"receipt.json"
     receipt_path.write_text(json.dumps({
         "source_sha":source,
-        "local_image_id":"sha256:"+config_digest,
+        "docker_engine_inspect_id":"sha256:"+index_digest,
         "buildx_iid":"sha256:"+index_digest,
         "state":"BUILD_PASS",
         "deploy_authorized":False,
@@ -47,13 +47,13 @@ def test_archive_verifier_binds_receipt_to_config_and_index(tmp_path):
     assert result["local_image_id"]==config_id
     assert result["docker_config_digest"]==config_id
     assert result["oci_index_digest"]==index_id
-    assert result["docker_image_inspect_id"]==config_id
+    assert result["docker_engine_inspect_id"]==index_id
 
 
 def test_archive_verifier_rejects_wrong_inspect_id(tmp_path):
     archive,receipt,source,tag,config_id,index_id=make_archive(tmp_path)
-    with pytest.raises(ValueError,match="inspect ID"):
-        verifier.verify(archive,receipt,source,tag,index_id)
+    with pytest.raises(ValueError,match="matches neither"):
+        verifier.verify(archive,receipt,source,tag,"sha256:"+"f"*64)
 
 
 def test_archive_verifier_rejects_wrong_revision_label(tmp_path):
