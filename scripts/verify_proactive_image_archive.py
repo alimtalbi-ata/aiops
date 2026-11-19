@@ -62,20 +62,39 @@ def verify(archive_path, receipt_path, source_sha, expected_tag, inspect_id):
             raise ValueError("OCI index descriptor bytes do not match digest")
         index_object=json.loads(index_bytes)
         image_descriptors=index_object.get("manifests",[])
-        if not isinstance(image_descriptors,list) or len(image_descriptors)!=1:
-            raise ValueError("expected exactly one platform image manifest")
-        image_descriptor=image_descriptors[0]
-        manifest_match=re.fullmatch(r"sha256:([0-9a-f]{64})",image_descriptor.get("digest",""))
-        if not manifest_match:
-            raise ValueError("invalid platform image manifest digest")
-        manifest_path="blobs/sha256/"+manifest_match.group(1)
+        if not isinstance(image_descriptors,list) or not image_descriptors:
+            raise ValueError("OCI index has no image descriptors")
+        platform_descriptors=[]
+        attestation_descriptors=[]
+        for item in image_descriptors:
+            item_match=re.fullmatch(r"sha256:([0-9a-f]{64})",item.get("digest",""))
+            if not item_match:
+                raise ValueError("invalid OCI child descriptor digest")
+            item_path="blobs/sha256/"+item_match.group(1)
+            item_bytes=read_member(archive,item_path)
+            if digest(item_bytes)!=item["digest"]:
+                raise ValueError("OCI child descriptor bytes do not match digest")
+            platform=item.get("platform",{})
+            if platform.get("os")=="linux" and platform.get("architecture")=="amd64":
+                platform_descriptors.append(item)
+            elif (platform.get("os")=="unknown" and platform.get("architecture")=="unknown"
+                  and item.get("annotations",{}).get("vnd.docker.reference.type")=="attestation-manifest"):
+                attestation_descriptors.append(item)
+            else:
+                raise ValueError("unexpected OCI platform or descriptor type")
+        if len(platform_descriptors)!=1:
+            raise ValueError("expected exactly one linux/amd64 platform image manifest")
+        image_descriptor=platform_descriptors[0]
+        manifest_digest=image_descriptor["digest"]
+        manifest_path="blobs/sha256/"+manifest_digest.split(":")[1]
         image_manifest_bytes=read_member(archive,manifest_path)
-        manifest_digest=digest(image_manifest_bytes)
-        if manifest_digest!=image_descriptor["digest"]:
-            raise ValueError("platform image manifest bytes do not match digest")
         image_manifest=json.loads(image_manifest_bytes)
         if image_manifest.get("config",{}).get("digest")!=config_digest:
             raise ValueError("OCI image manifest config does not match Docker manifest config")
+        for attestation in attestation_descriptors:
+            annotations=attestation.get("annotations",{})
+            if annotations.get("vnd.docker.reference.digest")!=manifest_digest:
+                raise ValueError("OCI attestation does not reference the selected platform manifest")
 
     receipt_path=Path(receipt_path)
     receipt=json.loads(receipt_path.read_text())
