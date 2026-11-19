@@ -46,23 +46,36 @@ def verify(archive_path, receipt_path, source_sha, expected_tag, inspect_id):
         if labels.get("org.opencontainers.image.revision")!=source_sha:
             raise ValueError("OCI revision label does not match frozen source SHA")
         index_digest=None
-        try:
-            index=json.loads(read_member(archive,"index.json"))
-        except KeyError:
-            index=None
-        if index is not None:
-            descriptors=index.get("manifests",[])
-            if not isinstance(descriptors,list) or len(descriptors)!=1:
-                raise ValueError("expected exactly one OCI index descriptor")
-            descriptor=descriptors[0]
-            index_match=re.fullmatch(r"sha256:([0-9a-f]{64})",descriptor.get("digest",""))
-            if not index_match:
-                raise ValueError("invalid OCI index descriptor digest")
-            index_path="blobs/sha256/"+index_match.group(1)
-            index_bytes=read_member(archive,index_path)
-            index_digest=digest(index_bytes)
-            if index_digest!=descriptor["digest"]:
-                raise ValueError("OCI index descriptor bytes do not match digest")
+        manifest_digest=None
+        index=json.loads(read_member(archive,"index.json"))
+        descriptors=index.get("manifests",[])
+        if not isinstance(descriptors,list) or len(descriptors)!=1:
+            raise ValueError("expected exactly one OCI index descriptor")
+        descriptor=descriptors[0]
+        index_match=re.fullmatch(r"sha256:([0-9a-f]{64})",descriptor.get("digest",""))
+        if not index_match:
+            raise ValueError("invalid OCI index descriptor digest")
+        index_path="blobs/sha256/"+index_match.group(1)
+        index_bytes=read_member(archive,index_path)
+        index_digest=digest(index_bytes)
+        if index_digest!=descriptor["digest"]:
+            raise ValueError("OCI index descriptor bytes do not match digest")
+        index_object=json.loads(index_bytes)
+        image_descriptors=index_object.get("manifests",[])
+        if not isinstance(image_descriptors,list) or len(image_descriptors)!=1:
+            raise ValueError("expected exactly one platform image manifest")
+        image_descriptor=image_descriptors[0]
+        manifest_match=re.fullmatch(r"sha256:([0-9a-f]{64})",image_descriptor.get("digest",""))
+        if not manifest_match:
+            raise ValueError("invalid platform image manifest digest")
+        manifest_path="blobs/sha256/"+manifest_match.group(1)
+        image_manifest_bytes=read_member(archive,manifest_path)
+        manifest_digest=digest(image_manifest_bytes)
+        if manifest_digest!=image_descriptor["digest"]:
+            raise ValueError("platform image manifest bytes do not match digest")
+        image_manifest=json.loads(image_manifest_bytes)
+        if image_manifest.get("config",{}).get("digest")!=config_digest:
+            raise ValueError("OCI image manifest config does not match Docker manifest config")
 
     receipt_path=Path(receipt_path)
     receipt=json.loads(receipt_path.read_text())
@@ -71,14 +84,15 @@ def verify(archive_path, receipt_path, source_sha, expected_tag, inspect_id):
     buildx_iid=receipt.get("buildx_iid")
     if index_digest and buildx_iid!=index_digest:
         raise ValueError("Buildx IID does not match OCI index digest")
-    if inspect_id not in {config_digest,index_digest}:
-        raise ValueError("docker image inspect ID matches neither exported config nor OCI index")
+    if inspect_id!=manifest_digest:
+        raise ValueError("docker image inspect ID does not match exported platform manifest")
     if receipt.get("docker_engine_inspect_id")!=inspect_id:
         raise ValueError("receipt docker_engine_inspect_id does not match docker image inspect")
     receipt["local_image_id"]=config_digest
     receipt["docker_config_digest"]=config_digest
     receipt["docker_engine_inspect_id"]=inspect_id
     receipt["oci_index_digest"]=index_digest
+    receipt["oci_manifest_digest"]=manifest_digest
     receipt["image_tag"]=expected_tag
     tmp=receipt_path.with_suffix(receipt_path.suffix+".tmp")
     tmp.write_text(json.dumps(receipt,sort_keys=True)+"\n")
