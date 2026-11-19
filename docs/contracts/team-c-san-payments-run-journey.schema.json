@@ -372,7 +372,26 @@
         ],
         "properties": {
           "stage": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "capability_simulator",
+              "capability_core",
+              "capability_twin",
+              "capability_policy",
+              "capability_worker",
+              "simulator_start",
+              "pre_resolution_core",
+              "pre_resolution_twin",
+              "pre_resolution_policy",
+              "pre_resolution_worker",
+              "worker_no_effect",
+              "core_finalization",
+              "post_resolution_core",
+              "post_resolution_twin",
+              "post_resolution_policy",
+              "post_resolution_worker",
+              "resolved"
+            ]
           },
           "status": {
             "const": "PASS"
