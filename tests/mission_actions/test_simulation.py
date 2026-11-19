@@ -36,3 +36,12 @@ def test_real_offline_pipeline(monkeypatch):
     assert data["actual_recovery_state"] == "UNKNOWN"
     assert data["runtime_execution_performed"] is False
     assert data["live_remediation_authorized"] is False
+
+def test_corrupted_receipt_is_denied(monkeypatch):
+    monkeypatch.setattr(module, "require_demo_operator", lambda _: None)
+    impact = module._load_or_503()
+    result = module.run_acme_demo_simulation()
+    result["simulation"]["receipt_sha256"] = "0" * 64
+    monkeypatch.setattr(module, "run_acme_demo_simulation", lambda: result)
+    response = client().post("/api/mission-actions/demo/simulation", json={k:impact[k] for k in ("incident_id","run_id","source_sha256")})
+    assert response.status_code == 503
