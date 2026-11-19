@@ -462,11 +462,11 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         # Small viewport: tables remain inside scroll containers and summary cards stack.
         self.page.set_viewport_size({"width": 390, "height": 844})
         self.page.reload()
-        self.assertEqual(self.page.locator("div.table-scroll table").count(), 4)
+        self.assertEqual(self.page.locator("div.table-scroll table").count(), 5)
         self.assertEqual(self.page.locator(".demo-card").count(), 3)
         self.assertEqual(
             [table.locator("tbody tr").count()
-             for table in self.page.locator("table").all()],
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
             [9, 9, 9, 8],
         )
         self.assertIn("NO-GO LIVE", self.page.locator("#verdict").inner_text())
@@ -512,7 +512,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "fixture_sha256": re.search(
                 r"[a-f0-9]{64}", self.page.locator("main").inner_text()
             ).group(0),
-            "table_count": 4,
+            "table_count": self.page.locator("table").count(),
             "runtime_authenticated": False,
             "browser_rehearsal_independently_reviewed": False,
             "production_qualified": False,
