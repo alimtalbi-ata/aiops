@@ -25,6 +25,16 @@ def impact(node_id:str):
         if not c.execute('select 1 from aiops.twin_nodes where node_id=%s',(node_id,)).fetchone():raise HTTPException(404,'node not found')
         rows=c.execute("with recursive down(id,depth) as (select %s,0 union select e.target_id,d.depth+1 from aiops.twin_edges e join down d on e.source_id=d.id where d.depth<8) select n.node_id,n.type,n.name,n.criticality,d.depth from down d join aiops.twin_nodes n on n.node_id=d.id order by d.depth,n.criticality desc",(node_id,)).fetchall()
     k=['node_id','type','name','criticality','depth']; return {'root':node_id,'affected':[dict(zip(k,x)) for x in rows]}
+
+from twin.dependents import potential_dependents
+
+@app.get('/api/twin/dependents/{node_id}')
+def dependents(node_id: str):
+    try:
+        return potential_dependents(graph(), node_id)
+    except KeyError:
+        raise HTTPException(404, 'node not found')
+
 @app.get('/api/twin/at')
 def at(known_at:str):
     with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()

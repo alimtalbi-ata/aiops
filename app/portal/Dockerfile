@@ -4,6 +4,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY shared /app/shared
 COPY portal /app/portal
+COPY twin/dependents.py /app/twin/dependents.py
 ENV PYTHONPATH=/app
 EXPOSE 777
 CMD ["uvicorn","portal.main:app","--host","0.0.0.0","--port","777"]
