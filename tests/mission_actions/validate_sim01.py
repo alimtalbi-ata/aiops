@@ -29,6 +29,17 @@ def validate(journey, result):
         require(receipt[key] is False, key)
     for key in ("itil_transition_authorized", "live_remediation_authorized"):
         require(result["evidence_gate"][key] is False, "gate_" + key)
+    require(receipt["schema"] == "aiops.demo-remediation-simulation-receipt.v1", "receipt_schema")
+    require(receipt["tenant_id"] == "acme-demo", "synthetic_tenant")
+    require(receipt["action_id"] == "acme-payments-restart-hypothesis-001" and receipt["action_kind"] == "SERVICE_RESTART_SIMULATION", "action_identity")
+    before = {"service": "payments", "health": "DEGRADED", "alert_active": True}
+    after = {"service": "payments", "health": "HEALTHY", "alert_active": False}
+    def sha(value):
+        return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+    require(sha(receipt["before"]) == sha(before) == receipt["before_sha256"], "before_state")
+    require(sha(receipt["hypothetical_after"]) == sha(after) == receipt["after_sha256"], "after_state")
+    request = {"schema": "aiops.demo-remediation-simulation-request.v1", "mode": "DEMO", "tenant_id": "acme-demo", "incident_id": journey["incident_id"], "action_id": receipt["action_id"], "action_kind": receipt["action_kind"], "before": before, "policy_decision": "SIMULATE_ONLY"}
+    require(sha(request) == receipt["request_sha256"], "request_digest")
     return "PASS isolated receipt contract; recovery UNKNOWN"
 
 if __name__ == "__main__":
