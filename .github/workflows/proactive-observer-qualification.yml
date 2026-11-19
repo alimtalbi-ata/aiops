@@ -9,6 +9,7 @@ on:
       - "deploy/**"
       - "tests/test_proactive_candidate.py"
       - "tests/test_proactive_update_discovery.py"
+      - "tests/test_proactive_watchdog_handoff.py"
       - "scripts/proactive_portal_build.sh"
 
 permissions:
@@ -64,7 +65,7 @@ jobs:
       - name: Run candidate and update discovery tests explicitly
         working-directory: orchestrator
         run: |
-          python -m pytest -q -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py
+          python -m pytest -q -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py tests/test_proactive_watchdog_handoff.py
 
       - name: Build frozen INT07 image on GitHub-hosted runner
         working-directory: source
