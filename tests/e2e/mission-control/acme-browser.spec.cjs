@@ -8,6 +8,10 @@ test('runtime ACME browser read-only navigation and viewer isolation',async({pag
  if(origin.protocol!=='https:'&&!['localhost','127.0.0.1','[::1]'].includes(origin.hostname)) throw Error('Viewer requires HTTPS or loopback');
  if(!/^[!-~]{32,256}$/.test(token)) throw Error('Invalid viewer format');
  const writes=[];
+ let phase='SETUP';
+ const mark=name=>{phase=name;console.log('QA_PHASE '+name);};
+ page.setDefaultTimeout(7000);page.setDefaultNavigationTimeout(10000);
+ test.setTimeout(120000);
  await page.route('**/*',async route=>{
   const req=route.request();
   if(!['GET','HEAD','OPTIONS'].includes(req.method())){writes.push(req.method());return route.abort();}
@@ -15,27 +19,35 @@ test('runtime ACME browser read-only navigation and viewer isolation',async({pag
   return route.continue();
  });
  try{
+  mark('NAVIGATE');
   await page.goto(process.env.UI_PATH||'/mission-control');
+  mark('SHELL');
   const nav=page.getByRole('navigation',{name:'Navigation'});
   await expect(nav).toBeVisible();
   const go=async name=>{await nav.getByRole('button',{name,exact:true}).click();await expect(page.getByRole('heading',{level:1,name,exact:true})).toBeVisible();};
+  mark('DEMO_MODE');
   await page.getByLabel('Mode',{exact:true}).selectOption('demo');
+  mark('VIEWER_FORM');
   await page.getByText('Accès viewer / DEMO',{exact:true}).click();
   await page.getByLabel('Viewer',{exact:true}).fill(token);
-  const acme=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/mission-data/acme'&&r.status()===200);
-  const journey=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/mission-actions/journey'&&r.status()===200);
+  mark('VIEWER_RESPONSES');
+  const acme=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/mission-data/acme'&&r.status()===200,{timeout:15000});
+  const journey=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/mission-actions/journey'&&r.status()===200,{timeout:15000});
   await page.getByRole('button',{name:'Appliquer en mémoire'}).click();
+  mark('SOURCE_BINDING');
   const a=(await (await acme).json()).data;const j=await (await journey).json();
   expect(a.source_sha256===j.source_sha256&&j.runtime_attested===false&&j.live_remediation_authorized===false).toBe(true);
+  mark('SYNTHETIC_BANNER');
   await expect(page.getByText(/DONNÉES SYNTHÉTIQUES/)).toBeVisible();
-  await go('Incidents');await expect(page.getByText(j.incident_id,{exact:true})).toBeVisible();
-  await go('Digital Twin');const graph=page.locator('svg[aria-label="Topologie des dépendances"]');await expect(graph).toBeVisible();
-  await graph.getByRole('button').first().focus();await page.keyboard.press('Enter');await expect(page.locator('aside.ux-inspector')).toBeVisible();await page.keyboard.press('Escape');await expect(page.locator('aside.ux-inspector')).toHaveCount(0);
-  await go('Intelligence');await expect(page.getByRole('heading',{name:'Analyste',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Critic',exact:true})).toBeVisible();
-  await go('Automatisation');await expect(page.getByRole('button',{name:'Simuler (sans action réelle)'})).toBeDisabled();
-  await go('Evidence');await expect(page.getByRole('heading',{name:'Checkpoints synthétiques'})).toBeVisible();await expect(page.getByText(/MISSING/).first()).toBeVisible();
-  await go('ITSM');await expect(page.getByRole('link',{name:'Ouvrir ITSM'})).toHaveAttribute('href','/itsm');
+  mark('INCIDENTS');await go('Incidents');await expect(page.getByText(j.incident_id,{exact:true})).toBeVisible();
+  mark('TWIN');await go('Digital Twin');const graph=page.locator('svg[aria-label="Topologie des dépendances"]');await expect(graph).toBeVisible();
+  mark('TWIN_KEYBOARD');await graph.getByRole('button').first().focus();await page.keyboard.press('Enter');await expect(page.locator('aside.ux-inspector')).toBeVisible();await page.keyboard.press('Escape');await expect(page.locator('aside.ux-inspector')).toHaveCount(0);
+  mark('INTELLIGENCE');await go('Intelligence');await expect(page.getByRole('heading',{name:'Analyste',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Critic',exact:true})).toBeVisible();
+  mark('AUTOMATION');await go('Automatisation');await expect(page.getByRole('button',{name:'Simuler (sans action réelle)'})).toBeDisabled();
+  mark('EVIDENCE');await go('Evidence');await expect(page.getByRole('heading',{name:'Checkpoints synthétiques'})).toBeVisible();await expect(page.getByText(/MISSING/).first()).toBeVisible();
+  mark('ITSM');await go('ITSM');await expect(page.getByRole('link',{name:'Ouvrir ITSM'})).toHaveAttribute('href','/itsm');
   await page.getByLabel('Mode',{exact:true}).selectOption('operational');await go('Incidents');await expect(page.getByText(/Autorité acteur \/ tenant non qualifiée/)).toBeVisible();await expect(page.getByText(j.incident_id,{exact:true})).toHaveCount(0);
+  mark('WRITE_GUARD');
   expect(writes).toEqual([]);
- }catch{throw Error('Authenticated browser qualification failed; reproduce privately without publishing credentials or payloads');}
+ }catch{throw Error('Authenticated browser qualification failed at '+phase+'; reproduce privately without publishing credentials or payloads');}
 });
