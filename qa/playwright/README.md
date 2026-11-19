@@ -51,3 +51,21 @@ Use the matrix in the TEAM D report to classify each case PASS / FAIL / BLOCKED 
 
 
 The isolated GitHub Actions workflow is `.github/workflows/team-d-playwright.yml`. It runs against a disposable local FastAPI process with upstream services unreachable; inspect the JUnit artifact before assigning a PASS/FAIL verdict.
+
+
+## Runtime 7770 acceptance checklist (desktop, read-only first)
+
+Prerequisites: owner-authorized endpoint, tenant-scoped test identity via approved secure channel, deployed SHA and environment classification. Never put credentials in commands, comments or artifacts.
+
+| Check | Acceptance evidence |
+|---|---|
+| Runtime identity | Deployed SHA, UTC timestamp, environment and mode |
+| Navigation | Actual link clicks, refresh and history; no unexpected redirects |
+| Run selection | Selected Run identity stays consistent across views |
+| SAN / Twin / NOC | Correlated CI and incident IDs, source provenance and freshness |
+| Analyst / Critic / Policy | Same Run and attempt IDs, explicit verdict and uncertainty |
+| HITL / orchestration | Read-only state, authorization and execution receipts; no action initiated by smoke |
+| Evidence | Actual SHA, correlation IDs, digests and independently verified receipt |
+| Missing data / access | UNKNOWN distinct from zero; authorized differential 401/403/503 scenarios only in disposable environment |
+
+Do not run the generic anonymous POST probes against operational 7770. Use individually approved read-only cases first. Any simulation execution requires a separately approved isolated sandbox. No LIVE actions. Record PASS/FAIL/BLOCKED/NOT_RUN per case, evidence timestamp and tested identity. Runtime remains BLOCKED until prerequisites are provided.
