@@ -27,3 +27,5 @@
 .ux-root .ux-empty{color:var(--ux-muted)}
 @media(max-width:800px){.ux-root{grid-template-columns:minmax(0,1fr)}.ux-root .ux-grid{grid-template-columns:minmax(0,1fr)}.ux-root .ux-content{padding:10px}.ux-root .ux-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:420px){.ux-root .ux-kpis{grid-template-columns:minmax(0,1fr)}.ux-root .ux-search input{width:100%}}
+
+.ux-root .ux-health-stack{display:flex;height:18px;gap:2px;border-radius:5px;overflow:hidden;margin-bottom:8px}.ux-root .ux-health-stack span{min-width:0}.ux-root .ux-health-stack [data-health=healthy]{background:var(--ux-good)}.ux-root .ux-health-stack [data-health=degraded]{background:var(--ux-warn)}.ux-root .ux-health-stack [data-health=critical]{background:var(--ux-bad)}.ux-root .ux-health-stack [data-health=UNKNOWN],.ux-root .ux-heat button[data-health=UNKNOWN]{background:repeating-linear-gradient(135deg,var(--ux-muted) 0 2px,var(--ux-border) 2px 5px)}.ux-root .ux-status[data-health=UNKNOWN]{color:var(--ux-muted)}
