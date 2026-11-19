@@ -24,3 +24,19 @@ def test_gamma03_glpi_status_remains_denied(monkeypatch):
     assert response.status_code == 503
     assert response.json()["reason"] == "TENANT_ACL_NOT_QUALIFIED"
     assert response.json()["glpi_write_enabled"] is False
+
+def test_operator_capability_does_not_grant_tenant_acl(monkeypatch):
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "viewer-test-token")
+    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "operator-test-token")
+    monkeypatch.delenv("AIOPS_INTERNAL_TOKEN", raising=False)
+    app = FastAPI()
+    app.include_router(module.router)
+    client = TestClient(app)
+    path = "/api/mission-actions/session/operator"
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers={"Authorization":"Bearer viewer-test-token"}).status_code == 401
+    response = client.get(path, headers={"Authorization":"Bearer operator-test-token"})
+    assert response.status_code == 200
+    assert response.json()["simulation_authorized"] is True
+    assert response.json()["tenant_acl_qualified"] is False
+    assert response.json()["live_remediation_authorized"] is False
