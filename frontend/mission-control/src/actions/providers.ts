@@ -26,7 +26,7 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
     const ids: Record<string,unknown> = {incident:j.incident_id,run:j.run_id,scenario:j.scenario_id};
     const matches = selection.view === "ci" ? Array.isArray(j.affected_ci_ids) && j.affected_ci_ids.includes(selection.id)
       : selection.view in ids ? ids[selection.view] === selection.id : selection.id === j.run_id;
-    if (!matches || (selection.runId !== undefined && selection.runId !== j.run_id))
+    if (!matches || (selection.sourceSha256 !== undefined && selection.sourceSha256 !== j.source_sha256) || (selection.runId !== undefined && selection.runId !== j.run_id))
       return blocked("SELECTION_NOT_BOUND_TO_DEMO_FIXTURE");
     if (signal.aborted) return blocked("CONTEXT_CANCELLED");
     if (snapshot !== j.source_sha256) {cursor=0; snapshot=j.source_sha256; receipt=undefined; generation++;}
