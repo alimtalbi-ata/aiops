@@ -20,7 +20,7 @@ def fetch_check_runs(sha):
     # --slurp preserves every page returned by --paginate; never accept a
     # partial first page as a complete qualification snapshot.
     raw=subprocess.check_output(
-        ["gh","api","--paginate","--slurp",f"repos/{REPO}/commits/{sha}/check-runs?per_page=100"],
+        ["gh","api","--paginate","--slurp",f"repos/{REPO}/commits/{sha}/check-runs?per_page=100&filter=all"],
         timeout=60,
     )
     pages=json.loads(raw)
