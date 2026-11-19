@@ -274,3 +274,36 @@ def test_cockpit_cross_navigation_connects_existing_operator_surfaces():
     assert "Aller au parcours SAN vers Payments" in page.text
     assert "assets/aiops-theme.css" in page.text
     assert "NO-GO LIVE" in page.text
+
+
+def test_team_c_run_journey_is_joined_to_existing_twin_without_fabricated_execution():
+    impact = build_acme_impact_read_model()
+    cockpit = project_synthetic_incident_cockpit(impact)
+    journey = cockpit["run_journey"]
+    assert journey["run"]["run_id"] == impact["twin_evidence"]["run_id"]
+    assert journey["run"]["run_id"] == cockpit["twin_consumer"]["story_identity"]["run_id"]
+    assert journey["run"]["incident_id"] == cockpit["incident_id"]
+    assert journey["run"]["tenant_id"] is None
+    assert journey["run"]["executed_sha"] is None
+    assert journey["run"]["idempotency_key"] == journey["run"]["attempt_id"]
+    assert journey["provenance"]["source_sha256"] == impact["source_sha256"]
+    assert len(journey["stage_plan"]) == 17
+    assert all(x["status"] == "NOT_RUN" and x["evidence_state"] == "MISSING" for x in journey["stage_plan"])
+    assert journey["receipt"] is None
+    assert journey["hitl"]["kind"] == "SIMULATED_NOT_REQUESTED"
+    assert journey["hitl"]["approval_id"] is None
+    assert journey["worker"]["executor"] == "NOT_INVOKED"
+    assert journey["policy"]["decision"] == "DENY_LIVE_ACTION"
+
+
+def test_team_c_run_journey_is_visible_in_existing_operator_cockpit():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "Run Journey SAN P1" in page.text
+    assert "0/17 étapes exécutées" in page.text
+    assert "SIMULATED_NOT_REQUESTED" in page.text
+    assert "NOT_INVOKED" in page.text
+    assert "NOT_RUN" in page.text
+    assert "NO-GO LIVE" in page.text
