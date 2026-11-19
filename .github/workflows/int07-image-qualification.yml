@@ -13,7 +13,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: int07-image-qualification-636205a7
+  group: int07-image-qualification-636205a7-ghcr-v2
   cancel-in-progress: true
 
 jobs:
