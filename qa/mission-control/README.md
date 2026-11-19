@@ -17,4 +17,7 @@ OUT=$(mktemp -d)
 OUT=$(mktemp -d)
 ./node_modules/.bin/tsc --strict --skipLibCheck --target ES2022 --module commonjs --lib ES2022,DOM --outDir "$OUT" src/actions/providers.test.ts && node -e 'require(process.argv[1]).verifyProviderContracts().catch(e=>{console.error(e);process.exitCode=1})' "$OUT/providers.test.js"
 ```
-No production secrets or network for unit tests. ACME official fixture required. P1 authenticated journey and P2 simulation not yet implemented.
+No production secrets or network for unit tests. ACME official fixture required. P1 authenticated API cross-contract test is implemented; browser journey and P2 simulation are not yet implemented.
+
+## ACME viewer read-only
+Set QA_VIEWER_TOKEN through an approved local secret mechanism, never on a command line or in Git. Run `npm test -- acme-readonly.spec.cjs` with BASE_URL HTTPS or loopback only. No redirects, no traces/screenshots/video for this authenticated API test. Keep all reports private; sanitize before sharing. Missing viewer skips the test, not PASS. No POST or execution. The API checks synthetic classification, incident/run/source binding, affected CI IDs, missing evidence, LIVE ACL refusal. Remove token from environment after testing.
