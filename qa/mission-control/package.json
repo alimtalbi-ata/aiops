@@ -3,9 +3,10 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "preflight": "playwright test --list"
   },
   "devDependencies": {
-    "@playwright/test": "1.51.1"
+    "@playwright/test": "1.55.1"
   }
 }
