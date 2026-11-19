@@ -123,7 +123,7 @@ def test_customer_walkthrough_has_five_working_anchor_targets_and_safe_verdict()
     assert page.status_code == 200
     anchors = Anchors()
     anchors.feed(page.text)
-    assert anchors.targets == ["impact", "workbench", "decision", "itil", "verdict"]
+    assert anchors.targets == ["impact", "evidence", "impact", "workbench", "decision", "itil", "verdict"]
     # Preserve the historical direct-link target while the guided journey uses Workbench.
     assert "evidence" in anchors.ids
     assert "workbench" in anchors.ids
@@ -257,3 +257,20 @@ def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
     assert "focus-visible" in page.text
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
+
+
+def test_cockpit_cross_navigation_connects_existing_operator_surfaces():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    for href in (
+        "/#noc", "/demo/explore-story", "/demo/acme-impact",
+        "/#incidents", "/#runs", "#evidence",
+    ):
+        assert f'href="{href}"' in page.text or f"href='{href}'" in page.text
+    assert "Navigation espace opérateur" in page.text
+    assert "href='#evidence'>Workbench</a>" in page.text
+    assert "Aller au parcours SAN vers Payments" in page.text
+    assert "assets/aiops-theme.css" in page.text
+    assert "NO-GO LIVE" in page.text

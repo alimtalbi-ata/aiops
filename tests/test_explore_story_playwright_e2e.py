@@ -664,5 +664,37 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertNotIn("run_id", response.json())
 
 
+    def test_11_itsm_has_no_page_overflow_at_320px(self):
+        """The existing ITSM handoff must fit the viewport; table scroll is local."""
+        self.page.set_viewport_size({"width": 320, "height": 800})
+        response = self.page.goto(self.base + "/itsm", wait_until="domcontentloaded")
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status, 200)
+        expect(self.page.get_by_role("heading", name="GLPI / ITSM — point de passage opérateur")).to_be_visible()
+        metrics = self.page.evaluate("""() => ({
+            viewport: window.innerWidth,
+            document: document.documentElement.scrollWidth,
+            body: document.body.scrollWidth,
+            offenders: [...document.querySelectorAll("body *")].map(el => {
+                const r = el.getBoundingClientRect();
+                return {tag: el.tagName, className: String(el.className || ""),
+                        id: el.id, left: Math.round(r.left), right: Math.round(r.right),
+                        width: Math.round(r.width)};
+            }).filter(x => x.width > 0 && (x.left < -1 || x.right > window.innerWidth + 1)).slice(0, 12)
+        })""")
+        self.assertLessEqual(
+            metrics["document"], metrics["viewport"],
+            f"/itsm page-level horizontal overflow at 320px: {metrics}",
+        )
+        self.assertLessEqual(metrics["body"], metrics["viewport"], metrics)
+        table_region = self.page.locator(".itsm-table-scroll")
+        self.assertEqual(table_region.count(), 1)
+        self.assertTrue(table_region.evaluate("el => el.scrollWidth >= el.clientWidth"))
+        self.assertIn("UNKNOWN", self.page.locator("body").inner_text())
+        self.assertIn("NOT_INSTALLED", self.page.locator("body").inner_text())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
