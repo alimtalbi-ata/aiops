@@ -77,14 +77,14 @@ jobs:
           test -n "${REGISTRY_DIGEST}"
           printf '%s\n' "${REGISTRY_IMAGE}:${SOURCE_SHA}" > "${RECEIPT_DIR}/registry-image-ref.txt"
           printf '%s\n' "${REGISTRY_DIGEST}" > "${RECEIPT_DIR}/registry-manifest-digest.txt"
-          python - <<'PY'
+          REGISTRY_DIGEST="${REGISTRY_DIGEST}" REGISTRY_IMAGE="${REGISTRY_IMAGE}" SOURCE_SHA="${SOURCE_SHA}" python - <<'PY'
           import json, os
           from pathlib import Path
           p = Path(os.environ["RECEIPT_DIR"]) / "build.json"
           data = json.loads(p.read_text())
           data["registry_digest"] = os.environ["REGISTRY_DIGEST"]
           data["registry_image_ref"] = os.environ["REGISTRY_IMAGE"] + ":" + os.environ["SOURCE_SHA"]
-          p.write_text(json.dumps(data, sort_keys=True) + "\\n")
+          p.write_text(json.dumps(data, sort_keys=True) + "\n")
           PY
           echo "digest=${REGISTRY_DIGEST}" >> "${GITHUB_OUTPUT}"
 
