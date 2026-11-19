@@ -1,0 +1,177 @@
+name: INT07 exact-image build and desktop qualification
+
+on:
+  push:
+    branches:
+      - feature/mission-control-central-unified
+    paths:
+      - .github/workflows/int07-image-qualification.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: int07-image-qualification-636205a7
+  cancel-in-progress: false
+
+jobs:
+  build-and-playwright:
+    name: build-and-playwright
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      SOURCE_SHA: 636205a7b24de08ff6c52e4b956a42904b58cee9
+      QUALIFIER_SHA: 4ea75a4fbd977a79777d660e5b6de77652ca9593
+      IMAGE_TAG: aiops2-portal-int07:636205a7b24de08ff6c52e4b956a42904b58cee9
+      RECEIPT_DIR: ${{ runner.temp }}/int07-qualification
+    steps:
+      - name: Checkout frozen INT07 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          path: source
+          persist-credentials: false
+
+      - name: Checkout pinned qualification orchestrator
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFIER_SHA }}
+          path: orchestrator
+          persist-credentials: false
+
+      - name: Verify both immutable checkouts and hosted runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "${GITHUB_ACTIONS}" = "true"
+          test "${RUNNER_ENVIRONMENT}" = "github-hosted"
+          test "$(git -C source rev-parse HEAD)" = "${SOURCE_SHA}"
+          test "$(git -C orchestrator rev-parse HEAD)" = "${QUALIFIER_SHA}"
+          test -z "$(git -C source status --porcelain)"
+          test -z "$(git -C orchestrator status --porcelain)"
+          mkdir -p "${RECEIPT_DIR}"
+          printf '%s\n' "${SOURCE_SHA}" > "${RECEIPT_DIR}/source-sha.txt"
+          printf '%s\n' "${QUALIFIER_SHA}" > "${RECEIPT_DIR}/qualifier-sha.txt"
+
+      - name: Build exact INT07 image using pinned qualifier
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd source
+          bash ../orchestrator/scripts/proactive_portal_build.sh "${SOURCE_SHA}" | tee "${RECEIPT_DIR}/build.json"
+          docker image inspect --format '{{.Id}}' "${IMAGE_TAG}" > "${RECEIPT_DIR}/image-id.txt"
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "${IMAGE_TAG}")" = "${SOURCE_SHA}"
+
+      - name: Start the exact built image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker run -d --rm --name int07-portal-qualification \
+            -p 127.0.0.1:1777:777 \
+            -e AIOPS_INTERNAL_TOKEN=ci-only-int07-qualification-token \
+            -e AIOPS_PORTAL_READ_TOKEN=ci-only-int07-viewer-token \
+            -e CORE_URL=http://127.0.0.1:9 \
+            -e COPILOT_URL=http://127.0.0.1:9 \
+            -e TWIN_URL=http://127.0.0.1:9 \
+            "${IMAGE_TAG}"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:1777/health > "${RECEIPT_DIR}/health.json"; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:1777/health > /dev/null
+
+      - name: Run desktop Chromium Playwright against that same image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m pip install --disable-pip-version-check "playwright==1.55.0"
+          python -m playwright install --with-deps chromium
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+
+          base = "http://127.0.0.1:1777"
+          out = Path(os.environ["RECEIPT_DIR"])
+          results = {"browser": "chromium-desktop", "viewport": {"width": 1440, "height": 1000}, "checks": []}
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+              page = browser.new_page(viewport={"width": 1440, "height": 1000})
+              response = page.goto(base + "/demo/explore-story", wait_until="networkidle", timeout=30000)
+              assert response and response.status == 200, f"portal route status: {response.status if response else 'no response'}"
+              page.screenshot(path=str(out / "int07-desktop.png"), full_page=True)
+              body = page.locator("body").inner_text()
+              assert body.strip(), "empty portal page"
+              results["checks"].append({"name": "portal-demo-route-http-200", "status": "PASS"})
+              results["checks"].append({"name": "desktop-render-nonempty", "status": "PASS"})
+              health = page.request.get(base + "/health")
+              assert health.status == 200, f"health status: {health.status}"
+              results["checks"].append({"name": "container-health-http-200", "status": "PASS"})
+              browser.close()
+          results["status"] = "PASS"
+          results["captured_at_utc"] = datetime.now(timezone.utc).isoformat()
+          (out / "playwright-results.json").write_text(json.dumps(results, indent=2) + "\n")
+          PY
+
+      - name: Export immutable image archive and calculate artifact digest
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
+            docker save "${IMAGE_TAG}" -o "${RECEIPT_DIR}/int07-image.tar"
+            sha256sum "${RECEIPT_DIR}/int07-image.tar" | awk '{print $1}' > "${RECEIPT_DIR}/image-archive.sha256"
+            docker image inspect --format '{{.Id}}' "${IMAGE_TAG}" > "${RECEIPT_DIR}/image-id.txt"
+          fi
+          docker logs int07-portal-qualification > "${RECEIPT_DIR}/container.log" 2>&1 || true
+          docker rm -f int07-portal-qualification >/dev/null 2>&1 || true
+
+      - name: Write qualification receipt
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          d = Path(os.environ["RECEIPT_DIR"])
+          def read(name):
+              p=d/name
+              return p.read_text().strip() if p.exists() else None
+          pw_path=d/"playwright-results.json"
+          pw=json.loads(pw_path.read_text()) if pw_path.exists() else {"status":"NOT_RUN","checks":[]}
+          archive=d/"int07-image.tar"
+          receipt={
+            "schema":"aiops.int07.image-qualification.v1",
+            "source_sha":os.environ["SOURCE_SHA"],
+            "qualifier_sha":os.environ["QUALIFIER_SHA"],
+            "workflow_run_id":os.environ["GITHUB_RUN_ID"],
+            "workflow_run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],
+            "job_name":"build-and-playwright",
+            "runner_environment":os.environ.get("RUNNER_ENVIRONMENT"),
+            "runner_name":os.environ.get("RUNNER_NAME"),
+            "built_at_utc":datetime.now(timezone.utc).isoformat(),
+            "image_tag":os.environ["IMAGE_TAG"],
+            "local_image_id":read("image-id.txt"),
+            "image_archive_sha256":read("image-archive.sha256"),
+            "registry_manifest_digest":None,
+            "playwright":pw,
+            "deploy_authorized":False,
+            "promotion_authorized":False,
+          }
+          (d/"qualification-receipt.json").write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n")
+          PY
+
+      - name: Upload build, browser, and provenance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: int07-image-qualification-${{ github.run_id }}
+          path: ${{ runner.temp }}/int07-qualification/
+          if-no-files-found: error
+          retention-days: 30
