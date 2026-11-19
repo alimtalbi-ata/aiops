@@ -8,7 +8,7 @@ export type OperationalKpi={id:string;label:string;value:number|null;unit:string
 export type IncidentView={incident_id:string;title?:string;severity:string;state?:string;service_id?:string|null;synthetic:boolean};
 export type CIView={node_id:string;name:string;type:string;state:string;site?:string|null;health:number|null;confidence?:number|null;criticality?:string|number|null};
 export type Comparison={id:string;label:string;unit:string;source:string;before:Observation;after:Observation};
-export type OperationalData={availability?:ReadResult<AvailabilityHistory>;technical?:ReadResult<TechnicalHistory>[];kpis?:OperationalKpi[];incidents?:IncidentView[];ci?:CIView[];comparisons?:Comparison[]};
+export type OperationalData={platform?:ReadResult<PlatformSummary>;availability?:ReadResult<AvailabilityHistory>;technical?:ReadResult<TechnicalHistory>[];kpis?:OperationalKpi[];incidents?:IncidentView[];ci?:CIView[];comparisons?:Comparison[]};
 export function availabilityStats(points:AvailabilityPoint[]){
  const observed=points.filter(p=>p.up===0||p.up===1);
  return {observed:observed.length,expected:points.length,coverage:points.length?observed.length/points.length:null,upRatio:observed.length?observed.filter(p=>p.up===1).length/observed.length:null};
