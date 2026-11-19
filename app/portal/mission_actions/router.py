@@ -27,6 +27,18 @@ def session(authorization: str | None = Header(default=None)):
         "blocked": list(BLOCKED),
     })
 
+@router.get("/session/operator")
+def operator_session(authorization: str | None = Header(default=None)):
+    """Check existing operator authority; never issue a token or grant tenant ACL."""
+    require_demo_operator(authorization)
+    return _noc_json_response({
+        "schema": "aiops.mission-actions.operator-session.v1",
+        "mode": "DEMO", "simulation_authorized": True,
+        "tenant_acl_qualified": False, "runtime_attested": False,
+        "live_remediation_authorized": False,
+    })
+
+
 @router.get("/journey")
 def journey(authorization: str | None = Header(default=None)):
     _require_portal_read_auth(authorization)
