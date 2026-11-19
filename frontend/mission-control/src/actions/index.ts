@@ -4,3 +4,4 @@ export type { ActionProvider, Mode, View, Selection, Command, Reply } from "./co
 
 export { AcmeJourney } from "./AcmeJourney";
 export { PocIntelligence } from "./PocIntelligence";
+export { ConnectedIntelligence } from "./ConnectedIntelligence";
