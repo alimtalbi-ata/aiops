@@ -40,11 +40,51 @@ def render_story_context(cockpit):
             + item("Signal — événements synthétiques", signal.get("unique_count", "UNKNOWN"))
             + item("SHA-256 fixture (intégrité, pas signature)", digest)
             + item("Fraîcheur runtime", "UNKNOWN")
-            + "</dl><p>RUNTIME_SANDBOX : UNKNOWN — aucun reçu authentifié. PROD : NO-GO.</p>"
+            + "</dl>" + render_twin_evidence_plan(twin) + "<p>RUNTIME_SANDBOX : UNKNOWN — aucun reçu authentifié. PROD : NO-GO.</p>"
             "<p>États de preuve : MISSING = absente ; UNKNOWN = non qualifiée ; "
             "FAIL = contrôle négatif attesté ; PASS = contrôle positif attesté par le serveur. "
             "Aucun PASS runtime attribué ici.</p></section>")
 
+
+
+def render_twin_evidence_plan(twin):
+    """Display structural observations only; never infer runtime health."""
+    plan = twin.get("evidence_collection_plan")
+    impact = twin.get("structural_impact")
+    missing = "<p>Plan de collecte Twin : MISSING / UNKNOWN</p>"
+    if not isinstance(plan, dict) or not isinstance(impact, dict):
+        return missing
+    rows = plan.get("affected_ci_observations")
+    alternatives = plan.get("alternative_dependency_observations")
+    if (plan.get("scope") != "STORY_OFFLINE"
+            or plan.get("ordering") != "STRUCTURAL_DISTANCE_NOT_SEVERITY"
+            or plan.get("execution_authorized") is not False
+            or not isinstance(rows, list) or not isinstance(alternatives, list)
+            or not all(isinstance(r, dict) and isinstance(r.get("ci_id"), str)
+                       and type(r.get("minimum_dependency_hops")) is int
+                       and r["minimum_dependency_hops"] >= 0
+                       and type(r.get("structural_path_count")) is int
+                       and r["structural_path_count"] >= 1
+                       and r.get("required_observation") == "DEPENDENCY_HEALTH"
+                       and r.get("observation_status") == "MISSING" for r in rows)
+            or not all(isinstance(r, dict) and isinstance(r.get("ci_id"), str)
+                       and r.get("required_observation") == "REDUNDANCY_HEALTH"
+                       and r.get("observation_status") == "MISSING" for r in alternatives)
+            or sorted(r["ci_id"] for r in rows) != impact.get("affected_ci_ids")
+            or [r["ci_id"] for r in alternatives] != impact.get("alternative_dependency_ids")
+            or {r["ci_id"]: r["structural_path_count"] for r in rows} != impact.get("path_count_by_ci")
+            or rows != sorted(rows, key=lambda r: (r["minimum_dependency_hops"], r["ci_id"]))):
+        return missing
+    items = "".join("<li><code>" + escape(r["ci_id"]) + "</code> — "
+                    + str(r["minimum_dependency_hops"]) + " saut(s), "
+                    + str(r["structural_path_count"]) + " chemin(s) ; DEPENDENCY_HEALTH : MISSING</li>"
+                    for r in rows)
+    alternate_items = "".join("<li><code>" + escape(r["ci_id"])
+                              + "</code> — REDUNDANCY_HEALTH : MISSING</li>" for r in alternatives)
+    return ("<section aria-label='Plan de collecte Twin'><h3>Plan de collecte Twin</h3>"
+            "<p>STORY_OFFLINE — ordre structurel, pas un classement de sévérité. "
+            "Aucune collecte exécutée ni autorisée.</p><ol>" + items + "</ol>"
+            "<h4>Dépendances alternatives</h4><ul>" + alternate_items + "</ul></section>")
 
 def render_runtime_refusals(context=None):
     """Presentation of B's refusal-only result, never a receipt verifier.
