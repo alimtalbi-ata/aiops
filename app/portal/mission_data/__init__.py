@@ -124,3 +124,17 @@ def health_jobs(authorization: str | None = Header(default=None)):
         "freshness": "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME",
         "counts": {status: sum(item["status"] == status for item in items) for status in ("UP","DOWN","UNKNOWN")}
     }))
+
+@router.get("/acme")
+def acme(mode: Mode, authorization: str | None = Header(default=None)):
+    denied = auth_error(authorization)
+    if denied is not None:
+        return denied
+    if mode != "DEMO":
+        return _noc_json_response(envelope(mode, "acme", "TENANT_ACL_NOT_QUALIFIED"), status_code=503)
+    from portal.mission_data.acme import project_acme
+    try:
+        data = project_acme()
+    except (HTTPException, OSError, ValueError, KeyError, TypeError, AttributeError, IndexError):
+        return _noc_json_response(envelope(mode, "acme", "SYNTHETIC_SOURCE_UNAVAILABLE"), status_code=503)
+    return _noc_json_response(envelope(mode, "acme", None, data))
