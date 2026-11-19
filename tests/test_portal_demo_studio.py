@@ -97,5 +97,30 @@ class DemoStudioTests(unittest.TestCase):
         self.assertIn('HITL : refus simulé', GOLDEN_SCRIPT)
 
 
+
+class TwinDependentsTests(unittest.TestCase):
+    def test_reverse_diamond_cycle_and_simulation_direction(self):
+        with patch.dict(os.environ, {"AIOPS_ADMIN_TOKEN": "test-only"}):
+            from twin.main import potential_dependents
+        nodes = [{"node_id": n} for n in ("san","storage","vm1","vm2","pay","sim","unknown")]
+        edges = [
+            ("a","storage","san","PATH"), ("b","vm1","storage","USES"),
+            ("c","vm2","storage","USES"), ("d","pay","vm1","DEPENDS_ON"),
+            ("e","pay","vm2","DEPENDS_ON"), ("f","san","pay","DEPENDS_ON"),
+            ("g","san","sim","SIMULATED_FC_PATH"), ("h","san","unknown","UNRECOGNIZED"),
+        ]
+        snapshot = {"nodes":nodes,"edges":[dict(zip(("edge_id","source_id","target_id","relation_type"),e)) for e in edges]}
+        out = potential_dependents(snapshot,"san")
+        actual = {n["node_id"]:n for n in out["affected"]}
+        self.assertEqual(set(actual), {"san","storage","vm1","vm2","pay","sim"})
+        self.assertEqual(len(out["affected"]),6)
+        self.assertEqual(actual["pay"]["path_edge_ids"],["a","b","d"])
+        self.assertEqual(actual["pay"]["depth"],3)
+        self.assertEqual(out["excluded_relation_types"],["UNRECOGNIZED"])
+        self.assertFalse(out["live_remediation_authorized"])
+        self.assertFalse(out["redundancy_verified"])
+        with self.assertRaises(KeyError):
+            potential_dependents(snapshot,"missing")
+
 if __name__ == "__main__":
     unittest.main()
