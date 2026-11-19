@@ -26,6 +26,15 @@ jobs:
       AIOPS_INTERNAL_TOKEN: ci-only-not-a-runtime-secret
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual=$(git rev-parse HEAD)
+          printf 'Expected source SHA: %s\nExecuted SHA: %s\n' "$EXPECTED_SHA" "$actual"
+          test "$actual" = "$EXPECTED_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
