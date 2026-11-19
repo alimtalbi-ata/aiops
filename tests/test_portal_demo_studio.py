@@ -73,5 +73,17 @@ class DemoStudioTests(unittest.TestCase):
         self.assertEqual(self.client.post("/demo/golden").status_code, 405)
 
 
+    def test_twin_and_report_are_explicitly_synthetic(self):
+        response = self.client.get("/demo/golden")
+        self.assertEqual(response.status_code, 200)
+        for marker in ("Digital Twin · SYNTHETIC", "fraîcheur runtime UNKNOWN", "AL-SYN-01", "Cible non mesurée", "Rapport d'incident · SYNTHETIC", "NON EFFECTUÉE"):
+            self.assertIn(marker, response.text)
+        self.assertIn('id="targets" hidden', response.text)
+        self.assertIn('id="report" class="card" hidden', response.text)
+        from portal.demo_studio import GOLDEN_SCRIPT
+        self.assertIn('step<4||decision!=="approved"', GOLDEN_SCRIPT)
+        self.assertIn('step!==5&&decision!=="refused"', GOLDEN_SCRIPT)
+
+
 if __name__ == "__main__":
     unittest.main()
