@@ -38,6 +38,7 @@ def page(browser):
         ignore_https_errors=False,
         record_har_path=None,
     )
+    context.route("**/*", lambda r: r.continue_() if r.request.method in ("GET", "HEAD") and urlparse(r.request.url).netloc == urlparse(BASE_URL).netloc else r.abort())
     tab = context.new_page()
     # Never print console payloads or request headers; they may contain credentials.
     tab.on("console", lambda _msg: None)
@@ -77,44 +78,66 @@ def _safe_screenshot(page: Page, route: str, width: int) -> None:
     )
 
 
+def pytest_generate_tests(metafunc):
+    if not {"route", "viewport"}.issubset(metafunc.fixturenames):
+        return
+    # Discover links once in a disposable browser; no credentials or mutations.
+    routes = {"/", "/itsm", "/demo/acme-impact", "/demo/explore-story",
+              "/demo/acme-incident-cockpit"}
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if
+                       r.request.method in ("GET", "HEAD") and
+                       urlparse(r.request.url).netloc == urlparse(BASE_URL).netloc
+                       else r.abort())
+            response = page.goto(BASE_URL + "/", wait_until="domcontentloaded")
+            assert response is not None and response.status < 400
+            routes.update(_same_origin_links(page))
+        finally:
+            browser.close()
+    cases = [(route, viewport) for route in sorted(routes) for viewport in VIEWPORTS]
+    metafunc.parametrize("route,viewport", cases,
+                         ids=[f"{r}-{v[0]}px" for r, v in cases])
+
+
 @pytest.mark.browser
-def test_home_and_discoverable_routes_desktop_mobile_refresh_history(page: Page):
-    response = page.goto(BASE_URL + "/", wait_until="domcontentloaded")
-    assert response is not None and response.status < 500
-    routes = _same_origin_links(page)
-    # Include the canonical story routes when present in this portal generation.
-    for candidate in ("/demo/acme-impact", "/demo/explore-story",
-                     "/demo/acme-incident-cockpit"):
-        if candidate not in routes:
-            routes.append(candidate)
+def test_portal_route_viewport(page: Page, route, viewport):
+    width, height = viewport
+    page.set_viewport_size({"width": width, "height": height})
+    result = page.goto(urljoin(BASE_URL + "/", route.lstrip("/")),
+                       wait_until="domcontentloaded")
+    assert result is not None and result.status < 400
+    expect(page.locator("body")).to_be_visible()
+    assert urlparse(page.url).path == route, "Unexpected redirect"
+    measurements = page.evaluate("() => [document.documentElement.scrollWidth, innerWidth]")
+    assert measurements[0] <= measurements[1], (
+        f"Horizontal overflow on {route}: scrollWidth={measurements[0]}, viewport={measurements[1]}"
+    )
+    current = page.url
+    refreshed = page.reload(wait_until="domcontentloaded")
+    assert refreshed is not None and refreshed.status < 400
+    assert page.url == current
+    expect(page.locator("body")).to_be_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "Overflow after reload"
+    _safe_screenshot(page, route, width)
 
-    assert routes, "No same-origin portal routes discovered from the home page"
-    for route in routes:
-        for width, height in VIEWPORTS:
-            page.set_viewport_size({"width": width, "height": height})
-            result = page.goto(urljoin(BASE_URL + "/", route.lstrip("/")),
-                               wait_until="domcontentloaded")
-            assert result is not None, f"No HTTP response for {route}"
-            assert result.status < 400, f"{route} returned HTTP {result.status}"
-            expect(page.locator("body")).to_be_visible()
-            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (
-                f"Horizontal overflow at {width}px on {route}"
-            )
-            # A refresh must preserve the URL and remain renderable.
-            current = page.url
-            page.reload(wait_until="domcontentloaded")
-            assert page.url == current
-            expect(page.locator("body")).to_be_visible()
-            _safe_screenshot(page, route, width)
 
-    # Exercise browser history without assuming a particular client-side router.
-    if len(routes) > 1:
-        page.goto(urljoin(BASE_URL + "/", routes[0].lstrip("/")))
-        page.goto(urljoin(BASE_URL + "/", routes[1].lstrip("/")))
-        page.go_back(wait_until="domcontentloaded")
-        assert urlparse(page.url).path == routes[0]
-        page.go_forward(wait_until="domcontentloaded")
-        assert urlparse(page.url).path == routes[1]
+@pytest.mark.browser
+def test_browser_history(page: Page):
+    page.goto(BASE_URL + "/", wait_until="domcontentloaded")
+    routes = [r for r in _same_origin_links(page) if r != "/"]
+    if not routes:
+        pytest.skip("No alternate route discovered")
+    first = page.url
+    page.goto(urljoin(BASE_URL + "/", routes[0].lstrip("/")), wait_until="domcontentloaded")
+    second = page.url
+    assert first != second
+    page.go_back(wait_until="domcontentloaded")
+    assert page.url == first
+    page.go_forward(wait_until="domcontentloaded")
+    assert page.url == second
 
 
 @pytest.mark.browser
