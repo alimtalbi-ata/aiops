@@ -38,7 +38,7 @@ synthétiques ; elles ne prouvent pas une connexion aux outils client.</p>
 Aucun incident ou ticket réel, aucune lecture GLPI/Core, aucune commande,
 aucune approbation réelle et aucune remédiation LIVE. Les preuves non disponibles
 restent UNKNOWN ou MISSING.</section>
-<h2>Parcours guidé · 5 minutes</h2><section class="grid" aria-label="Étapes de démonstration">
+<p><a href="/demo/golden">Lancer la Golden Demo interactive →</a></p><h2>Parcours guidé · 5 minutes</h2><section class="grid" aria-label="Étapes de démonstration">
 <article class="card"><div class="time">00:00 · 45 s</div><h2>1. Contexte métier</h2>
 <p>ACME, Payments et la dégradation SAN : expliquer l'impact avant de parler d'action.</p>
 <blockquote>« Nous partons d'un incident P1 synthétique. L'objectif est de comprendre l'impact. »</blockquote></article>
@@ -92,3 +92,21 @@ DECISION_PAGE = PAGE.split("</style>", 1)[0].replace("<title>AIOps · Demo Studi
 def decision_cockpit_page():
     """Illustrative decision chain; no execution or runtime evidence."""
     return HTMLResponse(DECISION_PAGE, headers=HEADERS)
+
+
+import base64
+import hashlib
+
+GOLDEN_SCRIPT = "(()=>{const stages=[[\"Détection\",\"Incident SAN P1 synthétique. Payments P2 potentiellement impacté.\"],[\"Impact métier\",\"SAN → stockage → Payments : chemin illustratif, dépendances réelles UNKNOWN.\"],[\"Analyst / Critic\",\"Hypothèse SAN à challenger. Corrélation ne vaut pas causalité.\"],[\"Policy / HITL\",\"LIVE interdit. Choisissez uniquement la suite narrative de la simulation.\"],[\"Simulation\",\"Exemple de plan : vérifier les chemins SAN et comparer les métriques. Aucune commande exécutée.\"],[\"Verification\",\"Critères attendus : latence et disponibilité. Récupération réelle UNKNOWN.\"]];let step=-1,decision=null;const by=id=>document.getElementById(id);function show(){by(\"progress\").value=Math.max(0,step+1);by(\"stage\").textContent=step<0?\"Prêt à démarrer\":stages[step][0];by(\"detail\").textContent=step<0?\"Lancez le parcours synthétique.\":stages[step][1];by(\"choice\").hidden=step!==3||decision!==null;by(\"next\").hidden=step===3||step===5||decision===\"refused\";by(\"next\").textContent=step<0?\"Lancer la démo\":\"Étape suivante\";by(\"verdict\").textContent=decision===\"refused\"?\"REFUS SIMULÉ — scénario arrêté, aucune action.\":step===5?\"BILAN SYNTHÉTIQUE — aucune exécution, récupération UNKNOWN.\":decision===\"approved\"?\"Autorisation narrative uniquement — LIVE bloqué.\":\"Aucune décision réelle.\"; }by(\"next\").addEventListener(\"click\",()=>{if(step<5&&step!==3&&decision!==\"refused\"){step++;show()}});by(\"approve\").addEventListener(\"click\",()=>{if(step===3&&decision===null){decision=\"approved\";step=4;show()}});by(\"refuse\").addEventListener(\"click\",()=>{if(step===3&&decision===null){decision=\"refused\";show()}});by(\"reset\").addEventListener(\"click\",()=>{step=-1;decision=null;show()});show()})();"
+GOLDEN_PAGE = PAGE.split("</style>", 1)[0] + """button{font:inherit;padding:10px 16px;margin:8px 8px 8px 0;border-radius:8px;border:1px solid #7098b5;background:#193d58;color:white;cursor:pointer}button:focus-visible{outline:3px solid #ffda7a}progress{width:100%;height:20px}[hidden]{display:none!important}</style></head><body><main>
+<header><a href="/demo/studio">Retour au Demo Studio</a><span class="eyebrow">GOLDEN DEMO · SYNTHETIC ONLY</span></header><h1>SAN → Payments</h1><section class="notice">SIMULATION uniquement · LIVE BLOQUÉ · preuves runtime MISSING</section>
+<p><progress id="progress" max="6" value="0" aria-label="Progression"></progress></p><section class="card" aria-live="polite"><h2 id="stage">Prêt à démarrer</h2><p id="detail">Lancez le parcours synthétique.</p><p id="verdict">Aucune décision réelle.</p></section>
+<button type="button" id="next">Lancer la démo</button><span id="choice" hidden><button type="button" id="approve">Autoriser la simulation narrative</button><button type="button" id="refuse">Refuser la simulation</button></span><button type="button" id="reset">Recommencer</button><noscript>JavaScript requis pour le parcours interactif. <a href="/demo/studio">Parcours statique</a></noscript></main><script>""" + GOLDEN_SCRIPT + "</script></body></html>"
+
+@router.get("/demo/golden", response_class=HTMLResponse)
+def golden_demo_page():
+    """Browser-only narrative state; no action API or persistence."""
+    digest = base64.b64encode(hashlib.sha256(GOLDEN_SCRIPT.encode()).digest()).decode()
+    headers = dict(HEADERS)
+    headers["Content-Security-Policy"] += "; script-src 'sha256-" + digest + "'; connect-src 'none'"
+    return HTMLResponse(GOLDEN_PAGE, headers=headers)
