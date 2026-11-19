@@ -37,7 +37,10 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
       const valid=sim.ok && d.schema==="aiops.acme-demo-simulation-pipeline.v1" &&
         d.run_id===j.run_id && d.incident_id===j.incident_id && d.source_sha256===j.source_sha256 &&
         d.mode==="DEMO" && d.actual_recovery_state==="UNKNOWN" && d.runtime_execution_performed===false &&
-        d.temporal_execution_performed===false && d.glpi_write_performed===false && d.live_remediation_authorized===false;
+        d.temporal_execution_performed===false && d.glpi_write_performed===false && d.live_remediation_authorized===false &&
+        /^[a-f0-9]{64}$/.test(d.simulation?.receipt_sha256??"") && d.simulation?.receipt?.simulation_result==="HYPOTHETICAL_ONLY" &&
+        d.simulation?.receipt?.incident_id===j.incident_id && d.simulation?.receipt?.runtime_execution_verified===false &&
+        d.simulation?.receipt?.independent_postcheck_verified===false && d.evidence_gate?.itil_transition_authorized===false;
       if(valid && !signal.aborted) receipt=d;
       return {state:valid?"SIMULATED":sim.ok?"UNKNOWN":"BLOCKED",detail:valid?d:{reason:d.reason??d.detail??"SIMULATION_UNQUALIFIED"},http:sim.http};
     }
@@ -65,9 +68,9 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
     }
     const c=j.cockpit;
     const projections: Record<string,unknown> = {
-      incident:c?.lifecycle, ci:{selected:selection.id,affected:j.affected_cis,twin:j.twin}, run:c, scenario:{id:j.scenario_id,run:j.run_id,cursor,source_sha256:snapshot},
+      incident:c?.lifecycle, ci:{selected:selection.id,affected:j.affected_cis,twin:j.twin}, run:c, scenario:{id:j.scenario_id,run:j.run_id,cursor,source_sha256:snapshot,timeline:j.timeline},
       analysis:j.decision_preview?.analyst, critic:j.decision_preview?.critic, policy:j.decision_preview?.policy,
-      hitl:c?.itil_readiness, execution:j.decision_preview?.remediation_preview, evidence:{plan:c?.evidence_plan, simulation_receipt:receipt?.simulation??null, evidence_gate:receipt?.evidence_gate??null}, itsm:c?.itil_readiness
+      hitl:c?.itil_readiness, execution:receipt??j.decision_preview?.remediation_preview, evidence:{plan:c?.evidence_plan, simulation_receipt:receipt?.simulation??null, evidence_gate:receipt?.evidence_gate??null}, itsm:c?.itil_readiness
     };
     const detail=projections[selection.view];
     return {state:detail==null?"UNKNOWN":"SIMULATED",detail:detail??{reason:"PROJECTION_MISSING"},http:r.http};
