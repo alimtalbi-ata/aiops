@@ -25,7 +25,7 @@ def create_app(snapshot):
             "X-Content-Type-Options":"nosniff"})
     return app
 
-PAGE = """<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+PAGE = r"""<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AIOps2 Twin Explorer</title><style>
 body{font:16px system-ui;background:#111827;color:#e5e7eb;margin:32px} main{max-width:1250px;margin:auto} select,button{padding:12px;background:#263449;color:white;border:1px solid #64748b;border-radius:6px} table{width:100%;border-collapse:collapse} td,th{text-align:left;padding:12px;border-bottom:1px solid #374151} td{overflow-wrap:anywhere} section{background:#1f2937;padding:20px;margin:20px 0;border-radius:8px} small{color:#a5b4fc} pre{white-space:pre-wrap} .bad{color:#fca5a5}
 </style><main><h1>AIOps2 | Twin Explorer</h1><p>QUALIFICATION · EXPORT LOCAL · LECTURE SEULE · aucune causalité confirmée</p>
