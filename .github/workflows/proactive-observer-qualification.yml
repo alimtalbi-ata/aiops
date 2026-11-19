@@ -1,22 +1,15 @@
 name: Proactive observer qualification
 
 on:
-  pull_request:
+  push:
     branches:
-      - feature/mission-control-central-unified
-    paths:
-      - ".github/workflows/proactive-observer-qualification.yml"
-      - "deploy/**"
-      - "tests/test_proactive_candidate.py"
-      - "tests/test_proactive_update_discovery.py"
-      - "tests/test_proactive_watchdog_handoff.py"
-      - "scripts/proactive_portal_build.sh"
+      - feature/central-proactive-cron-v1
 
 permissions:
   contents: read
 
 concurrency:
-  group: proactive-observer-qualification-${{ github.event.pull_request.number }}
+  group: proactive-observer-qualification-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,7 +24,7 @@ jobs:
       - name: Checkout trusted orchestrator candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           path: orchestrator
           persist-credentials: false
 
