@@ -140,7 +140,7 @@ jobs:
           (out / "playwright-results.json").write_text(json.dumps(results, indent=2) + "\n")
           PY
 
-      - name: Generate source-bound SLSA provenance predicate
+      - name: Generate INT07 source-materials attestation predicate
         id: source-predicate
         shell: bash
         run: |
@@ -156,28 +156,21 @@ jobs:
           attempt = os.environ["GITHUB_RUN_ATTEMPT"]
           workflow = ".github/workflows/int07-image-qualification.yml"
           predicate = {
-            "buildDefinition": {
-              "buildType": "https://actions.github.io/buildtypes/workflow/v1",
-              "externalParameters": {
-                "workflow": {
-                  "path": ".github/workflows/int07-image-qualification.yml",
-                  "repository": f"https://github.com/{repo}",
-                  "ref": ref
-                },
-                "source": {"repository": f"https://github.com/{repo}", "ref": source},
-                "qualifier": {"repository": f"https://github.com/{repo}", "ref": qualifier}
-              },
-              "internalParameters": {
-                "github": {"event_name": os.environ["GITHUB_EVENT_NAME"], "runner_environment": os.environ["RUNNER_ENVIRONMENT"]}
-              },
-              "resolvedDependencies": [
-                {"uri": f"git+https://github.com/{repo}@{source}", "digest": {"gitCommit": source}},
-                {"uri": f"git+https://github.com/{repo}@{qualifier}", "digest": {"gitCommit": qualifier}}
-              ]
+            "schemaVersion": "1.0",
+            "purpose": "Bind the immutable INT07 source and qualification orchestrator to the attested container image digest",
+            "source": {
+              "repository": f"https://github.com/{repo}",
+              "commit": source
             },
-            "runDetails": {
-              "builder": {"id": f"https://github.com/{repo}/{workflow}@{ref}"},
-              "metadata": {"invocationId": f"https://github.com/{repo}/actions/runs/{run_id}/attempts/{attempt}"}
+            "qualifier": {
+              "repository": f"https://github.com/{repo}",
+              "commit": qualifier
+            },
+            "workflow": {
+              "path": ".github/workflows/int07-image-qualification.yml",
+              "ref": ref,
+              "run_id": run_id,
+              "run_attempt": attempt
             }
           }
           Path(os.environ["RUNNER_TEMP"], "int07-source-bound-provenance.json").write_text(json.dumps(predicate, indent=2) + "\n")
@@ -188,7 +181,7 @@ jobs:
         with:
           subject-name: ghcr.io/${{ github.repository }}/aiops-portal-int07
           subject-digest: ${{ steps.publish-image.outputs.digest }}
-          predicate-type: https://slsa.dev/provenance/v1
+          predicate-type: https://aiops.example/attestations/int07-source-materials/v1
           predicate-path: ${{ runner.temp }}/int07-source-bound-provenance.json
           push-to-registry: true
 
