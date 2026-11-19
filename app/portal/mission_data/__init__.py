@@ -138,3 +138,25 @@ def acme(mode: Mode, authorization: str | None = Header(default=None)):
     except (HTTPException, OSError, ValueError, KeyError, TypeError, AttributeError, IndexError):
         return _noc_json_response(envelope(mode, "acme", "SYNTHETIC_SOURCE_UNAVAILABLE"), status_code=503)
     return _noc_json_response(envelope(mode, "acme", None, data))
+
+@router.get("/health/history")
+def health_history(minutes: int = Query(60, ge=1, le=1440),
+                   authorization: str | None = Header(default=None)):
+    denied = auth_error(authorization)
+    if denied is not None:
+        return denied
+    from portal.mission_data.history import history
+    try:
+        data = history(JOBS, PROM, NoRedirect, minutes)
+    except (OSError, ValueError, KeyError, TypeError, OverflowError, AttributeError, IndexError):
+        return _noc_json_response(envelope("PLATFORM", "prometheus", "UPSTREAM_UNAVAILABLE"), status_code=503)
+    return _noc_json_response(envelope("PLATFORM", "prometheus", None, data))
+
+@router.get("/metrics", include_in_schema=False)
+def portal_metrics():
+    # Same public liveness classification as the existing /health endpoint.
+    # No tenant information, counters, secrets or dependency claims.
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse("# TYPE aiops_portal_up gauge\naiops_portal_up 1\n",
+                             media_type="text/plain; version=0.0.4",
+                             headers={"Cache-Control": "no-store"})
