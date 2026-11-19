@@ -12,7 +12,26 @@ const stages: {view:View;label:string}[]=[
 ];
 /** Embed inside Team A's graphical workspace. Credentials are supplied by its memory-only session. */
 export function AcmeJourney({viewerToken,operatorToken}:{viewerToken:string;operatorToken?:string}) {
- const provider=useMemo(()=>demoProvider(viewerToken,operatorToken),[viewerToken,operatorToken]);
+ const [qualified,setQualified]=useState<{viewer:string;operator:string}|null>(null);
+ const operatorReady=Boolean(operatorToken && qualified?.viewer===viewerToken && qualified?.operator===operatorToken);
+ useEffect(()=>{
+   const controller=new AbortController();
+   setQualified(null);
+   if(!viewerToken || !operatorToken)return;
+   void (async()=>{
+     try{
+       const r=await fetch("/api/mission-actions/session/operator",{signal:controller.signal,cache:"no-store",
+         credentials:"omit",redirect:"error",headers:{Authorization:"Bearer "+operatorToken}});
+       const d=await r.json();
+       if(!controller.signal.aborted && r.ok && d.schema==="aiops.mission-actions.operator-session.v1" &&
+          d.mode==="DEMO" && d.simulation_authorized===true && d.tenant_acl_qualified===false &&
+          d.runtime_attested===false && d.live_remediation_authorized===false)
+         setQualified({viewer:viewerToken,operator:operatorToken});
+     }catch{/* remain denied */}
+   })();
+   return()=>controller.abort();
+ },[viewerToken,operatorToken]);
+ const provider=useMemo(()=>demoProvider(viewerToken,operatorReady?operatorToken:undefined),[viewerToken,operatorToken,operatorReady]);
  const [loaded,setLoaded]=useState<{provider:typeof provider;data:Journey}|null>(null);
  const [chosen,setChosen]=useState(false),[view,setView]=useState<View>("incident"),[ci,setCI]=useState("");
  const [error,setError]=useState("");
@@ -40,6 +59,7 @@ export function AcmeJourney({viewerToken,operatorToken}:{viewerToken:string;oper
  return <section className="panel" aria-label="Parcours ACME synthétique">
    <h2>ACME · parcours DEMO isolé</h2>
    <p>Aucune preuve runtime, approbation réelle ou écriture GLPI.</p>
+   <p role="status">Opérateur DEMO : {operatorReady?"Autorisation vérifiée":"Non qualifié — simulation désactivée"}</p>
    {!j?<p role="status">{error||"Chargement…"}</p>:<>
      <label>Incident <select value={chosen?j.incident_id:""} onChange={e=>setChosen(e.target.value===j.incident_id)}>
        <option value="">Sélectionner un incident</option><option value={j.incident_id}>{j.incident_id}</option>
