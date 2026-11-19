@@ -1,38 +1,4 @@
-import {jobs,readPlatformSummary,type PlatformSummary,type Result,type Options,type JobStatus} from './index';
-
-// Existing public technical snapshot: no extra permissions, no invented timestamps.
-export async function readPocPlatform(options: Options): Promise<Result<PlatformSummary>> {
-  if (options.token) return readPlatformSummary(options);
-  const unknown = (reason:string): Result<PlatformSummary> => ({
-    mode:'PLATFORM',source:'prometheus',retrieved_at:null,tenant_acl_qualified:false,
-    state:'UNKNOWN',reason,data:null
-  });
-  try {
-    const r = await fetch('/api/mission-control/snapshot',{
-      credentials:'omit',cache:'no-store',redirect:'error',signal:options.signal
-    });
-    if (!r.ok) return unknown('HTTP_'+r.status);
-    const d = await r.json();
-    if (!d || !Array.isArray(d.services) || d.services.length !== jobs.length ||
-        !Array.isArray(d.metrics)) return unknown('INVALID_RESPONSE');
-    const items: JobStatus[] = [];
-    for (const job of jobs) {
-      const matches = d.services.filter((s: any)=>s && s.name===job);
-      if (matches.length!==1) return unknown('INVALID_RESPONSE');
-      const up = matches[0].up;
-      if (up!==null && up!==0 && up!==1) return unknown('INVALID_RESPONSE');
-      // Snapshot has a shared metric timestamp, not a per-job timestamp.
-      // Do not misrepresent it as per-job evaluation: use a separate projection below.
-      items.push({job,status:'UNKNOWN',at:null,reason:'NO_SAMPLES'});
-    }
-    // v1 PlatformSummary requires per-job evaluation timestamps. Public snapshot
-    // cannot meet that contract: return explicit unknown, not fabricated values.
-    return unknown('SNAPSHOT_PER_JOB_TIMESTAMP_UNAVAILABLE');
-  } catch(e) {
-    if(options.signal?.aborted) throw e;
-    return unknown('NETWORK_UNAVAILABLE');
-  }
-}
+import {jobs,type Options} from './index';
 
 export type PocSnapshot = {source:'prometheus · snapshot technique'; counts: {UP:number;DOWN:number;UNKNOWN:number}; services:{job:typeof jobs[number];up:0|1|null}[]; evaluated_at:null};
 export function projectPocSnapshot(data:unknown): PocSnapshot|null {
@@ -48,4 +14,11 @@ export function projectPocSnapshot(data:unknown): PocSnapshot|null {
   return {source:'prometheus · snapshot technique',services:rows,evaluated_at:null,counts:{
     UP:rows.filter(s=>s.up===1).length,DOWN:rows.filter(s=>s.up===0).length,UNKNOWN:rows.filter(s=>s.up===null).length
   }};
+}
+
+export async function readPocSnapshot(options: Pick<Options,'signal'> = {}): Promise<PocSnapshot|null> {
+  try {
+    const r = await fetch('/api/mission-control/snapshot',{credentials:'omit',cache:'no-store',redirect:'error',signal:options.signal});
+    return r.ok ? projectPocSnapshot(await r.json()) : null;
+  } catch(e) { if(options.signal?.aborted) throw e; return null; }
 }
