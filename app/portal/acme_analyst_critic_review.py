@@ -32,6 +32,7 @@ def review_synthetic_analyst_critic(impact: dict) -> dict:
         raise ValueError("missing_independent_review_gates")
     return {
         "schema": "aiops.synthetic-analyst-critic-evidence-review.v1",
+        "twin_consumer": lifecycle["twin_consumer"],
         "mode": "DEMO",
         "source_sha256": plan["source_sha256"],
         "incident_id": plan["incident_id"],
