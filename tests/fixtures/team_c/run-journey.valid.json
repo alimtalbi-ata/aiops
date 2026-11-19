@@ -1,0 +1,246 @@
+{
+  "schema": "aiops.team-c.san-payments-run-journey.v1",
+  "scope": "STORY_OFFLINE",
+  "mode": "DEMO",
+  "run": {
+    "run_id": "SIM-ACME-0123456789ABCDEF",
+    "attempt_id": "ACME-SIM-0123456789ABCDEF",
+    "incident_id": "SIM-INC-ACME-SAN-001",
+    "tenant_id": null,
+    "scenario_id": "ACME-SAN-PAYMENTS",
+    "executed_sha": "0123456789abcdef0123456789abcdef01234567",
+    "idempotency_key": "ACME-SIM-0123456789ABCDEF"
+  },
+  "intelligence": {
+    "provider": "DETERMINISTIC_RULES_NOT_LLM",
+    "analyst_status": "HYPOTHESIS_ONLY",
+    "hypotheses": [
+      {
+        "claim": "Dégradation SAN corrélée à l'impact Payments",
+        "confidence": 0.72,
+        "evidence_refs": [
+          "fixture://san/signals/001"
+        ]
+      }
+    ],
+    "critic_disposition": "HOLD_FOR_HUMAN_REVIEW",
+    "objections": [
+      "La causalité SAN→Payments n'est pas confirmée par une lecture indépendante runtime."
+    ],
+    "critic_independently_verified": false,
+    "evidence_refs": [
+      "fixture://san/signals/001"
+    ]
+  },
+  "policy": {
+    "decision": "DENY_LIVE_ACTION",
+    "reason_codes": [
+      "LIVE_ACTION_DISABLED",
+      "RUNTIME_EVIDENCE_NOT_ATTESTED"
+    ],
+    "execution_allowed": false,
+    "effect_allowed": false
+  },
+  "hitl": {
+    "kind": "SIMULATED",
+    "approval_id": "SIM-APP-ACME-001",
+    "issuer": "TWIN_ACME_SIMULATED",
+    "human_approval_claimed": false,
+    "simulated_only": true
+  },
+  "worker": {
+    "executor": "TEMPORAL",
+    "workflow_id": "SIM-WF-ACME-001",
+    "task_queue": "aiops-runner-isolated",
+    "isolated": true,
+    "no_effect": true,
+    "runtime_attested": false
+  },
+  "receipt": {
+    "schema": "aiops.debian-acme-sim-e2e.v1",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "PASS",
+    "reason": "SIMULATED_SANDBOX_ONLY",
+    "ticket_id": "SIM-GLPI-ACME-001",
+    "stages": {
+      "capability_simulator": "PASS",
+      "capability_core": "PASS",
+      "capability_twin": "PASS",
+      "capability_policy": "PASS",
+      "capability_worker": "PASS",
+      "simulator_start": "PASS",
+      "pre_resolution_core": "PASS",
+      "pre_resolution_twin": "PASS",
+      "pre_resolution_policy": "PASS",
+      "pre_resolution_worker": "PASS",
+      "worker_no_effect": "PASS",
+      "core_finalization": "PASS",
+      "post_resolution_core": "PASS",
+      "post_resolution_twin": "PASS",
+      "post_resolution_policy": "PASS",
+      "post_resolution_worker": "PASS",
+      "resolved": "PASS"
+    }
+  },
+  "stage_evidence": [
+    {
+      "stage": "capability_simulator",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "capability_core",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "capability_twin",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "capability_policy",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "capability_worker",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "simulator_start",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "pre_resolution_core",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "pre_resolution_twin",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "pre_resolution_policy",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "pre_resolution_worker",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "worker_no_effect",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "core_finalization",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "post_resolution_core",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "post_resolution_twin",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "post_resolution_policy",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "post_resolution_worker",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    },
+    {
+      "stage": "resolved",
+      "status": "PASS",
+      "issuer": "LOCAL_SYNTHETIC_FIXTURE",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "observed_at": "2026-11-19T14:00:00Z",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF"
+    }
+  ],
+  "provenance": {
+    "source_kind": "LOCAL_SYNTHETIC_FIXTURE",
+    "source_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "expected_sha": "0123456789abcdef0123456789abcdef01234567",
+    "collected_at": "2026-11-19T14:00:00Z"
+  }
+}
