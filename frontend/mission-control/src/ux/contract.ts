@@ -1,3 +1,4 @@
+import type {OperationalData} from './operational';
 import type {ReactNode} from 'react';
 import type {TwinService} from './model';
 import type {Sample} from './analytics';
@@ -19,6 +20,7 @@ export interface MissionSlotContext {
 }
 export type MissionSlot=(context:MissionSlotContext)=>ReactNode;
 export interface MissionControlProps {
+ operationalData?:OperationalData;
  page?:MissionPage;
  onPageChange?:(page:MissionPage)=>void;
  selectedServiceId?:string|null;
