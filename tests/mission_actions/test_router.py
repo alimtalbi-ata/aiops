@@ -38,7 +38,7 @@ def test_story_delegates(monkeypatch):
     monkeypatch.setattr(module, "_require_portal_read_auth", lambda _: None)
     from fastapi.responses import JSONResponse
     monkeypatch.setattr(module, "explore_story_control",
-                        lambda payload, auth: JSONResponse({"payload": payload, "auth": auth}))
+                        lambda payload, authorization: JSONResponse({"payload": payload, "auth": authorization}))
     payload = {"action": "advance", "cursor": 1, "mode": "story"}
     r = client().post("/api/mission-actions/story", json=payload, headers={"Authorization": "Bearer test"})
     assert r.json() == {"payload": payload, "auth": "Bearer test"}
