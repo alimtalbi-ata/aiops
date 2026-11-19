@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 15
     env:
       PYTHONPATH: app
+      AIOPS_QA_ISOLATED_PROBES: '1'
       AIOPS_QA_BASE_URL: http://127.0.0.1:17777
       # All upstreams are deliberately unreachable; this job must remain local.
       CORE_URL: http://127.0.0.1:9
