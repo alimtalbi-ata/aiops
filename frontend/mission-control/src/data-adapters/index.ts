@@ -157,7 +157,7 @@ export const aggregateMetrics = {
   evidence: ["aiops_evidence_total"],
   twin: ["aiops_twin_nodes","aiops_twin_degraded","aiops_twin_failed"],
   "fs-lab": ["aiops2_fs_lab_used_percent","aiops2_fs_lab_alert_firing"],
-  services: ["aiops_worker_up","aiops_policy_up"]
+  services: ["aiops_worker_up","aiops_policy_up","aiops_portal_up"]
 } as const;
 export type AggregateGroup = keyof typeof aggregateMetrics;
 export type AggregateMetric<G extends AggregateGroup> = typeof aggregateMetrics[G][number];
@@ -185,4 +185,12 @@ export async function readAggregateKpis<G extends AggregateGroup>(group:G,option
           s.value!==s.points[minutes].value||s.coverage!==s.points.filter(p=>p.value!==null).length/(minutes+1);
       })) return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
   return r;
+}
+
+/** No fallback across modes, providers or missing observations. */
+export function aggregateSeries<G extends AggregateGroup>(result: Result<AggregateHistory<G>>, metric: AggregateMetric<G>): AggregateHistory<G>["series"][number] | null {
+  return result.state === "AVAILABLE" ? result.data.series.find(s=>s.metric===metric) ?? null : null;
+}
+export function aggregateValue<G extends AggregateGroup>(result: Result<AggregateHistory<G>>, metric: AggregateMetric<G>): number|null {
+  return aggregateSeries(result,metric)?.value ?? null;
 }
