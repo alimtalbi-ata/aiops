@@ -55,12 +55,12 @@ jobs:
 
       - name: Compile observer scripts
         working-directory: orchestrator
-        run: python -m py_compile deploy/proactive_candidate.py deploy/proactive_watchdog.py deploy/proactive_build_handoff.py deploy/proactive_update_discovery.py
+        run: python -m py_compile deploy/proactive_candidate.py deploy/proactive_watchdog.py deploy/proactive_build_handoff.py deploy/proactive_update_discovery.py && bash -n deploy/install-proactive-observer.sh deploy/rollback-proactive-observer.sh
 
       - name: Run candidate and update discovery tests explicitly
         working-directory: orchestrator
         run: |
-          python -m pytest -q -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py tests/test_proactive_watchdog_handoff.py tests/test_proactive_rollback.py
+          python -m pytest -q -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py tests/test_proactive_watchdog_handoff.py tests/test_proactive_rollback.py tests/test_proactive_installer.py
 
       - name: Build frozen INT07 image on GitHub-hosted runner
         working-directory: source
