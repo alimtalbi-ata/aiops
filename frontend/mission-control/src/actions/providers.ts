@@ -13,6 +13,7 @@ async function request(path: string, token: string, signal: AbortSignal, body?: 
 export function demoProvider(token: string, operatorToken?: string): ActionProvider {
   let cursor = 0, snapshot = "";
   let receipt: Json | undefined;
+  let generation = 0;
   return {mode:"DEMO", canSimulate: Boolean(operatorToken), async invoke(selection, command, signal) {
     if (!token) return blocked("VIEWER_REQUIRED");
     if (["approve","reject"].includes(command)) return blocked("NO_RUNTIME_AUTHORITY");
@@ -27,9 +28,17 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
       : selection.view in ids ? ids[selection.view] === selection.id : selection.id === j.run_id;
     if (!matches || (selection.runId !== undefined && selection.runId !== j.run_id))
       return blocked("SELECTION_NOT_BOUND_TO_DEMO_FIXTURE");
-    if (snapshot !== j.source_sha256) {cursor=0; snapshot=j.source_sha256; receipt=undefined;}
+    if (signal.aborted) return blocked("CONTEXT_CANCELLED");
+    if (snapshot !== j.source_sha256) {cursor=0; snapshot=j.source_sha256; receipt=undefined; generation++;}
+    const currentGeneration=generation;
+    const active=()=>!signal.aborted && currentGeneration===generation;
     if (command === "execute") {
       if (selection.view !== "execution" || !operatorToken) return blocked("DEMO_OPERATOR_REQUIRED");
+      const authority=await request("session/operator",operatorToken,signal);
+      if(!active() || !authority.ok || authority.data.schema!=="aiops.mission-actions.operator-session.v1" ||
+        authority.data.mode!=="DEMO" || authority.data.simulation_authorized!==true || authority.data.tenant_acl_qualified!==false ||
+        authority.data.runtime_attested!==false || authority.data.live_remediation_authorized!==false)
+        return blocked("DEMO_OPERATOR_NOT_QUALIFIED");
       const sim = await request("demo/simulation",operatorToken,signal,{
         incident_id:j.incident_id,run_id:j.run_id,source_sha256:j.source_sha256
       });
@@ -41,7 +50,8 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
         /^[a-f0-9]{64}$/.test(d.simulation?.receipt_sha256??"") && d.simulation?.receipt?.simulation_result==="HYPOTHETICAL_ONLY" &&
         d.simulation?.receipt?.incident_id===j.incident_id && d.simulation?.receipt?.runtime_execution_verified===false &&
         d.simulation?.receipt?.independent_postcheck_verified===false && d.evidence_gate?.itil_transition_authorized===false;
-      if(valid && !signal.aborted) receipt=d;
+      if(!active()) return blocked("CONTEXT_CHANGED");
+      if(valid) receipt=d;
       return {state:valid?"SIMULATED":sim.ok?"UNKNOWN":"BLOCKED",detail:valid?d:{reason:d.reason??d.detail??"SIMULATION_UNQUALIFIED"},http:sim.http};
     }
     if (command === "glpi" && selection.view === "itsm") {
@@ -63,7 +73,8 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
           !Number.isInteger(story.data.cursor) || !Array.isArray(story.data.timeline) ||
           story.data.cursor<0 || story.data.cursor>=story.data.timeline.length ||
           story.data.timeline.some((step:Json)=>step?.status!=="MISSING")) return {state:"UNKNOWN",detail:{reason:"STORY_NOT_BOUND"},http:story.http};
-      if (!signal.aborted) cursor=story.data.cursor;
+      if (!active()) return blocked("CONTEXT_CHANGED");
+      cursor=story.data.cursor;
       return {state:"SIMULATED",detail:story.data,http:story.http};
     }
     const c=j.cockpit;
