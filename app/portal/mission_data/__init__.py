@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/mission-data", tags=["mission-data"])
 JOBS = ("aiops2-core", "aiops2-worker", "aiops2-twin", "aiops2-policy", "aiops2-evidence", "aiops2-portal")
 PROM = "http://aiops2-rebuild-prometheus:9090"
 Mode = Literal["LIVE", "DEMO"]
+HealthMode = Literal["PLATFORM", "LIVE", "DEMO"]
 Dataset = Literal["core", "fs-lab", "evidence", "logs", "traces", "twin", "impact", "noc"]
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -65,18 +66,18 @@ def auth_error(authorization):
 
 @router.get("/health")
 def health(job: Literal["aiops2-core", "aiops2-worker", "aiops2-twin", "aiops2-policy", "aiops2-evidence", "aiops2-portal"],
-           mode: Mode, minutes: int = Query(0, ge=0, le=1440),
+           mode: HealthMode, minutes: int = Query(0, ge=0, le=1440),
            authorization: str | None = Header(default=None)):
     denied = auth_error(authorization)
     if denied is not None:
         return denied
     # This is platform scrape health, not a claim of business health or LIVE remediation.
     # The configured Prometheus has no verified DEMO/LIVE partition.
-    if mode == "DEMO":
+    if mode != "PLATFORM":
         return _noc_json_response(envelope(mode, "prometheus", "MODE_NOT_QUALIFIED"), status_code=503)
     try:
         points = query_prom(job, minutes)
-    except (OSError, ValueError, KeyError, TypeError, OverflowError):
+    except (OSError, ValueError, KeyError, TypeError, OverflowError, AttributeError, IndexError):
         return _noc_json_response(envelope(mode, "prometheus", "UPSTREAM_UNAVAILABLE"), status_code=503)
     if not points:
         return _noc_json_response(envelope(mode, "prometheus", "NO_SAMPLES"), status_code=503)
