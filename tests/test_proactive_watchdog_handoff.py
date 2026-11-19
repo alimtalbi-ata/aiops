@@ -165,3 +165,69 @@ def test_handoff_rechecks_head_after_reservation_before_post(tmp_path):
         handoff.main()
     assert run.call_count==0
     assert json.loads((root/f"build-handoff-{sha}.json").read_text())["status"]=="OBSOLETE_SHA"
+
+
+def handoff_uncertain_receipt(tmp_path, sha):
+    root=tmp_path/".local/state/aiops2-proactive"
+    root.mkdir(parents=True,exist_ok=True)
+    (root/"candidate.json").write_text(json.dumps({"observed_at":utc_now(),"state":"BUILD_ELIGIBLE","sha":sha,"pr":818,"deploy_authorized":False}))
+    marker=f"[CENTRAL][BUILD_QUALIFICATION:{sha}]"
+    receipt=root/f"build-handoff-{sha}.json"
+    receipt.write_text(json.dumps({"status":"PUBLICATION_UNCERTAIN","sha":sha,"marker":marker,"reconciliation_attempts":0}))
+    return root,receipt,marker
+
+
+def test_handoff_zero_matches_escalates_after_three_scans(tmp_path):
+    sha="1"*40
+    root,receipt,marker=handoff_uncertain_receipt(tmp_path,sha)
+    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"run",return_value=completed_pages([])) as run:
+        handoff.main()
+        handoff.main()
+        handoff.main()
+    assert run.call_count==3
+    data=json.loads(receipt.read_text())
+    assert data["status"]=="MANUAL_ESCALATION_REQUIRED"
+    assert data["reconciliation_attempts"]==3
+
+
+def test_handoff_two_matches_escalate_without_post(tmp_path):
+    sha="2"*40
+    root,receipt,marker=handoff_uncertain_receipt(tmp_path,sha)
+    items=[{"id":10,"body":marker,"user":{"login":"alimtalbi-ata"}},{"id":11,"body":marker,"user":{"login":"alimtalbi-ata"}}]
+    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"run",return_value=completed_pages(items)) as run:
+        handoff.main()
+    assert run.call_count==1
+    assert json.loads(receipt.read_text())["status"]=="DUPLICATE_ESCALATION"
+
+
+def test_handoff_wrong_author_conflict_without_repost(tmp_path):
+    sha="3"*40
+    root,receipt,marker=handoff_uncertain_receipt(tmp_path,sha)
+    items=[{"id":12,"body":marker,"user":{"login":"untrusted-user"}}]
+    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"run",return_value=completed_pages(items)) as run:
+        handoff.main()
+    assert run.call_count==1
+    assert json.loads(receipt.read_text())["status"]=="AUTHOR_CONFLICT"
+
+
+def test_handoff_api_failure_keeps_uncertain_receipt_and_never_reposts(tmp_path):
+    import pytest
+    sha="4"*40
+    root,receipt,marker=handoff_uncertain_receipt(tmp_path,sha)
+    failure=subprocess.CalledProcessError(1,["gh","api"],stderr="API unavailable")
+    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"run",side_effect=failure) as run:
+        with pytest.raises(subprocess.CalledProcessError):
+            handoff.main()
+    assert run.call_count==1
+    assert json.loads(receipt.read_text())["status"]=="PUBLICATION_UNCERTAIN"
+
+
+def test_handoff_invalid_pagination_is_not_treated_as_zero_matches(tmp_path):
+    import pytest
+    sha="5"*40
+    root,receipt,marker=handoff_uncertain_receipt(tmp_path,sha)
+    malformed=subprocess.CompletedProcess(["gh","api"],0,json.dumps({"items":[]}),"")
+    with patch.object(handoff.Path,"home",return_value=tmp_path),patch.object(handoff.subprocess,"run",return_value=malformed):
+        with pytest.raises(ValueError):
+            handoff.main()
+    assert json.loads(receipt.read_text())["status"]=="PUBLICATION_UNCERTAIN"
