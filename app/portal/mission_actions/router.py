@@ -1,4 +1,6 @@
 """Authenticated synthetic journey. Never grants actor/tenant or execution rights."""
+import hashlib
+import json
 from fastapi import APIRouter, Header, HTTPException, Request
 from portal.acme_demo_simulation_pipeline import run_acme_demo_simulation
 from portal.portal_command_auth import require_demo_operator
@@ -39,6 +41,7 @@ def journey(authorization: str | None = Header(default=None)):
             "mode": "DEMO", "runtime_attested": False,
             "live_remediation_authorized": False, "cockpit": cockpit,
             "decision_preview": impact["decision_preview"],
+            "timeline": [{"cue": step["cue"], "service": step["service"], "view": step["view"], "status": "MISSING"} for step in impact.get("checkpoint_evidence", [])],
             "twin": impact.get("twin_consumer"),
             "affected_cis": impact.get("affected_cis", []),
         })
@@ -104,6 +107,19 @@ async def simulation(request: Request, authorization: str | None = Header(defaul
                     "runtime_execution_performed", "glpi_write_performed",
                     "temporal_execution_performed", "live_remediation_authorized"))):
             raise ValueError("unqualified_simulation_result")
+        simulation = result["simulation"]
+        receipt = simulation["receipt"]
+        digest = hashlib.sha256(json.dumps(receipt, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+        if (digest != simulation["receipt_sha256"]
+                or receipt["incident_id"] != payload["incident_id"]
+                or receipt["mode"] != "DEMO"
+                or receipt["simulation_result"] != "HYPOTHETICAL_ONLY"
+                or any(receipt[k] is not False for k in (
+                    "runtime_execution_verified", "independent_postcheck_verified",
+                    "temporal_execution_verified", "itil_transition_authorized", "live_remediation_authorized"))
+                or result["evidence_gate"]["itil_transition_authorized"] is not False
+                or result["evidence_gate"]["live_remediation_authorized"] is not False):
+            raise ValueError("unqualified_simulation_receipt")
         return _noc_json_response({**result, "run_id": payload["run_id"]})
     except (ValueError, KeyError, TypeError, OSError):
         raise HTTPException(503, "simulation_unqualified")
