@@ -14,3 +14,11 @@ def test_candidate_gates():
     assert m.classify(pr,checks+[dict(checks[0],id=99,conclusion="failure")])=="CI_BLOCKED"
     assert m.classify(pr,[dict(c,head_sha="b"*40) for c in checks])=="CI_PENDING"
     assert m.classify(dict(pr,state="closed"),checks)=="INELIGIBLE"
+
+def test_success_conclusion_is_not_eligible_until_check_completed():
+    sha="c"*40
+    pr={"state":"open","head":{"sha":sha,"repo":{"full_name":m.REPO}}}
+    checks=[{"id":i,"name":n,"head_sha":sha,"status":"in_progress","conclusion":"success"} for i,n in enumerate(sorted(m.REQUIRED))]
+    assert m.classify(pr,checks)=="CI_PENDING"
+    completed=[dict(c,status="completed") for c in checks]
+    assert m.classify(pr,completed)=="BUILD_ELIGIBLE"
