@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 REPO = "alimtalbi-ata/aiops"
+EXPECTED_CHECK_APP = "github-actions"
 REQUIRED = frozenset(("core-postgres-noc-real-integration","policy-and-static","grafana-real-integration","offline-e2e","synthetic-contracts","synthetic-noc","tenant-postgres-isolation","contract","offline-readiness","ephemeral-portal-chromium","portal-tenant-actor-boundary","offline"))
 
 def gh(path):
@@ -22,7 +23,7 @@ def classify(pr, checks):
         return "INELIGIBLE"
     latest = {}
     for c in sorted(checks,key=lambda c:c.get("id",0)):
-        if c.get("head_sha") == pr["head"]["sha"]:
+        if c.get("head_sha") == pr["head"]["sha"] and c.get("app",{}).get("slug") == EXPECTED_CHECK_APP:
             latest[c["name"]] = c
     if any(latest[n].get("conclusion") in {"failure","cancelled","timed_out","action_required"} for n in REQUIRED & latest.keys()):
         return "CI_BLOCKED"
