@@ -19,11 +19,13 @@ async function main(){
    check(calls.length===1);
    check(a.snapshot?.counts.UP===4&&a.snapshot.counts.DOWN===1&&a.snapshot.counts.UNKNOWN===1);
    check(a.availability.state==='UNKNOWN'&&a.availability.reason==='VIEWER_REQUIRED');
+   check(a.aggregateHistory?.core.state==='UNKNOWN'&&a.aggregateHistory.core.reason==='VIEWER_REQUIRED');
    check(a.kpis.every(k=>k.value===null&&k.reason==='VIEWER_REQUIRED'));
    const b=await loadPocTechnical({token:'fixture-only'});
    check(calls.length===11);
    check(b.snapshot?.counts.DOWN===1);
    check(b.platform.state==='UNKNOWN'&&b.platform.reason==='HTTP_401');
+   check(b.aggregateHistory?.core.state==='UNKNOWN'&&b.aggregateHistory.core.reason==='HTTP_401');
    check(b.kpis.every(k=>k.value===null&&k.reason==='HTTP_401'));
    console.log('POC02 mock checks PASS');
  } finally {globalThis.fetch=original;}
