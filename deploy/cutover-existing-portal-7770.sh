@@ -40,11 +40,16 @@ echo "TARGET_PORT=$TARGET_PORT"
 echo "BUILD=false"
 echo "OTHER_SERVICES_TOUCHED=false"
 rollback(){
-  echo "CUTOVER_FAILED_ROLLBACK_BEGIN"
-  AIOPS_PORTAL_HOST_PORT="$OLD_PORT" docker compose --project-directory "$WORKDIR" -p "$PROJECT" "${COMPOSE_ARGS[@]}" up -d --no-deps --no-build "$SERVICE" || true
-  echo "ROLLBACK_REQUESTED|port=$OLD_PORT"
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    set +e
+    echo "CUTOVER_FAILED_ROLLBACK_BEGIN"
+    AIOPS_PORTAL_HOST_PORT="$OLD_PORT" docker compose --project-directory "$WORKDIR" -p "$PROJECT" "${COMPOSE_ARGS[@]}" up -d --no-deps --no-build "$SERVICE"
+    echo "ROLLBACK_EXIT=$?"
+    echo "ROLLBACK_TARGET_PORT=$OLD_PORT"
+  fi
 }
-trap rollback ERR
+trap rollback EXIT
 AIOPS_PORTAL_HOST_PORT="$TARGET_PORT" docker compose --project-directory "$WORKDIR" -p "$PROJECT" "${COMPOSE_ARGS[@]}" up -d --no-deps --no-build "$SERVICE"
 IMAGE_AFTER="$(docker inspect -f '{{.Image}}' "$CONTAINER")"
 [[ "$IMAGE_AFTER" == "$IMAGE_BEFORE" ]] || fail "image_changed"
@@ -71,7 +76,7 @@ done
 curl -fsS --max-time 5 "http://127.0.0.1:$TARGET_PORT/health" >/dev/null
 curl -fsS --max-time 5 "http://127.0.0.1:$TARGET_PORT/" -o /dev/null
 docker port "$CONTAINER" 777/tcp | grep -q ":$TARGET_PORT$" || fail "published_port_mismatch"
-trap - ERR
+trap - EXIT
 echo "IMAGE_UNCHANGED=PASS"
 echo "ENV_UNCHANGED_EXCEPT_PORT=PASS"
 echo "MOUNTS_UNCHANGED=PASS"
