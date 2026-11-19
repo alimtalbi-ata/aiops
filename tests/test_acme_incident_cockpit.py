@@ -257,3 +257,13 @@ def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
     assert "focus-visible" in page.text
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
+
+
+def test_operator_navigation_connects_existing_desktop_surfaces():
+    from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
+    html = render_synthetic_cockpit_html(project_synthetic_incident_cockpit(build_acme_impact_read_model()))
+    assert "Navigation espace opérateur" in html
+    for href in ("/#noc", "/demo/explore-story", "/demo/acme-impact", "/#incidents", "/#runs", "/itsm", "#workbench"):
+        assert f"href='{href}'" in html
+    assert "Runs Core (ACL requise)" in html
+    assert "NO-GO LIVE" in html
