@@ -126,7 +126,7 @@ def health_jobs(authorization: str | None = Header(default=None)):
     }))
 
 @router.get("/acme")
-def acme(mode: Mode, authorization: str | None = Header(default=None)):
+def acme_snapshot(mode: Mode, authorization: str | None = Header(default=None)):
     denied = auth_error(authorization)
     if denied is not None:
         return denied
@@ -162,7 +162,7 @@ def portal_metrics():
                              headers={"Cache-Control": "no-store"})
 
 @router.get("/technical/{metric}")
-def technical(metric: Literal["scrape-duration", "scrape-samples"],
+def technical_history(metric: Literal["scrape-duration", "scrape-samples"],
               minutes: int = Query(60, ge=1, le=1440),
               authorization: str | None = Header(default=None)):
     denied = auth_error(authorization)
@@ -176,7 +176,7 @@ def technical(metric: Literal["scrape-duration", "scrape-samples"],
     return _noc_json_response(envelope("PLATFORM", "prometheus", None, data))
 
 @router.get("/kpis/{group}")
-def kpis(group: Literal["core", "evidence", "twin", "fs-lab", "services"],
+def aggregate_kpis(group: Literal["core", "evidence", "twin", "fs-lab", "services"],
          minutes: int = Query(60, ge=1, le=1440),
          authorization: str | None = Header(default=None)):
     denied = auth_error(authorization)
