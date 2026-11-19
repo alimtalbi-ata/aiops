@@ -43,7 +43,7 @@ def make_archive(tmp_path):
 
 def test_archive_verifier_binds_receipt_to_config_and_index(tmp_path):
     archive,receipt,source,tag,config_id,index_id=make_archive(tmp_path)
-    result=verifier.verify(archive,receipt,source,tag,config_id)
+    result=verifier.verify(archive,receipt,source,tag,index_id)
     assert result["local_image_id"]==config_id
     assert result["docker_config_digest"]==config_id
     assert result["oci_index_digest"]==index_id
