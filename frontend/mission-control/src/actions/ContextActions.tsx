@@ -3,7 +3,7 @@ import { commands, labels, type ActionProvider, type Command, type Reply, type S
 
 /** Inline slot for existing graphical cards/drawers; no portal, token input or links. */
 export function ContextActions({provider,selection}:{provider:ActionProvider;selection:Selection}) {
-  const key=JSON.stringify([provider.mode,selection.view,selection.id,selection.runId]);
+  const key=JSON.stringify([provider.mode,selection.view,selection.id,selection.runId,selection.sourceSha256]);
   const pending=useRef<AbortController|null>(null);
   const [reply,setReply]=useState<{key:string;provider:ActionProvider;value:Reply}|null>(null);
   const [busy,setBusy]=useState(false);
