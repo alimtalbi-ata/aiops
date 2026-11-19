@@ -77,6 +77,15 @@ jobs:
           test -n "${REGISTRY_DIGEST}"
           printf '%s\n' "${REGISTRY_IMAGE}:${SOURCE_SHA}" > "${RECEIPT_DIR}/registry-image-ref.txt"
           printf '%s\n' "${REGISTRY_DIGEST}" > "${RECEIPT_DIR}/registry-manifest-digest.txt"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ["RECEIPT_DIR"]) / "build.json"
+          data = json.loads(p.read_text())
+          data["registry_digest"] = os.environ["REGISTRY_DIGEST"]
+          data["registry_image_ref"] = os.environ["REGISTRY_IMAGE"] + ":" + os.environ["SOURCE_SHA"]
+          p.write_text(json.dumps(data, sort_keys=True) + "\\n")
+          PY
           echo "digest=${REGISTRY_DIGEST}" >> "${GITHUB_OUTPUT}"
 
       - name: Attest published INT07 image provenance
@@ -184,6 +193,22 @@ jobs:
           predicate-type: https://aiops.example/attestations/int07-source-materials/v1
           predicate-path: ${{ runner.temp }}/int07-source-bound-provenance.json
           push-to-registry: true
+
+      - name: Preserve signed source-materials predicate in qualification evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cp "${RUNNER_TEMP}/int07-source-bound-provenance.json" "${RECEIPT_DIR}/int07-source-bound-provenance.json"
+          cat > "${RECEIPT_DIR}/attestation-evidence.json" <<EOF
+          {
+            "subject_name": "ghcr.io/${GITHUB_REPOSITORY}/aiops-portal-int07",
+            "subject_digest": "${{ steps.publish-image.outputs.digest }}",
+            "predicate_type": "https://aiops.example/attestations/int07-source-materials/v1",
+            "source_sha": "${SOURCE_SHA}",
+            "qualifier_sha": "${QUALIFIER_SHA}",
+            "workflow_run_id": "${GITHUB_RUN_ID}"
+          }
+          EOF
 
       - name: Export immutable image archive and calculate artifact digest
         if: always()
