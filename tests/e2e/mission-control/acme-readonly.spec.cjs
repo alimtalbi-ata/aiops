@@ -22,6 +22,13 @@ test('runtime ACME read-only cross-contract and LIVE isolation',async({playwrigh
   expect(a.kpis.affected_ci_count===j.affected_ci_ids.length&&JSON.stringify([...a.impact.affected_ci_ids].sort())===JSON.stringify([...j.affected_ci_ids].sort())).toBe(true);
   expect(a.kpis.runtime_open_incidents===null&&a.observed_at===null&&a.impact.operational_impact==='UNKNOWN').toBe(true);
   expect(a.history.every(h=>h.status==='MISSING'&&h.observed_at===null)&&j.timeline.every(h=>h.status==='MISSING')).toBe(true);
+  const health=await read('/api/mission-data/health/jobs');
+  expect(health.data.classification==='PLATFORM_TECHNICAL_ONLY'&&health.data.items.length===6&&health.tenant_acl_qualified===false).toBe(true);
+  const history=await read('/api/mission-data/health/history?minutes=60');
+  expect(history.data.classification==='PLATFORM_TECHNICAL_ONLY'&&history.data.step_seconds===60&&history.data.series.length===6).toBe(true);
+  expect(history.data.series.every(s=>s.points.length===61&&s.points.every(p=>p.up===null||p.up===0||p.up===1)&&s.coverage>=0&&s.coverage<=1)).toBe(true);
+  const core=await read('/api/mission-data/kpis/core?minutes=60',503);
+  expect(core.reason==='AGGREGATE_AUTHORIZATION_NOT_QUALIFIED'&&core.data===null).toBe(true);
   const live=await read('/api/mission-data/acme?mode=LIVE',503);
   expect(live.reason==='TENANT_ACL_NOT_QUALIFIED'&&live.data===null).toBe(true);
  }finally{await api.dispose();}
