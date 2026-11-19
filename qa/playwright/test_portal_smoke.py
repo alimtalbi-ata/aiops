@@ -200,3 +200,18 @@ def test_twin_evidence_plan_remains_unobserved(page: Page):
     expect(journey).to_contain_text("DENY_LIVE_ACTION")
     expect(journey).to_contain_text("NOT_INVOKED")
     expect(journey).to_contain_text("0/17")
+
+
+@pytest.mark.browser
+def test_cockpit_grafana_preview_navigation_and_return(page: Page):
+    response = page.goto(BASE_URL + "/demo/acme-incident-cockpit", wait_until="domcontentloaded")
+    assert response is not None and response.status == 200
+    link = page.locator("a[href='/demo/acme-grafana-pilot-preview']")
+    expect(link).to_be_visible()
+    link.click()
+    expect(page).to_have_url(BASE_URL + "/demo/acme-grafana-pilot-preview")
+    expect(page.locator("body")).to_be_visible()
+    page.go_back(wait_until="domcontentloaded")
+    expect(page).to_have_url(BASE_URL + "/demo/acme-incident-cockpit")
+    expect(page.locator("#run-journey")).to_be_visible()
+    expect(page.locator("#twin-evidence-plan")).to_be_visible()
