@@ -8,7 +8,7 @@ spec.loader.exec_module(m)
 def test_candidate_gates():
     sha="a"*40
     pr={"state":"open","head":{"sha":sha,"repo":{"full_name":m.REPO}}}
-    checks=[{"id":i,"name":n,"head_sha":sha,"conclusion":"success"} for i,n in enumerate(sorted(m.REQUIRED))]
+    checks=[{"id":i,"name":n,"head_sha":sha,"status":"completed","conclusion":"success"} for i,n in enumerate(sorted(m.REQUIRED))]
     assert m.classify(pr,checks)=="BUILD_ELIGIBLE"
     assert m.classify(pr,checks[:-1])=="CI_PENDING"
     assert m.classify(pr,checks+[dict(checks[0],id=99,conclusion="failure")])=="CI_BLOCKED"
