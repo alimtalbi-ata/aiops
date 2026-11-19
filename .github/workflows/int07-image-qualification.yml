@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: int07-image-qualification-636205a7
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-playwright:
@@ -113,7 +113,7 @@ jobs:
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
               page = browser.new_page(viewport={"width": 1440, "height": 1000})
-              response = page.goto(base + "/demo/explore-story", wait_until="networkidle", timeout=30000)
+              response = page.goto(base + "/demo/explore-story", wait_until="domcontentloaded", timeout=30000)
               assert response and response.status == 200, f"portal route status: {response.status if response else 'no response'}"
               page.screenshot(path=str(out / "int07-desktop.png"), full_page=True)
               body = page.locator("body").inner_text()
