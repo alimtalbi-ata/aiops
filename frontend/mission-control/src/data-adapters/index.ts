@@ -1,18 +1,19 @@
 export const jobs = ["aiops2-core", "aiops2-worker", "aiops2-twin", "aiops2-policy", "aiops2-evidence", "aiops2-portal"] as const;
 export type Job = typeof jobs[number];
 export type Mode = "LIVE" | "DEMO";
+export type HealthMode = Mode | "PLATFORM";
 export type Dataset = "core" | "fs-lab" | "evidence" | "logs" | "traces" | "twin" | "impact" | "noc";
 export type Point = { at: number; up: 0 | 1 };
 export type Health = { job: Job; points: Point[]; classification: "PLATFORM_TECHNICAL_ONLY"; freshness: "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME" };
-export type Result<T> = { mode: Mode; source: string; retrieved_at: number | null; tenant_acl_qualified: false } & (
+export type Result<T> = { mode: HealthMode; source: string; retrieved_at: number | null; tenant_acl_qualified: false } & (
   { state: "AVAILABLE"; reason: null; data: T } |
   { state: "UNKNOWN"; reason: string; data: null }
 );
 type Options = { token: string; signal?: AbortSignal };
-function unavailable<T>(mode: Mode, source: string, reason: string): Result<T> {
+function unavailable<T>(mode: HealthMode, source: string, reason: string): Result<T> {
   return { mode, source, retrieved_at: null, tenant_acl_qualified: false, state: "UNKNOWN", reason, data: null };
 }
-async function read<T>(path: string, mode: Mode, source: string, options: Options): Promise<Result<T>> {
+async function read<T>(path: string, mode: HealthMode, source: string, options: Options): Promise<Result<T>> {
   try {
     const response = await fetch("/api/mission-data/" + path, {
       headers: { Authorization: "Bearer " + options.token }, credentials: "omit",
@@ -33,9 +34,17 @@ async function read<T>(path: string, mode: Mode, source: string, options: Option
     return unavailable(mode, source, "NETWORK_UNAVAILABLE");
   }
 }
-export function readHealth(job: Job, mode: Mode, options: Options, minutes = 0): Promise<Result<Health>> {
-  return read("health?" + new URLSearchParams({ job, mode, minutes: String(minutes) }), mode, "prometheus", options);
+export function readHealth(job: Job, mode: HealthMode, options: Options, minutes = 0): Promise<Result<Health>> {
+  return read<Health>("health?" + new URLSearchParams({ job, mode, minutes: String(minutes) }), mode, "prometheus", options).then(result => {
+    if (result.state === "UNKNOWN") return result;
+    const d = result.data;
+    if (mode !== "PLATFORM" || d.job !== job || d.classification !== "PLATFORM_TECHNICAL_ONLY" ||
+        d.freshness !== "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME" || !Array.isArray(d.points) ||
+        !d.points.length || d.points.some(p => !p || !Number.isFinite(p.at) || (p.up !== 0 && p.up !== 1)))
+      return unavailable<Health>(mode, "prometheus", "INVALID_RESPONSE");
+    return result;
+  });
 }
 export function readDataset(dataset: Dataset, mode: Mode, options: Options): Promise<Result<never>> {
-  return read("datasets/" + encodeURIComponent(dataset) + "?" + new URLSearchParams({ mode }), mode, dataset, options);
+  return read<never>("datasets/" + encodeURIComponent(dataset) + "?" + new URLSearchParams({ mode }), mode, dataset, options).then(result => result.state === "UNKNOWN" ? result : unavailable<never>(mode, dataset, "UNQUALIFIED_DATA"));
 }
