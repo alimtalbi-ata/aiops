@@ -3,7 +3,8 @@ const {test,expect}=require('../../../qa/mission-control/node_modules/@playwrigh
 test.use({trace:'off',screenshot:'off',video:'off'});
 test('runtime ACME read-only cross-contract and LIVE isolation',async({playwright})=>{
  const token=process.env.QA_VIEWER_TOKEN;
- test.skip(!token,'Approved viewer credential required');
+ if(!token && process.env.QA_REQUIRE_VIEWER==='1') throw Error('BLOCKED: approved viewer credential required');
+ test.skip(!token,'BLOCKED: approved viewer credential required');
  const url=new URL(process.env.BASE_URL);
  if(url.protocol!=='https:'&&!['localhost','127.0.0.1','[::1]'].includes(url.hostname)) throw Error('Viewer requires HTTPS or loopback');
  if(!/^[!-~]{32,256}$/.test(token)) throw Error('Invalid viewer format');
