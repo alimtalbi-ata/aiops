@@ -16,6 +16,35 @@ REQUIRED = frozenset(("core-postgres-noc-real-integration","policy-and-static","
 def gh(path):
     return json.loads(subprocess.check_output(["gh","api","--method","GET",path],timeout=30))
 
+def fetch_check_runs(sha):
+    # --slurp preserves every page returned by --paginate; never accept a
+    # partial first page as a complete qualification snapshot.
+    raw=subprocess.check_output(
+        ["gh","api","--paginate","--slurp",f"repos/{REPO}/commits/{sha}/check-runs?per_page=100"],
+        timeout=60,
+    )
+    pages=json.loads(raw)
+    if not isinstance(pages,list) or not pages or len(pages)>20:
+        raise ValueError("invalid or excessive check-run pagination")
+    total=None
+    checks=[]
+    seen=set()
+    for page in pages:
+        if not isinstance(page,dict) or not isinstance(page.get("check_runs"),list):
+            raise ValueError("invalid check-run page")
+        page_total=page.get("total_count")
+        if type(page_total) is not int or page_total<0 or (total is not None and total!=page_total):
+            raise ValueError("inconsistent check-run total")
+        total=page_total
+        for check in page["check_runs"]:
+            if not isinstance(check,dict) or type(check.get("id")) is not int or check["id"] in seen:
+                raise ValueError("invalid or duplicate check-run id")
+            seen.add(check["id"])
+            checks.append(check)
+    if total is None or total!=len(checks):
+        raise ValueError("incomplete check-run pagination")
+    return checks
+
 def classify(pr, checks):
     if pr.get("state") != "open" or not re.fullmatch(r"[0-9a-f]{40}",pr.get("head",{}).get("sha","")):
         return "INELIGIBLE"
@@ -63,10 +92,8 @@ def main():
             pr=gh(f"repos/{REPO}/pulls/818")
             sha=pr["head"]["sha"]
             if not re.fullmatch(r"[0-9a-f]{40}",sha): raise ValueError("invalid SHA")
-            checks=gh(f"repos/{REPO}/commits/{sha}/check-runs?per_page=100")
-            if checks.get("total_count",0)>len(checks.get("check_runs",[])):
-                raise ValueError("check pagination required")
-            result={"sha":sha,"pr":818,"state":classify(pr,checks["check_runs"]),"deploy_authorized":False}
+            checks=fetch_check_runs(sha)
+            result={"sha":sha,"pr":818,"state":classify(pr,checks),"deploy_authorized":False}
         except Exception as exc:
             result={"state":"DISCOVERY_ERROR","error_type":type(exc).__name__,"deploy_authorized":False}
         result["observed_at"]=now()
