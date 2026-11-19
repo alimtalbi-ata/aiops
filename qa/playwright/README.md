@@ -22,13 +22,7 @@ AIOPS_QA_BASE_URL=http://127.0.0.1:17777 \
   python -m pytest -c qa/playwright/pytest.ini qa/playwright -q
 ```
 
-Optional screenshot capture (all editable fields are blanked before capture):
-
-```bash
-AIOPS_QA_BASE_URL=http://127.0.0.1:17777 \
-AIOPS_QA_CAPTURE=1 AIOPS_QA_ARTIFACT_DIR=artifacts/team-d \
-  python -m pytest -c qa/playwright/pytest.ini qa/playwright -q
-```
+Desktop only: 1440 x 1000. Do not enable screenshots on a runtime with sensitive data. Cosmetic and mobile findings are not release gates.
 
 ## Evidence classification
 
@@ -38,11 +32,9 @@ AIOPS_QA_CAPTURE=1 AIOPS_QA_ARTIFACT_DIR=artifacts/team-d \
 - The API checks send no credentials and only assert fail-closed HTTP status. They do not
   fabricate 401/403/503 identities or claim role-specific authorization coverage.
 - Routes are discovered from same-origin links and supplemented with known ACME story paths.
-  A 404/405 is tolerated by the smoke test to expose route inventory drift without hiding it
-  in the JUnit report; inspect each response when qualifying a target.
+  Browser navigation requires HTTP <400 and a matching path; each route is independent.
 - No trace/HAR/video is recorded. Console and request data are deliberately not logged.
-- Screenshots are viewport-only and editable fields are blanked. Review artifacts before sharing;
-  dynamic page content can still contain sensitive data and must be manually redacted.
+- Screenshot capture is disabled by default and is not approved for sensitive runtime content.
 
 ## Current limits / not covered automatically
 
@@ -52,6 +44,8 @@ AIOPS_QA_CAPTURE=1 AIOPS_QA_ARTIFACT_DIR=artifacts/team-d \
   end-to-end execution. These require approved isolated test fixtures/services and explicit
   test identities.
 - No LIVE action, external ticket write, deployment, or Debian mutation is performed.
+
+The offline cockpit browser checks verify 17 NOT_RUN/MISSING stages and Twin evidence MISSING, DENY_LIVE_ACTION and NOT_INVOKED. These are not execution receipts.
 
 Use the matrix in the TEAM D report to classify each case PASS / FAIL / BLOCKED / NOT_RUN.
 
