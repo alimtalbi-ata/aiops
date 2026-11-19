@@ -103,3 +103,26 @@ export async function readAcmeDemo(options: Options): Promise<Result<AcmeSnapsho
     return unavailable("DEMO", "acme", "INVALID_RESPONSE");
   return r;
 }
+
+export type AvailabilityHistory = {
+  series: { job: Job; points: { at: number; up: 0|1|null }[]; observed: number; expected: number; coverage: number; last_evaluated_at: number|null }[];
+  start: number; end: number; step_seconds: 60; coverage: number;
+  classification: "PLATFORM_TECHNICAL_ONLY"; freshness: "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME";
+};
+export async function readAvailabilityHistory(options: Options, minutes = 60): Promise<Result<AvailabilityHistory>> {
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return unavailable("PLATFORM","prometheus","INVALID_WINDOW");
+  const r = await read<AvailabilityHistory>("health/history?minutes="+minutes,"PLATFORM","prometheus",options);
+  if (r.state === "UNKNOWN") return r;
+  const d = r.data;
+  if (!d || d.classification !== "PLATFORM_TECHNICAL_ONLY" || d.freshness !== "QUERY_EVALUATION_TIME_NOT_SCRAPE_TIME" ||
+      d.step_seconds !== 60 || !Number.isFinite(d.start) || d.end-d.start !== minutes*60 ||
+      !Array.isArray(d.series) || d.series.length !== jobs.length ||
+      jobs.some(j => d.series.filter(s => s && s.job === j).length !== 1) ||
+      d.series.some(s => !Array.isArray(s.points) || s.points.length !== minutes+1 ||
+        s.points.some((p,i) => !p || p.at !== d.start+i*60 || ![0,1,null].includes(p.up)) ||
+        s.expected !== minutes+1 || s.observed !== s.points.filter(p => p.up !== null).length ||
+        s.coverage !== s.observed/s.expected) ||
+      d.coverage !== d.series.reduce((n,s)=>n+s.observed,0)/(jobs.length*(minutes+1)))
+    return unavailable("PLATFORM","prometheus","INVALID_RESPONSE");
+  return r;
+}
