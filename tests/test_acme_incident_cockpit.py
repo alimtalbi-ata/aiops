@@ -72,7 +72,17 @@ def test_canonical_operator_cockpit_page_contains_all_gates_and_no_actions():
     assert "DENY_LIVE_ACTION" in page.text
     assert "0 / 9" in page.text
     # 9 lifecycle + 8 ITIL + 9 customer timeline + 9 evidence requirements.
-    assert page.text.count("<tr><th scope='row'>") == 35
+    before, twin_and_after = page.text.split("<table id='twin-evidence-plan'>", 1)
+    twin_table, after = twin_and_after.split("</table>", 1)
+    assert (before + after).count("<tr><th scope='row'>") == 35
+    plan = project_synthetic_incident_cockpit(build_acme_impact_read_model())["twin_consumer"]["evidence_collection_plan"]
+    expected = plan["affected_ci_observations"] + plan["alternative_dependency_observations"]
+    assert twin_table.count("<tr><th scope='row'>") == len(expected)
+    assert twin_table.count("<td>MISSING</td>") == len(expected)
+    from html import escape
+    for row in expected:
+        assert "<th scope='row'>" + escape(row["ci_id"]) + "</th>" in twin_table
+    assert plan["execution_authorized"] is False
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
     with patch("portal.acme_impact_read_model.build_acme_impact_read_model",
@@ -123,7 +133,10 @@ def test_customer_walkthrough_has_five_working_anchor_targets_and_safe_verdict()
     assert page.status_code == 200
     anchors = Anchors()
     anchors.feed(page.text)
-    assert anchors.targets == ["impact", "evidence", "decision", "itil", "verdict"]
+    assert anchors.targets == ["impact", "workbench", "decision", "itil", "verdict"]
+    # Preserve the historical direct-link target while the guided journey uses Workbench.
+    assert "evidence" in anchors.ids
+    assert "workbench" in anchors.ids
     assert set(anchors.targets).issubset(anchors.ids)
     assert page.text.index("id='decision'") < page.text.index("id='itil'")
     assert page.text.index("id='itil'") < page.text.index("id='verdict'")
@@ -244,7 +257,7 @@ def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
     assert page.status_code == 200
     parser = TableWrappers()
     parser.feed(page.text)
-    assert parser.wrapper_count == parser.table_count == 4
+    assert parser.wrapper_count == parser.table_count == 5
     assert parser.stack == []
     assert "Résumé de qualification" in page.text
     assert "GO — scénario synthétique" in page.text
@@ -254,3 +267,58 @@ def test_customer_cockpit_responsive_layout_preserves_readonly_semantics():
     assert "focus-visible" in page.text
     assert "<script" not in page.text.lower()
     assert "<form" not in page.text.lower()
+
+
+def test_operator_navigation_connects_existing_desktop_surfaces():
+    from portal.acme_incident_cockpit_html import render_synthetic_cockpit_html
+    html = render_synthetic_cockpit_html(project_synthetic_incident_cockpit(build_acme_impact_read_model()))
+    assert "Navigation espace opérateur" in html
+    for href in ("/#noc", "/demo/explore-story", "/demo/acme-impact", "/#incidents", "/#runs", "/itsm", "#workbench"):
+        assert f"href='{href}'" in html
+    assert "Runs Core (ACL requise)" in html
+    assert "NO-GO LIVE" in html
+
+
+def test_team_c_run_journey_is_joined_to_existing_twin_without_fabricated_execution():
+    impact = build_acme_impact_read_model()
+    cockpit = project_synthetic_incident_cockpit(impact)
+    journey = cockpit["run_journey"]
+    assert journey["run"]["run_id"] == impact["twin_evidence"]["run_id"]
+    assert journey["run"]["run_id"] == cockpit["twin_consumer"]["story_identity"]["run_id"]
+    assert journey["run"]["incident_id"] == cockpit["incident_id"]
+    assert journey["run"]["tenant_id"] is None
+    assert journey["run"]["executed_sha"] is None
+    assert journey["run"]["idempotency_key"] == journey["run"]["attempt_id"]
+    assert journey["provenance"]["source_sha256"] == impact["source_sha256"]
+    assert len(journey["stage_plan"]) == 17
+    assert all(x["status"] == "NOT_RUN" and x["evidence_state"] == "MISSING" for x in journey["stage_plan"])
+    assert journey["receipt"] is None
+    assert journey["hitl"]["kind"] == "SIMULATED_NOT_REQUESTED"
+    assert journey["hitl"]["approval_id"] is None
+    assert journey["worker"]["executor"] == "NOT_INVOKED"
+    assert journey["policy"]["decision"] == "DENY_LIVE_ACTION"
+
+
+def test_team_c_run_journey_is_visible_in_existing_operator_cockpit():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "Run Journey SAN P1" in page.text
+    assert "0/17 étapes exécutées" in page.text
+    assert "SIMULATED_NOT_REQUESTED" in page.text
+    assert "NOT_INVOKED" in page.text
+    assert "NOT_RUN" in page.text
+    assert "NO-GO LIVE" in page.text
+
+
+def test_twin_evidence_plan_visible_in_existing_workbench():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "id='twin-evidence-plan'" in page.text
+    assert "DEPENDENCY_HEALTH" in page.text
+    assert "REDUNDANCY_HEALTH" in page.text
+    assert "Aucune collecte exécutée" in page.text
+    assert "0/17 étapes exécutées" in page.text

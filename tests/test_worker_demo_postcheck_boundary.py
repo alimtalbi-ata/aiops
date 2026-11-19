@@ -28,7 +28,15 @@ def test_demo_verify_blocks_before_synthetic_evidence_and_completion():
 
 
 def test_workflow_stops_on_block_before_finish():
-    source = SOURCE.read_text()
-    assert "if r.get('status')=='BLOCKED': return" in source
-    assert source.index("if r.get('status')=='BLOCKED': return") < source.index(
-        "execute_activity(finish_run")
+    import asyncio
+    from test_worker_temporal_workflow_stop import _workflow_with_stub
+
+    events = []
+    result = asyncio.run(_workflow_with_stub(events, block_stage="VERIFY").run({
+        "run_id": "demo-run-01", "mode": "DEMO", "scenario_id": "acme",
+        "version": 0,
+    }))
+    assert result["status"] == "BLOCKED"
+    assert result["blocked_stage"] == "VERIFY"
+    assert events[-1][1]["stage"] == "VERIFY"
+    assert not any(name == "finish_run" for name, _ in events)

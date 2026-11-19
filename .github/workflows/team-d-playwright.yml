@@ -1,0 +1,60 @@
+name: TEAM D isolated Playwright portal smoke
+
+on:
+  pull_request:
+    paths:
+      - "qa/playwright/**"
+      - "app/portal/**"
+      - "app/shared/**"
+      - ".github/workflows/team-d-playwright.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-portal-chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: app
+      AIOPS_QA_BASE_URL: http://127.0.0.1:17777
+      CORE_URL: http://127.0.0.1:9
+      COPILOT_URL: http://127.0.0.1:9
+      TWIN_URL: http://127.0.0.1:9
+      AIOPS_INTERNAL_TOKEN: ci-only-not-a-runtime-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: app/requirements.txt
+      - name: Install portal and test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r app/requirements.txt pytest playwright
+          python -m playwright install --with-deps chromium
+      - name: Start isolated FastAPI portal
+        run: |
+          nohup python -m uvicorn portal.main:app --host 127.0.0.1 --port 17777 > "$RUNNER_TEMP/team-d-portal.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/team-d-portal.pid"
+          for attempt in $(seq 1 60); do
+            if python -c "from urllib.request import urlopen; r=urlopen('http://127.0.0.1:17777/health',timeout=1); assert r.status == 200"; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/team-d-portal.log"
+          exit 1
+      - name: Execute TEAM D browser and unauthenticated boundary checks
+        run: python -m pytest -c qa/playwright/pytest.ini qa/playwright -q --junitxml="$RUNNER_TEMP/team-d-playwright.xml"
+      - name: Stop ephemeral portal
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/team-d-portal.pid" ]; then kill "$(cat "$RUNNER_TEMP/team-d-portal.pid")" 2>/dev/null || true; fi
+      - name: Upload JUnit report only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team-d-playwright-junit
+          path: "$RUNNER_TEMP/team-d-playwright.xml"
+          if-no-files-found: warn
+          retention-days: 7

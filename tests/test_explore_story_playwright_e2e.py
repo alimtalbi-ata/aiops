@@ -411,7 +411,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(self.page.locator("nav[aria-label='Parcours guidé de démonstration'] a[href^='#']").count(), 5)
         for anchor, heading in (
             ("impact", "Incident et impact métier"),
-            ("evidence", "Cycle incident"),
+            ("workbench", "Evidence Workbench"),
             ("decision", "Analyst / Critic / Policy"),
             ("itil", "Transitions ITIL"),
             ("verdict", "Décision opérateur"),
@@ -423,17 +423,28 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             target = self.page.locator(f"#{anchor}")
             self.assertEqual(target.count(), 1)
             self.assertIn(heading, target.inner_text())
+        # Historical fragment remains a direct link to the same evidence register.
+        self.page.goto(self.base + "/demo/acme-incident-cockpit#evidence")
+        self.assertEqual(self.page.evaluate("location.hash"), "#evidence")
+        self.assertEqual(self.page.locator("#evidence").count(), 1)
+        self.assertEqual(self.page.locator("#evidence + #workbench").count(), 1)
+        expect(self.page.locator("#workbench")).to_be_visible()
         self.assertIn("GO — scénario synthétique", self.page.locator("body").inner_text())
         self.assertIn("UNKNOWN — preuves runtime", self.page.locator("body").inner_text())
         self.assertIn("NO-GO LIVE", self.page.locator("body").inner_text())
-        self.assertEqual(self.page.locator("table").count(), 4)
-        # Check each semantic table independently, not just the total number
-        # of rows; a missing lifecycle stage cannot hide behind another table.
+        self.assertEqual(self.page.locator("table").count(), 5)
         self.assertEqual(
             [table.locator("tbody tr").count()
-             for table in self.page.locator("table").all()],
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
             [9, 9, 9, 8],
         )
+        twin = self.page.locator("#twin-evidence-plan")
+        self.assertEqual(twin.count(), 1)
+        self.assertEqual(twin.locator("tbody tr").count(), 6)
+        for row in twin.locator("tbody tr").all():
+            expect(row.locator("td").last).to_have_text("MISSING")
+        expect(twin).to_contain_text("DEPENDENCY_HEALTH")
+        expect(twin).to_contain_text("REDUNDANCY_HEALTH")
         self.assertEqual(self.page.locator("form").count(), 0)
         self.assertEqual(self.page.locator("script").count(), 0)
 
@@ -451,18 +462,29 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         # Small viewport: tables remain inside scroll containers and summary cards stack.
         self.page.set_viewport_size({"width": 390, "height": 844})
         self.page.reload()
-        self.assertEqual(self.page.locator("div.table-scroll table").count(), 4)
+        self.assertEqual(self.page.locator("div.table-scroll table").count(), 5)
         self.assertEqual(self.page.locator(".demo-card").count(), 3)
         self.assertEqual(
             [table.locator("tbody tr").count()
-             for table in self.page.locator("table").all()],
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
             [9, 9, 9, 8],
         )
         self.assertIn("NO-GO LIVE", self.page.locator("#verdict").inner_text())
         self.assertTrue(self.page.locator("body").evaluate(
             "el => el.scrollWidth <= window.innerWidth"
         ), "cockpit creates page-level horizontal overflow on mobile")
+        # Native collapsed details have no measurable table scroll layout.
+        # Open them through the user-facing summaries before checking geometry.
+        for details in self.page.locator("details").all():
+            if details.locator("div.table-scroll").count():
+                if not details.evaluate("el => el.open"):
+                    details.locator("summary").click()
+                self.assertTrue(details.evaluate("el => el.open"))
+        self.assertTrue(self.page.locator("body").evaluate(
+            "el => el.scrollWidth <= window.innerWidth"
+        ), "expanded cockpit creates page-level horizontal overflow on mobile")
         for wrapper in self.page.locator("div.table-scroll").all():
+            expect(wrapper).to_be_visible()
             self.assertGreaterEqual(
                 wrapper.evaluate("el => el.scrollWidth"),
                 wrapper.evaluate("el => el.clientWidth"),
@@ -490,7 +512,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "fixture_sha256": re.search(
                 r"[a-f0-9]{64}", self.page.locator("main").inner_text()
             ).group(0),
-            "table_count": 4,
+            "table_count": self.page.locator("table").count(),
             "runtime_authenticated": False,
             "browser_rehearsal_independently_reviewed": False,
             "production_qualified": False,
@@ -513,6 +535,152 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertFalse(stored["browser_rehearsal_independently_reviewed"])
         self.assertFalse(stored["live_remediation_authorized"])
 
+
+
+    def _responsive_showrun(self, width, repetition):
+        self.page.set_viewport_size({"width": width, "height": 900 if width >= 768 else 844})
+        output = Path(os.environ.get(
+            "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")
+        ))
+        output.mkdir(parents=True, exist_ok=True)
+        prefix = f"showrun-{width}-{repetition}"
+        captures = []
+        def capture(label):
+            self.assertTrue(self.page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), f"{prefix}: {label} horizontal overflow")
+            name = f"{prefix}-{label}.png"
+            png = self.page.screenshot(path=str(output / name), full_page=True, animations="disabled")
+            digest = hashlib.sha256(png).hexdigest()
+            self.assertEqual(hashlib.sha256((output / name).read_bytes()).hexdigest(), digest)
+            captures.append({"file": name, "sha256": digest})
+        self.page.goto(self.base + "/demo/explore-story")
+        self.page.locator("#story-token").fill(VIEWER)
+        self.page.locator("#start").click()
+        expect(self.page.locator("#story-status")).to_contain_text("PAUSE / EXPLORE")
+        scenario = self.page.locator("#scenario").inner_text()
+        run_id = scenario.split(" · ")[0]
+        self.assertRegex(run_id, r"^SIM-ACME-[A-F0-9]{16}$")
+        self.assertIn("ACME-DEMO-SAN-001", scenario)
+        self.assertIn("ACME-DEMO-PAY-002", scenario)
+        self.assertEqual(self.page.locator("#timeline li").count(), 9)
+        for cursor in range(2, 10):
+            self.page.locator("#advance").click()
+            expect(self.page.locator("#story-status")).to_contain_text(f"{cursor}/9")
+        self.assertTrue(all("MISSING" in t for t in self.page.locator("#timeline li").all_inner_texts()))
+        self.assertEqual(self.page.locator("#story-token").input_value(), "")
+        capture("story")
+        self.page.goto(self.base + "/demo/acme-impact")
+        expect(self.page.locator("body")).to_contain_text(run_id)
+        capture("impact")
+        self.page.goto(self.base + "/demo/acme-incident-cockpit")
+        for anchor in ("impact", "workbench", "decision", "itil", "verdict"):
+            self.page.locator(f"nav a[href='#{anchor}']").click()
+            self.assertEqual(self.page.evaluate("location.hash"), "#" + anchor)
+            expect(self.page.locator(f"#{anchor}")).to_be_visible()
+        body = self.page.locator("body").inner_text()
+        for verdict in ("GO — scénario synthétique", "UNKNOWN — preuves runtime", "NO-GO LIVE"):
+            self.assertIn(verdict, body)
+        self.assertEqual(self.page.locator("table").count(), 5)
+        self.assertEqual(
+            [table.locator("tbody tr").count()
+             for table in self.page.locator("table:not(#twin-evidence-plan)").all()],
+            [9, 9, 9, 8],
+        )
+        twin = self.page.locator("#twin-evidence-plan")
+        self.assertEqual(twin.count(), 1)
+        self.assertEqual(twin.locator("tbody tr").count(), 6)
+        for row in twin.locator("tbody tr").all():
+            expect(row.locator("td").last).to_have_text("MISSING")
+        expect(twin).to_contain_text("DEPENDENCY_HEALTH")
+        expect(twin).to_contain_text("REDUNDANCY_HEALTH")
+        self.assertEqual(self.page.locator("form").count(), 0)
+        self.assertEqual(self.page.locator("script").count(), 0)
+        capture("cockpit")
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        receipt = {"schema": "aiops.responsive-showrun.v1", "executed_sha": sha,
+                   "width": width, "repetition": repetition, "run_id": run_id,
+                   "captures": captures, "scope": "STORY_OFFLINE",
+                   "runtime_authenticated": False, "production_qualified": False,
+                   "live_remediation_authorized": False}
+        (output / f"{prefix}.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+    def test_09_showrun_320_1(self):
+        self._responsive_showrun(320, 1)
+
+    def test_09_showrun_320_2(self):
+        self._responsive_showrun(320, 2)
+
+    def test_09_showrun_320_3(self):
+        self._responsive_showrun(320, 3)
+
+    def test_09_showrun_768_1(self):
+        self._responsive_showrun(768, 1)
+
+    def test_09_showrun_768_2(self):
+        self._responsive_showrun(768, 2)
+
+    def test_09_showrun_768_3(self):
+        self._responsive_showrun(768, 3)
+
+    def test_09_showrun_1440_1(self):
+        self._responsive_showrun(1440, 1)
+
+    def test_09_showrun_1440_2(self):
+        self._responsive_showrun(1440, 2)
+
+    def test_09_showrun_1440_3(self):
+        self._responsive_showrun(1440, 3)
+
+    def test_10_interactive_run_selection_with_untrusted_dom_inventory(self):
+        """Real UI click; injected display rows are not Core or ACL evidence."""
+        self.page.goto(self.base + "/")
+        expect(self.page.locator("#run-detail-id")).to_be_visible()
+        expect(self.page.locator("#portal-run-filter")).to_be_visible()
+        self.page.evaluate("""() => {
+            const rows = document.getElementById('portal-runs');
+            rows.replaceChildren();
+            for (const id of ['RUN-CI-001', 'RUN-CI-002', 'SIM-ACME-INVALID']) {
+                const row = rows.insertRow();
+                for (const value of [id, 'TEST', 'UNKNOWN', '-', 'DOM fixture only'])
+                    row.insertCell().textContent = value;
+            }
+        }""")
+        rows = self.page.locator("#portal-runs tr")
+        first = rows.nth(0).locator("button[data-run-select]")
+        second = rows.nth(1).locator("button[data-run-select]")
+        expect(first).to_be_visible()
+        expect(second).to_be_visible()
+        expect(rows.nth(2).locator("button[data-run-select]")).to_have_count(0)
+        field = self.page.locator("#run-detail-id")
+        original_url = self.page.url
+        requests = []
+        self.page.on("request", lambda req: requests.append(req.url))
+        first.click()
+        expect(field).to_have_value("RUN-CI-001")
+        expect(field).to_be_focused()
+        expect(self.page.locator("#run-selection-status")).to_contain_text("ACL")
+        self.assertEqual(self.page.url, original_url)
+        self.assertFalse(any("/api/portal/runs/" in url for url in requests))
+        self.page.locator("#portal-run-filter-input").fill("RUN-CI-001")
+        expect(rows.nth(1)).to_be_hidden()
+        second.evaluate("el => el.click()")
+        expect(field).to_have_value("RUN-CI-001")
+        self.page.locator("#portal-run-filter-clear").click()
+        second.click()
+        expect(field).to_have_value("RUN-CI-002")
+        self.page.evaluate("document.getElementById('portal-runs').replaceChildren()")
+        expect(field).to_have_value("")
+        expect(self.page.locator("#run-selection-status")).to_contain_text("UNKNOWN")
+        self.assertEqual(self.page.url, original_url)
+        self.assertFalse(any("/api/portal/runs/" in url for url in requests))
+        response = self.context.request.get(
+            self.base + "/api/portal/runs/RUN-CI-002",
+            headers={"Authorization": "Bearer " + VIEWER},
+        )
+        self.assertEqual(response.status, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertNotIn("run_id", response.json())
 
 
 if __name__ == "__main__":

@@ -457,3 +457,18 @@ This review is a preservation/qualification decision only. No PR was merged, no 
 - [Core FS147 PR #450](https://github.com/alimtalbi-ata/aiops/pull/450) advanced from `ac2e3822dd073411ee7450940a5716cdc88fca5a` to [`bbe8b2b46d10e91a2100690941e7a6e2ae0e119a`](https://github.com/alimtalbi-ata/aiops/commit/bbe8b2b46d10e91a2100690941e7a6e2ae0e119a): comparison shows **two new files**, `app/core/fs147_correlation_chain.py` (60 lines) and `tests/test_fs147_correlation_chain.py` (61 lines). Pure offline tests cover tenant/alert/incident/run/evidence identity mismatch, untrusted identifiers, ticket 147, DEMO/LIVE boundaries and deterministic replay. [AIOps quality gates #42438550623](https://github.com/alimtalbi-ata/aiops/actions/runs/42438550623) completed SUCCESS for this HEAD; **CODE/CI only**, not authenticated GLPI, PG16, Temporal or host E2E.
 - [Integration PR #449](https://github.com/alimtalbi-ata/aiops/pull/449) remains at `a1f6d18e0e529b434e8cf45db2e294cc504411af`; [general quality gate #42379782613](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782613) FAILURE and [isolated receipt gate #42379782717](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782717) SUCCESS. These are distinct qualification levels.
 - **One priority blocker:** no newly authenticated SRV-DEB-05 preservation inventory for the five Compose stacks. Existing reporter -> publisher must attest immutable image identities, source/dirty worktrees, effective Compose/overrides, mount/volume and simulated-data retention, test receipts and verified rollback. Four crontab entries are not five stacks. Do not infer deployment from GitHub SHA, image tags or file dates. No host inspection or deployment was performed in this GitHub-only cycle. FS1113 remains non-production and separate from FS147.
+
+
+## 2026-11-18 — ACME offline Twin provenance (proposed, #804)
+
+Convergence #713 KEEP; base integration #810 `aec5a442a9c0718b6603eda9af9a2628c146b2e3`. Add `twin_evidence` to existing impact read model, no new route or orchestrator. Per-element fixture pointer and SHA256, Git SHA and observed_at null, freshness UNKNOWN, scope STORY_OFFLINE. Structural reachability only; no tenant/Core binding or operational authority. Golden graph/sandbox ADAPT deferred pending edge provenance and ACL. Reproduce: `python -m unittest discover -s tests -p 'test_acme_twin_provenance.py' -v`. Runtime and production not qualified.
+
+
+## ACME E2E selective receipt port — 2026-11-18 (proposed in draft)
+
+See [E2E handover](contracts/acme-e2e-handover.md). Offline structural gate only; runtime NOT_TESTED. Existing orchestration retained.
+
+
+## 2026-11-18 — AIOPS2 ABC candidate (#804)
+
+Frozen source heads: A 77fcbccb52d0a4efd7a28de1072ebc7ff56aa940; B 2a5881de2747b7362060da3b6b2b00f79a3ea37a; C 621eb12e386efbdc5bcc671bc3a5aa210751f464. Isolated candidate only; integrated qualification pending. No runtime or production GO.

@@ -31,17 +31,21 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <title>GLPI / ITSM — Portal read-only handoff</title>
 <style>
 body{margin:0;background:#07111d;color:#e9f2f8;font:15px/1.55 system-ui,sans-serif}
-main{max-width:1100px;margin:auto;padding:24px}
-a{color:#91d6ff}a:focus-visible,select:focus-visible{outline:3px solid #ffda7a;outline-offset:3px}
-nav{display:flex;gap:18px;flex-wrap:wrap}
-.panel{background:#0c1d2d;border:1px solid #31506a;border-radius:12px;padding:18px;margin:16px 0}
+main{width:100%;max-width:1100px;min-width:0;box-sizing:border-box;margin:auto;padding:24px}
+a{color:#91d6ff;overflow-wrap:anywhere}a:focus-visible,select:focus-visible{outline:3px solid #ffda7a;outline-offset:3px}
+nav{display:flex;gap:18px;flex-wrap:wrap;min-width:0}
+.panel{min-width:0;max-width:100%;box-sizing:border-box;background:#0c1d2d;border:1px solid #31506a;border-radius:12px;padding:18px;margin:16px 0}
 .muted{color:#b5c9d7}.status{font-weight:700;color:#ffda7a}
-.journey{display:flex;flex-wrap:wrap;gap:10px;list-style:decimal;padding-left:24px}
-.journey li{padding:4px 10px 4px 0}.journey [aria-current=page]{font-weight:700}
-dl{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:8px}
-table{width:100%;border-collapse:collapse}th,td{border:1px solid #31506a;padding:10px;text-align:left}caption{text-align:left;color:#b5c9d7}
+.journey{display:flex;flex-wrap:wrap;gap:10px;list-style:decimal;padding-left:24px;min-width:0}
+.journey li{min-width:0;max-width:100%;padding:4px 10px 4px 0;overflow-wrap:anywhere}.journey [aria-current=page]{font-weight:700}
+dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px;min-width:0}
+dt,dd{min-width:0;overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #31506a;padding:10px;text-align:left;overflow-wrap:anywhere}caption{text-align:left;color:#b5c9d7}
+.itsm-table-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-inline:contain}
+.itsm-table-scroll table{min-width:520px}
 dt{font-weight:700}dd{margin:0;color:#b5c9d7}
-@media(max-width:600px){dl{grid-template-columns:1fr}}
+h1,h2,p,li{min-width:0;overflow-wrap:anywhere}
+@media(max-width:600px){dl{grid-template-columns:minmax(0,1fr)}}
 </style></head><body><main>
 <nav aria-label="Navigation Portal"><a href="/">Cockpit AIOps</a>
 <a href="/#integrations">Liens natifs configurés, dont GLPI</a>
@@ -93,13 +97,14 @@ templates et pages natives GLPI n'ont pas été inspectés sur une instance auto
 <p id="queue-unavailable" role="note">NOT_INSTALLED — aucune API GLPI authentifiée et
 tenant-scoped ne fournit la file, les délais SLA/OLA ou les fenêtres de maintenance.
 Aucun ticket ni compteur n'est déduit des fixtures SYNTHETIC.</p>
+<div class="itsm-table-scroll" role="region" aria-label="État de la file ITSM" tabindex="0">
 <table aria-describedby="queue-unavailable">
 <caption>État de la file ITSM, sans enregistrement client</caption>
 <thead><tr><th scope="col">Priorité</th><th scope="col">Ticket</th>
 <th scope="col">SLA / OLA</th><th scope="col">Source / fraîcheur</th></tr></thead>
 <tbody><tr><td colspan="4">UNKNOWN — aucune ligne affichable avant ACL acteur,
 tenant et entité GLPI vérifiée côté serveur.</td></tr></tbody>
-</table>
+</table></div>
 <p>Calendrier de maintenance : UNKNOWN. Historique et journal d'audit : UNKNOWN.
 Les permissions N1/N2/N3/manager restent celles de GLPI, non inférées ici.</p>
 </section>

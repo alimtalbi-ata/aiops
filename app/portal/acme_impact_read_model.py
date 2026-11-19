@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Any
 
 from portal.acme_fixture_contract import load_fixture_bytes, validate_fixture
+from portal.acme_twin_provenance import build_twin_evidence
+from portal.acme_twin_consumer import project_twin_consumer
+from portal.acme_signal_context import build_signal_context
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -89,9 +92,10 @@ def build_acme_impact_read_model() -> dict[str, Any]:
     fixture = load_fixture_bytes(raw)
     report = validate_fixture(fixture)
     digest = hashlib.sha256(raw).hexdigest()
-    return {
+    model = {
         "schema": "aiops.synthetic-impact-read-model.v1",
-        "entrypoint": "http://10.79.94.202:17777/",
+        "twin_evidence": build_twin_evidence(raw),
+        "entrypoint": "/",
         "run_id": "SIM-ACME-" + digest[:16].upper(),
         "run_id_provenance": "DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN",
         "incident_id": report["source_incident_id"],
@@ -173,12 +177,15 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "production_qualified": False,
         "live_remediation_authorized": False,
     }
+    model["twin_consumer"] = project_twin_consumer(model)
+    model["signal_context"] = build_signal_context(model["twin_evidence"])
+    return model
 
 
 def _load_or_503() -> dict[str, Any]:
     try:
         return build_acme_impact_read_model()
-    except (OSError, UnicodeError, ValueError, ImportError, AttributeError) as exc:
+    except (OSError, UnicodeError, ValueError, ImportError, AttributeError, KeyError, TypeError, IndexError) as exc:
         raise HTTPException(
             status_code=503,
             detail="synthetic_impact_fixture_unavailable_or_invalid",
@@ -229,7 +236,7 @@ def acme_itil_readiness_page():
         "<table><caption>Étapes et preuves manquantes</caption>"
         "<thead><tr><th>Transition</th><th>Qualification</th>"
         "<th>Preuves requises absentes</th><th>Autorisée</th></tr></thead>"
-        "<tbody>" + rows + "</tbody></table>"
+        "<tbody>" + rows + "</tbody></table></div>"
         "<p>Source SHA-256 : <code>"
         + html.escape(readiness["source_sha256"], quote=True)
         + "</code></p></main></body></html>"
@@ -418,7 +425,7 @@ def acme_impact_json():
 
 @router.get("/demo/acme-impact", response_class=HTMLResponse, name="synthetic_acme_impact_page")
 def acme_impact_page():
-    """Serve a local HTML snapshot; no scripts, forms, links or upstream calls."""
+    """Serve a local HTML snapshot; no scripts, forms or upstream calls."""
     model = _load_or_503()
     path = " → ".join(str(part) for part in model["impact_path"])
     rows = [
@@ -471,20 +478,20 @@ def acme_impact_page():
     )
     path_nodes = "".join(
         "<g><rect x=\"" + str(25 + i * 230) + "\" y=\"72\" width=\"190\" height=\"76\" rx=\"12\" "
-        "fill=\"" + ("#7f1d1d" if i == 0 else "#17365d" if i < len(model["impact_path"]) - 1 else "#7c2d12") + "\" "
+        "fill=\"" + ("#7f1d1d" if i == 0 else "#172136" if i < len(model["impact_path"]) - 1 else "#7c2d12") + "\" "
         "stroke=\"#cbd5e1\" stroke-width=\"2\"/>"
         "<text x=\"" + str(120 + i * 230) + "\" y=\"101\" text-anchor=\"middle\" "
-        "font-family=\"Arial,sans-serif\" font-size=\"13\" fill=\"#ffffff\">"
+        "font-family=\"Arial,sans-serif\" font-size=\"16\" fill=\"#ffffff\">"
         + html.escape(str(node), quote=True) + "</text>"
         "<text x=\"" + str(120 + i * 230) + "\" y=\"124\" text-anchor=\"middle\" "
-        "font-family=\"Arial,sans-serif\" font-size=\"10\" fill=\"#e2e8f0\">"
+        "font-family=\"Arial,sans-serif\" font-size=\"14\" fill=\"#e2e8f0\">"
         + ("SAN P1" if i == 0 else "SERVICE IMPACT" if i == len(model["impact_path"]) - 1 else "DEPENDENCY") + "</text></g>"
         for i, node in enumerate(model["impact_path"])
     )
     arrows = "".join(
-        "<path d=\"M " + str(215 + i * 230) + " 110 h 30\" stroke=\"#64748b\" "
+        "<path d=\"M " + str(215 + i * 230) + " 110 h 30\" stroke=\"#8b5cf6\" "
         "stroke-width=\"3\" fill=\"none\"/><path d=\"M " + str(237 + i * 230) + " 103 l 8 7 -8 7\" "
-        "stroke=\"#64748b\" stroke-width=\"3\" fill=\"none\"/>"
+        "stroke=\"#8b5cf6\" stroke-width=\"3\" fill=\"none\"/>"
         for i in range(max(0, len(model["impact_path"]) - 1))
     )
     diagram = (
@@ -493,19 +500,19 @@ def acme_impact_page():
         "<p>Graphe local construit depuis le fixture synthétique ; pas une topologie runtime.</p>"
         "<svg xmlns=\"http://www.w3.org/2000/svg\" role=\"img\" aria-label=\"Dépendances SAN vers application Payments, simulation\" "
         "viewBox=\"0 0 980 180\" width=\"100%\" height=\"180\" preserveAspectRatio=\"xMinYMin meet\">"
-        "<rect width=\"980\" height=\"180\" rx=\"14\" fill=\"#f8fafc\"/>"
-        + arrows + path_nodes + "</svg></section>"
+        "<rect width=\"980\" height=\"180\" rx=\"14\" fill=\"#111827\"/>"
+        + arrows + path_nodes + "</svg><ol class=\"mobile-path\">" + "".join("<li>" + html.escape(str(node)) + "</li>" for node in model["impact_path"]) + "</ol></section>"
     )
     body = (
         "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
         "<title>ACME — impact SAN P1 vers Payments P2 (simulation)</title>"
-        "<style>body{margin:0;background:#0b1220;color:#eef5ff;font:15px/1.55 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:clamp(16px,4vw,44px)}h1{font-size:clamp(2rem,4vw,3.2rem)}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:24px 0}.kpi{background:#121e31;border:1px solid #2a3b55;border-radius:14px;padding:16px}.kpi span{display:block;color:#a8b8ce;font-size:.82rem}.kpi strong{display:block;font-size:1.25rem;margin-top:4px}.kpi .p1{color:#ff6878}.kpi .p2{color:#ffc66d}.ci-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0}.ci-card{background:#121e31;border:1px solid #2a3b55;border-radius:12px;padding:14px;min-width:0}.ci-top{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.ci-top strong{color:#65d9ee}.ci-top span{font-size:.7rem;color:#ffc66d}.ci-card h3{font-size:1rem;margin:10px 0 2px;overflow-wrap:anywhere}.ci-card p{color:#a8b8ce;margin:0 0 10px}.ci-card small{color:#a8b8ce;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#121e31;border-radius:12px;overflow:hidden}th,td{text-align:left;padding:12px;border-bottom:1px solid #2a3b55;overflow-wrap:anywhere}th{color:#65d9ee}td:nth-child(3){color:#a8b8ce;font-size:.85rem}svg{max-width:100%;height:auto}caption{text-align:left;padding:12px;color:#65d9ee;font-weight:700}@media(max-width:600px){main{padding:14px}th,td{padding:7px;font-size:.78rem}}</style>"
-        "</head><body><main><h1>ACME — SAN P1 → Payments P2</h1>"
+        "<style>body{margin:0;background:#0b1220;color:#eef5ff;font:15px/1.55 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:clamp(16px,4vw,44px)}h1{font-size:clamp(2rem,4vw,3.2rem)}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:24px 0}.kpi{background:#121e31;border:1px solid #334155;border-radius:14px;padding:16px}.kpi span{display:block;color:#b8c7df;font-size:.82rem}.kpi strong{display:block;font-size:1.25rem;margin-top:4px}.kpi .p1{color:#ff6878}.kpi .p2{color:#ffc66d}.ci-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0}.ci-card{background:#121e31;border:1px solid #334155;border-radius:12px;padding:14px;min-width:0}.ci-top{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.ci-top strong{color:#38bdf8}.ci-top span{font-size:.7rem;color:#ffc66d}.ci-card h3{font-size:1rem;margin:10px 0 2px;overflow-wrap:anywhere}.ci-card p{color:#b8c7df;margin:0 0 10px}.ci-card small{color:#b8c7df;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#121e31;border-radius:12px;overflow:hidden}th,td{text-align:left;padding:12px;border-bottom:1px solid #334155;overflow-wrap:anywhere}th{color:#38bdf8}td:nth-child(3){color:#b8c7df;font-size:.85rem}svg{max-width:100%;height:auto}caption{text-align:left;padding:12px;color:#38bdf8;font-weight:700}@media(max-width:600px){main{padding:14px}th,td{padding:7px;font-size:.78rem}}body{background:#080b14;color:#f4f7ff}.kpi,.ci-card,table{background:#111827}.table-scroll{overflow-x:auto;max-width:100%}.table-scroll table{min-width:620px}th,td{font-size:.9rem;overflow-wrap:normal;word-break:normal}td:nth-child(3){font-size:.9rem}td{overflow-wrap:normal}.table-scroll td:nth-child(2){min-width:200px;overflow-wrap:anywhere;font-family:ui-monospace,monospace}.table-scroll td:nth-child(3){min-width:190px;overflow-wrap:anywhere}.table-scroll:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}a{color:#38bdf8}a:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}header a{display:inline-block;padding:.4rem 0}.mobile-path{display:none}@media(max-width:1100px){svg{display:none}.mobile-path{display:block}.mobile-path li{padding:.7rem;background:#172136;margin:.4rem 0;overflow-wrap:anywhere}}</style>"
+        "</head><body><main><header><a href=\"/#incidents\">Retour Incident Explorer</a></header><h1>ACME — SAN P1 → Payments P2</h1>"
         "<p><strong>SIMULATION LOCALE UNIQUEMENT.</strong> Aucun incident runtime, "
         "ticket GLPI, capture applicative, appel backend ou événement horodaté n'est créé. "
         "Le run_id affiché est dérivé des octets du fixture, pas d'un run exécuté.</p>"
-        + diagram +
+        + "<p><strong>GO — scénario synthétique · UNKNOWN — preuves runtime · NO-GO LIVE</strong></p>" + diagram +
         '<section class="kpis" aria-label="Indicateurs du scénario">'
         '<article class="kpi"><span>Incident source</span><strong class="p1">SAN P1</strong><span>Dégradation de fabric simulée</span></article>'
         '<article class="kpi"><span>Service impacté</span><strong class="p2">Payments P2</strong><span>Impact métier simulé</span></article>'
@@ -526,10 +533,10 @@ def acme_impact_page():
         + '<section aria-label="Neuf checkpoints applicatifs attendus"><h2>STAR — checkpoints applicatifs et preuves manquantes</h2>'
         + '<p>Les noms de vues et états sont le contrat attendu, pas des captures observées. Les URL runtime exactes, les identifiants applicatifs et les SHA-256 de captures ne sont pas disponibles dans ce scénario.</p>'
         + '<div class="ci-grid">' + checkpoint_cards + '</div></section>'
-        + "<table><caption>Identifiants, provenance et trous de preuve</caption>"
+        + "<p>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class=\"table-scroll\" role=\"region\" aria-label=\"Provenance\" tabindex=\"0\"><table><caption>Identifiants, provenance et trous de preuve</caption>"
         "<thead><tr><th scope=\"col\">Champ</th><th scope=\"col\">Valeur</th>"
         "<th scope=\"col\">Origine / qualification</th></tr></thead>"
-        "<tbody>" + table_rows + "</tbody></table>"
+        "<tbody>" + table_rows + "</tbody></table></div>"
         "<p>Remédiation LIVE autorisée : NON. Les identifiants et l'horloge de scénario sont "
         "déterministes et fictifs ; aucun ticket GLPI ni événement runtime n'existe.</p>"
         "</main></body></html>"

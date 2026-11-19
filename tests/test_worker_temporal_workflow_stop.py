@@ -35,8 +35,8 @@ def _workflow_with_stub(events, *, block_stage):
             return {"version": 1}
         if activity.__name__ == "execute_stage":
             if args["stage"] == block_stage:
-                return {"status": "BLOCKED", "version": args["version"] + 1}
-            return {"status": "PASS", "version": args["version"] + 1}
+                return {"run_id": args["run_id"], "stage": args["stage"], "status": "BLOCKED", "version": args["version"] + 1}
+            return {"run_id": args["run_id"], "stage": args["stage"], "status": "PASS", "version": args["version"] + 1}
         if activity.__name__ == "finish_run":
             return {"status": "RESOLVED", "version": args["version"] + 1}
         raise AssertionError("unknown activity")

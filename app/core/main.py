@@ -70,6 +70,8 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
+        # No independently qualified runtime postcheck authority exists on this path.
+        if x.command=='RESOLVE':raise HTTPException(403,'independent runtime postcheck required')
         rec=c.execute('select response from aiops.command_receipts where idempotency_key=%s',(x.idempotency_key,)).fetchone()
         if rec:return rec[0]
         status,version,mode=row

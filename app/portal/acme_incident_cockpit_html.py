@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from html import escape
+from portal.acme_workbench_presentation import render_story_context, render_runtime_refusals
 
 from portal.acme_evidence_collection_plan import EVIDENCE_REQUIREMENTS
 
@@ -18,6 +19,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
     readiness = cockpit["itil_readiness"]
     evidence = cockpit["evidence_plan"]
     review = cockpit["analyst_critic_review"]
+    journey = cockpit["run_journey"]
     if (len(lifecycle["stages"]) != 9 or len(readiness["transitions"]) != 8
             or evidence["requested_count"] != 9 or evidence["verified_count"] != 0
             or review["policy_disposition"] != "DENY_LIVE_ACTION"
@@ -31,6 +33,16 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
             or any(t["authorized"] is not False for t in readiness["transitions"])
             or any(r["evidence_state"] != "MISSING" for r in evidence["requests"])):
         raise ValueError("unqualified_cockpit_details")
+    if (journey.get("schema") != "aiops.team-c.san-payments-run-journey.v2"
+            or journey.get("scope") != "STORY_OFFLINE"
+            or journey.get("receipt") is not None
+            or len(journey.get("stage_plan", [])) != 17
+            or any(s.get("status") != "NOT_RUN" or s.get("evidence_state") != "MISSING" for s in journey["stage_plan"])
+            or journey["run"].get("run_id") != cockpit["twin_consumer"]["story_identity"]["run_id"]
+            or journey["run"].get("tenant_id") is not None
+            or journey["worker"].get("executor") != "NOT_INVOKED"
+            or journey["policy"].get("decision") != "DENY_LIVE_ACTION"):
+        raise ValueError("unqualified_run_journey_projection")
     def safe(value: object) -> str:
         return escape(str(value), quote=True)
     stage_rows = "".join(
@@ -84,6 +96,27 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<td>MISSING — contrôle humain requis</td></tr>"
         for index, request in enumerate(evidence["requests"], start=1)
     )
+    twin_plan = cockpit["twin_consumer"]["evidence_collection_plan"]
+    if (twin_plan.get("scope") != "STORY_OFFLINE"
+            or twin_plan.get("execution_authorized") is not False
+            or twin_plan.get("ordering") != "STRUCTURAL_DISTANCE_NOT_SEVERITY"
+            or any(row.get("observation_status") != "MISSING"
+                   for row in twin_plan["affected_ci_observations"] + twin_plan["alternative_dependency_observations"])):
+        raise ValueError("unqualified_twin_evidence_plan")
+    twin_rows = "".join(
+        "<tr><th scope='row'>" + safe(row["ci_id"]) + "</th><td>"
+        + safe(row["minimum_dependency_hops"]) + "</td><td>"
+        + safe(row["structural_path_count"]) + "</td><td>DEPENDENCY_HEALTH</td><td>MISSING</td></tr>"
+        for row in twin_plan["affected_ci_observations"]
+    ) + "".join(
+        "<tr><th scope='row'>" + safe(row["ci_id"])
+        + "</th><td>—</td><td>—</td><td>REDUNDANCY_HEALTH</td><td>MISSING</td></tr>"
+        for row in twin_plan["alternative_dependency_observations"]
+    )
+    journey_rows = "".join(
+        "<li><code>" + safe(item["stage"]) + "</code> — <strong>NOT_RUN</strong> · preuve MISSING</li>"
+        for item in journey["stage_plan"]
+    )
     transition_rows = "".join(
         "<tr><th scope='row'>" + safe(t["transition"]) + "</th><td>"
         + safe(", ".join(t["missing_evidence"])) + "</td><td>NON</td></tr>"
@@ -115,18 +148,15 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "@media(max-width:700px){body{margin:1rem auto}.demo-cards{grid-template-columns:1fr}"
         "nav{align-items:stretch}nav a{flex:1 1 40%;text-align:center}}"
         "@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}"
-        "</style></head><body><main>"
-        "<h1>AIOPS2 — Cockpit incident → ITIL</h1>"
+        "body{background:#080b14;color:#f4f7ff}a{color:#38bdf8}thead{background:#172136;color:#f4f7ff}nav{background:#111827}nav a{background:#172136;color:#38bdf8;border-color:#64748b}.demo-card{background:#111827}.warning{background:#31251b;color:#fff0cc;border-color:#fbbf24}a:focus-visible,summary:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}details{background:#111827;padding:1rem;border-radius:12px;margin:1rem 0}summary{cursor:pointer;font-weight:bold}.table-scroll:focus-visible{outline:3px solid #38bdf8;outline-offset:3px}td,th{overflow-wrap:normal;word-break:normal}.story-context{background:#111827;padding:1rem;border-radius:12px}.story-context dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.35rem .8rem}.story-context dt,.story-context dd{margin:0;min-width:0}.story-context dd{overflow-wrap:anywhere;font-family:ui-monospace,monospace}@media(max-width:700px){.story-context dl{grid-template-columns:1fr}.story-context dt{font-weight:600}.story-context dd{margin-bottom:.35rem}}.scroll-hint{font-size:.875rem;color:#b8c7df}@media(max-width:700px){h1{font-size:1.55rem;margin:.5rem 0}.warning{padding:.65rem}.demo-cards{gap:.35rem;margin:.65rem 0}.demo-card{padding:.55rem}.demo-card strong{font-size:1rem}.demo-card p{font-size:.85rem;margin:.1rem 0}nav{padding:.5rem}} </style></head><body><main>"
+        "<header><nav aria-label='Navigation espace opérateur'>"
+        "<a href='/#noc'>Cockpit NOC</a><a href='/demo/explore-story'>Explore / Story</a>"
+        "<a href='/demo/acme-impact'>Digital Twin</a><a href='/#incidents'>Retour Incident Explorer</a>"
+        "<a href='/#runs'>Runs Core (ACL requise)</a><a href='/itsm'>GLPI / ITSM</a>"
+        "</nav></header><h1>AIOPS2 — Cockpit incident → ITIL</h1>"
         "<p class='warning'><strong>DEMO SYNTHÉTIQUE — NO-GO LIVE.</strong> "
         "Aucune preuve runtime authentifiée, aucun ticket GLPI modifié, "
         "aucune exécution Temporal ni remédiation autorisée.</p>"
-        "<nav aria-label='Parcours guidé de démonstration'>"
-        "<strong>Démo guidée (8–12 min) :</strong> "
-        "<a href='#impact'>1. Impact métier</a> · "
-        "<a href='#evidence'>2. Preuves</a> · "
-        "<a href='#decision'>3. Décision</a> · "
-        "<a href='#itil'>4. ITIL</a> · "
-        "<a href='#verdict'>5. Verdict</a></nav>"
         "<div class='demo-cards' aria-label='Résumé de qualification'>"
         "<div class='demo-card'><strong>GO — scénario synthétique</strong>"
         "<p>Corrélation SAN vers Payments sur fixture locale.</p></div>"
@@ -134,6 +164,13 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<p>Aucune source réelle ni récupération indépendante attestée.</p></div>"
         "<div class='demo-card'><strong>NO-GO LIVE</strong>"
         "<p>Aucune action réelle ni clôture GLPI autorisée.</p></div></div>"
+        "<nav aria-label='Parcours guidé de démonstration'>"
+        "<strong>Démo guidée (8–12 min) :</strong> "
+        "<a href='#impact'>1. Impact métier</a> · "
+        "<a href='#workbench'>2. Preuves</a> · "
+        "<a href='#decision'>3. Décision</a> · "
+        "<a href='#itil'>4. ITIL</a> · "
+        "<a href='#verdict'>5. Verdict</a></nav>"
         "<h2>Parcours démontrable — SAN vers Payments</h2>"
         "<p>Signal SAN → incident P1 → impact Payments → hypothèses Analyst/Critic "
         "→ décision Policy/HITL → simulation isolée → vérification indépendante "
@@ -152,23 +189,40 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(cockpit["incident_id"]) + "</code> · Payments P2 : <code>"
         + safe(cockpit["business_impact_incident_id"]) + "</code></p>"
         "<p>Chemin d'impact : " + safe(" → ".join(cockpit["business_impact_path"]))
-        + "</p><h2>Chronologie explicative — scénario, pas événements observés</h2>"
+        + "</p><details class='secondary-detail'><summary>Chronologie explicative — 9 étapes UNKNOWN, pas événements observés</summary>"
         "<p>Neuf étapes attendues, aucune horodatée ni attestée. "
         "La prochaine vérification ne constitue pas une action exécutée.</p>"
-        "<div class='table-scroll'><table><thead><tr><th>Étape métier</th><th>Source attendue</th>"
+        "<p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Chronologie métier' tabindex='0'><table><thead><tr><th>Étape métier</th><th>Source attendue</th>"
         "<th>État de preuve</th><th>Prochaine vérification</th></tr></thead>"
-        "<tbody>" + timeline_rows + "</tbody></table></div>"
-        "<h2 id='evidence'>Cycle incident (9 étapes)</h2><div class='table-scroll'><table><thead><tr>"
+        "<tbody>" + timeline_rows + "</tbody></table></div></details>"
+        "<details class='secondary-detail'><summary>Cycle incident — 9 étapes UNKNOWN</summary><p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Cycle incident' tabindex='0'><table><thead><tr>"
         "<th>Étape</th><th>Source attendue</th><th>Preuve</th></tr></thead>"
-        "<tbody>" + stage_rows + "</tbody></table></div>"
-        "<h2>Registre des preuves attendues — lecture seule</h2>"
+        "<tbody>" + stage_rows + "</tbody></table></div></details>"
+        " <section id='run-journey' aria-label='Run Journey Team C'><h2>Run Journey SAN P1 → Payments — contrat v2</h2>"
+        "<p><strong>STORY_OFFLINE · DEMO · aucun reçu émis · 0/17 étapes exécutées.</strong></p>"
+        "<dl><dt>Run simulé</dt><dd><code>" + safe(journey["run"]["run_id"]) + "</code></dd>"
+        "<dt>Attempt simulé / clé idempotente</dt><dd><code>" + safe(journey["run"]["attempt_id"]) + "</code></dd>"
+        "<dt>SHA exécuté</dt><dd>ABSENT — aucun binaire exécuté</dd><dt>Tenant</dt><dd>UNBOUND — aucun tenant Core</dd>"
+        "<dt>Policy</dt><dd>DENY_LIVE_ACTION</dd><dt>HITL</dt><dd>SIMULATED_NOT_REQUESTED — aucune approbation créée</dd>"
+        "<dt>Worker</dt><dd>NOT_INVOKED — Temporal non appelé</dd></dl>"
+        "<details><summary>Plan des 17 étapes — toutes NOT_RUN / MISSING</summary><ol>" + journey_rows + "</ol></details></section>"
+        " <span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
+        "<h3>Plan de preuves Digital Twin</h3>"
+        "<p>STORY_OFFLINE — distance structurelle, pas gravité. Aucune collecte exécutée.</p>"
+        "<div class='table-scroll' role='region' aria-label='Plan de preuves Digital Twin' tabindex='0'><table id='twin-evidence-plan'><thead><tr><th>CI</th><th>Distance</th><th>Chemins</th>"
+        "<th>Observation requise</th><th>État</th></tr></thead><tbody>"
+        + twin_rows + "</tbody></table></div>"
+        "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
+        "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
+        + render_story_context(cockpit) + render_runtime_refusals() +
+        "<details><summary>Registre des preuves attendues — 9 MISSING</summary>"
         "<p>Chaque ligne est une demande de preuve, pas une pièce collectée. "
         "Les champs observed_at, source_id et content_sha256 doivent être "
         "contrôlés indépendamment avant toute qualification. "
         "Aucun dépôt, appel sortant ou validation automatique ici.</p>"
-        "<div class='table-scroll'><table><thead><tr><th>Point de contrôle</th><th>Preuve exigée</th>"
+        "<div class='table-scroll' role='region' aria-label='Registre des preuves attendues' tabindex='0'><table><thead><tr><th>Point de contrôle</th><th>Preuve exigée</th>"
         "<th>Source attendue</th><th>Métadonnées requises</th>"
-        "<th>État</th></tr></thead><tbody>" + evidence_rows + "</tbody></table></div>"
+        "<th>État</th></tr></thead><tbody>" + evidence_rows + "</tbody></table></div></details>"
         "<section aria-label='Fiche de décision opérationnelle'>"
         "<h2>Fiche de décision — que peut faire le NOC ?</h2>"
         "<dl><dt><strong>Ce que nous savons</strong></dt><dd>"
@@ -195,9 +249,9 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + safe(evidence["requested_count"]) + "</strong>. "
         "Prochaine action : collecte manuelle en lecture seule, "
         "puis vérification indépendante.</p>"
-        "<h2 id='itil'>Transitions ITIL (8)</h2><div class='table-scroll'><table><thead><tr>"
+        "<h2 id='itil'>Transitions ITIL (8)</h2><details><summary>8 transitions non autorisées — preuves manquantes</summary><p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Transitions ITIL' tabindex='0'><table><thead><tr>"
         "<th>Transition</th><th>Preuves manquantes</th><th>Autorisée</th>"
-        "</tr></thead><tbody>" + transition_rows + "</tbody></table></div>"
+        "</tr></thead><tbody>" + transition_rows + "</tbody></table></div></details>"
         "<div id='verdict' class='warning'><strong>Décision opérateur :</strong> "
         "GO pour le scénario synthétique ; UNKNOWN pour les preuves runtime ; "
         "NO-GO LIVE pour toute action réelle ou clôture GLPI.</div>"
