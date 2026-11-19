@@ -55,5 +55,23 @@ class DemoStudioTests(unittest.TestCase):
         self.assertIn('href="/demo/decision-cockpit"', self.client.get("/demo/studio").text)
 
 
+    def test_golden_demo_hash_and_no_network(self):
+        import hashlib
+        import base64
+        from portal.demo_studio import GOLDEN_SCRIPT
+        response = self.client.get("/demo/golden")
+        self.assertEqual(response.status_code, 200)
+        digest = base64.b64encode(hashlib.sha256(GOLDEN_SCRIPT.encode()).digest()).decode()
+        csp = response.headers["content-security-policy"]
+        self.assertIn("script-src 'sha256-" + digest + "'", csp)
+        self.assertIn("connect-src 'none'", csp)
+        self.assertIn("LIVE BLOQUÉ", response.text)
+        self.assertIn("REFUS SIMULÉ", response.text)
+        self.assertIn('href="/demo/golden"', self.client.get("/demo/studio").text)
+        self.assertNotIn("fetch(", GOLDEN_SCRIPT)
+        self.assertNotIn("localStorage", GOLDEN_SCRIPT)
+        self.assertEqual(self.client.post("/demo/golden").status_code, 405)
+
+
 if __name__ == "__main__":
     unittest.main()
