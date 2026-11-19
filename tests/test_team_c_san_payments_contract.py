@@ -35,12 +35,15 @@ def check_story_contract(value):
     assert tuple(receipt["stages"]) == STAGES
     assert all(receipt["stages"][stage] == "PASS" for stage in STAGES)
     assert len(value["stage_evidence"]) == 17
+    stage_names = [item["stage"] for item in value["stage_evidence"]]
+    assert len(stage_names) == len(set(stage_names)) == 17
+    assert set(stage_names) == set(STAGES)
     for item in value["stage_evidence"]:
         assert item["status"] == "PASS"
         assert item["run_id"] == run["run_id"]
         assert item["attempt_id"] == run["attempt_id"]
         assert re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
-        assert item["observed_at"].endswith("Z")
+        assert re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z", item["observed_at"])
     intel = value["intelligence"]
     assert intel["provider"] == "DETERMINISTIC_RULES_NOT_LLM"
     assert intel["analyst_status"] == "HYPOTHESIS_ONLY"
@@ -56,6 +59,7 @@ def check_story_contract(value):
     assert value["worker"]["isolated"] is True and value["worker"]["no_effect"] is True
     assert value["worker"]["runtime_attested"] is False
     assert value["provenance"]["source_kind"] == "LOCAL_SYNTHETIC_FIXTURE"
+    assert value["provenance"]["expected_sha"] == run["executed_sha"]
     assert value["provenance"]["collected_at"].endswith("Z")
 
 class TeamCSanPaymentsContractTests(unittest.TestCase):
@@ -64,6 +68,15 @@ class TeamCSanPaymentsContractTests(unittest.TestCase):
 
     def test_positive_story_offline_contract(self):
         check_story_contract(self.value)
+
+    def test_schema_is_closed_and_requires_17_stages(self):
+        schema = load(SCHEMA_PATH)
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(schema["properties"]["schema"]["const"], "aiops.team-c.san-payments-run-journey.v1")
+        receipt_stages = schema["properties"]["receipt"]["properties"]["stages"]
+        self.assertFalse(receipt_stages["additionalProperties"])
+        self.assertEqual(set(receipt_stages["required"]), set(STAGES))
+        self.assertEqual(len(receipt_stages["required"]), 17)
 
     def test_rejects_live_mode(self):
         self.value["mode"] = "LIVE"
@@ -95,8 +108,13 @@ class TeamCSanPaymentsContractTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             check_story_contract(self.value)
 
-    def test_rejects_missing_or_duplicate_stage(self):
+    def test_rejects_missing_stage(self):
         self.value["stage_evidence"].pop()
+        with self.assertRaises(AssertionError):
+            check_story_contract(self.value)
+
+    def test_rejects_duplicate_stage(self):
+        self.value["stage_evidence"][0]["stage"] = self.value["stage_evidence"][1]["stage"]
         with self.assertRaises(AssertionError):
             check_story_contract(self.value)
 
