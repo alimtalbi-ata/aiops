@@ -53,7 +53,7 @@ def test_watchdog_fails_closed_on_stale_or_future_observation(tmp_path):
         for receipt in root.glob("reported-*.json"):
             receipt.unlink()
         (root/"candidate.json").write_text(json.dumps({"observed_at":stamp,"state":"BUILD_ELIGIBLE","sha":"a"*40,"deploy_authorized":False}))
-        with patch.object(watchdog.Path,"home",return_value=tmp_path),patch.object(watchdog.subprocess,"run") as run:
+        with patch.object(watchdog.Path,"home",return_value=tmp_path),patch.object(watchdog.subprocess,"run",return_value=subprocess.CompletedProcess(["gh","api"],0,json.dumps({"id":103,"user":{"login":"alimtalbi-ata"}}),"")) as run:
             watchdog.main()
         assert run.call_count==1
         assert "DISCOVERY_STALE" in run.call_args.args[0][-1]
