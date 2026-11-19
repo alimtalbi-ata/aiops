@@ -48,6 +48,7 @@ def test_downstream_rejects_mixed_snapshot_or_authority(client, route, key, valu
 def test_legacy_story_fields_remain(client):
     model = client.get("/api/demo/acme-impact").json()
     assert model["schema"] == "aiops.synthetic-impact-read-model.v1"
+    assert model["entrypoint"] == "/"
     assert model["ticket_id"] is None
     assert model["event_timestamp_utc"] is None
     assert model["impact_path"] == model["twin_evidence"]["impact"]["impact_path"]
