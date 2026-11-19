@@ -94,7 +94,7 @@ def build_acme_impact_read_model() -> dict[str, Any]:
     model = {
         "schema": "aiops.synthetic-impact-read-model.v1",
         "twin_evidence": build_twin_evidence(raw),
-        "entrypoint": "http://10.79.94.202:17777/",
+        "entrypoint": "/",
         "run_id": "SIM-ACME-" + digest[:16].upper(),
         "run_id_provenance": "DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN",
         "incident_id": report["source_incident_id"],
