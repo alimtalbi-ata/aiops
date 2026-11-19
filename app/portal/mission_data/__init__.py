@@ -160,3 +160,17 @@ def portal_metrics():
     return PlainTextResponse("# TYPE aiops_portal_up gauge\naiops_portal_up 1\n",
                              media_type="text/plain; version=0.0.4",
                              headers={"Cache-Control": "no-store"})
+
+@router.get("/technical/{metric}")
+def technical(metric: Literal["scrape-duration", "scrape-samples"],
+              minutes: int = Query(60, ge=1, le=1440),
+              authorization: str | None = Header(default=None)):
+    denied = auth_error(authorization)
+    if denied is not None:
+        return denied
+    from portal.mission_data.technical import technical_series
+    try:
+        data = technical_series(JOBS, PROM, NoRedirect, metric, minutes)
+    except (OSError, ValueError, KeyError, TypeError, OverflowError, AttributeError, IndexError):
+        return _noc_json_response(envelope("PLATFORM", "prometheus", "UPSTREAM_UNAVAILABLE"), status_code=503)
+    return _noc_json_response(envelope("PLATFORM", "prometheus", None, data))
