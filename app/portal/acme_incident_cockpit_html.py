@@ -19,6 +19,7 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
     readiness = cockpit["itil_readiness"]
     evidence = cockpit["evidence_plan"]
     review = cockpit["analyst_critic_review"]
+    journey = cockpit["run_journey"]
     if (len(lifecycle["stages"]) != 9 or len(readiness["transitions"]) != 8
             or evidence["requested_count"] != 9 or evidence["verified_count"] != 0
             or review["policy_disposition"] != "DENY_LIVE_ACTION"
@@ -32,6 +33,16 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
             or any(t["authorized"] is not False for t in readiness["transitions"])
             or any(r["evidence_state"] != "MISSING" for r in evidence["requests"])):
         raise ValueError("unqualified_cockpit_details")
+    if (journey.get("schema") != "aiops.team-c.san-payments-run-journey.v2"
+            or journey.get("scope") != "STORY_OFFLINE"
+            or journey.get("receipt") is not None
+            or len(journey.get("stage_plan", [])) != 17
+            or any(s.get("status") != "NOT_RUN" or s.get("evidence_state") != "MISSING" for s in journey["stage_plan"])
+            or journey["run"].get("run_id") != cockpit["twin_consumer"]["story_identity"]["run_id"]
+            or journey["run"].get("tenant_id") is not None
+            or journey["worker"].get("executor") != "NOT_INVOKED"
+            or journey["policy"].get("decision") != "DENY_LIVE_ACTION"):
+        raise ValueError("unqualified_run_journey_projection")
     def safe(value: object) -> str:
         return escape(str(value), quote=True)
     stage_rows = "".join(
@@ -84,6 +95,10 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         + "</td><td>observed_at, source_id, content_sha256</td>"
         "<td>MISSING — contrôle humain requis</td></tr>"
         for index, request in enumerate(evidence["requests"], start=1)
+    )
+    journey_rows = "".join(
+        "<li><code>" + safe(item["stage"]) + "</code> — <strong>NOT_RUN</strong> · preuve MISSING</li>"
+        for item in journey["stage_plan"]
     )
     transition_rows = "".join(
         "<tr><th scope='row'>" + safe(t["transition"]) + "</th><td>"
@@ -174,7 +189,15 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<details class='secondary-detail'><summary>Cycle incident — 9 étapes UNKNOWN</summary><p class='scroll-hint'>Tableau : défilement horizontal si nécessaire, avec les flèches après Tab.</p><div class='table-scroll' role='region' aria-label='Cycle incident' tabindex='0'><table><thead><tr>"
         "<th>Étape</th><th>Source attendue</th><th>Preuve</th></tr></thead>"
         "<tbody>" + stage_rows + "</tbody></table></div></details>"
-        " <span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
+        " <section id='run-journey' aria-label='Run Journey Team C'><h2>Run Journey SAN P1 → Payments — contrat v2</h2>"
+        "<p><strong>STORY_OFFLINE · DEMO · aucun reçu émis · 0/17 étapes exécutées.</strong></p>"
+        "<dl><dt>Run simulé</dt><dd><code>" + safe(journey["run"]["run_id"]) + "</code></dd>"
+        "<dt>Attempt simulé / clé idempotente</dt><dd><code>" + safe(journey["run"]["attempt_id"]) + "</code></dd>"
+        "<dt>SHA exécuté</dt><dd>ABSENT — aucun binaire exécuté</dd><dt>Tenant</dt><dd>UNBOUND — aucun tenant Core</dd>"
+        "<dt>Policy</dt><dd>DENY_LIVE_ACTION</dd><dt>HITL</dt><dd>SIMULATED_NOT_REQUESTED — aucune approbation créée</dd>"
+        "<dt>Worker</dt><dd>NOT_INVOKED — Temporal non appelé</dd></dl>"
+        "<details><summary>Plan des 17 étapes — toutes NOT_RUN / MISSING</summary><ol>" + journey_rows + "</ol></details></section>"
+        "<span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
         + render_story_context(cockpit) + render_runtime_refusals() +
