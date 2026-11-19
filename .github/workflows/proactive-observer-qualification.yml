@@ -33,12 +33,14 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           path: orchestrator
+          persist-credentials: false
 
       - name: Checkout frozen INT07 source
         uses: actions/checkout@v4
         with:
           ref: 636205a7b24de08ff6c52e4b956a42904b58cee9
           path: source
+          persist-credentials: false
 
       - name: Verify exact source and clean checkout
         working-directory: source
