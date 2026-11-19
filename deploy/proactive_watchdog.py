@@ -65,9 +65,12 @@ def main():
         body=f"{marker}\nAIOPS2 proactive observation: {state}; SHA={sha or 'unknown'}. No deployment attestation."
         atomic(receipt,{"status":"STARTED","marker":marker})
         try:
-            subprocess.run(["gh","issue","comment","804","--repo",REPO,"--body",body],check=True,timeout=30,capture_output=True)
-        except (OSError,subprocess.SubprocessError):
+            posted=subprocess.run(["gh","api","--method","POST",f"repos/{REPO}/issues/804/comments","-f",f"body={body}"],check=True,timeout=30,capture_output=True,text=True)
+            payload=json.loads(posted.stdout)
+            if not isinstance(payload.get("id"),int) or payload.get("user",{}).get("login")!=EXPECTED_AUTHOR:
+                raise ValueError("comment POST receipt did not match expected author/id")
+        except (OSError,ValueError,json.JSONDecodeError,subprocess.SubprocessError):
             atomic(receipt,{"status":"PUBLICATION_UNCERTAIN","marker":marker})
             raise
-        atomic(receipt,{"status":"PUBLISHED","marker":marker})
+        atomic(receipt,{"status":"PUBLISHED","marker":marker,"comment_id":payload["id"]})
 if __name__=="__main__": main()
