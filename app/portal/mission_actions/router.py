@@ -33,6 +33,7 @@ def journey(authorization: str | None = Header(default=None)):
             "schema": "aiops.mission-actions.journey.v1",
             "scenario_id": "acme-san-payments", "run_id": impact["run_id"],
             "incident_id": impact["incident_id"], "source_sha256": impact["source_sha256"],
+            "affected_ci_ids": impact["affected_ci_ids"],
             "mode": "DEMO", "runtime_attested": False,
             "live_remediation_authorized": False, "cockpit": cockpit,
             "decision_preview": impact["decision_preview"],
