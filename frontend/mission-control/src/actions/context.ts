@@ -1,6 +1,6 @@
 export type Mode = "DEMO" | "OPERATIONAL";
 export type View = "incident" | "ci" | "run" | "scenario" | "analysis" | "critic" | "policy" | "hitl" | "execution" | "evidence" | "itsm";
-export type Selection = { view: View; id: string; runId?: string };
+export type Selection = { view: View; id: string; runId?: string; sourceSha256?: string };
 export type Command = "inspect" | "rag" | "start" | "advance" | "pause" | "reset" | "replay" | "execute" | "approve" | "reject" | "glpi";
 export type Reply = { state: "SIMULATED" | "OBSERVED" | "BLOCKED" | "UNKNOWN"; detail: unknown; http?: number };
 export interface ActionProvider {
