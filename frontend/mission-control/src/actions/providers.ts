@@ -19,7 +19,7 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
     const r = await request("journey",token,signal);
     if (!r.ok) return {state:"BLOCKED",detail:r.data,http:r.http};
     const j = r.data;
-    if (j.schema !== "aiops.mission-actions.journey.v1" || j.runtime_attested !== false ||
+    if (j.schema !== "aiops.mission-actions.journey.v1" || j.mode !== "DEMO" || j.runtime_attested !== false ||
         j.live_remediation_authorized !== false || typeof j.source_sha256 !== "string")
       return blocked("UNQUALIFIED_DEMO_RESPONSE");
     const ids: Record<string,unknown> = {incident:j.incident_id,run:j.run_id,scenario:j.scenario_id};
@@ -55,15 +55,17 @@ export function demoProvider(token: string, operatorToken?: string): ActionProvi
         return blocked("COMMAND_NOT_APPLICABLE");
       const story = await request("story",token,signal,{action:command,cursor,mode:"story"});
       if (!story.ok || story.data.schema!=="aiops.acme-explore-story.v1" ||
-          story.data.source_sha256!==snapshot || story.data.scenario?.run_id!==j.run_id ||
+          story.data.source_sha256!==snapshot || story.data.scenario?.run_id!==j.run_id || story.data.scenario?.incident_id!==j.incident_id ||
           story.data.runtime_attested!==false || story.data.live_remediation_authorized!==false ||
-          !Number.isInteger(story.data.cursor)) return {state:"UNKNOWN",detail:{reason:"STORY_NOT_BOUND"},http:story.http};
+          !Number.isInteger(story.data.cursor) || !Array.isArray(story.data.timeline) ||
+          story.data.cursor<0 || story.data.cursor>=story.data.timeline.length ||
+          story.data.timeline.some((step:Json)=>step?.status!=="MISSING")) return {state:"UNKNOWN",detail:{reason:"STORY_NOT_BOUND"},http:story.http};
       if (!signal.aborted) cursor=story.data.cursor;
       return {state:"SIMULATED",detail:story.data,http:story.http};
     }
     const c=j.cockpit;
     const projections: Record<string,unknown> = {
-      incident:c?.lifecycle, ci:{selected:selection.id,affected:j.affected_cis,twin:j.twin}, run:c, scenario:{id:j.scenario_id,run:j.run_id},
+      incident:c?.lifecycle, ci:{selected:selection.id,affected:j.affected_cis,twin:j.twin}, run:c, scenario:{id:j.scenario_id,run:j.run_id,cursor,source_sha256:snapshot},
       analysis:j.decision_preview?.analyst, critic:j.decision_preview?.critic, policy:j.decision_preview?.policy,
       hitl:c?.itil_readiness, execution:j.decision_preview?.remediation_preview, evidence:{plan:c?.evidence_plan, simulation_receipt:receipt?.simulation??null, evidence_gate:receipt?.evidence_gate??null}, itsm:c?.itil_readiness
     };
