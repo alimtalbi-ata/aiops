@@ -20,7 +20,18 @@ def main():
         sha=d.get("sha","")
         if not (0<=age<=120 and d.get("state")=="BUILD_ELIGIBLE" and d.get("pr")==818 and d.get("deploy_authorized") is False and re.fullmatch(r"[0-9a-f]{40}",sha)): return
         receipt=root/f"build-handoff-{sha}.json"
-        if receipt.exists(): return
+        if receipt.exists():
+            previous=json.loads(receipt.read_text())
+            if previous.get("status")=="PUBLISHED": return
+            if previous.get("status") not in {"STARTED","PUBLICATION_UNCERTAIN"}: return
+            # Read-only reconciliation; never retry an ambiguous publication blindly.
+            raw=subprocess.run(["gh","api","--paginate","--slurp",f"repos/{REPO}/issues/804/comments?per_page=100"],check=True,timeout=30,capture_output=True,text=True)
+            pages=json.loads(raw.stdout)
+            marker=f"[CENTRAL][BUILD_QUALIFICATION:{sha}]"
+            matches=[item for page in pages for item in page if item.get("body","").startswith(marker)]
+            if len(matches)==1:
+                atomic(receipt,{"status":"PUBLISHED","sha":sha,"comment_id":matches[0]["id"],"reconciled":True})
+            return
         body=f"[CENTRAL][BUILD_QUALIFICATION:{sha}] Team C: qualify isolated build for PR #818 at exact SHA; publish image digest and provenance. Team D: independently verify evidence and prepare desktop 7770 acceptance. On failure open corrective task; on success request protected promotion according to policy. No runtime deployment authorized by this task."
         atomic(receipt,{"status":"STARTED","sha":sha})
         try:
