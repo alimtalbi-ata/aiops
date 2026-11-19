@@ -10,7 +10,7 @@ mkdir -p "$root" "$state"
 exec 9>"$state/install.lock"
 flock -n 9
 tmp="$(mktemp -d "$root/.stage.XXXXXXXX")"
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "$tmp" "${new:-}" "${verify:-}"' EXIT
 for f in proactive_candidate.py proactive_watchdog.py proactive_build_handoff.py; do
   gh api --method GET -H 'Accept: application/vnd.github.raw+json' "repos/alimtalbi-ata/aiops/contents/deploy/$f?ref=$sha" > "$tmp/$f"
 done
@@ -31,5 +31,28 @@ if ! crontab -l > "$old"; then echo "Cannot read existing crontab" >&2; exit 1; 
 new="$(mktemp "$state/crontab-new.XXXXXXXX")"
 grep -v '# AIOPS2_PROACTIVE_OBSERVER_V1$' "$old" > "$new" || [[ $? == 1 ]]
 printf '%s\n' "* * * * * /usr/bin/python3 -B $root/$sha/proactive_candidate.py >> $state/discovery.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" "*/2 * * * * /usr/bin/python3 -B $root/$sha/proactive_watchdog.py >> $state/watchdog.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" "*/2 * * * * /usr/bin/python3 -B $root/$sha/proactive_build_handoff.py >> $state/handoff.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" >> "$new"
+verify="$(mktemp "$state/crontab-verify.XXXXXXXX")"
+write_attempted=0
+restore_on_failure() {
+  rc="$1"
+  trap - ERR INT TERM
+  if [[ "$write_attempted" == 1 ]]; then
+    if ! crontab "$old" || ! crontab -l > "$verify" || ! cmp -s "$old" "$verify"; then
+      echo "CRITICAL: observer crontab write failed and automatic restore could not be verified; backup=$old" >&2
+      exit 99
+    fi
+    echo "Observer crontab write failed; original crontab restored and verified from $old" >&2
+  fi
+  exit "$rc"
+}
+trap 'restore_on_failure $?' ERR
+trap 'restore_on_failure 130' INT
+trap 'restore_on_failure 143' TERM
+write_attempted=1
 crontab "$new"
+if ! crontab -l > "$verify" || ! cmp -s "$new" "$verify"; then
+  echo "Installed crontab did not match requested observer schedule" >&2
+  false
+fi
+write_attempted=0
 echo "Observer installed at $sha; backup=$old; no deployment enabled"
