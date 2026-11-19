@@ -3,7 +3,7 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-19T20:59:01.297142+00:00",
+  "collected_at": "2026-11-19T21:00:01.884513+00:00",
   "docker": {
     "available": true,
     "containers": [
@@ -12,21 +12,21 @@
         "image": "aiops2-portal:golden-demo-c347500ddb40",
         "inspect_ok": true,
         "name": "aiops2-golden-demo-external",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-portal:golden-demo-c347500ddb40",
         "inspect_ok": true,
         "name": "aiops2-golden-demo-netcheck",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-portal:golden-demo-c347500ddb40",
         "inspect_ok": true,
         "name": "aiops2-golden-demo-qualification",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 6 weeks, 1 day, 11 hours, 10 minutes"
+    "uptime": "up 6 weeks, 1 day, 11 hours, 11 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 129687842816,
+      "free_bytes": 129687609344,
       "total_bytes": 172898033664,
-      "used_bytes": 34352869376
+      "used_bytes": 34353102848
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.98583984375,
-      0.9736328125,
-      0.94384765625
+      1.470703125,
+      1.0771484375,
+      0.9794921875
     ],
     "memory_bytes": {
-      "MemAvailable": 17812393984,
+      "MemAvailable": 17940738048,
       "MemTotal": 25205911552,
       "SwapFree": 10422157312,
       "SwapTotal": 10838077440
