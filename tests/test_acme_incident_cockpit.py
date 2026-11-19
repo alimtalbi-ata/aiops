@@ -300,3 +300,15 @@ def test_team_c_run_journey_is_visible_in_existing_operator_cockpit():
     assert "NOT_INVOKED" in page.text
     assert "NOT_RUN" in page.text
     assert "NO-GO LIVE" in page.text
+
+
+def test_twin_evidence_plan_visible_in_existing_workbench():
+    with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+        from portal.main import app
+    page = TestClient(app).get("/demo/acme-incident-cockpit")
+    assert page.status_code == 200
+    assert "id='twin-evidence-plan'" in page.text
+    assert "DEPENDENCY_HEALTH" in page.text
+    assert "REDUNDANCY_HEALTH" in page.text
+    assert "Aucune collecte exécutée" in page.text
+    assert "0/17 étapes exécutées" in page.text

@@ -96,6 +96,23 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<td>MISSING — contrôle humain requis</td></tr>"
         for index, request in enumerate(evidence["requests"], start=1)
     )
+    twin_plan = cockpit["twin_consumer"]["evidence_collection_plan"]
+    if (twin_plan.get("scope") != "STORY_OFFLINE"
+            or twin_plan.get("execution_authorized") is not False
+            or twin_plan.get("ordering") != "STRUCTURAL_DISTANCE_NOT_SEVERITY"
+            or any(row.get("observation_status") != "MISSING"
+                   for row in twin_plan["affected_ci_observations"] + twin_plan["alternative_dependency_observations"])):
+        raise ValueError("unqualified_twin_evidence_plan")
+    twin_rows = "".join(
+        "<tr><th scope='row'>" + safe(row["ci_id"]) + "</th><td>"
+        + safe(row["minimum_dependency_hops"]) + "</td><td>"
+        + safe(row["structural_path_count"]) + "</td><td>DEPENDENCY_HEALTH</td><td>MISSING</td></tr>"
+        for row in twin_plan["affected_ci_observations"]
+    ) + "".join(
+        "<tr><th scope='row'>" + safe(row["ci_id"])
+        + "</th><td>—</td><td>—</td><td>REDUNDANCY_HEALTH</td><td>MISSING</td></tr>"
+        for row in twin_plan["alternative_dependency_observations"]
+    )
     journey_rows = "".join(
         "<li><code>" + safe(item["stage"]) + "</code> — <strong>NOT_RUN</strong> · preuve MISSING</li>"
         for item in journey["stage_plan"]
@@ -190,6 +207,11 @@ def render_synthetic_cockpit_html(cockpit: dict) -> str:
         "<dt>Worker</dt><dd>NOT_INVOKED — Temporal non appelé</dd></dl>"
         "<details><summary>Plan des 17 étapes — toutes NOT_RUN / MISSING</summary><ol>" + journey_rows + "</ol></details></section>"
         " <span id='evidence' aria-hidden='true'></span><h2 id='workbench'>Evidence Workbench — lecture seule</h2>"
+        "<h3>Plan de preuves Digital Twin</h3>"
+        "<p>STORY_OFFLINE — distance structurelle, pas gravité. Aucune collecte exécutée.</p>"
+        "<table id='twin-evidence-plan'><thead><tr><th>CI</th><th>Distance</th><th>Chemins</th>"
+        "<th>Observation requise</th><th>État</th></tr></thead><tbody>"
+        + twin_rows + "</tbody></table>"
         "<p><strong>0 / 9 preuves vérifiées · 9 MISSING · NO-GO LIVE</strong></p>"
         "<p>Fixture synthétique hors ligne. Liaison tenant, Run Core et attempt non attestée : UNKNOWN. Aucun lien implicite vers un Run réel.</p>"
         + render_story_context(cockpit) + render_runtime_refusals() +
