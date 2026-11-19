@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-19T14:01:01.847292+00:00",
+  "collected_at": "2026-11-19T14:02:01.609513+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:f44b355a876cfc9794cc8fbe96185f8206bc7fa863431639ea67d8b2ab6c8487",
+        "inspect_ok": true,
+        "name": "aiops2-portal-7770-candidate",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "sha256:3d7d5ad2bd99442f9d33a5a8e7ab6ccc75e3d84bcbb647a06ec751b5b4b06cb9",
@@ -559,13 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-rebuild-policy-rollback-otel-lot7c2-20261118T224849Z",
         "state": "exited"
-      },
-      {
-        "health": "unhealthy",
-        "image": "aiops2-acme-sandbox-core:e9a21e3e13f9",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-core-before-metrics",
-        "state": "exited"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 6 weeks, 1 day, 4 hours, 12 minutes"
+    "uptime": "up 6 weeks, 1 day, 4 hours, 13 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 129879871488,
+      "free_bytes": 129877692416,
       "total_bytes": 172898033664,
-      "used_bytes": 34160840704
+      "used_bytes": 34163019776
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.48681640625,
-      0.9111328125,
-      1.0107421875
+      0.82080078125,
+      0.962890625,
+      1.02197265625
     ],
     "memory_bytes": {
-      "MemAvailable": 18203394048,
+      "MemAvailable": 18117234688,
       "MemTotal": 25205911552,
       "SwapFree": 10418987008,
       "SwapTotal": 10838077440
