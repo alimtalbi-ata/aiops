@@ -17,7 +17,12 @@ def make_archive(tmp_path):
     config_digest=hashlib.sha256(config).hexdigest()
     image_manifest=json.dumps({"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"digest":"sha256:"+config_digest},"layers":[]},separators=(",",":")).encode()
     manifest_digest=hashlib.sha256(image_manifest).hexdigest()
-    index_blob=json.dumps({"schemaVersion":2,"manifests":[{"digest":"sha256:"+manifest_digest}]},separators=(",",":")).encode()
+    attestation_blob=b'{"predicateType":"https://slsa.dev/provenance/v1","subject":[]}'
+    attestation_digest=hashlib.sha256(attestation_blob).hexdigest()
+    index_blob=json.dumps({"schemaVersion":2,"manifests":[
+        {"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:"+manifest_digest,"platform":{"architecture":"amd64","os":"linux"}},
+        {"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:"+attestation_digest,"platform":{"architecture":"unknown","os":"unknown"},"annotations":{"vnd.docker.reference.digest":"sha256:"+manifest_digest,"vnd.docker.reference.type":"attestation-manifest"}}
+    ]},separators=(",",":")).encode()
     index_digest=hashlib.sha256(index_blob).hexdigest()
     index=json.dumps({"schemaVersion":2,"manifests":[{"digest":"sha256:"+index_digest}]},separators=(",",":")).encode()
     manifest=json.dumps([{"Config":f"blobs/sha256/{config_digest}","RepoTags":[tag],"Layers":[]}]).encode()
@@ -28,6 +33,7 @@ def make_archive(tmp_path):
             ("index.json",index),
             (f"blobs/sha256/{config_digest}",config),
             (f"blobs/sha256/{manifest_digest}",image_manifest),
+            (f"blobs/sha256/{attestation_digest}",attestation_blob),
             (f"blobs/sha256/{index_digest}",index_blob),
         ]:
             info=tarfile.TarInfo(name)
