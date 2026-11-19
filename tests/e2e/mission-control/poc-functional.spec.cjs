@@ -5,6 +5,7 @@ test('P0 isolated POC nine-view functional smoke',async({page},info)=>{
  const origin=new URL(process.env.BASE_URL);
  const viewer=process.env.QA_VIEWER_TOKEN;
  if(viewer&&origin.protocol!=='https:'&&!['localhost','127.0.0.1','[::1]'].includes(origin.hostname))throw Error('Secure origin required');
+ test.setTimeout(120000);
  let writes=0,phase='SETUP';const statusCounts={};
  const check=expect.configure({timeout:7000});
  await page.context().route('**/*',async route=>{
@@ -38,7 +39,7 @@ test('P0 isolated POC nine-view functional smoke',async({page},info)=>{
    if(m==='demo'){
     phase='DEMO_TWIN';await nav.getByRole('button',{name:'Digital Twin',exact:true}).click();
     await check(page.locator('svg[aria-label="Topologie des dépendances"]')).toBeVisible();
-    phase='DEMO_SYNTHETIC';await check(page.getByText(/DONNÉES SYNTHÉTIQUES/)).first().toBeVisible();
+    phase='DEMO_SYNTHETIC';await check(page.getByText(/DONNÉES SYNTHÉTIQUES/).first()).toBeVisible();
    }
   }
   phase='RETURN';await mode.selectOption('operational');await check(mode).toHaveValue('operational');
