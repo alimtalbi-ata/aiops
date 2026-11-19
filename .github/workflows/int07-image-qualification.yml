@@ -159,6 +159,11 @@ jobs:
             "buildDefinition": {
               "buildType": "https://actions.github.io/buildtypes/workflow/v1",
               "externalParameters": {
+                "workflow": {
+                  "path": ".github/workflows/int07-image-qualification.yml",
+                  "repository": f"https://github.com/{repo}",
+                  "ref": ref
+                },
                 "source": {"repository": f"https://github.com/{repo}", "ref": source},
                 "qualifier": {"repository": f"https://github.com/{repo}", "ref": qualifier}
               },
