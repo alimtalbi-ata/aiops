@@ -29,14 +29,14 @@ jobs:
       - name: Checkout frozen INT07 source
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.SOURCE_SHA }}
+          ref: 636205a7b24de08ff6c52e4b956a42904b58cee9
           path: source
           persist-credentials: false
 
       - name: Checkout pinned qualification orchestrator
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.QUALIFIER_SHA }}
+          ref: 4ea75a4fbd977a79777d660e5b6de77652ca9593
           path: orchestrator
           persist-credentials: false
 
