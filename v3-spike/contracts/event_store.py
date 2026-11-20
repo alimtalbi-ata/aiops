@@ -40,7 +40,7 @@ def require_version(db):
     require_layout(db)
 
 def initialize(path):
-    with closing(sqlite3.connect(path)) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         db.execute("BEGIN IMMEDIATE")
         version = db.execute("PRAGMA user_version").fetchone()[0]
         objects = db.execute("SELECT name FROM sqlite_master").fetchall()
@@ -65,7 +65,7 @@ def admit(path, body, *, tenant, instance, now):
     serialized = json.dumps(body, sort_keys=True, separators=(",", ":"))
     canonical = dict(body, at=dt.datetime.fromisoformat(body["at"].replace("Z", "+00:00")).isoformat(timespec="microseconds"))
     fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    with closing(sqlite3.connect(f'file:{Path(path).resolve().as_posix()}?mode=rw', uri=True, timeout=10)) as db:
+    with closing(sqlite3.connect(f'file:{Path(path).resolve().as_posix()}?mode=rw', uri=True, timeout=10)) as db, db:
         db.execute("BEGIN IMMEDIATE")
         require_version(db)
         row = db.execute("SELECT fingerprint FROM events WHERE tenant=? AND instance=? AND event=?", key).fetchone()
@@ -95,6 +95,25 @@ class Tests(unittest.TestCase):
 
     def put(self, body=None, **scope):
         return admit(self.path, self.fixture if body is None else body, now=self.now, tenant=scope.get("tenant","demo-a"), instance=scope.get("instance","collector-a"))
+
+    def test_durable_reopen_and_replay(self):
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], STORE_VERSION)
+            require_version(db)
+        self.assertEqual(self.put(), "ACCEPT")
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+        self.assertEqual(self.put(), "DUPLICATE")
+        self.assertEqual(read(self.path, tenant="demo-a", instance="collector-a", event="e1"), self.fixture)
+
+    def test_conflict_rolls_back_and_preserves_winner(self):
+        self.assertEqual(self.put(), "ACCEPT")
+        with self.assertRaisesRegex(ValueError, "identity conflict"):
+            self.put(dict(self.fixture, digest="b"*64))
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+        self.assertEqual(self.put(), "DUPLICATE")
+        self.assertEqual(read(self.path, tenant="demo-a", instance="collector-a", event="e1"), self.fixture)
 
     def test_missing_store_never_created_by_read_or_admit(self):
         missing = str(Path(self.tmp.name) / "missing.sqlite")
