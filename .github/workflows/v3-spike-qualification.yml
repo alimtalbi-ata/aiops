@@ -1,0 +1,36 @@
+name: V3 spike qualification
+on:
+  push:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/**'
+      - '.github/workflows/v3-spike-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  kit-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact SHA and clean checkout
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          date -u +%FT%TZ
+          git rev-parse HEAD
+          python3 --version
+      - name: Synthetic kit unit tests
+        working-directory: v3-spike/kit
+        run: python3 -B -m unittest -v test_preflight
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "deploy_authorized=false activation_authorized=false"
+          echo "runtime=NOT_RUN"
