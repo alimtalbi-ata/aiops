@@ -7,7 +7,7 @@
 <header><h1>GAMMA / DEMO</h1><p>Synthetic fixture — tenant UNBOUND — runtime UNKNOWN</p><nav aria-label="Incident sections"><a href="#incident">Incident</a><a href="#run">Run Journey</a><a href="#evidence">Evidence</a><a href="#itsm">ITSM</a></nav></header>
 <main><section id="incident"><h2>Incident DEMO-001</h2><p>Storage latency affecting a synthetic payment service. No observed production data.</p></section>
 <div class="panels"><section id="run"><h2>Run Journey / Twin</h2><label for="run-choice">Select synthetic Run</label><select id="run-choice"><option value="storage">DEMO-RUN-STORAGE</option><option value="network">DEMO-RUN-NETWORK</option></select><p id="run-result" role="status"></p></section>
-<section id="evidence"><h2>Evidence</h2><p>0/9 — MISSING. Runtime attested: false.</p><p>0/17 — NOT_RUN.</p></section></div>
+<section id="evidence"><h2>Evidence</h2><p>0/9 — MISSING. Runtime attested: false.</p><p>0/17 — NOT_RUN.</p><label for="admission">Synthetic admission receipt</label><select id="admission"><option value="unknown">No receipt</option><option value="accept">ACCEPT</option><option value="duplicate">DUPLICATE</option><option value="refused">REFUSED — storage unavailable</option></select><p id="admission-result" role="status"></p><p>Admission is not evidence verification. Declared digest unverified; no runtime attestation.</p></section></div>
 <section id="itsm"><h2>ITSM / Copilot</h2><p>GLPI and Mattermost adapters: UNKNOWN — not connected.</p><button id="policy" type="button">Check action eligibility</button><p id="decision" role="status">No action requested.</p></section></main>
 <script>
 "use strict";
@@ -17,5 +17,10 @@ const result=document.getElementById("run-result");
 function render(){result.textContent=runs[selector.value] || "UNKNOWN — NOT_RUN";document.getElementById("decision").textContent="No action requested.";}
 selector.addEventListener("change",render);
 document.getElementById("policy").addEventListener("click",()=>{document.getElementById("decision").textContent="DENIED — synthetic fixture, tenant UNBOUND; no action sent.";});
-render();
+const admission=document.getElementById("admission");
+const admissionStates=Object.freeze({unknown:"UNKNOWN — no admission receipt.",accept:"ACCEPT — synthetic event admitted; evidence MISSING.",duplicate:"DUPLICATE — synthetic replay; no additional evidence.",refused:"REFUSED — synthetic storage unavailable; evidence UNKNOWN."});
+function renderAdmission(){document.getElementById("admission-result").textContent=admissionStates[admission.value] || admissionStates.unknown;}
+admission.addEventListener("change",renderAdmission);
+selector.addEventListener("change",()=>{admission.value="unknown";renderAdmission();});
+render();renderAdmission();
 </script></html>
