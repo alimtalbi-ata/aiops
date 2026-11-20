@@ -16,10 +16,10 @@ class UpdateDiscoveryTests(unittest.TestCase):
         value.update(overrides)
         return base64.b64encode(json.dumps(value).encode()).decode()
 
-    def run_case(self, protected=True, manifest=None):
+    def run_case(self, protected=True, manifest=None, final=None):
         sha="a"*40
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(update.Path,"home",return_value=Path(tmp)),patch.object(update,"get",side_effect=[{"protected":protected,"commit":{"sha":sha}},{"content":manifest or self.manifest()}]):
+            with patch.object(update.Path,"home",return_value=Path(tmp)),patch.object(update,"get",side_effect=[{"protected":protected,"commit":{"sha":sha}},{"content":manifest or self.manifest()},final if final is not None else {"protected":True,"commit":{"sha":sha}}]):
                 update.main()
             return json.loads((Path(tmp)/".local/state/aiops2-proactive/update-candidate.json").read_text())
 
@@ -52,3 +52,25 @@ class UpdateDiscoveryTests(unittest.TestCase):
     def test_non_object_manifest(self):
         raw=base64.b64encode(json.dumps(["not","object"]).encode()).decode()
         self.assertEqual(self.run_case(manifest=raw)["state"],"UPDATE_BLOCKED")
+
+    def test_changed_reference_blocks(self):
+        self.assertEqual(self.run_case(final={"protected":True,"commit":{"sha":"c"*40}})["state"],"UPDATE_BLOCKED")
+
+    def test_lost_protection_blocks(self):
+        self.assertEqual(self.run_case(final={"protected":False,"commit":{"sha":"a"*40}})["state"],"UPDATE_BLOCKED")
+
+    def test_final_api_failure_blocks(self):
+        self.assertEqual(self.run_case(final=OSError("API unavailable"))["state"],"UPDATE_BLOCKED")
+
+    def test_contended_lock_does_not_read_or_publish(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/".local/state/aiops2-proactive"
+            root.mkdir(parents=True)
+            target=root/"update-candidate.json"
+            target.write_text("{}")
+            with (root/"update-discovery.lock").open("a") as lock:
+                update.fcntl.flock(lock,update.fcntl.LOCK_EX)
+                with patch.object(update.Path,"home",return_value=Path(tmp)),patch.object(update,"get") as get:
+                    update.main()
+                    get.assert_not_called()
+                self.assertEqual(target.read_text(),"{}")
