@@ -52,6 +52,31 @@ class GammaAcceptance(unittest.TestCase):
         self.assertEqual(self.blocked, [], "Unexpected attempted requests (blocked before network)")
         self.assertEqual(self.requests, [("GET", self.url)])
         self.assertFalse(self.errors)
+    def test_admission_projection_and_run_reset(self):
+        p = self.page
+        receipt = p.locator("#admission")
+        projection = p.locator("#admission-result")
+        self.assertIn("UNKNOWN", projection.inner_text())
+        for state, expected in (
+            ("accept", "ACCEPT — synthetic event admitted; evidence MISSING."),
+            ("duplicate", "DUPLICATE — synthetic replay; no additional evidence."),
+            ("refused", "REFUSED — synthetic storage unavailable; evidence UNKNOWN."),
+            ("unknown", "UNKNOWN — no admission receipt."),
+        ):
+            with self.subTest(state=state):
+                receipt.select_option(state)
+                self.assertEqual(projection.inner_text(), expected)
+                self.assertIn("unverified", p.locator("#evidence").inner_text())
+                self.assertIn("Runtime attested: false", p.locator("#evidence").inner_text())
+        receipt.select_option("accept")
+        p.locator("#run-choice").select_option("network")
+        self.assertEqual(receipt.input_value(), "unknown")
+        self.assertEqual(projection.inner_text(), "UNKNOWN — no admission receipt.")
+        self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
+        self.assertEqual(self.allowed, [("GET", self.url)])
+        self.assertEqual(self.blocked, [])
+        self.assertEqual(self.requests, [("GET", self.url)])
+        self.assertFalse(self.errors)
     def test_keyboard(self):
         p = self.page
         for target in ["#incident", "#run", "#evidence", "#itsm"]:
