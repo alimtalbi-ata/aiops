@@ -38,7 +38,7 @@ jobs:
           sys.modules[spec.name] = module
           spec.loader.exec_module(module)
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.Tests)
-          expected = 15
+          expected = 17
           actual = suite.countTestCases()
           print(f"contracts-unit collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
