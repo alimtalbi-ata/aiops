@@ -27,6 +27,8 @@ def admit(path, body, *, tenant, instance, now):
     if (body["tenant"], body["instance"]) != (tenant, instance):
         raise PermissionError("source scope mismatch")
     age = (now - dt.datetime.fromisoformat(body["at"].replace("Z", "+00:00"))).total_seconds()
+    # Late retries are rejected uniformly before lookup: no existence disclosure
+    # or re-admission. Delivery retry belongs to a separate durable outbox.
     if not 0 <= age <= 300:
         raise ValueError("outside synthetic freshness window")
     key = (tenant, instance, body["event"])
@@ -99,6 +101,35 @@ class Tests(unittest.TestCase):
         for at in ("2026-11-20T11:54:59Z","2026-11-20T12:00:01Z"):
             with self.assertRaises(ValueError):
                 self.put(dict(self.fixture, at=at))
+
+    def test_retry_boundary_and_no_disclosure(self):
+        self.put()
+        for seconds, expected in ((300, "DUPLICATE"), (301, None)):
+            now = self.now + dt.timedelta(seconds=seconds)
+            if expected:
+                self.assertEqual(admit(self.path, self.fixture, tenant="demo-a", instance="collector-a", now=now), expected)
+            else:
+                for body in (self.fixture, dict(self.fixture, event="unknown"), dict(self.fixture, digest="b"*64)):
+                    with self.assertRaisesRegex(ValueError, "^outside synthetic freshness window$"):
+                        admit(self.path, body, tenant="demo-a", instance="collector-a", now=now)
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+        self.assertEqual(read(self.path, tenant="demo-a", instance="collector-a", event="e1"), self.fixture)
+
+    def test_concurrent_conflicting_digests(self):
+        def attempt(digest):
+            try:
+                return self.put(dict(self.fixture, digest=digest))
+            except ValueError as exc:
+                self.assertEqual(str(exc), "identity conflict")
+                return "CONFLICT"
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(attempt, ["a"*64, "b"*64]))
+        self.assertCountEqual(results, ["ACCEPT", "CONFLICT"])
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+        winner = ["a"*64, "b"*64][results.index("ACCEPT")]
+        self.assertEqual(read(self.path, tenant="demo-a", instance="collector-a", event="e1")["digest"], winner)
 
 if __name__ == "__main__":
     unittest.main()
