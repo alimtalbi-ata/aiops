@@ -60,7 +60,7 @@ jobs:
       - name: Run candidate and update discovery tests explicitly
         working-directory: orchestrator
         run: |
-          python -m pytest -q -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py tests/test_proactive_watchdog_handoff.py tests/test_proactive_rollback.py tests/test_proactive_installer.py tests/test_proactive_image_archive.py
+          python -m pytest -v -ra tests/test_proactive_candidate.py tests/test_proactive_update_discovery.py tests/test_proactive_watchdog_handoff.py tests/test_proactive_rollback.py tests/test_proactive_installer.py tests/test_proactive_image_archive.py
 
       - name: Build frozen INT07 image on GitHub-hosted runner
         working-directory: source
