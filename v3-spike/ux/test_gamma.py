@@ -10,24 +10,35 @@ class GammaAcceptance(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(Path(__file__).resolve().parent)))
-        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.addClassCleanup(cls.server.server_close)
+        thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        thread.start()
+        cls.addClassCleanup(thread.join, 5)
+        cls.addClassCleanup(cls.server.shutdown)
         cls.url = f"http://127.0.0.1:{cls.server.server_port}/index.html"
         cls.pw = sync_playwright().start()
+        cls.addClassCleanup(cls.pw.stop)
         cls.browser = cls.pw.chromium.launch()
-    @classmethod
-    def tearDownClass(cls):
-        cls.browser.close()
-        cls.pw.stop()
-        cls.server.shutdown()
-        cls.server.server_close()
+        cls.addClassCleanup(cls.browser.close)
     def setUp(self):
         self.page = self.browser.new_page()
         self.addCleanup(self.page.close)
         self.requests = []
+        self.allowed = []
+        self.blocked = []
         self.errors = []
         self.page.on("request", lambda r: self.requests.append((r.method, r.url)))
         self.page.on("pageerror", lambda e: self.errors.append(str(e)))
-        self.page.route("**/*", lambda r: r.continue_() if r.request.url == self.url else r.abort())
+        def gate(route):
+            request = route.request
+            entry = (request.method, request.url)
+            if entry == ("GET", self.url) and request.is_navigation_request():
+                self.allowed.append(entry)
+                route.continue_()
+            else:
+                self.blocked.append(entry)
+                route.abort()
+        self.page.route("**/*", gate)
         self.page.goto(self.url)
     def test_run_selection_and_refusal(self):
         p = self.page
@@ -37,6 +48,8 @@ class GammaAcceptance(unittest.TestCase):
         p.locator("#run-choice").select_option("network")
         self.assertIn("NETWORK", p.locator("#run-result").inner_text())
         self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
+        self.assertEqual(self.allowed, [("GET", self.url)])
+        self.assertEqual(self.blocked, [], "Unexpected attempted requests (blocked before network)")
         self.assertEqual(self.requests, [("GET", self.url)])
         self.assertFalse(self.errors)
     def test_keyboard(self):
