@@ -33,7 +33,8 @@ def admit(path, body, *, tenant, instance, now):
         raise ValueError("outside synthetic freshness window")
     key = (tenant, instance, body["event"])
     serialized = json.dumps(body, sort_keys=True, separators=(",", ":"))
-    fingerprint = hashlib.sha256(serialized.encode()).hexdigest()
+    canonical = dict(body, at=dt.datetime.fromisoformat(body["at"].replace("Z", "+00:00")).isoformat(timespec="microseconds"))
+    fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     with sqlite3.connect(path, timeout=10) as db:
         db.execute("BEGIN IMMEDIATE")
         row = db.execute("SELECT fingerprint FROM events WHERE tenant=? AND instance=? AND event=?", key).fetchone()
@@ -101,6 +102,26 @@ class Tests(unittest.TestCase):
         for at in ("2026-11-20T11:54:59Z","2026-11-20T12:00:01Z"):
             with self.assertRaises(ValueError):
                 self.put(dict(self.fixture, at=at))
+
+    def test_timestamp_precision_and_equivalent_replay(self):
+        from jsonschema.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            self.put(dict(self.fixture, at="2026-11-20T12:00:00.0000009Z"))
+        with self.assertRaises(ValueError):
+            self.put(dict(self.fixture, at="2026-11-20T12:00:00.000001Z"))
+        self.assertEqual(self.put(), "ACCEPT")
+        self.assertEqual(self.put(dict(self.fixture, at="2026-11-20T12:00:00.000000Z")), "DUPLICATE")
+
+    def test_new_admission_boundary(self):
+        for seconds in (300, 301):
+            body = dict(self.fixture, event=str(seconds))
+            now = self.now + dt.timedelta(seconds=seconds)
+            if seconds == 300:
+                self.assertEqual(admit(self.path, body, tenant="demo-a", instance="collector-a", now=now), "ACCEPT")
+            else:
+                with self.assertRaisesRegex(ValueError, "^outside synthetic freshness window$"):
+                    admit(self.path, body, tenant="demo-a", instance="collector-a", now=now)
+                self.assertIsNone(read(self.path, tenant="demo-a", instance="collector-a", event=str(seconds)))
 
     def test_retry_boundary_and_no_disclosure(self):
         self.put()
