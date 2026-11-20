@@ -1,33 +1,52 @@
-"""Validate resolved Compose JSON from stdin; fail closed. No Docker mutation."""
+"""Validate resolved Compose JSON for the synthetic kit only."""
 import json
 import re
 import sys
+from pathlib import Path
+
+def require(ok, reason):
+    if not ok:
+        raise ValueError(reason)
 
 def validate(config):
     services = config["services"]
-    if not {"gamma", "core"} <= services.keys():
-        raise ValueError("missing mandatory service")
-    if set(services) - {"gamma", "core", "demo"}:
-        raise ValueError("unexpected service")
-    for name, service in services.items():
-        if not re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", service.get("image", "")):
-            raise ValueError("unpinned image: " + name)
-        if service.get("privileged") or service.get("network_mode") or service.get("build"):
-            raise ValueError("unsafe service: " + name)
-        if service.get("user") != "65532:65532" or not service.get("read_only"):
-            raise ValueError("missing isolation: " + name)
-        ports = service.get("ports", [])
+    require(type(services) is dict and {"gamma", "core"} <= services.keys(), "missing mandatory service")
+    require(set(services) <= {"gamma", "core", "demo"}, "unexpected service")
+    require(set(config["networks"]) == {"edge", "backend"}, "unexpected networks")
+    require(config["networks"]["backend"].get("internal") is True, "backend not internal")
+    for net in config["networks"].values():
+        require(not net.get("external") and net.get("driver", "bridge") == "bridge", "unsafe network")
+    allowed = {"image","user","read_only","cap_drop","security_opt","ports","networks","volumes","environment","command","healthcheck","depends_on","profiles"}
+    for name, s in services.items():
+        require(type(s) is dict and set(s) <= allowed, "unexpected service field: " + name)
+        require(type(s.get("image")) is str and re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", s["image"]), "unpinned image")
+        require(s.get("user") == "65532:65532" and s.get("read_only") is True, "missing isolation")
+        require(s.get("cap_drop") == ["ALL"], "cap_drop")
+        require(s.get("security_opt") in (["no-new-privileges:true"], ["no-new-privileges=true"]), "security_opt")
+        nets = s["networks"]
+        require(type(nets) is dict and set(nets) == ({"edge","backend"} if name == "gamma" else {"backend"}), "network membership")
+        require(all(v is None or v == {} for v in nets.values()), "network options")
+        mounts = s["volumes"]
+        require(type(mounts) is list and len(mounts) == 1, "mount count")
+        m = mounts[0]
+        require(type(m) is dict and m.get("type") == "bind" and m.get("target") == "/fixture.py" and m.get("read_only") is True, "mount mode")
+        require(Path(m["source"]).resolve() == Path(__file__).resolve().with_name("fixture.py"), "mount source")
+        require(set(m) <= {"type","source","target","read_only","bind"}, "mount options")
+        require(set(m.get("bind", {})) <= {"create_host_path"}, "bind options")
+        require(s.get("command") == ["python","/fixture.py"] and s.get("environment") == {"FIXTURE_ROLE":name}, "fixture command/environment")
+        ports = s.get("ports", [])
+        require(type(ports) is list, "ports type")
         if name == "gamma":
-            if len(ports) != 1 or ports[0].get("host_ip") != "127.0.0.1" or ports[0].get("target") != 8080 or str(ports[0].get("published", "0")) != "0":
-                raise ValueError("gamma port not ephemeral loopback")
-        elif ports:
-            raise ValueError("unexpected published port: " + name)
-    if not config["networks"]["backend"].get("internal"):
-        raise ValueError("backend not internal")
+            require(len(ports) == 1 and type(ports[0]) is dict, "gamma port count")
+            p = ports[0]
+            require(p.get("host_ip") == "127.0.0.1" and type(p.get("target")) is int and p["target"] == 8080 and p.get("published","0") in ("0",0) and p.get("protocol") == "tcp", "gamma port")
+            require(set(p) <= {"host_ip","target","published","protocol","mode"} and p.get("mode","ingress") in ("ingress","host"), "port options")
+        else:
+            require(not ports, "unexpected published port")
 
 if __name__ == "__main__":
     try:
         validate(json.load(sys.stdin))
-    except (ValueError, KeyError, TypeError) as exc:
+    except (ValueError, KeyError, TypeError, AttributeError, OSError) as exc:
         sys.exit("PREFLIGHT_FAIL: " + str(exc))
     print("PREFLIGHT_STATIC_PASS")
