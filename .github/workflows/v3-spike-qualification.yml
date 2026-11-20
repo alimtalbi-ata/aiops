@@ -27,7 +27,27 @@ jobs:
       - name: Synthetic contract tests (locked dependency)
         run: |
           python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
-          python3 -B -m unittest discover -s v3-spike/contracts -p 'test*.py' -v
+          python3 -B - <<'PY'
+          import importlib.util
+          import pathlib
+          import sys
+          import unittest
+          path = pathlib.Path("v3-spike/contracts/event_store.py").resolve()
+          spec = importlib.util.spec_from_file_location("v3_event_store", path)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.Tests)
+          expected = 15
+          actual = suite.countTestCases()
+          print(f"contracts-unit collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit(f"FAIL contract test collection: {actual} != {expected}")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit(f"FAIL contract tests: executed={result.testsRun} expected={expected}")
+          print(f"PASS contract tests: executed={result.testsRun}", flush=True)
+          PY
       - name: Receipt
         if: always()
         run: |
