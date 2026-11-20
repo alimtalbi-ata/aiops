@@ -3,7 +3,7 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-20T10:09:01.921028+00:00",
+  "collected_at": "2026-11-20T10:10:01.556545+00:00",
   "docker": {
     "available": true,
     "containers": [
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 6 weeks, 2 days, 20 minutes"
+    "uptime": "up 6 weeks, 2 days, 21 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 129654132736,
+      "free_bytes": 129653886976,
       "total_bytes": 172898033664,
-      "used_bytes": 34386579456
+      "used_bytes": 34386825216
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.466796875,
-      0.80224609375,
-      0.87109375
+      0.3203125,
+      0.71044921875,
+      0.8349609375
     ],
     "memory_bytes": {
-      "MemAvailable": 18386296832,
+      "MemAvailable": 18354565120,
       "MemTotal": 25205911552,
       "SwapFree": 10423754752,
       "SwapTotal": 10838077440
