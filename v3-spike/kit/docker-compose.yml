@@ -2,6 +2,10 @@
 # Supply verified OCI digests locally. No mutable tag fallback.
 services:
   gamma:
+    user: "65532:65532"
+    environment: {FIXTURE_ROLE: gamma}
+    command: ["python", "/fixture.py"]
+    volumes: ["./fixture.py:/fixture.py:ro"]
     image: "${GAMMA_IMAGE:?verified digest required}"
     ports:
       - "127.0.0.1::8080"
@@ -18,6 +22,10 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
   core:
+    user: "65532:65532"
+    environment: {FIXTURE_ROLE: core}
+    command: ["python", "/fixture.py"]
+    volumes: ["./fixture.py:/fixture.py:ro"]
     image: "${CORE_IMAGE:?verified digest required}"
     networks: [backend]
     healthcheck:
@@ -29,8 +37,12 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
   demo:
+    user: "65532:65532"
+    environment: {FIXTURE_ROLE: demo}
+    command: ["python", "/fixture.py"]
+    volumes: ["./fixture.py:/fixture.py:ro"]
     profiles: [demo]
-    image: "${DEMO_IMAGE:?verified digest required}"
+    image: "${DEMO_IMAGE:-${CORE_IMAGE}}"
     networks: [backend]
     read_only: true
     cap_drop: [ALL]
