@@ -97,7 +97,12 @@ class GammaAcceptance(unittest.TestCase):
         for width in (320, 1280, 1440, 1920):
             with self.subTest(width=width):
                 p.set_viewport_size({"width": width, "height": 900})
-                self.assertTrue(p.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+                self.assertTrue(p.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Horizontal overflow at {width}px")
+                for section in ("#incident", "#run", "#evidence", "#itsm"):
+                    bounds = p.locator(section).bounding_box()
+                    self.assertIsNotNone(bounds, f"{section} missing at {width}px")
+                    self.assertGreaterEqual(bounds["x"], -1, f"{section} left-clipped at {width}px")
+                    self.assertLessEqual(bounds["x"] + bounds["width"], width + 1, f"{section} right-clipped at {width}px")
                 self.assertTrue(p.locator("#itsm").is_visible())
                 for token in ("DEMO", "UNBOUND", "UNKNOWN", "MISSING", "NOT_RUN"):
                     self.assertIn(token, p.locator("body").inner_text())
