@@ -55,7 +55,7 @@
     "at": {
       "type": "string",
       "format": "date-time",
-      "pattern": "Z(?![\\s\\S])"
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z(?![\\s\\S])"
     },
     "digest": {
       "type": "string",
