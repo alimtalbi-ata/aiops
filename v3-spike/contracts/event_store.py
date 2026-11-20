@@ -15,12 +15,28 @@ from jsonschema import Draft202012Validator, FormatChecker
 SCHEMA = json.loads(Path(__file__).with_name("event.schema.json").read_text())
 VALIDATOR = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
 
+STORE_VERSION = 2
+
+def require_version(db):
+    if db.execute("PRAGMA user_version").fetchone()[0] != STORE_VERSION:
+        raise ValueError("unsupported event store version; migration required")
+
 def initialize(path):
     with sqlite3.connect(path) as db:
-        db.execute("""CREATE TABLE IF NOT EXISTS events (
+        db.execute("BEGIN IMMEDIATE")
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
+        if version == STORE_VERSION:
+            if tables != [("events",)]:
+                raise ValueError("unexpected event store layout")
+            return
+        if version != 0 or tables:
+            raise ValueError("unsupported event store version; migration required")
+        db.execute("""CREATE TABLE events (
             tenant TEXT NOT NULL, instance TEXT NOT NULL, event TEXT NOT NULL,
             fingerprint TEXT NOT NULL, body TEXT NOT NULL,
             PRIMARY KEY (tenant, instance, event))""")
+        db.execute("PRAGMA user_version = 2")
 
 def admit(path, body, *, tenant, instance, now):
     VALIDATOR.validate(body)
@@ -37,6 +53,7 @@ def admit(path, body, *, tenant, instance, now):
     fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     with sqlite3.connect(path, timeout=10) as db:
         db.execute("BEGIN IMMEDIATE")
+        require_version(db)
         row = db.execute("SELECT fingerprint FROM events WHERE tenant=? AND instance=? AND event=?", key).fetchone()
         if row:
             if row[0] != fingerprint:
@@ -48,6 +65,7 @@ def admit(path, body, *, tenant, instance, now):
 def read(path, *, tenant, instance, event):
     # Trusted scope required; no authentication implementation in this spike.
     with sqlite3.connect(path) as db:
+        require_version(db)
         row = db.execute("SELECT body FROM events WHERE tenant=? AND instance=? AND event=?", (tenant, instance, event)).fetchone()
     return json.loads(row[0]) if row else None
 
@@ -62,6 +80,32 @@ class Tests(unittest.TestCase):
 
     def put(self, body=None, **scope):
         return admit(self.path, self.fixture if body is None else body, now=self.now, tenant=scope.get("tenant","demo-a"), instance=scope.get("instance","collector-a"))
+
+    def test_legacy_store_refused_without_mutation(self):
+        legacy = str(Path(self.tmp.name) / "legacy.sqlite")
+        with sqlite3.connect(legacy) as db:
+            db.execute("CREATE TABLE events (tenant TEXT, instance TEXT, event TEXT, fingerprint TEXT, body TEXT)")
+            db.execute("INSERT INTO events VALUES (?,?,?,?,?)", ("demo-a", "collector-a", "e1", "old", "{}"))
+        before = Path(legacy).read_bytes()
+        with self.assertRaisesRegex(ValueError, "migration required"):
+            initialize(legacy)
+        with self.assertRaisesRegex(ValueError, "migration required"):
+            admit(legacy, self.fixture, tenant="demo-a", instance="collector-a", now=self.now)
+        with self.assertRaisesRegex(ValueError, "migration required"):
+            read(legacy, tenant="demo-a", instance="collector-a", event="e1")
+        self.assertEqual(Path(legacy).read_bytes(), before)
+
+    def test_initialize_idempotent_and_unknown_version(self):
+        self.put()
+        initialize(self.path)
+        self.assertEqual(self.put(), "DUPLICATE")
+        with sqlite3.connect(self.path) as db:
+            db.execute("PRAGMA user_version = 99")
+        with self.assertRaisesRegex(ValueError, "migration required"):
+            initialize(self.path)
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 99)
+            self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
 
     def test_composite_collision(self):
         self.assertEqual(self.put(dict(self.fixture, instance="collector-a:x"), instance="collector-a:x"), "ACCEPT")
