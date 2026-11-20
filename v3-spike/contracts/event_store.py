@@ -3,6 +3,7 @@ Requires jsonschema 4.26.0. Identity arguments must come from trusted caller.
 Digest is declared, not a verified payload digest.
 """
 import datetime as dt
+from contextlib import closing
 import hashlib
 import json
 import sqlite3
@@ -39,7 +40,7 @@ def require_version(db):
     require_layout(db)
 
 def initialize(path):
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db:
         db.execute("BEGIN IMMEDIATE")
         version = db.execute("PRAGMA user_version").fetchone()[0]
         objects = db.execute("SELECT name FROM sqlite_master").fetchall()
@@ -64,7 +65,7 @@ def admit(path, body, *, tenant, instance, now):
     serialized = json.dumps(body, sort_keys=True, separators=(",", ":"))
     canonical = dict(body, at=dt.datetime.fromisoformat(body["at"].replace("Z", "+00:00")).isoformat(timespec="microseconds"))
     fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    with sqlite3.connect(path, timeout=10) as db:
+    with closing(sqlite3.connect(f'file:{Path(path).resolve().as_posix()}?mode=rw', uri=True, timeout=10)) as db:
         db.execute("BEGIN IMMEDIATE")
         require_version(db)
         row = db.execute("SELECT fingerprint FROM events WHERE tenant=? AND instance=? AND event=?", key).fetchone()
@@ -77,7 +78,7 @@ def admit(path, body, *, tenant, instance, now):
 
 def read(path, *, tenant, instance, event):
     # Trusted scope required; no authentication implementation in this spike.
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(f'file:{Path(path).resolve().as_posix()}?mode=ro', uri=True)) as db:
         db.execute("BEGIN")
         require_version(db)
         row = db.execute("SELECT body FROM events WHERE tenant=? AND instance=? AND event=?", (tenant, instance, event)).fetchone()
@@ -94,6 +95,19 @@ class Tests(unittest.TestCase):
 
     def put(self, body=None, **scope):
         return admit(self.path, self.fixture if body is None else body, now=self.now, tenant=scope.get("tenant","demo-a"), instance=scope.get("instance","collector-a"))
+
+    def test_missing_store_never_created_by_read_or_admit(self):
+        missing = str(Path(self.tmp.name) / "missing.sqlite")
+        self.assertFalse(Path(missing).exists())
+        with self.assertRaises(sqlite3.OperationalError):
+            read(missing, tenant="demo-a", instance="collector-a", event="e1")
+        self.assertFalse(Path(missing).exists())
+        with self.assertRaises(sqlite3.OperationalError):
+            admit(missing, self.fixture, tenant="demo-a", instance="collector-a", now=self.now)
+        self.assertFalse(Path(missing).exists())
+        initialize(missing)
+        self.assertTrue(Path(missing).exists())
+        self.assertEqual(admit(missing, self.fixture, tenant="demo-a", instance="collector-a", now=self.now), "ACCEPT")
 
     def test_legacy_store_refused_without_mutation(self):
         legacy = str(Path(self.tmp.name) / "legacy.sqlite")
