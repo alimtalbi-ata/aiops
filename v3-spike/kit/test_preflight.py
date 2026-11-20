@@ -40,6 +40,11 @@ class IsolationTests(unittest.TestCase):
                 c["services"]["gamma"][field] = value
                 with self.assertRaises(ValueError):
                     validate(c)
+    def test_network_driver_opts(self):
+        c = fixture()
+        c["networks"]["edge"]["driver_opts"] = {"com.docker.network.bridge.host_binding_ipv4": "0.0.0.0"}
+        with self.assertRaises(ValueError):
+            validate(c)
     def test_network_external(self):
         c = fixture()
         c["networks"]["edge"]["external"] = True
