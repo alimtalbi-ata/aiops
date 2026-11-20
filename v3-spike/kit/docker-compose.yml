@@ -1,0 +1,41 @@
+# Synthetic infrastructure spike only; not a product release.
+# Supply verified OCI digests locally. No mutable tag fallback.
+services:
+  gamma:
+    image: "${GAMMA_IMAGE:?verified digest required}"
+    ports:
+      - "127.0.0.1::8080"
+    networks: [edge, backend]
+    depends_on:
+      core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  core:
+    image: "${CORE_IMAGE:?verified digest required}"
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  demo:
+    profiles: [demo]
+    image: "${DEMO_IMAGE:?verified digest required}"
+    networks: [backend]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+networks:
+  edge: {}
+  backend:
+    internal: true
