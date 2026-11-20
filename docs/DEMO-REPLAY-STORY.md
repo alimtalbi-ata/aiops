@@ -6,3 +6,4 @@ The mode belongs to the Run, not to a global switch. This prevents a global `sim
 - **REPLAY**: deterministic reproduction of an earlier event sequence.
 - **STORY**: scripted narrative using the same execution model.
 - **LIVE**: production evidence only; synthetic mutation endpoints are rejected by design.
+
