@@ -16,26 +16,39 @@ SCHEMA = json.loads(Path(__file__).with_name("event.schema.json").read_text())
 VALIDATOR = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
 
 STORE_VERSION = 2
+EVENT_DDL = """CREATE TABLE events (
+            tenant TEXT NOT NULL, instance TEXT NOT NULL, event TEXT NOT NULL,
+            fingerprint TEXT NOT NULL, body TEXT NOT NULL,
+            PRIMARY KEY (tenant, instance, event))"""
+
+def require_layout(db):
+    # Strict owned schema, including constraints and unexpected objects.
+    objects = db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY name").fetchall()
+    with sqlite3.connect(':memory:') as expected:
+        expected.execute(EVENT_DDL)
+        reference = expected.execute("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY name").fetchall()
+        for pragma in ('table_info(events)', 'index_list(events)', 'index_info(sqlite_autoindex_events_1)'):
+            if db.execute('PRAGMA '+pragma).fetchall() != expected.execute('PRAGMA '+pragma).fetchall():
+                raise ValueError('unexpected event store layout')
+    if objects != reference:
+        raise ValueError('unexpected event store layout')
 
 def require_version(db):
     if db.execute("PRAGMA user_version").fetchone()[0] != STORE_VERSION:
         raise ValueError("unsupported event store version; migration required")
+    require_layout(db)
 
 def initialize(path):
     with sqlite3.connect(path) as db:
         db.execute("BEGIN IMMEDIATE")
         version = db.execute("PRAGMA user_version").fetchone()[0]
-        tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
+        objects = db.execute("SELECT name FROM sqlite_master").fetchall()
         if version == STORE_VERSION:
-            if tables != [("events",)]:
-                raise ValueError("unexpected event store layout")
+            require_layout(db)
             return
-        if version != 0 or tables:
+        if version != 0 or objects:
             raise ValueError("unsupported event store version; migration required")
-        db.execute("""CREATE TABLE events (
-            tenant TEXT NOT NULL, instance TEXT NOT NULL, event TEXT NOT NULL,
-            fingerprint TEXT NOT NULL, body TEXT NOT NULL,
-            PRIMARY KEY (tenant, instance, event))""")
+        db.execute(EVENT_DDL)
         db.execute("PRAGMA user_version = 2")
 
 def admit(path, body, *, tenant, instance, now):
@@ -65,6 +78,7 @@ def admit(path, body, *, tenant, instance, now):
 def read(path, *, tenant, instance, event):
     # Trusted scope required; no authentication implementation in this spike.
     with sqlite3.connect(path) as db:
+        db.execute("BEGIN")
         require_version(db)
         row = db.execute("SELECT body FROM events WHERE tenant=? AND instance=? AND event=?", (tenant, instance, event)).fetchone()
     return json.loads(row[0]) if row else None
@@ -106,6 +120,31 @@ class Tests(unittest.TestCase):
         with sqlite3.connect(self.path) as db:
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 99)
             self.assertEqual(db.execute("SELECT count(*) FROM events").fetchone()[0], 1)
+
+    def test_malformed_v2_refused_without_mutation(self):
+        variants = (
+            ("CREATE TABLE events (tenant TEXT, instance TEXT, event TEXT, fingerprint TEXT, body TEXT)",),
+            (EVENT_DDL, "CREATE INDEX extra ON events(body)"),
+            (EVENT_DDL, "CREATE VIEW extra AS SELECT body FROM events"),
+            (EVENT_DDL, "CREATE TRIGGER extra AFTER INSERT ON events BEGIN DELETE FROM events; END"),
+            (EVENT_DDL.replace("tenant, instance, event", "instance, tenant, event"),),
+        )
+        for i, statements in enumerate(variants):
+            with self.subTest(statements=statements):
+                path = str(Path(self.tmp.name) / ("malformed%d.sqlite" % i))
+                with sqlite3.connect(path) as db:
+                    for statement in statements:
+                        db.execute(statement)
+                    db.execute("PRAGMA user_version = 2")
+                before = Path(path).read_bytes()
+                for operation in (
+                    lambda: initialize(path),
+                    lambda: admit(path, self.fixture, tenant="demo-a", instance="collector-a", now=self.now),
+                    lambda: read(path, tenant="demo-a", instance="collector-a", event="e1"),
+                ):
+                    with self.assertRaisesRegex(ValueError, "unexpected event store layout"):
+                        operation()
+                    self.assertEqual(Path(path).read_bytes(), before)
 
     def test_composite_collision(self):
         self.assertEqual(self.put(dict(self.fixture, instance="collector-a:x"), instance="collector-a:x"), "ACCEPT")
