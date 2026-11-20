@@ -10,6 +10,7 @@ permissions:
   contents: read
 jobs:
   kit-unit:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
