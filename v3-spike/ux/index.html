@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GAMMA — synthetic incident fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:1rem system-ui,sans-serif;color:#172435;background:#f5f7fa}main,header{max-width:80rem;margin:auto;padding:1rem}section{background:white;border:1px solid #aab5c2;border-radius:.5rem;padding:1rem;margin-bottom:1rem;min-width:0;overflow-wrap:anywhere}nav{display:flex;flex-wrap:wrap;gap:1rem}a{color:#174c87}select,button{font:inherit;max-width:100%;padding:.5rem}label{display:block;margin-bottom:.5rem}:focus-visible{outline:3px solid #174c87;outline-offset:3px}.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:1rem}h1,h2{line-height:1.2}
+</style>
+<header><h1>GAMMA / DEMO</h1><p>Synthetic fixture — tenant UNBOUND — runtime UNKNOWN</p><nav aria-label="Incident sections"><a href="#incident">Incident</a><a href="#run">Run Journey</a><a href="#evidence">Evidence</a><a href="#itsm">ITSM</a></nav></header>
+<main><section id="incident"><h2>Incident DEMO-001</h2><p>Storage latency affecting a synthetic payment service. No observed production data.</p></section>
+<div class="panels"><section id="run"><h2>Run Journey / Twin</h2><label for="run-choice">Select synthetic Run</label><select id="run-choice"><option value="storage">DEMO-RUN-STORAGE</option><option value="network">DEMO-RUN-NETWORK</option></select><p id="run-result" role="status"></p></section>
+<section id="evidence"><h2>Evidence</h2><p>0/9 — MISSING. Runtime attested: false.</p><p>0/17 — NOT_RUN.</p></section></div>
+<section id="itsm"><h2>ITSM / Copilot</h2><p>GLPI and Mattermost adapters: UNKNOWN — not connected.</p><button id="policy" type="button">Check action eligibility</button><p id="decision" role="status">No action requested.</p></section></main>
+<script>
+"use strict";
+const runs=Object.freeze({storage:"DEMO-RUN-STORAGE — simulated storage dependency — NOT_RUN",network:"DEMO-RUN-NETWORK — simulated network dependency — NOT_RUN"});
+const selector=document.getElementById("run-choice");
+const result=document.getElementById("run-result");
+function render(){result.textContent=runs[selector.value] || "UNKNOWN — NOT_RUN";document.getElementById("decision").textContent="No action requested.";}
+selector.addEventListener("change",render);
+document.getElementById("policy").addEventListener("click",()=>{document.getElementById("decision").textContent="DENIED — synthetic fixture, tenant UNBOUND; no action sent.";});
+render();
+</script></html>
