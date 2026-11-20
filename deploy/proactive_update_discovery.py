@@ -3,6 +3,8 @@
 import base64
 import datetime as dt
 import json
+import fcntl
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -37,6 +39,13 @@ def validate_manifest(manifest):
 def main():
     root=Path.home()/".local/state/aiops2-proactive"
     root.mkdir(mode=0o700,parents=True,exist_ok=True)
+    os.umask(0o077)
+    with (root/"update-discovery.lock").open("a") as lock:
+        try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError: return
+        discover(root)
+
+def discover(root):
     # Withdraw previous candidate before network calls; failures stay fail-closed.
     result={"state":"UPDATE_BLOCKED","activation_authorized":False}
     atomic(root/"update-candidate.json",result)
@@ -50,6 +59,10 @@ def main():
         manifest=validate_manifest(json.loads(raw))
         if manifest["source_sha"]!=sha:
             raise ValueError("manifest source SHA does not match protected branch")
+        latest=get("branches/deploy/aiops2-stable")
+        if latest.get("protected") is not True or latest["commit"]["sha"]!=sha:
+            raise ValueError("protected reference changed during discovery")
+        validate_manifest(manifest)
         result={"state":"REVIEW_REQUIRED","stable_sha":sha,"artifact_digest":manifest["artifact_digest"],"expires_at":manifest["expires_at"],"activation_authorized":False}
     except Exception as exc:
         result={"state":"UPDATE_BLOCKED","error_type":type(exc).__name__,"activation_authorized":False}
