@@ -118,6 +118,18 @@ jobs:
           date -u +%FT%TZ
           git rev-parse HEAD
           python3 --version
+      - name: BOM Markdown structure and CI inventory lint
+        run: |
+          python3 -B - <<'PY'
+          from pathlib import Path
+          text = Path("v3-spike/kit/BOM-BUILD-PLAN.md").read_text(encoding="utf-8")
+          assert chr(92) + "n" not in text, "FAIL literal escaped newlines in BOM"
+          assert "| Liaison Event/Twin/Evidence |" in text, "FAIL missing binding row"
+          assert "\n## État de qualification" in text, "FAIL missing qualification section"
+          for term in ("SQLite 17", "sécurité 9", "GAMMA 5", "kit 6", "resource-binding 6", "authenticated-binding 4", "Compose default/DEMO"):
+              assert term in text, f"FAIL BOM missing {term}"
+          print("PASS BOM structure and six-job inventory; no runtime qualification")
+          PY
       - name: Synthetic kit unit tests (strict 6 methods)
         working-directory: v3-spike/kit
         run: |
