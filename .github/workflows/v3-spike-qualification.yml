@@ -341,7 +341,7 @@ jobs:
               raise SystemExit(f"FAIL pair decision: executed={result.testsRun} expected={expected}")
           print(f"PASS pair decision: executed={result.testsRun}", flush=True)
           PY
-      - name: ADR-003 SnapshotPair5 and adversarial6 (synthetic only)
+      - name: ADR-003 SnapshotPair5 and adversarial7 (instrumented synthetic only)
         run: |
           set -eu
           mkdir -p reports
@@ -350,7 +350,7 @@ jobs:
           import unittest
           import xmlrunner
           specs = (("test_snapshot_pair", "SnapshotPairTests", 5),
-                   ("test_snapshot_adversarial", "SnapshotAdversarialTests", 6))
+                   ("test_snapshot_adversarial", "SnapshotAdversarialTests", 7))
           good = True
           for module_name, class_name, expected in specs:
               module = importlib.import_module(module_name)
@@ -364,7 +364,7 @@ jobs:
               good = result.wasSuccessful() and result.testsRun == expected and good
           if not good:
               raise SystemExit("FAIL synthetic SnapshotPair/adversarial gate")
-          print("PASS synthetic SnapshotPair5/adversarial6; backend atomicity NOT_ATTESTED")
+          print("PASS synthetic SnapshotPair5/adversarial7; backend atomicity NOT_ATTESTED")
           PY
       - name: Receipt
         if: always()
