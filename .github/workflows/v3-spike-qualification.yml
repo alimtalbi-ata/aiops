@@ -124,7 +124,6 @@ jobs:
           from pathlib import Path
           text = Path("v3-spike/kit/BOM-BUILD-PLAN.md").read_text(encoding="utf-8")
           assert chr(92) + "n" not in text, "FAIL literal escaped newlines in BOM"
-          import re
           def validate_table(source):
               lines = source.splitlines()
               matches = [i for i, line in enumerate(lines) if line.startswith("| Liaison Event/Twin/Evidence |")]
