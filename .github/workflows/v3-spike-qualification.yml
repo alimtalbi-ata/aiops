@@ -118,14 +118,14 @@ jobs:
           date -u +%FT%TZ
           git rev-parse HEAD
           python3 --version
-      - name: Synthetic kit unit tests (strict 5 methods)
+      - name: Synthetic kit unit tests (strict 6 methods)
         working-directory: v3-spike/kit
         run: |
           python3 -B - <<'PY'
           import unittest
           import test_preflight
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_preflight.IsolationTests)
-          expected = 5
+          expected = 6
           actual = suite.countTestCases()
           print(f"kit-unit collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
