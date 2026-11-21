@@ -156,6 +156,8 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
+      - name: Install isolated security integration dependency
+        run: python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
       - name: Synthetic security boundary tests (strict 6 methods)
         run: |
           python3 -B - <<'PY'
@@ -164,7 +166,9 @@ jobs:
           import sys
           import unittest
           from unittest import mock
-          path = pathlib.Path("v3-spike/contracts/secure_boundary.py")
+          path = pathlib.Path("v3-spike/contracts/secure_boundary.py").resolve()
+          # The SQLite integration test imports event_store from this directory.
+          sys.path.insert(0, str(path.parent))
           source = path.read_text(encoding="utf-8")
           tree = ast.parse(source, filename=str(path))
           classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == "SecurityTests"]
