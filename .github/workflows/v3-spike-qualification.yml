@@ -152,7 +152,10 @@ jobs:
       - name: Synthetic kit unit tests (strict 6 methods)
         working-directory: v3-spike/kit
         run: |
+          python3 -m pip install --disable-pip-version-check 'unittest-xml-reporting==3.2.0'
+          mkdir -p reports
           python3 -B - <<'PY'
+          import xmlrunner
           import unittest
           import test_preflight
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_preflight.IsolationTests)
@@ -161,7 +164,7 @@ jobs:
           print(f"kit-unit collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL kit test collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL kit tests: executed={result.testsRun} expected={expected}")
           print(f"PASS kit tests: executed={result.testsRun}", flush=True)
@@ -171,6 +174,7 @@ jobs:
         run: |
           python3 -B - <<'PY'
           import unittest
+          import xmlrunner
           import test_oci_release_gate
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_oci_release_gate.OCIReleaseStructureTests)
           expected = 5
@@ -178,7 +182,7 @@ jobs:
           print(f"oci-structure collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL OCI structural collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL OCI structural tests: executed={result.testsRun} expected={expected}")
           print("OCI_STRUCTURE_ONLY_PASS; registry/signature/license/provenance NOT_ATTESTED", flush=True)
@@ -190,6 +194,14 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "deploy_authorized=false activation_authorized=false"
           echo "runtime=NOT_RUN"
+      - name: Publish kit JUnit (preflight6 and OCI5)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-kit-junit
+          path: v3-spike/kit/reports/*.xml
+          if-no-files-found: error
+          retention-days: 14
 
   secure-boundary:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
