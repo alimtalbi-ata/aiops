@@ -35,6 +35,17 @@ def validate(config):
         require(set(m) <= {"type","source","target","read_only","bind"}, "mount options")
         require(set(m.get("bind", {})) <= {"create_host_path"}, "bind options")
         require(s.get("command") == ["python","/fixture.py"] and s.get("environment") == {"FIXTURE_ROLE":name}, "fixture command/environment")
+        health = s.get("healthcheck")
+        expected_health = ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+        require(type(health) is dict and health.get("test") == expected_health, "missing or unsafe healthcheck: " + name)
+        require(health.get("disable") is not True and set(health) <= {"test", "interval", "timeout", "retries", "start_period", "start_interval"}, "unsafe healthcheck options: " + name)
+        require(type(health.get("retries")) is int and 1 <= health["retries"] <= 12, "healthcheck retries: " + name)
+        deps = s.get("depends_on", {})
+        require(type(deps) is dict, "depends_on type: " + name)
+        if name == "gamma":
+            require(set(deps) == {"core"} and type(deps["core"]) is dict and deps["core"].get("condition") == "service_healthy", "gamma startup dependency")
+        else:
+            require(not deps, "unexpected startup dependency: " + name)
         ports = s.get("ports", [])
         require(type(ports) is list, "ports type")
         if name == "gamma":
