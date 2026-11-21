@@ -1,0 +1,420 @@
+name: AIOps quality gates
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "integration/aiops2-convergence-20261114"
+
+permissions:
+  contents: read
+
+jobs:
+  policy-and-static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      AIOPS_INTERNAL_TOKEN: ci-synthetic-internal-token-not-for-runtime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install policy test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "pytest==8.4.2" "PyJWT[crypto]==2.10.1"
+      - name: Tenant actor boundary offline security contracts (ported from PR #631)
+        run: python -m pytest -q tests/test_portal_tenant_actor_boundary_20261111.py tests/test_portal_tenant_actor_http_denial_20261111.py tests/test_portal_tenant_actor_schema_20261111.py tests/test_portal_tenant_actor_core_reader_20261111.py tests/test_verified_principal.py tests/test_portal_tenant_runs_oidc_adapter.py
+      - name: Daily quality schedule contract
+        run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
+      - name: Compile Python source
+        run: python -m compileall -q app tests
+      - name: ABC cross-lot contracts (all five required, no skips)
+        run: |
+          python - <<'PY'
+          import unittest
+          suite = unittest.defaultTestLoader.discover("tests", pattern="test_acme_cross_lot_consumers.py")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if result.testsRun != 5 or result.skipped or not result.wasSuccessful():
+              raise SystemExit("ABC cross-lot qualification failed")
+          PY
+      - name: ABC Twin and signal HTTP contracts
+        run: python -m pytest -q tests/test_acme_signal_context.py tests/test_acme_twin_consumer.py tests/test_acme_twin_http.py tests/test_acme_twin_provenance.py
+      - name: ABC frontend usability contracts
+        run: node --test tests/test_portal_incident_filters.cjs tests/test_portal_run_selection.cjs tests/test_portal_usability_client.cjs
+      - name: Policy safety unit tests
+        run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
+      - name: Existing HITL OIDC verifier and principal adapter tests (PR #194 selective port)
+        run: python -m pytest -q tests/test_hitl_identity.py tests/test_verified_principal.py
+      - name: PostgreSQL JTI revocation and action replay store unit/schema contracts
+        run: python -m pytest -q tests/test_oidc_jti_store.py tests/test_oidc_jti_schema.py
+      - name: GLPI signed xref and OIDC-bound native ACL contracts (offline)
+        run: python -m pytest -q tests/test_glpi_signed_xref_boundary.py tests/test_glpi_xref_hmac_verifier.py tests/test_glpi_xref_postgres_nonce.py tests/test_glpi_xref_resolver_factory.py tests/test_verified_principal_glpi_xref.py
+      - name: OIDC-bound authenticated Core and GLPI read-only assembly contracts (offline)
+        run: python -m pytest -q tests/test_verified_principal_glpi_readonly.py tests/test_glpi_native_ticket_acl.py tests/test_glpi_actor_native_acl_chain.py tests/test_glpi_core_readonly_qualifier_chain.py tests/test_glpi_signed_oidc_full_readonly_chain.py tests/test_glpi_actor_credential_broker.py tests/test_glpi_http_json_transport.py tests/test_glpi_session_readonly.py tests/test_glpi_session_identity_attestation.py tests/test_glpi_http_readers.py tests/test_glpi_raw_readback.py tests/test_glpi_readback_comparison.py tests/test_glpi_full_readonly_chain.py tests/test_glpi_server_readonly_assembly.py
+      - name: Portal registry and integration navigation unit tests
+        run: python -m unittest discover -s tests -p "test_portal_integrations.py" -v
+      - name: Portal navigation browser JavaScript syntax
+        run: node --check app/portal/portal_navigation_client.js
+      - name: Portal navigation DOM contract regression (unit-only)
+        run: node --test tests/test_portal_navigation_client.mjs
+      - name: Portal authenticated integration navigation tests
+        run: python -m unittest discover -s tests -p "test_portal_navigation_auth.py" -v
+      - name: Portal Core and Twin read model failure tests
+        run: python -m unittest discover -s tests -p "test_portal_read_models.py" -v
+      - name: Portal Golden DEMO operator authorization and upstream receipt safety
+        run: python -m unittest discover -s tests -p "test_portal_demo_command_auth.py" -v
+      - name: Portal authenticated Core Twin bootstrap HTTP regression
+        run: python -m unittest discover -s tests -p "test_portal_bootstrap_auth.py" -v
+      - name: Portal Core Twin browser JS syntax
+        run: node --check app/portal/portal_bootstrap_client.js
+      - name: Portal Core Twin browser DOM regression (synthetic DOM only)
+        run: node --test tests/test_portal_bootstrap_client.mjs
+      - name: Signed NOC read-model security and regression tests
+        run: python -m unittest discover -s tests -p "test_portal_noc_runtime_adapter.py" -v
+      - name: Signed NOC tenant-scope refusal security and regression tests
+        run: python -m unittest discover -s tests -p "test_noc_tenant_scope_fence.py" -v
+      - name: Signed NOC to canonical Run correlation security and regression tests
+        run: python -m unittest discover -s tests -p "test_noc_canonical_correlation.py" -v
+      - name: Synthetic NOC RAG citation security and regression tests
+        run: python -m unittest discover -s tests -p "test_noc_demo_rag.py" -v
+      - name: Grafana real-HTTP readiness security contract tests
+        run: python -m unittest discover -s tests -p "test_noc_grafana_health.py" -v
+      - name: ACME SAN to Payments synthetic impact contract tests
+        run: python -m unittest discover -s tests -p "test_acme_impact_read_model.py" -v
+      - name: Synthetic incident impact to ITIL policy evidence lifecycle (offline)
+        run: python -m pytest -q tests/test_acme_lifecycle_read_model.py
+      - name: Synthetic ITIL transitions require independent evidence (offline)
+        run: python -m pytest -q tests/test_acme_itil_readiness.py
+      - name: Independent incident evidence requirements and no-write contract (offline)
+        run: python -m pytest -q tests/test_acme_evidence_collection_plan.py
+      - name: Untrusted offline incident evidence manifest validation (offline)
+        run: python -m pytest -q tests/test_acme_evidence_manifest_validator.py
+      - name: Analyst Critic Policy evidence qualification (offline)
+        run: python -m pytest -q tests/test_acme_analyst_critic_review.py
+      - name: Unified incident-to-ITIL cockpit consistency (offline)
+        run: python -m pytest -q tests/test_acme_incident_cockpit.py
+      - name: ITIL incident handoff draft no-write contract (offline)
+        run: python -m pytest -q tests/test_acme_itil_draft.py
+      - name: Independent readback digest matching without attestation (offline)
+        run: python -m pytest -q tests/test_acme_evidence_digest_readback.py
+      - name: Source-bound offline evidence receipt authentication (offline)
+        run: python -m pytest -q tests/test_acme_evidence_source_binding.py
+      - name: Joint evidence digest and source MAC consistency (offline)
+        run: python -m pytest -q tests/test_acme_evidence_joint_qualification.py
+      - name: Isolated deterministic DEMO remediation simulation
+        run: python -m pytest -q tests/test_acme_isolated_remediation_simulator.py
+      - name: DEMO simulation receipt and evidence qualification gate
+        run: python -m pytest -q tests/test_acme_simulation_evidence_gate.py
+      - name: ACME supplied evidence MAC digest simulation pipeline
+        run: python -m pytest -q tests/test_acme_demo_evidence_pipeline.py
+      - name: Temporal DEMO independent postcheck refusal contract
+        run: python -m pytest -q tests/test_worker_demo_postcheck_boundary.py
+      - name: Execute Worker DEMO and LIVE VERIFY fail-closed activity
+        run: python -m pytest -q tests/test_worker_demo_verify_execution.py
+      - name: Execute Temporal workflow loop and assert VERIFY stop
+        run: python -m pytest -q tests/test_worker_temporal_workflow_stop.py
+      - name: In-process Worker DEMO orchestration through VERIFY block
+        run: python -m pytest -q tests/test_worker_orchestration_integrated_demo.py
+      - name: Bound Temporal stage and terminal transition receipts (offline)
+        run: python -m pytest -q tests/test_worker_temporal_transition_receipts.py tests/test_core_unqualified_resolve.py
+      - name: Worker Policy gate refused decision persists Core BLOCK
+        run: python -m pytest -q tests/test_worker_policy_gate_execution.py
+      - name: Worker execution start request validation before Temporal connect
+        run: python -m pytest -q tests/test_worker_execution_start_boundary.py
+      - name: Core Temporal start conflict and unknown outcome handling
+        run: python -m pytest -q tests/test_core_temporal_start_conflict.py
+      - name: Worker read-only Temporal workflow visibility inspection
+        run: python -m pytest -q tests/test_worker_temporal_inspection.py
+      - name: Core read-only Temporal visibility and receipt comparison
+        run: python -m pytest -q tests/test_core_temporal_inspection.py
+      - name: Temporal start history and immutable intent fail-closed contracts
+        run: python -m pytest -q tests/test_temporal_start_fingerprint.py tests/test_temporal_start_comparison.py tests/test_temporal_start_history.py tests/test_core_temporal_start_intent.py tests/test_core_temporal_start_response.py tests/test_core_temporal_lost_start_response.py
+      - name: Customer-facing ACME SAN Payments demo acceptance contract
+        run: |
+          python -m pytest -q tests/test_aiops2_demo_acceptance.py
+          python scripts/verify_aiops2_demo_acceptance.py
+      - name: Reproducible SAN Payments customer evidence package (synthetic only)
+        run: |
+          python -m pytest -q tests/test_aiops2_demo_evidence_package.py tests/test_aiops2_demo_zip.py tests/test_aiops2_customer_rehearsal.py
+          python scripts/package_aiops2_demo_evidence.py --output "${{ runner.temp }}/aiops2-demo-evidence"
+          python scripts/package_aiops2_demo_evidence.py --verify "${{ runner.temp }}/aiops2-demo-evidence"
+          python scripts/rehearse_aiops2_customer_demo.py "${{ runner.temp }}/aiops2-demo-evidence" --output "${{ runner.temp }}/aiops2-demo-operator-rehearsal.md"
+      - name: Upload synthetic customer demo package (not runtime evidence)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-san-payments-synthetic-demo
+          path: ${{ runner.temp }}/aiops2-demo-evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload synthetic operator rehearsal sheet (not runtime evidence)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-san-payments-operator-rehearsal
+          path: ${{ runner.temp }}/aiops2-demo-operator-rehearsal.md
+          if-no-files-found: error
+          retention-days: 7
+      - name: Read-only pilot evidence register fail-closed contract
+        run: |
+          python -m pytest -q tests/test_aiops2_readonly_pilot_register.py
+          if python scripts/validate_aiops2_readonly_pilot_register.py docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json; then
+            echo "Template unexpectedly qualified"
+            exit 1
+          else
+            echo "Template correctly remains BLOCKED"
+          fi
+      - name: Read-only Grafana alert evidence tenant and freshness contract
+        run: python -m pytest -q tests/test_grafana_readonly_evidence.py
+      - name: SAN Payments Grafana read-only pilot preview stays UNKNOWN
+        run: python -m pytest -q tests/test_grafana_pilot_preview.py
+      - name: SAN Payments Grafana customer preview HTML is safe and unqualified
+        run: python -m pytest -q tests/test_grafana_pilot_preview_html.py
+      - name: SAN Payments Grafana synthetic Portal route safety
+        run: python -m pytest -q tests/test_acme_grafana_pilot_preview_route.py
+      - name: SAN Payments downloaded Docker smoke provenance verifier tests
+        run: python -m pytest -q tests/test_aiops2_docker_smoke_artifact.py
+      - name: SAN Payments packaged demo smoke contract tests
+        run: python -m pytest -q tests/test_acme_demo_container_smoke.py
+      - name: SAN Payments Portal Docker image contains blocked register
+        run: |
+          docker build --build-context noc_scripts=./scripts --file app/portal/Dockerfile --tag aiops2-portal-demo-smoke:ci app
+          docker run --rm --network none --env AIOPS_INTERNAL_TOKEN --entrypoint python aiops2-portal-demo-smoke:ci -m portal.acme_demo_container_smoke > "${{ runner.temp }}/aiops2-packaged-demo-smoke.json"
+          python -m json.tool "${{ runner.temp }}/aiops2-packaged-demo-smoke.json" > /dev/null
+          python -c 'import json, pathlib, sys; p = pathlib.Path(sys.argv[1]); d = json.loads(p.read_text()); assert set(d) == {"schema", "accepted", "scope", "runtime_attested", "live_actions_authorized", "incident_id", "source_sha256"}; assert d["schema"] == "aiops2.packaged-demo-smoke.v1" and d["accepted"] is True and d["scope"] == "LOCAL_SYNTHETIC_ONLY"; assert d["runtime_attested"] is False and d["live_actions_authorized"] is False; assert isinstance(d["incident_id"], str) and bool(d["incident_id"]); assert isinstance(d["source_sha256"], str) and len(d["source_sha256"]) == 64 and all(c in "0123456789abcdef" for c in d["source_sha256"])' "${{ runner.temp }}/aiops2-packaged-demo-smoke.json"
+      - name: Record SAN Payments smoke GitHub execution provenance
+        env:
+          AIOPS2_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python -c 'import json, os, pathlib; p = pathlib.Path(os.environ["RUNNER_TEMP"]) / "aiops2-packaged-demo-smoke-provenance.json"; d = {"schema": "aiops2.github-actions-smoke-provenance.v1", "repository": os.environ["GITHUB_REPOSITORY"], "commit_sha": os.environ["GITHUB_SHA"], "pr_head_sha": os.environ["AIOPS2_PR_HEAD_SHA"], "ref": os.environ["GITHUB_REF"], "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"], "workflow": os.environ["GITHUB_WORKFLOW"], "event_name": os.environ["GITHUB_EVENT_NAME"], "trust_boundary": "UNSIGNED_GITHUB_ACTIONS_RUN_METADATA_NOT_RUNTIME_ATTESTATION"}; p.write_text(json.dumps(d, sort_keys=True, indent=2) + chr(10))'
+      - name: Verify SAN Payments Docker smoke and GitHub run binding before upload
+        env:
+          AIOPS2_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python scripts/verify_aiops2_docker_smoke_artifact.py "${{ runner.temp }}" \
+            --repository "${{ github.repository }}" \
+            --head-sha "$AIOPS2_PR_HEAD_SHA" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}"
+      - name: Cross-verify customer demo package against offline Docker smoke
+        env:
+          AIOPS2_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python -m pytest -q tests/test_aiops2_customer_demo_bundle.py
+          python scripts/verify_aiops2_customer_demo_bundle.py "${{ runner.temp }}/aiops2-demo-evidence" "${{ runner.temp }}" \
+            --repository "${{ github.repository }}" \
+            --head-sha "$AIOPS2_PR_HEAD_SHA" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --report "${{ runner.temp }}/aiops2-customer-qualification.json"
+      - name: Publish synthetic customer qualification report (not runtime attestation)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-san-payments-qualification-unattested
+          path: ${{ runner.temp }}/aiops2-customer-qualification.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Publish SAN Payments offline Docker smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-san-payments-offline-docker-smoke
+          path: |
+            ${{ runner.temp }}/aiops2-packaged-demo-smoke.json
+            ${{ runner.temp }}/aiops2-packaged-demo-smoke-provenance.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: ACME incident to simulation to evidence DEMO pipeline
+        run: python -m pytest -q tests/test_acme_demo_simulation_pipeline.py
+      - name: ACME offline simulation CLI receipt verification
+        run: python -m pytest -q tests/test_acme_demo_simulation_cli.py
+      - name: Verify saved ACME DEMO artifact against local fixture
+        run: python -m pytest -q tests/test_acme_demo_saved_artifact_verifier.py
+      - name: Authenticated Explore Story synthetic timeline and security regressions
+        run: python -m unittest discover -s tests -p "test_portal_explore_story.py" -v
+      - name: Explore Story browser syntax
+        run: node --check app/portal/acme_explore_story_client.js
+      - name: Explore Story synthetic DOM browser contract (unit-only)
+        run: node --test tests/test_portal_explore_story_client.cjs
+      - name: Install isolated Chromium for real portal browser E2E
+        run: |
+          python -m pip install --disable-pip-version-check "uvicorn==0.35.0" "pytest==8.4.2" "playwright==1.55.0"
+          python -m playwright install --with-deps chromium
+      - name: Explore Story real Chromium to ephemeral portal E2E (SIMULATED only)
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/acme-browser
+        run: python -m unittest discover -s tests -p "test_explore_story_playwright_e2e.py" -v
+      - name: Upload unreviewed CI-simulated portal browser observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-explore-story-ci-simulated
+          path: ${{ runner.temp }}/acme-browser/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Worker simulation Policy contract and safety regression tests
+        run: python -m unittest discover -s tests -p "test_simulation_policy_contract.py" -v
+      - name: Secret preflight unit tests
+        run: bash tests/test_preflight_secrets.sh
+      - name: Automation control-plane heartbeat offline gate
+        run: python -m unittest discover -s tests -p "test_automation_heartbeat_gate.py" -v
+      - name: Static repository audit
+        run: bash tests/static-audit.sh
+      - name: Validate Compose configuration with generated secrets
+        run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
+
+
+  core-postgres-noc-real-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-noc-ephemeral-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-noc-ephemeral-only@127.0.0.1:5432/aiops
+      AIOPS_TENANT_TEST_DSN: postgresql://aiops:ci-noc-ephemeral-only@127.0.0.1:5432/tenant_isolation
+      PGPASSWORD: ci-noc-ephemeral-only
+      AIOPS_INTERNAL_TOKEN: ci-noc-internal-ephemeral-token-20261028-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real Core HTTP/PostgreSQL dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0" "pytest==8.4.2"
+      - name: Create isolated ephemeral tenant test database
+        run: createdb -h 127.0.0.1 -U aiops tenant_isolation
+      - name: Apply Core schema to ephemeral real PostgreSQL
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+          with psycopg.connect(os.environ["DATABASE_URL"]) as c:
+              for name in ("001_schema.sql", "004_operational_model.sql"):
+                  c.execute((Path("db/migrations") / name).read_text())
+          PY
+      - name: Real PostgreSQL immutable Temporal start-intent concurrency and mutation guards
+        env:
+          AIOPS_START_INTENT_REAL_PG_CI: "1"
+          AIOPS_DISPOSABLE_DATABASE: "1"
+        run: python -m pytest -q tests/test_core_temporal_start_intent_postgres.py
+      - name: Real PostgreSQL actor/tenant isolation and revocation contract (ported from PR #631)
+        run: python -m pytest -q tests/test_portal_tenant_actor_postgres_20261111.py
+      - name: Real PostgreSQL OIDC JTI revocation and concurrent action replay contract
+        run: python -m pytest -q tests/test_oidc_jti_postgres.py
+      - name: GLPI signed xref nonce replay barrier against disposable PostgreSQL
+        env:
+          AIOPS_GLPI_NONCE_REAL_PG_CI: "1"
+        run: python -m unittest discover -s tests -p "test_glpi_xref_postgres_real_integration.py" -v
+      - name: GLPI actor credential broker tenant isolation and revocation against disposable PostgreSQL
+        env:
+          AIOPS_GLPI_BROKER_REAL_PG_CI: "1"
+        run: python -m pytest -q tests/test_glpi_actor_credential_broker_postgres.py
+      - name: Start actual Core HTTP service and verify readiness
+        run: |
+          PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 1810 > /tmp/aiops-core-ci.log 2>&1 &
+          echo $! > /tmp/aiops-core-ci.pid
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(40):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:1810/health", timeout=2) as r:
+                      if r.status == 200:
+                          print("Real Core HTTP + PostgreSQL ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              from pathlib import Path
+              print("Core startup diagnostic (ephemeral CI):")
+              print(Path("/tmp/aiops-core-ci.log").read_text()[-4000:])
+              raise SystemExit("BLOCKED: real Core/PostgreSQL not ready")
+          PY
+      - name: Real Core PostgreSQL NOC read security and regression
+        run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Start actual Policy HTTP service (ephemeral CI only)
+        run: |
+          PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &
+          echo $! > /tmp/aiops-policy-ci.pid
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:1813/health", timeout=2) as response:
+                      if response.status == 200:
+                          print("Real ephemeral Policy HTTP ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              from pathlib import Path
+              print(Path("/tmp/aiops-policy-ci.log").read_text()[-3000:])
+              raise SystemExit("BLOCKED: actual Policy HTTP not ready")
+          PY
+      - name: Real Core PostgreSQL DEMO Policy gate observation and refusals
+        run: python -m unittest discover -s tests -p "test_core_demo_policy_real_integration.py" -v
+      - name: Real Policy HTTP SIMULATE and LIVE refusal regression
+        run: python -m unittest discover -s tests -p "test_policy_real_http_integration.py" -v
+      - name: Stop ephemeral Core and Policy
+        if: always()
+        run: |
+          if test -f /tmp/aiops-policy-ci.pid; then kill "$(cat /tmp/aiops-policy-ci.pid)" || true; fi
+          if test -f /tmp/aiops-core-ci.pid; then kill "$(cat /tmp/aiops-core-ci.pid)" || true; fi
+
+  grafana-real-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      grafana:
+        image: grafana/grafana:11.6.0
+        ports:
+          - 3000:3000
+    env:
+      AIOPS_REAL_GRAFANA_CI: "true"
+      AIOPS_GRAFANA_READ_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install read-model test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7"
+      - name: Wait for actual Grafana health endpoint
+        run: |
+          python - <<'PY'
+          import time, urllib.request
+          url = "http://127.0.0.1:3000/api/health"
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as response:
+                      if response.status == 200:
+                          print("Real Grafana HTTP health reachable")
+                          break
+              except Exception:
+                  pass
+              time.sleep(2)
+          else:
+              raise SystemExit("BLOCKED: real Grafana container not healthy")
+          PY
+      - name: Test real Grafana HTTP adapter without mocks
+        run: python -m unittest discover -s tests -p "test_noc_grafana_real_integration.py" -v
