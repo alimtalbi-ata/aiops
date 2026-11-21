@@ -26,12 +26,15 @@ jobs:
           test -z "$(git status --porcelain)"
       - name: Synthetic contract tests (locked dependency)
         run: |
-          python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
+          python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0' 'unittest-xml-reporting==3.2.0'
           python3 -B - <<'PY'
           import importlib.util
           import pathlib
           import sys
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           path = pathlib.Path("v3-spike/contracts/event_store.py").resolve()
           spec = importlib.util.spec_from_file_location("v3_event_store", path)
           module = importlib.util.module_from_spec(spec)
@@ -43,11 +46,19 @@ jobs:
           print(f"contracts-unit collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL contract test collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL contract tests: executed={result.testsRun} expected={expected}")
           print(f"PASS contract tests: executed={result.testsRun}", flush=True)
           PY
+      - name: Publish contracts JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-contracts-junit
+          path: reports/*.xml
+          if-no-files-found: error
+          retention-days: 14
       - name: Receipt
         if: always()
         run: |
@@ -70,7 +81,7 @@ jobs:
       - name: Install isolated browser dependencies
         run: |
           set -eu
-          python3 -m pip install --disable-pip-version-check 'playwright==1.56.0'
+          python3 -m pip install --disable-pip-version-check 'playwright==1.56.0' 'unittest-xml-reporting==3.2.0'
           python3 -m playwright install --with-deps chromium
       - name: Synthetic GAMMA browser acceptance (strict 5 tests)
         run: |
@@ -79,6 +90,9 @@ jobs:
           import pathlib
           import sys
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           path = pathlib.Path("v3-spike/ux/test_gamma.py").resolve()
           spec = importlib.util.spec_from_file_location("v3_gamma_browser", path)
           module = importlib.util.module_from_spec(spec)
@@ -90,11 +104,19 @@ jobs:
           print(f"ux-browser collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL UX test collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL UX tests: executed={result.testsRun} expected={expected}")
           print(f"PASS UX tests: executed={result.testsRun}", flush=True)
           PY
+      - name: Publish gamma JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-gamma-junit
+          path: reports/*.xml
+          if-no-files-found: error
+          retention-days: 14
       - name: Receipt
         if: always()
         run: |
@@ -157,6 +179,9 @@ jobs:
           python3 -B - <<'PY'
           import xmlrunner
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           import test_preflight
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_preflight.IsolationTests)
           expected = 6
@@ -174,6 +199,9 @@ jobs:
         run: |
           python3 -B - <<'PY'
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           import xmlrunner
           import test_oci_release_gate
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_oci_release_gate.OCIReleaseStructureTests)
@@ -225,6 +253,9 @@ jobs:
           import pathlib
           import sys
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           from unittest import mock
           path = pathlib.Path("v3-spike/contracts/secure_boundary.py").resolve()
           # The SQLite integration test imports event_store from this directory.
@@ -250,11 +281,19 @@ jobs:
           print(f"secure-boundary collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL security test collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL security tests: executed={result.testsRun} expected={expected}")
           print(f"PASS security tests: executed={result.testsRun}", flush=True)
           PY
+      - name: Publish security JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-security-junit
+          path: reports/*.xml
+          if-no-files-found: error
+          retention-days: 14
       - name: Receipt
         if: always()
         run: |
@@ -285,6 +324,9 @@ jobs:
           import pathlib
           import sys
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           path = pathlib.Path("v3-spike/contracts/resource_binding.py").resolve()
           spec = importlib.util.spec_from_file_location("v3_resource_binding", path)
           module = importlib.util.module_from_spec(spec)
@@ -296,7 +338,7 @@ jobs:
           print(f"resource-binding collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL binding collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL binding tests: executed={result.testsRun} expected={expected}")
           print(f"PASS binding tests: executed={result.testsRun}", flush=True)
@@ -307,6 +349,9 @@ jobs:
           import pathlib
           import sys
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           root = pathlib.Path("v3-spike/contracts").resolve()
           sys.path.insert(0, str(root))
           import test_authenticated_binding
@@ -316,7 +361,7 @@ jobs:
           print(f"authenticated-binding collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL authenticated binding collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL authenticated binding: executed={result.testsRun} expected={expected}")
           print(f"PASS authenticated binding: executed={result.testsRun}", flush=True)
@@ -327,6 +372,9 @@ jobs:
           import pathlib
           import sys
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           root = pathlib.Path("v3-spike/contracts").resolve()
           sys.path.insert(0, str(root))
           import test_pair_decision
@@ -336,7 +384,7 @@ jobs:
           print(f"pair-decision collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
               raise SystemExit(f"FAIL pair decision collection: {actual} != {expected}")
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL pair decision: executed={result.testsRun} expected={expected}")
           print(f"PASS pair decision: executed={result.testsRun}", flush=True)
@@ -348,6 +396,9 @@ jobs:
           PYTHONPATH=v3-spike/contracts python3 -B - <<'PY'
           import importlib
           import unittest
+          import xmlrunner
+          import os
+          os.makedirs('reports', exist_ok=True)
           import xmlrunner
           specs = (("test_snapshot_pair", "SnapshotPairTests", 5),
                    ("test_snapshot_adversarial", "SnapshotAdversarialTests", 7))
