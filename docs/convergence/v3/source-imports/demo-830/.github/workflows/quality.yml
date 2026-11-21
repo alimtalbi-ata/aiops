@@ -1,0 +1,225 @@
+name: AIOps quality gates
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "fix/**"
+
+permissions:
+  contents: read
+
+jobs:
+  policy-and-static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install policy test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
+      - name: Daily quality schedule contract
+        run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
+      - name: Compile Python source
+        run: python -m compileall -q app tests
+      - name: Policy safety unit tests
+        run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
+      - name: Portal registry and integration navigation unit tests
+        run: python -m unittest discover -s tests -p "test_portal_integrations.py" -v
+      - name: Portal navigation browser JavaScript syntax
+        run: node --check app/portal/portal_navigation_client.js
+      - name: Portal navigation DOM contract regression (unit-only)
+        run: node --test tests/test_portal_navigation_client.mjs
+      - name: Portal authenticated integration navigation tests
+        run: python -m unittest discover -s tests -p "test_portal_navigation_auth.py" -v
+      - name: Portal Core and Twin read model failure tests
+        run: python -m unittest discover -s tests -p "test_portal_read_models.py" -v
+      - name: Portal Golden DEMO operator authorization and upstream receipt safety
+        run: python -m unittest discover -s tests -p "test_portal_demo_command_auth.py" -v
+      - name: Portal authenticated Core Twin bootstrap HTTP regression
+        run: python -m unittest discover -s tests -p "test_portal_bootstrap_auth.py" -v
+      - name: Portal Core Twin browser JS syntax
+        run: node --check app/portal/portal_bootstrap_client.js
+      - name: Portal Core Twin browser DOM regression (synthetic DOM only)
+        run: node --test tests/test_portal_bootstrap_client.mjs
+      - name: Signed NOC read-model security and regression tests
+        run: python -m unittest discover -s tests -p "test_portal_noc_runtime_adapter.py" -v
+      - name: Signed NOC tenant-scope refusal security and regression tests
+        run: python -m unittest discover -s tests -p "test_noc_tenant_scope_fence.py" -v
+      - name: Signed NOC to canonical Run correlation security and regression tests
+        run: python -m unittest discover -s tests -p "test_noc_canonical_correlation.py" -v
+      - name: Synthetic NOC RAG citation security and regression tests
+        run: python -m unittest discover -s tests -p "test_noc_demo_rag.py" -v
+      - name: Grafana real-HTTP readiness security contract tests
+        run: python -m unittest discover -s tests -p "test_noc_grafana_health.py" -v
+      - name: ACME SAN to Payments synthetic impact contract tests
+        run: python -m unittest discover -s tests -p "test_acme_impact_read_model.py" -v
+      - name: Static Demo Studio presenter page and no-I/O boundary
+        run: python -m unittest discover -s tests -p "test_portal_demo_studio.py" -v
+      - name: Authenticated Explore Story synthetic timeline and security regressions
+        run: python -m unittest discover -s tests -p "test_portal_explore_story.py" -v
+      - name: Explore Story browser syntax
+        run: node --check app/portal/acme_explore_story_client.js
+      - name: Explore Story synthetic DOM browser contract (unit-only)
+        run: node --test tests/test_portal_explore_story_client.cjs
+      - name: Install isolated Chromium for real portal browser E2E
+        run: |
+          python -m pip install --disable-pip-version-check "uvicorn==0.35.0" "playwright==1.55.0"
+          python -m playwright install chromium
+      - name: Explore Story real Chromium to ephemeral portal E2E (SIMULATED only)
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/acme-browser
+        run: python -m unittest discover -s tests -p "test_explore_story_playwright_e2e.py" -v
+      - name: Upload unreviewed CI-simulated portal browser observation
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-explore-story-ci-simulated
+          path: ${{ runner.temp }}/acme-browser/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Worker simulation Policy contract and safety regression tests
+        run: python -m unittest discover -s tests -p "test_simulation_policy_contract.py" -v
+      - name: Secret preflight unit tests
+        run: bash tests/test_preflight_secrets.sh
+      - name: Automation control-plane heartbeat offline gate
+        run: python -m unittest discover -s tests -p "test_automation_heartbeat_gate.py" -v
+      - name: Static repository audit
+        run: bash tests/static-audit.sh
+      - name: Validate Compose configuration with generated secrets
+        run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
+
+
+  core-postgres-noc-real-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-noc-ephemeral-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-noc-ephemeral-only@127.0.0.1:5432/aiops
+      AIOPS_INTERNAL_TOKEN: ci-noc-internal-ephemeral-token-20261028-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real Core HTTP/PostgreSQL dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0"
+      - name: Apply Core schema to ephemeral real PostgreSQL
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+          with psycopg.connect(os.environ["DATABASE_URL"]) as c:
+              for name in ("001_schema.sql", "004_operational_model.sql"):
+                  c.execute((Path("db/migrations") / name).read_text())
+          PY
+      - name: Start actual Core HTTP service and verify readiness
+        run: |
+          PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 1810 > /tmp/aiops-core-ci.log 2>&1 &
+          echo $! > /tmp/aiops-core-ci.pid
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(40):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:1810/health", timeout=2) as r:
+                      if r.status == 200:
+                          print("Real Core HTTP + PostgreSQL ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              from pathlib import Path
+              print("Core startup diagnostic (ephemeral CI):")
+              print(Path("/tmp/aiops-core-ci.log").read_text()[-4000:])
+              raise SystemExit("BLOCKED: real Core/PostgreSQL not ready")
+          PY
+      - name: Real Core PostgreSQL NOC read security and regression
+        run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Start actual Policy HTTP service (ephemeral CI only)
+        run: |
+          PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &
+          echo $! > /tmp/aiops-policy-ci.pid
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:1813/health", timeout=2) as response:
+                      if response.status == 200:
+                          print("Real ephemeral Policy HTTP ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              from pathlib import Path
+              print(Path("/tmp/aiops-policy-ci.log").read_text()[-3000:])
+              raise SystemExit("BLOCKED: actual Policy HTTP not ready")
+          PY
+      - name: Real Core PostgreSQL DEMO Policy gate observation and refusals
+        run: python -m unittest discover -s tests -p "test_core_demo_policy_real_integration.py" -v
+      - name: Real Policy HTTP SIMULATE and LIVE refusal regression
+        run: python -m unittest discover -s tests -p "test_policy_real_http_integration.py" -v
+      - name: Stop ephemeral Core and Policy
+        if: always()
+        run: |
+          if test -f /tmp/aiops-policy-ci.pid; then kill "$(cat /tmp/aiops-policy-ci.pid)" || true; fi
+          if test -f /tmp/aiops-core-ci.pid; then kill "$(cat /tmp/aiops-core-ci.pid)" || true; fi
+
+  grafana-real-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      grafana:
+        image: grafana/grafana:11.6.0
+        ports:
+          - 3000:3000
+    env:
+      AIOPS_REAL_GRAFANA_CI: "true"
+      AIOPS_GRAFANA_READ_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install read-model test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7"
+      - name: Wait for actual Grafana health endpoint
+        run: |
+          python - <<'PY'
+          import time, urllib.request
+          url = "http://127.0.0.1:3000/api/health"
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as response:
+                      if response.status == 200:
+                          print("Real Grafana HTTP health reachable")
+                          break
+              except Exception:
+                  pass
+              time.sleep(2)
+          else:
+              raise SystemExit("BLOCKED: real Grafana container not healthy")
+          PY
+      - name: Test real Grafana HTTP adapter without mocks
+        run: python -m unittest discover -s tests -p "test_noc_grafana_real_integration.py" -v
