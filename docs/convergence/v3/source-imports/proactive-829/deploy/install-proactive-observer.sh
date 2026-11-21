@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+[[ "$(id -un)" == aiops && "$(hostname -s | tr '[:upper:]' '[:lower:]')" == srv-deb-05 ]]
+sha="${1:?Expected reviewed commit SHA}"
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+root="$HOME/.local/share/aiops2-proactive"
+state="$HOME/.local/state/aiops2-proactive"
+mkdir -p "$root" "$state"
+exec 9>"$state/install.lock"
+flock -n 9
+tmp="$(mktemp -d "$root/.stage.XXXXXXXX")"
+trap 'rm -rf "$tmp" "${new:-}" "${verify:-}"' EXIT
+for f in proactive_candidate.py proactive_watchdog.py proactive_build_handoff.py; do
+  gh api --method GET -H 'Accept: application/vnd.github.raw+json' "repos/alimtalbi-ata/aiops/contents/deploy/$f?ref=$sha" > "$tmp/$f"
+done
+python3 -m py_compile "$tmp/"*.py
+rm -rf "$tmp/__pycache__"
+if [[ ! -d "$root/$sha" ]]; then mv "$tmp" "$root/$sha"; else
+  for f in proactive_candidate.py proactive_watchdog.py proactive_build_handoff.py; do cmp "$tmp/$f" "$root/$sha/$f"; done
+fi
+python3 "$root/$sha/proactive_candidate.py"
+python3 - "$state/candidate.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d["state"] in {"BUILD_ELIGIBLE","CI_PENDING","CI_BLOCKED","INELIGIBLE"}
+assert d["deploy_authorized"] is False
+PY
+old="$(mktemp "$state/crontab.XXXXXXXX")"
+if ! crontab -l > "$old"; then echo "Cannot read existing crontab" >&2; exit 1; fi
+new="$(mktemp "$state/crontab-new.XXXXXXXX")"
+grep -v '# AIOPS2_PROACTIVE_OBSERVER_V1$' "$old" > "$new" || [[ $? == 1 ]]
+printf '%s\n' "* * * * * /usr/bin/python3 -B $root/$sha/proactive_candidate.py >> $state/discovery.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" "*/2 * * * * /usr/bin/python3 -B $root/$sha/proactive_watchdog.py >> $state/watchdog.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" "*/2 * * * * /usr/bin/python3 -B $root/$sha/proactive_build_handoff.py >> $state/handoff.log 2>&1 # AIOPS2_PROACTIVE_OBSERVER_V1" >> "$new"
+verify="$(mktemp "$state/crontab-verify.XXXXXXXX")"
+write_attempted=0
+restore_on_failure() {
+  rc="$1"
+  trap - ERR INT TERM
+  if [[ "$write_attempted" == 1 ]]; then
+    if ! crontab "$old" || ! crontab -l > "$verify" || ! cmp -s "$old" "$verify"; then
+      echo "CRITICAL: observer crontab write failed and automatic restore could not be verified; backup=$old" >&2
+      exit 99
+    fi
+    echo "Observer crontab write failed; original crontab restored and verified from $old" >&2
+  fi
+  exit "$rc"
+}
+trap 'restore_on_failure $?' ERR
+trap 'restore_on_failure 130' INT
+trap 'restore_on_failure 143' TERM
+write_attempted=1
+crontab "$new"
+if ! crontab -l > "$verify" || ! cmp -s "$new" "$verify"; then
+  echo "Installed crontab did not match requested observer schedule" >&2
+  false
+fi
+write_attempted=0
+echo "Observer installed at $sha; backup=$old; no deployment enabled"
