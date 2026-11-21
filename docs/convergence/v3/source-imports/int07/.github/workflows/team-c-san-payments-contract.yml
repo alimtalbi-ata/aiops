@@ -1,0 +1,38 @@
+name: TEAM C SAN to Payments contract (offline)
+on:
+  pull_request:
+    paths:
+      - 'docs/contracts/team-c-san-payments-run-journey.schema.json'
+      - 'docs/demo/TEAM-C-SAN-PAYMENTS-E2E.md'
+      - 'tests/test_team_c_san_payments_contract.py'
+      - 'tests/fixtures/team_c/**'
+      - 'app/portal/acme_run_journey_projection.py'
+      - 'app/portal/acme_incident_cockpit.py'
+      - 'app/portal/acme_incident_cockpit_html.py'
+      - 'tests/test_acme_incident_cockpit.py'
+      - '.github/workflows/team-c-san-payments-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "PyJWT[crypto]==2.10.1" "pytest==8.4.2"
+      - name: Compile Team C projection and tests
+        run: python -m py_compile app/portal/acme_run_journey_projection.py app/portal/acme_incident_cockpit.py app/portal/acme_incident_cockpit_html.py tests/test_team_c_san_payments_contract.py tests/test_acme_incident_cockpit.py
+      - name: Run positive and negative Team C contract tests
+        run: python -m unittest discover -s tests -p 'test_team_c_san_payments_contract.py' -v
+      - name: Run integrated existing cockpit projection tests
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-synthetic-internal-token-not-for-runtime
+        run: python -m pytest -q tests/test_acme_incident_cockpit.py -k team_c_run_journey
