@@ -140,3 +140,19 @@ User instruction: **continue collecting historical functionality, scripts, confi
 - **No test executed** and no claim of exhaustive coverage across all historical PRs, branches or satellite repositories.
 
 **Collection strategy:** copy missing non-conflicting code into active paths only when explicitly suitable; archive divergent entrypoints, workflows, executable deploy scripts and QA source in `docs/convergence/v3/source-imports/<source>/` to prevent accidental runtime activation. Do not automatically promote archival files into the running system.
+
+
+## Port 7 — Close identified PR inventories, without running tests (2026-11-21)
+
+**Source files copied verbatim and archived inertly:**
+- **PR #802** (`integration/acme-demo-readiness-gate-20261116`, head `f594d04e02abde19b2299fbb523bf9d0d0e360b8`): **all 6 listed changed paths** copied under `docs/convergence/v3/source-imports/pr-802/` (three CI configs, golden-demo showrun, readiness script and its historical test).
+- **PR #799** (`test/aiops2-correlation-freshness-replay-20261116`, head `7d7024b19cf85d53c5c4993b312681fe1ffd1505`): **its 1 listed changed path** archived under `docs/convergence/v3/source-imports/pr-799/`. Its upstream implementation dependency is still not asserted present.
+- **PR #808** (`feature/acme-workbench-demo-qualification-addon-20261117`, head `41f91ab7c6c7f91814368e8590773581d4c5b212`): added its four architecture docs, workflow and divergent portal main plus all 23 listed historical QA/test paths under `docs/convergence/v3/source-imports/acme-808/`. Together with Port 6, **all 46 PR #808 changed paths have source copies** (15 scripts + 2 portal modules + 4 docs + workflow + main + 23 tests).
+- **PR #829** (`feature/central-proactive-cron-v1`, head `08ed06f08f9e8ad6b3f8817effa14c57733d4959`): added its workflow, two docs and six test source paths under `docs/convergence/v3/source-imports/proactive-829/`. Together with Port 6, **all 17 changed paths have source copies** (8 deploy/scripts + 1 workflow + 2 docs + 6 tests).
+- **PR #825**: archived Team C cockpit workflow and historical test, plus demo doc under `docs/convergence/v3/source-imports/team-c-825/`; active Run Journey modules/contract/fixture and imported tests are already in the PR.
+- **PR #824**: archived source workflow and demo doc under `docs/convergence/v3/source-imports/team-c-824/`; source Run Journey module, contract and fixture were previously copied.
+- **PR #818**: additionally archived Team C/Team D workflows, decision log, project continuity and E2E handover under `docs/convergence/v3/source-imports/int07/`. One already-existing archived workflow was not overwritten.
+
+**Meaning of complete:** coverage of the **changed-file lists for the specifically enumerated PRs**, not an assertion that all repository branches, other PRs, other repositories or implicit runtime dependencies have been harvested. Source copies do not imply integration, correctness, authorization or deployability.
+
+**User restriction:** NO tests executed, NO collector invoked, NO deployment/merge, NO live service calls. CI workflow files copied under documentation paths are inert. Existing active workflow from earlier implementation remains in the PR but no execution result is claimed.
