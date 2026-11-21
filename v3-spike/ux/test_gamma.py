@@ -92,6 +92,27 @@ class GammaAcceptance(unittest.TestCase):
         p.locator("#policy").focus()
         p.keyboard.press("Enter")
         self.assertIn("DENIED", p.locator("#decision").inner_text())
+    def test_accessibility_semantics(self):
+        p = self.page
+        self.assertEqual(p.locator("html").get_attribute("lang"), "en")
+        self.assertEqual(p.locator('nav[aria-label="Incident sections"] a').count(), 4)
+        for control in ("run-choice", "admission"):
+            with self.subTest(control=control):
+                self.assertEqual(p.locator(f'label[for="{control}"]').count(), 1)
+                self.assertEqual(p.locator(f'#{control}').count(), 1)
+        for status in ("run-result", "admission-result", "decision"):
+            with self.subTest(status=status):
+                self.assertEqual(p.locator(f'#{status}').get_attribute("role"), "status")
+                self.assertTrue(p.locator(f'#{status}').inner_text().strip())
+        for width in (320, 1280, 1920):
+            with self.subTest(width=width):
+                p.set_viewport_size({"width": width, "height": 900})
+                p.locator("#policy").focus()
+                self.assertTrue(p.locator("#policy").evaluate(
+                    "(el) => el === document.activeElement && getComputedStyle(el).outlineStyle !== 'none' && parseFloat(getComputedStyle(el).outlineWidth) >= 3"
+                ), f"Keyboard focus indicator absent at {width}px")
+        self.assertEqual(self.blocked, [])
+        self.assertFalse(self.errors)
     def test_viewports_and_states(self):
         p = self.page
         for width in (320, 1280, 1440, 1920):
