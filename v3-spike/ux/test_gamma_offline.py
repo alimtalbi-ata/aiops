@@ -57,6 +57,19 @@ class GammaOffline(unittest.TestCase):
         self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
         p.locator("#policy").click()
         self.assertIn("DENIED", p.locator("#decision").inner_text())
+    def test_adversarial_unknown_selection_denied(self):
+        p = self.page
+        # Unknown injected DOM value must fail closed, without network or JS errors.
+        p.locator("#binding-case").evaluate("(el) => { el.add(new Option('Injected', 'unexpected')); el.value = 'unexpected'; el.dispatchEvent(new Event('change', {bubbles:true})); }")
+        self.assertIn("DENY", p.locator("#binding-result").inner_text())
+        self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
+        # Recovery to the known synthetic match must still never authorize action.
+        p.locator("#binding-case").select_option("matched")
+        self.assertIn("ALLOW_SYNTHETIC", p.locator("#binding-result").inner_text())
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
     def test_viewports(self):
         p = self.page
         for width in (320, 1280, 1920):
