@@ -56,13 +56,24 @@ class SyntheticIndependentWitness:
             return False
 
 
-def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witness):
-    """Deny first; no real ALLOW or mutation, even with a valid fixture receipt."""
+def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witness, state_probe=None):
+    """Synthetic decision; optional trusted state probe rejects observable fetch mutations.
+
+    state_probe must be owned outside the adapter under test. This is NOT
+    production transaction isolation or a guarantee against hidden side effects.
+    """
     if not isinstance(event, dict) or not callable(getattr(witness, "verify", None)):
         return "DENY"
 
+    if state_probe is not None and not callable(state_probe):
+        return "DENY"
+
     def checked_fetch_pair(**kwargs):
+        before = state_probe() if state_probe is not None else None
         response = fetch_pair(**kwargs)
+        after = state_probe() if state_probe is not None else None
+        if state_probe is not None and (before != after):
+            raise PermissionError("observable backend mutation")
         if not isinstance(response, AttestedPair):
             raise PermissionError("missing independent receipt")
         if (not isinstance(response.pair, SnapshotPair) or
