@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "AcmeIds": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "minLength": 1,
+          "title": "Approval Id",
+          "type": "string",
+          "pattern": "^SIM-APP-[A-Za-z0-9][A-Za-z0-9_-]*$"
+        },
+        "incident_id": {
+          "minLength": 1,
+          "title": "Incident Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "ticket_id": {
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string",
+          "pattern": "^SIM-GLPI-[A-Za-z0-9][A-Za-z0-9_-]*$"
+        }
+      },
+      "required": [
+        "incident_id",
+        "run_id",
+        "ticket_id",
+        "proposal_id",
+        "approval_id"
+      ],
+      "title": "AcmeIds",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "approval_issuer": {
+      "const": "TWIN_ACME_SIMULATED",
+      "title": "Approval Issuer",
+      "type": "string"
+    },
+    "attempt_id": {
+      "pattern": "^ACME-SIM-[A-F0-9]{16}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "collected_at": {
+      "format": "date-time",
+      "title": "Collected At",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?(?:Z|\\+00:00)$"
+    },
+    "docker_mutations": {
+      "maximum": 0,
+      "minimum": 0,
+      "title": "Docker Mutations",
+      "type": "integer"
+    },
+    "human_approval_claimed": {
+      "const": false,
+      "title": "Human Approval Claimed",
+      "type": "boolean"
+    },
+    "ids": {
+      "$ref": "#/$defs/AcmeIds"
+    },
+    "live_effects_allowed": {
+      "const": false,
+      "title": "Live Effects Allowed",
+      "type": "boolean"
+    },
+    "mode": {
+      "const": "SIMULATION",
+      "title": "Mode",
+      "type": "string"
+    },
+    "real_glpi_writes_allowed": {
+      "const": false,
+      "title": "Real Glpi Writes Allowed",
+      "type": "boolean"
+    },
+    "reason": {
+      "const": "SIMULATED_SANDBOX_ONLY",
+      "title": "Reason",
+      "type": "string"
+    },
+    "scenario_id": {
+      "const": "ACME-SAN-PAYMENTS",
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "aiops.debian-acme-sim-e2e.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "stages": {
+      "additionalProperties": false,
+      "title": "Stages",
+      "type": "object",
+      "properties": {
+        "capability_simulator": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "capability_core": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "capability_twin": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "capability_policy": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "capability_worker": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "simulator_start": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "pre_resolution_core": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "pre_resolution_twin": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "pre_resolution_policy": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "pre_resolution_worker": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "worker_no_effect": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "core_finalization": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "post_resolution_core": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "post_resolution_twin": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "post_resolution_policy": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "post_resolution_worker": {
+          "const": "PASS",
+          "type": "string"
+        },
+        "resolved": {
+          "const": "PASS",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability_simulator",
+        "capability_core",
+        "capability_twin",
+        "capability_policy",
+        "capability_worker",
+        "simulator_start",
+        "pre_resolution_core",
+        "pre_resolution_twin",
+        "pre_resolution_policy",
+        "pre_resolution_worker",
+        "worker_no_effect",
+        "core_finalization",
+        "post_resolution_core",
+        "post_resolution_twin",
+        "post_resolution_policy",
+        "post_resolution_worker",
+        "resolved"
+      ]
+    },
+    "status": {
+      "const": "PASS",
+      "title": "Status",
+      "type": "string"
+    },
+    "tenant_id": {
+      "const": "ACME-TEST",
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "collected_at",
+    "attempt_id",
+    "tenant_id",
+    "scenario_id",
+    "mode",
+    "status",
+    "reason",
+    "approval_issuer",
+    "human_approval_claimed",
+    "live_effects_allowed",
+    "real_glpi_writes_allowed",
+    "docker_mutations",
+    "stages",
+    "ids"
+  ],
+  "title": "AcmeReceipt",
+  "type": "object"
+}
