@@ -171,3 +171,17 @@ User instruction: **continue collecting historical functionality, scripts, confi
 **Additional PR inventory discovered:** #821 (central 7770 cutover), #817/#816/#815 (INT06A), #814 (ABC), #813 (E2E), #811 (Frontend Premium), and earlier historical PRs back to #753 in the inspected recent-PR listing. These and PR #792's much larger portable install kit are **not all fully archived**. The source-harvest is therefore **NOT globally complete**; scope is explicit to prevent a false completion claim.
 
 **No tests executed in Port 8, no operational collection, no merge or deploy.**
+
+
+## Port 9 — CENTRAL 7770, INT06A, Frontend Premium, E2E (2026-11-21)
+
+**Instruction observed: collect/copy sources and configs only, NO test execution.** All items below copied as historical source files under `docs/convergence/v3/source-imports/`, with canonical code, active workflows and deployment unchanged.
+
+- **#821 CENTRAL** `feature/mission-control-central-unified`: all six changed paths archived under `pr-821/`: image qualification, independent audit workflows, two portal 7770 clone/cutover shell scripts, findings and target architecture. **No cutover executed.**
+- **#816 INT06A B** `integration/aiops2-int06a-b-20261118`: both changed paths archived under `pr-816/` (runtime context and historical test).
+- **#815 INT06A A** `integration/aiops2-int06a-a-20261118`: all eight changed paths archived under `pr-815/` (frontend workflow, impact model, cockpit HTML, workbench, usability JS, architecture, two historical tests).
+- **#811 Frontend Premium** `feat/aiops2-frontend-premium`: all twelve changed paths archived under `pr-811/` (Explore/Story, cockpit HTML, Run detail, CSS, main, JS and historical tests).
+- **#813 E2E** `feat/aiops2-orchestration-e2e`: all thirty-five changed paths archived under `pr-813/`, including Core/Worker entrypoints, receipt schema and model, CI variants, **17 fixture JSONs**, negative boundary and worker tests. **No tests run.**
+- **#817 INT06A ABC** `integration/aiops2-int06a-20261118`: all seventy-three changed paths archived under `pr-817/`, including Core, Portal, Worker, Twin, INT06A, frontend, contracts, workflows, scripts, **17 fixture JSONs** and historical QA files. **No tests run.**
+
+**Not complete across repository:** #814 (ABC candidate), #792 (large installer/release kit), many earlier PRs and any unenumerated branches or satellite repos. Archive is not a live integration or validation. No collectors, CI runs, cron, merge, cutover, or deployment intentionally invoked.
