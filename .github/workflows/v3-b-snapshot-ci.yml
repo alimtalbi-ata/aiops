@@ -39,7 +39,7 @@ jobs:
               ("test_authenticated_binding", "AuthenticatedBindingTests", 4),
               ("test_pair_decision", "PairDecisionTests", 7),
               ("test_snapshot_pair", "SnapshotPairTests", 5),
-              ("test_snapshot_adversarial", "SnapshotAdversarialTests", 6),
+              ("test_snapshot_adversarial", "SnapshotAdversarialTests", 7),
           ]
           all_good = True
           for module_name, cls, expected in modules:
