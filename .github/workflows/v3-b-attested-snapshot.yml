@@ -1,0 +1,58 @@
+name: V3 B independently witnessed snapshot synthetic gate
+on:
+  push:
+    branches: [v3-spike/b-attested-snapshot-20261121]
+    paths:
+      - 'v3-spike/contracts/**'
+      - '.github/workflows/v3-b-attested-snapshot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  witnessed-snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact SHA and environment
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          date -u +%FT%TZ
+          python3 --version
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+      - name: Pinned synthetic test dependencies
+        run: python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0' 'unittest-xml-reporting==3.2.0'
+      - name: Run nine adversarial witnessed snapshot tests
+        env:
+          PYTHONPATH: v3-spike/contracts
+        run: |
+          mkdir -p reports
+          python3 -B - <<'PY'
+          import unittest
+          import xmlrunner
+          from test_attested_snapshot import AttestedSnapshotTests
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(AttestedSnapshotTests)
+          assert suite.countTestCases() == 9, "collection gate failed"
+          result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != 9:
+              raise SystemExit("FAIL witnessed snapshot tests")
+          print("PASS 9 synthetic tests; real backend attestation NOT_ATTESTED")
+          PY
+      - name: Publish JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-b-attested-snapshot-junit
+          path: reports/*.xml
+          if-no-files-found: error
+          retention-days: 14
+      - name: UTC receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "runtime=NOT_RUN production_allow=false"
