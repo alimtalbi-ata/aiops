@@ -84,8 +84,10 @@ class GammaAcceptance(unittest.TestCase):
             self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), target)
         p.keyboard.press("Enter")
         self.assertTrue(p.url.endswith("#itsm"))
-        # Reload to reset sequential focus after fragment navigation; use Tab, not .focus().
-        p.reload()
+        # Navigate to the canonical fragment-free URL for deterministic Tab order.
+        p.goto(self.url)
+        self.assertEqual(p.url, self.url)
+        self.assertEqual(p.evaluate("document.activeElement.tagName"), "BODY")
         for target in ("#incident", "#run", "#evidence", "#itsm"):
             p.keyboard.press("Tab")
             self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), target)
@@ -119,12 +121,11 @@ class GammaAcceptance(unittest.TestCase):
         for width in (320, 1280, 1920):
             with self.subTest(width=width):
                 p.set_viewport_size({"width": width, "height": 900})
-                # Start from a known keyboard position; no programmatic .focus() oracle.
-                p.locator("body").click(position={"x": 1, "y": 1})
-                p.keyboard.press("ControlOrMeta+Home")
-                # Shift+Tab from the first navigation link would be browser-dependent.
-                # Reload the synthetic fixture to reset sequential keyboard focus.
-                p.reload()
+                # Canonical navigation clears any fragment and starts at BODY.
+                # No programmatic .focus() in the keyboard oracle.
+                p.goto(self.url)
+                self.assertEqual(p.url, self.url)
+                self.assertEqual(p.evaluate("document.activeElement.tagName"), "BODY")
                 for expected in ("#incident", "#run", "#evidence", "#itsm"):
                     p.keyboard.press("Tab")
                     self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), expected)
