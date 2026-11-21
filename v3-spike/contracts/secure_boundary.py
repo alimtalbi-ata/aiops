@@ -101,9 +101,18 @@ def verified_admit(store, path, body, payload: bytes, assertion: str, verifier: 
     return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=dt.datetime.fromtimestamp(verified_at, tz=dt.timezone.utc))
 
 
+def _valid_opaque_identifier(value):
+    """Conservative bounded identifier; never interpret as a path or URL."""
+    if (not isinstance(value, str) or not 1 <= len(value) <= 128 or
+            not value.isascii() or
+            not all(ch in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:-" for ch in value)):
+        raise PermissionError("unauthorized")
+
+
 def verified_read(store, path, assertion: str, verifier: AssertionVerifier, *, tenant: str, instance: str, event: str):
     principal = verifier.verify(assertion)
     _authorized(principal, "event:read", tenant, instance)
+    _valid_opaque_identifier(event)
     return store.read(path, tenant=principal.tenant, instance=principal.instance, event=event)
 
 
@@ -112,6 +121,7 @@ def verified_resource_read(fetch, assertion: str, verifier: AssertionVerifier, *
         raise PermissionError("unauthorized")
     principal = verifier.verify(assertion)
     _authorized(principal, resource + ":read", tenant, instance)
+    _valid_opaque_identifier(identifier)
     return fetch(resource=resource, tenant=principal.tenant, instance=principal.instance, identifier=identifier)
 
 
@@ -202,6 +212,28 @@ if __name__ == "__main__":
                 with self.subTest(token=token), self.assertRaises(PermissionError):
                     verified_admit(self.store, "synthetic.db", self.body, self.payload, token, self.verifier)
             self.store.admit.assert_not_called()
+
+        def test_opaque_identifiers_fail_closed_before_backend(self):
+            fetch = Mock()
+            token_resource = self.assertion(["evidence:read"])
+            token_event = self.assertion(["event:read"])
+            invalid = (None, 42, [], "", "é", "a" * 129, "../x",
+                       "a/b", "a\\b", "a.b", "a?b", "a b")
+            for value in invalid:
+                with self.subTest(value=repr(value)):
+                    with self.assertRaisesRegex(PermissionError, "^unauthorized$"):
+                        verified_resource_read(fetch, token_resource, self.verifier,
+                                               resource="evidence", tenant="demo-a",
+                                               instance="collector-a", identifier=value)
+                    with self.assertRaisesRegex(PermissionError, "^unauthorized$"):
+                        verified_read(self.store, "synthetic.db", token_event, self.verifier,
+                                      tenant="demo-a", instance="collector-a", event=value)
+            fetch.assert_not_called()
+            self.store.read.assert_not_called()
+            verified_resource_read(fetch, token_resource, self.verifier,
+                                   resource="evidence", tenant="demo-a",
+                                   instance="collector-a", identifier="ev_1:abc-2")
+            fetch.assert_called_once()
 
         def test_read_and_resource_acl(self):
             for token in (None, 42, "", "a" * 9000):
