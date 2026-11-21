@@ -185,3 +185,15 @@ User instruction: **continue collecting historical functionality, scripts, confi
 - **#817 INT06A ABC** `integration/aiops2-int06a-20261118`: all seventy-three changed paths archived under `pr-817/`, including Core, Portal, Worker, Twin, INT06A, frontend, contracts, workflows, scripts, **17 fixture JSONs** and historical QA files. **No tests run.**
 
 **Not complete across repository:** #814 (ABC candidate), #792 (large installer/release kit), many earlier PRs and any unenumerated branches or satellite repos. Archive is not a live integration or validation. No collectors, CI runs, cron, merge, cutover, or deployment intentionally invoked.
+
+
+## Port 10 — ABC candidate #814 and golden install kit #792 (2026-11-21)
+
+**Collection only — NO tests executed.** Historical files are copied as inert text sources under `docs/convergence/v3/source-imports/`; active routes, workers, CI, migrations, deployments and collectors are not invoked.
+
+- **PR #814** `integration/aiops2-abc-candidate-20261118`: all **59 listed changed paths** copied under `pr-814/`. Includes Core, Portal, Twin, Worker, scripts, receipt contracts, CI variants, 17 JSON fixtures and historical test sources. Canonical files not overwritten.
+- **PR #792** `integration/aiops2-golden-demo-install-kit-20261116`: **50 priority source files** copied under `pr-792/`, including intelligence/policy/denial/evidence modules (10), historical SQL migrations (14), observability/install-kit configurations (20), FS385 ingest/shared/worker components and release tooling (10). **Partial harvest only**: the PR's much larger install kit includes additional files, not yet all copied. No migrations applied, no install executed.
+- The PR #792 archive is a provenance/source collection, **not** a functional installed kit or a verified complete deployment package. No environment variables or credentials are intentionally populated.
+- The scope of historical branches, other earlier PRs and satellite repositories remains unverified; do not claim global completeness.
+
+**No test runs, no CI results asserted, no deployment, no merge.**
