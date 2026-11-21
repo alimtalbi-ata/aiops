@@ -197,3 +197,15 @@ User instruction: **continue collecting historical functionality, scripts, confi
 - The scope of historical branches, other earlier PRs and satellite repositories remains unverified; do not claim global completeness.
 
 **No test runs, no CI results asserted, no deployment, no merge.**
+
+
+## Port 11 — Golden demo install kit #792 continued, collection only (2026-11-21)
+
+Additional historical **source-only** copies were created under `docs/convergence/v3/source-imports/pr-792/`, including:
+- Copilot, Core, Policy, Evidence, Simulator, Twin, Worker, Portal and Test Provider modules; denial fencing/prepare/resume, safety, shared evidence and service entrypoints.
+- Debian release and deployment shell/Python scripts, backups, restores, Temporal namespace scripts and host qualification tools, preserved **without executing** any script.
+- Historical CI workflow YAMLs preserved **outside** active `.github/workflows/`.
+- Full major install-kit service entrypoints, shared contract modules, Dockerfiles, Compose v0.1–v0.9 variants, example environment, Grafana/Prometheus/Loki/Tempo configs, Temporal installer and FS385 ingestion sources.
+- Evaluation/build tooling, readonly demo source and deploy isolation configuration.
+
+This tranche contains **150 additional PR #792 source files** copied (beyond Port 10's 50), but does **not** claim the full PR #792 changed-file inventory is complete; remaining historical documentation, tools and tests still need to be inventoried and harvested. File copies are inert snapshots, not an installable/reconciled runtime. **No tests, builds, migrations, deployments, collectors, agents or workflows were run.**
