@@ -107,6 +107,10 @@ def policy_evaluate(*, event, twin, evidence):
         _scope(instance)
         _identifier(event_id)
         _digest(digest)
+        # Event contract v1: explicitly bind both resource identities; no same-scope substitution.
+        twin_identifier, evidence_identifier = event["twin_identifier"], event["evidence_identifier"]
+        _identifier(twin_identifier)
+        _identifier(evidence_identifier)
     except (KeyError, TypeError, PermissionError):
         return "DENY"
     if twin is None or evidence is None:
@@ -114,8 +118,9 @@ def policy_evaluate(*, event, twin, evidence):
     try:
         for row, kind in ((twin, "twin"), (evidence, "evidence")):
             ScopedFixtureBackend._validate(row)
-            if (row.resource, row.tenant, row.instance, row.event, row.payload_digest) != (
-                    kind, tenant, instance, event_id, digest):
+            expected_identifier = twin_identifier if kind == "twin" else evidence_identifier
+            if (row.resource, row.tenant, row.instance, row.identifier, row.event, row.payload_digest) != (
+                    kind, tenant, instance, expected_identifier, event_id, digest):
                 return "DENY"
     except PermissionError:
         return "DENY"
@@ -125,7 +130,8 @@ def policy_evaluate(*, event, twin, evidence):
 class BindingContractTests(unittest.TestCase):
     def setUp(self):
         self.digest = "a" * 64
-        self.event = dict(tenant="demo-a", instance="collector-a", event="e1", digest=self.digest)
+        self.event = dict(tenant="demo-a", instance="collector-a", event="e1", digest=self.digest,
+                          twin_identifier="ci1", evidence_identifier="ev1")
         self.twin = Resource("twin", "demo-a", "collector-a", "ci1", "e1", self.digest)
         self.evidence = Resource("evidence", "demo-a", "collector-a", "ev1", "e1", self.digest)
         self.backend = ScopedFixtureBackend((self.twin, self.evidence))
@@ -165,6 +171,17 @@ class BindingContractTests(unittest.TestCase):
                                (self.twin, Resource("evidence", "demo-a", "collector-a", "ev1", "e1", "b" * 64))):
             self.assertEqual(policy_evaluate(event=self.event, twin=twin, evidence=evidence), "DENY")
         self.assertEqual(policy_evaluate(event=dict(self.event, digest="é"), twin=self.twin, evidence=self.evidence), "DENY")
+        # Independent D oracle: same tenant/instance/event/digest but unrelated IDs MUST deny.
+        unrelated_twin = Resource("twin", "demo-a", "collector-a", "ci-unrelated", "e1", self.digest)
+        unrelated_evidence = Resource("evidence", "demo-a", "collector-a", "ev-unrelated", "e1", self.digest)
+        for twin, evidence in ((unrelated_twin, self.evidence), (self.twin, unrelated_evidence),
+                               (unrelated_twin, unrelated_evidence)):
+            self.assertEqual(policy_evaluate(event=self.event, twin=twin, evidence=evidence), "DENY")
+        for changed in (dict(self.event, twin_identifier="ci-unrelated"),
+                        dict(self.event, evidence_identifier="ev-unrelated"),
+                        dict(self.event, twin_identifier=None),
+                        {k: v for k, v in self.event.items() if k != "twin_identifier"}):
+            self.assertEqual(policy_evaluate(event=changed, twin=self.twin, evidence=self.evidence), "DENY")
 
     def test_no_mutation_on_failed_reads(self):
         before = dict(self.backend._rows)
