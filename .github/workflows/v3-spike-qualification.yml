@@ -202,6 +202,50 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "security_boundary=synthetic_only runtime=NOT_RUN deploy_authorized=false"
 
+
+  resource-binding:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact SHA and clean checkout
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+      - name: Synthetic resource binding contract (strict 6 methods)
+        run: |
+          python3 -B - <<'PY'
+          import importlib.util
+          import pathlib
+          import sys
+          import unittest
+          path = pathlib.Path("v3-spike/contracts/resource_binding.py").resolve()
+          spec = importlib.util.spec_from_file_location("v3_resource_binding", path)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.BindingContractTests)
+          expected = 6
+          actual = suite.countTestCases()
+          print(f"resource-binding collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit(f"FAIL binding collection: {actual} != {expected}")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit(f"FAIL binding tests: executed={result.testsRun} expected={expected}")
+          print(f"PASS binding tests: executed={result.testsRun}", flush=True)
+          PY
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "resource_binding=synthetic_only runtime=NOT_RUN deploy_authorized=false"
+
   compose-static:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
