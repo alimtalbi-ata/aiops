@@ -156,7 +156,7 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
-      - name: Synthetic security boundary tests (strict 5 methods)
+      - name: Synthetic security boundary tests (strict 6 methods)
         run: |
           python3 -B - <<'PY'
           import ast
@@ -171,7 +171,7 @@ jobs:
           if len(classes) != 1:
               raise SystemExit(f"FAIL security test class collection: {len(classes)} != 1")
           tests = [node for node in classes[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_")]
-          expected = 5
+          expected = 6
           if len(tests) != expected:
               raise SystemExit(f"FAIL security test AST collection: {len(tests)} != {expected}")
           # Tests live under __main__; execute the source as __main__ while intercepting unittest.main.
