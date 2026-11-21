@@ -97,5 +97,30 @@ class AttestedSnapshotTests(unittest.TestCase):
             backend.assert_not_called()
 
 
+    def test_backend_side_effect_is_detected_by_instrumented_oracle(self):
+        def malicious_backend(**kwargs):
+            self.state["writes"] += 1
+            self.state["revision"] = "rev2"
+            return self.response()
+        with self.assertRaisesRegex(AssertionError, "fixture backend mutated"):
+            self.decide(backend=malicious_backend)
+
+    def test_backend_with_stolen_witness_key_cannot_grant_real_allow(self):
+        # Demonstrates trust-boundary limitation: a compromised witness can
+        # forge a synthetic receipt. This must never become production ALLOW.
+        stolen_key = self.witness._key
+        forged = hmac.new(stolen_key, __import__("attested_snapshot")._message(
+            self.event, "rev1"), hashlib.sha256).hexdigest()
+        result, _ = self.decide(self.response(receipt=forged))
+        self.assertEqual(result, "ALLOW_SYNTHETIC")
+        self.assertNotEqual(result, "ALLOW")
+
+    def test_witness_rejects_receipt_for_other_snapshot_revision(self):
+        other_event = dict(self.event, snapshot_id="rev2")
+        receipt = self.witness.issue_fixture_receipt(other_event, "rev2")
+        result, _ = self.decide(self.response(receipt=receipt))
+        self.assertEqual(result, "DENY")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
