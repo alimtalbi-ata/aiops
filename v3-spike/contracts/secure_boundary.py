@@ -93,7 +93,10 @@ def verified_admit(store, path, body, payload: bytes, assertion: str, verifier: 
     if not isinstance(payload, bytes) or len(payload) > 1024 * 1024:
         raise PermissionError("unauthorized")
     actual = hashlib.sha256(payload).hexdigest()
-    if not isinstance(body.get("digest"), str) or not hmac.compare_digest(actual, body["digest"]):
+    if (not isinstance(body.get("digest"), str) or len(body["digest"]) != 64 or
+            not body["digest"].isascii() or
+            any(ch not in "0123456789abcdef" for ch in body["digest"]) or
+            not hmac.compare_digest(actual, body["digest"])):
         raise PermissionError("unauthorized")
     return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=dt.datetime.fromtimestamp(verified_at, tz=dt.timezone.utc))
 
@@ -176,6 +179,15 @@ if __name__ == "__main__":
             with self.assertRaises(PermissionError):
                 verified_admit(self.store, "synthetic.db", self.body, b"altered",
                                self.assertion(["event:write"]), self.verifier)
+            self.store.admit.assert_not_called()
+
+        def test_malformed_digest_denied_without_mutation(self):
+            # Non-ASCII must not escape as TypeError from compare_digest.
+            valid = self.body["digest"]
+            for digest in ("é", "", "a" * 63, "a" * 65, "g" * 64, valid.upper(), None, 42):
+                with self.subTest(digest=repr(digest)), self.assertRaisesRegex(PermissionError, "^unauthorized$"):
+                    verified_admit(self.store, "synthetic.db", dict(self.body, digest=digest),
+                                   self.payload, self.assertion(["event:write"]), self.verifier)
             self.store.admit.assert_not_called()
 
         def test_tenant_impersonation_denied(self):
