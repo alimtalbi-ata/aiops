@@ -47,6 +47,24 @@ jobs:
               raise SystemExit("FAIL: browser acceptance")
           print("PASS: 5/5 Chromium synthetic acceptance", flush=True)
           PY
+      - name: Run offline Chromium five-case suite (no HTTP, exact HTML)
+        run: |
+          mkdir -p reports/offline
+          python3 -B - <<'PY'
+          import importlib.util, pathlib, sys, unittest, xmlrunner
+          p = pathlib.Path("v3-spike/ux/test_gamma_offline.py").resolve()
+          spec = importlib.util.spec_from_file_location("gamma_offline", p)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.GammaOffline)
+          if suite.countTestCases() != 5:
+              raise SystemExit("FAIL: offline collection mismatch")
+          result = xmlrunner.XMLTestRunner(output="reports/offline", verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != 5:
+              raise SystemExit("FAIL: offline Chromium acceptance")
+          print("PASS: offline 5/5", flush=True)
+          PY
       - name: UTC receipt
         if: always()
         run: |
