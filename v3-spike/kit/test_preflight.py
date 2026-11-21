@@ -13,7 +13,7 @@ def fixture():
             command=["python","/fixture.py"],
             volumes=[dict(type="bind", source=str(Path(__file__).resolve().with_name("fixture.py")), target="/fixture.py", read_only=True)])
     for service in services.values():
-        service["healthcheck"] = dict(test=["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"], retries=12)
+        service["healthcheck"] = dict(test=["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"], retries=12, interval=5_000_000_000, timeout=3_000_000_000)
     services["gamma"]["depends_on"] = {"core":{"condition":"service_healthy"}}
     services["gamma"]["networks"]["edge"] = None
     services["gamma"]["ports"] = [dict(host_ip="127.0.0.1", target=8080, published="0", protocol="tcp")]
@@ -45,7 +45,25 @@ class IsolationTests(unittest.TestCase):
                 c["services"]["gamma"][field] = value
                 with self.assertRaises(ValueError):
                     validate(c)
+    def healthcheck_bounds_per_service(self):
+        for service in ("gamma", "core", "demo"):
+            for mutation in (
+                lambda h: h.clear(),
+                lambda h: h.update(test=["CMD", "true"]),
+                lambda h: h.update(retries=0),
+                lambda h: h.update(interval=86_400_000_000_000),
+                lambda h: h.update(timeout=6_000_000_000),
+                lambda h: h.update(interval=True),
+                lambda h: h.update(start_period=121_000_000_000),
+                lambda h: h.update(start_interval=0),
+            ):
+                with self.subTest(service=service, mutation=mutation):
+                    c = fixture()
+                    mutation(c["services"][service]["healthcheck"])
+                    with self.assertRaises(ValueError):
+                        validate(c)
     def test_network_driver_opts(self):
+        self.healthcheck_bounds_per_service()
         c = fixture()
         c["networks"]["edge"]["driver_opts"] = {"com.docker.network.bridge.host_binding_ipv4": "0.0.0.0"}
         with self.assertRaises(ValueError):
