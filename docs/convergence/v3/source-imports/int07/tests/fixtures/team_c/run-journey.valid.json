@@ -1,0 +1,222 @@
+{
+  "schema": "aiops.team-c.san-payments-run-journey.v2",
+  "scope": "STORY_OFFLINE",
+  "mode": "DEMO",
+  "run": {
+    "run_id": "SIM-ACME-0123456789ABCDEF",
+    "attempt_id": "ACME-SIM-0123456789ABCDEF",
+    "incident_id": "ACME-SAN-P1-SYNTHETIC",
+    "tenant_id": null,
+    "scenario_id": "ACME-SAN-PAYMENTS",
+    "executed_sha": null,
+    "idempotency_key": "ACME-SIM-0123456789ABCDEF"
+  },
+  "intelligence": {
+    "provider": "DETERMINISTIC_RULES_NOT_LLM",
+    "analyst_status": "HYPOTHESIS_ONLY",
+    "hypotheses": [
+      {
+        "claim": "Le chemin de dépendances synthétique relie SAN P1 à Payments P2 ; causalité non confirmée.",
+        "confidence": null,
+        "evidence_refs": [
+          "app/portal/acme-fixtures.json#/ci"
+        ]
+      }
+    ],
+    "critic_disposition": "HOLD_FOR_HUMAN_REVIEW",
+    "objections": [
+      "Aucune télémétrie runtime indépendante ni vérification causale n'est disponible."
+    ],
+    "critic_independently_verified": false,
+    "evidence_refs": [
+      "app/portal/acme-fixtures.json#/ci"
+    ]
+  },
+  "policy": {
+    "decision": "DENY_LIVE_ACTION",
+    "reason_codes": [
+      "RUNTIME_EVIDENCE_MISSING",
+      "LIVE_ACTION_DISABLED"
+    ],
+    "execution_allowed": false,
+    "effect_allowed": false
+  },
+  "hitl": {
+    "kind": "SIMULATED_NOT_REQUESTED",
+    "approval_id": null,
+    "issuer": "TWIN_ACME_SIMULATED",
+    "human_approval_claimed": false,
+    "simulated_only": true
+  },
+  "worker": {
+    "executor": "NOT_INVOKED",
+    "workflow_id": null,
+    "task_queue": null,
+    "isolated": true,
+    "no_effect": true,
+    "runtime_attested": false
+  },
+  "receipt": null,
+  "stage_plan": [
+    {
+      "stage": "capability_simulator",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "capability_core",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "capability_twin",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "capability_policy",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "capability_worker",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "simulator_start",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "pre_resolution_core",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "pre_resolution_twin",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "pre_resolution_policy",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "pre_resolution_worker",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "worker_no_effect",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "core_finalization",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "post_resolution_core",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "post_resolution_twin",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "post_resolution_policy",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "post_resolution_worker",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    },
+    {
+      "stage": "resolved",
+      "status": "NOT_RUN",
+      "evidence_state": "MISSING",
+      "run_id": "SIM-ACME-0123456789ABCDEF",
+      "attempt_id": "ACME-SIM-0123456789ABCDEF",
+      "sha256": null,
+      "observed_at": null
+    }
+  ],
+  "provenance": {
+    "source_kind": "LOCAL_SYNTHETIC_FIXTURE",
+    "source_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "source_git_sha": null,
+    "expected_sha": null,
+    "collected_at": null
+  }
+}
