@@ -245,7 +245,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
       - name: Install isolated security integration dependency
-        run: python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
+        run: python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0' 'unittest-xml-reporting==3.2.0'
+      - name: Fail-closed security dependency closure
+        run: |
+          python3 -B - <<'PY'
+          import importlib.util
+          assert importlib.util.find_spec("xmlrunner") is not None, "FAIL missing xmlrunner"
+          assert importlib.util.find_spec("jsonschema") is not None, "FAIL missing jsonschema"
+          print("PASS secure-boundary dependency closure")
+          PY
       - name: Synthetic security boundary tests (strict 9 methods)
         run: |
           python3 -B - <<'PY'
@@ -475,6 +483,7 @@ jobs:
           set -eu
           docker compose version
           test "$(find . -maxdepth 1 -name '*compose*.yml' -o -name '*compose*.yaml' | wc -l)" -eq 1
+          mkdir -p reports
           for profile in default demo; do
             if [ "$profile" = default ]; then
               docker compose -f docker-compose.yml config --format json > /tmp/v3-compose.json
@@ -493,8 +502,39 @@ jobs:
               raise SystemExit(f"FAIL profile={profile} services={actual} expected={expected}")
           print(f"PASS compose-static profile={profile} services={sorted(actual)}")
           PY
+          echo PASS > "reports/compose-${profile}.status"
           done
           echo "NO_PULL NO_UP NO_RUNTIME"
+      - name: Compose static JUnit (strict default/demo receipts)
+        if: always()
+        working-directory: v3-spike/kit
+        run: |
+          python3 -B - <<'PY'
+          import os
+          import pathlib
+          import xml.etree.ElementTree as ET
+          reports = pathlib.Path("reports")
+          reports.mkdir(exist_ok=True)
+          root = ET.Element("testsuite", name="compose-static", tests="2", failures="0")
+          for profile in ("default", "demo"):
+              testcase = ET.SubElement(root, "testcase", classname="ComposeStatic", name=profile)
+              result_file = pathlib.Path(f"reports/compose-{profile}.status")
+              if not result_file.exists() or result_file.read_text().strip() != "PASS":
+                  ET.SubElement(testcase, "failure", message=f"{profile} Compose validation not passed").text = "Missing successful config/preflight/services receipt"
+                  root.set("failures", str(int(root.get("failures")) + 1))
+          ET.ElementTree(root).write(reports / "compose-static.xml", encoding="utf-8", xml_declaration=True)
+          if root.get("failures") != "0":
+              raise SystemExit("FAIL Compose static JUnit")
+          print("PASS Compose static JUnit default/demo")
+          PY
+      - name: Publish Compose JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-compose-junit
+          path: v3-spike/kit/reports/compose-static.xml
+          if-no-files-found: error
+          retention-days: 14
       - name: Receipt
         if: always()
         run: |
