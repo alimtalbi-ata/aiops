@@ -134,16 +134,18 @@ jobs:
               assert start is not None, "FAIL inventory header absent"
               assert all(line.startswith("|") and line.endswith("|") for line in lines[start:i+1]), "FAIL inventory table discontinuity"
           validate_table(text)
-          # Negative mutation: one blank line must be rejected.
-          mutated = text.replace("| Liaison Event/Twin/Evidence |", "\\n| Liaison Event/Twin/Evidence |", 1)
-          try:
-              validate_table(mutated)
-          except AssertionError:
-              pass
-          else:
-              raise AssertionError("FAIL BOM lint accepted blank-line mutation")
+          # Both real blank lines and literal escaped newlines must be rejected.
+          for label, prefix in (("blank-line", "\n"), ("literal-backslash-n", "\\n")):
+              mutated = text.replace("| Liaison Event/Twin/Evidence |", prefix + "| Liaison Event/Twin/Evidence |", 1)
+              assert mutated != text, f"FAIL mutation not applied: {label}"
+              try:
+                  validate_table(mutated)
+              except AssertionError:
+                  pass
+              else:
+                  raise AssertionError(f"FAIL BOM lint accepted {label} mutation")
           assert "\n## État de qualification" in text, "FAIL missing qualification section"
-          for term in ("SQLite 17", "sécurité 9", "GAMMA 5", "kit 6", "resource-binding 6", "authenticated-binding 4", "pair-decision 5", "Compose default/DEMO"):
+          for term in ("SQLite 17", "sécurité 9", "GAMMA 5", "kit 6", "resource-binding 6", "authenticated-binding 4", "pair-decision 7", "Compose default/DEMO"):
               assert term in text, f"FAIL BOM missing {term}"
           print("PASS BOM structure and six-job inventory; no runtime qualification")
           PY
@@ -288,7 +290,7 @@ jobs:
               raise SystemExit(f"FAIL authenticated binding: executed={result.testsRun} expected={expected}")
           print(f"PASS authenticated binding: executed={result.testsRun}", flush=True)
           PY
-      - name: Paired authenticated decision (strict 5 methods)
+      - name: Paired authenticated decision (strict 7 methods)
         run: |
           python3 -B - <<'PY'
           import pathlib
@@ -298,7 +300,7 @@ jobs:
           sys.path.insert(0, str(root))
           import test_pair_decision
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_pair_decision.PairDecisionTests)
-          expected = 5
+          expected = 7
           actual = suite.countTestCases()
           print(f"pair-decision collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
