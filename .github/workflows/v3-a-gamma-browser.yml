@@ -1,0 +1,62 @@
+name: V3 A GAMMA isolated Chromium
+on:
+  push:
+    branches: [v3-spike/a-gamma-snapshot-ci-20261121]
+    paths:
+      - 'v3-spike/ux/**'
+      - '.github/workflows/v3-a-gamma-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gamma-chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify exact source
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          git rev-parse HEAD
+          python3 --version
+      - name: Install pinned browser and JUnit reporter
+        run: |
+          python3 -m pip install --disable-pip-version-check 'playwright==1.56.0' 'unittest-xml-reporting==3.2.0'
+          python3 -m playwright install --with-deps chromium
+      - name: Run strict five Chromium acceptance tests
+        run: |
+          mkdir -p reports
+          python3 -B - <<'PY'
+          import importlib.util, pathlib, sys, unittest, xmlrunner
+          p = pathlib.Path("v3-spike/ux/test_gamma.py").resolve()
+          spec = importlib.util.spec_from_file_location("v3_gamma", p)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.GammaAcceptance)
+          count = suite.countTestCases()
+          print(f"collected={count} expected=5", flush=True)
+          if count != 5:
+              raise SystemExit("FAIL: test collection mismatch")
+          result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != 5:
+              raise SystemExit("FAIL: browser acceptance")
+          print("PASS: 5/5 Chromium synthetic acceptance", flush=True)
+          PY
+      - name: UTC receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID attempt=$GITHUB_RUN_ATTEMPT job=$GITHUB_JOB"
+          echo "runtime=NOT_RUN production=DENIED"
+      - name: Upload JUnit reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gamma-chromium-junit
+          path: reports/
+          if-no-files-found: warn
