@@ -8,7 +8,23 @@ def require(ok, reason):
     if not ok:
         raise ValueError(reason)
 
+def validate_source(source):
+    """Fail closed on profile declarations in the canonical, restricted YAML layout.
+
+    Resolved Compose JSON drops profiles of inactive services, so check source first.
+    Reject duplicate service headings and unsupported profile syntax rather than guess.
+    """
+    require(type(source) is str, "invalid compose source")
+    blocks = re.findall(r"(?ms)^  (gamma|core|demo):[ \\t]*\\n(.*?)(?=^  [a-zA-Z][a-zA-Z0-9_-]*:|^networks:|\\Z)", source)
+    require(len(blocks) == 3 and {name for name, _ in blocks} == {"gamma", "core", "demo"}, "canonical service blocks")
+    for name, block in blocks:
+        declarations = re.findall(r"(?m)^    profiles:[ \\t]*(.*?)\\s*$", block)
+        expected = ["[demo]"] if name == "demo" else []
+        require(declarations == expected, "unsafe source profiles: " + name)
+        require(not re.search(r"(?m)^\\s+profiles\\s*:", block.replace("    profiles: [demo]", "") if name == "demo" else block), "nested/duplicate profiles: " + name)
+
 def validate(config):
+    validate_source(Path(__file__).resolve().with_name("docker-compose.yml").read_text(encoding="utf-8"))
     services = config["services"]
     require(type(services) is dict and {"gamma", "core"} <= services.keys(), "missing mandatory service")
     require(set(services) <= {"gamma", "core", "demo"}, "unexpected service")
