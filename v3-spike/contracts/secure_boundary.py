@@ -31,6 +31,10 @@ class AssertionVerifier:
         return int(self._clock())
 
     def verify(self, assertion: str) -> VerifiedPrincipal:
+        return self.verify_with_time(assertion)[0]
+
+    def verify_with_time(self, assertion: str) -> tuple[VerifiedPrincipal, int]:
+        """Return the verified principal and the SAME trusted clock sample."""
         if not isinstance(assertion, str) or len(assertion) > 8192 or not assertion.isascii():
             raise PermissionError("unauthorized")
         try:
@@ -66,7 +70,7 @@ class AssertionVerifier:
             current = self.now()
             if type(exp) is not int or not current < exp <= current + 300:
                 raise PermissionError("unauthorized")
-            return VerifiedPrincipal(claims["tenant"], claims["instance"], frozenset(permissions))
+            return VerifiedPrincipal(claims["tenant"], claims["instance"], frozenset(permissions)), current
         except (ValueError, TypeError, KeyError, UnicodeError, json.JSONDecodeError) as exc:
             raise PermissionError("unauthorized") from exc
 
@@ -82,7 +86,7 @@ def _authorized(principal: VerifiedPrincipal, permission: str, tenant: str, inst
 
 def verified_admit(store, path, body, payload: bytes, assertion: str, verifier: AssertionVerifier):
     """Verify source, permission and actual bytes BEFORE any store mutation."""
-    principal = verifier.verify(assertion)
+    principal, verified_at = verifier.verify_with_time(assertion)
     if not isinstance(body, dict):
         raise PermissionError("unauthorized")
     _authorized(principal, "event:write", body.get("tenant", ""), body.get("instance", ""))
@@ -91,7 +95,7 @@ def verified_admit(store, path, body, payload: bytes, assertion: str, verifier: 
     actual = hashlib.sha256(payload).hexdigest()
     if not isinstance(body.get("digest"), str) or not hmac.compare_digest(actual, body["digest"]):
         raise PermissionError("unauthorized")
-    return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=dt.datetime.fromtimestamp(verifier.now(), tz=dt.timezone.utc))
+    return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=dt.datetime.fromtimestamp(verified_at, tz=dt.timezone.utc))
 
 
 def verified_read(store, path, assertion: str, verifier: AssertionVerifier, *, tenant: str, instance: str, event: str):
@@ -134,6 +138,18 @@ if __name__ == "__main__":
             self.store.admit.assert_called_once()
             self.assertEqual(self.store.admit.call_args.kwargs["now"], dt.datetime.fromtimestamp(1000, tz=dt.timezone.utc))
             self.assertIsInstance(self.store.admit.call_args.kwargs["now"], dt.datetime)
+
+        def test_single_trusted_clock_sample_on_admission(self):
+            # At the expiration edge, a second clock read would cross the boundary.
+            ticks = iter((1000, 1001))
+            verifier = AssertionVerifier(self.key, clock=lambda: next(ticks))
+            token = self.assertion(["event:write"], exp=1001)
+            self.assertEqual(verified_admit(self.store, "synthetic.db", self.body,
+                                            self.payload, token, verifier), "ACCEPT")
+            self.assertEqual(self.store.admit.call_args.kwargs["now"],
+                             dt.datetime.fromtimestamp(1000, tz=dt.timezone.utc))
+            # Any second read would consume 1001; one sample must suffice.
+            self.assertEqual(next(ticks), 1001)
 
         def test_integrated_sqlite_durability_synthetic(self):
             # Integration gate: real event_store, synthetic payload, no external I/O.
