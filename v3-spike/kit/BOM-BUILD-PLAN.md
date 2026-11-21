@@ -12,8 +12,8 @@ Statut: **DRAFT / NO-GO release**. Portée: serveur **neuf** seulement. Debian s
 | Data/event SQLite | `v3-spike/contracts/event_store.py` | 17 méthodes synthétiques, persistance de test |
 | Frontière de sécurité | `v3-spike/contracts/secure_boundary.py` | 9 méthodes synthétiques; ni IAM ni ACL backend produit |
 | GAMMA | `v3-spike/ux/test_gamma.py` | 5 méthodes navigateur synthétiques |
-| CI | `.github/workflows/v3-spike-qualification.yml` | Six jobs (SQLite 17, sécurité 9, GAMMA 5, kit 6, resource-binding 6 + authenticated-binding 4 + pair-decision 5, Compose default/DEMO); vérifier run ID/job ID/logs/UTC avant PASS |
-| Liaison Event/Twin/Evidence | `v3-spike/contracts/resource_binding.py` | 6 méthodes synthétiques, 4 tests d'intégration authentifiée et 5 tests de décision appariée; Event v1 lie explicitement `twin_identifier` et `evidence_identifier`, mais aucune ACL ni association CMDB attestée |
+| CI | `.github/workflows/v3-spike-qualification.yml` | Six jobs (SQLite 17, sécurité 9, GAMMA 5, kit 6, resource-binding 6 + authenticated-binding 4 + pair-decision 7, Compose default/DEMO); vérifier run ID/job ID/logs/UTC avant PASS |
+| Liaison Event/Twin/Evidence | `v3-spike/contracts/resource_binding.py` | 6 méthodes synthétiques, 4 tests d'intégration authentifiée et 7 tests de décision appariée; Event v1 lie explicitement `twin_identifier` et `evidence_identifier`, mais aucune ACL ni association CMDB attestée |
 
 **Manques bloquants** : Core produit, Temporal, Worker, Policy, HITL, Evidence, intégrations systèmes/stockage/réseau/applications/terminaux/cloud, workflows ITIL 4, installateur unique, migrations, sauvegarde/restauration, upgrade/rollback, secrets locaux, SBOM, signature, release, licence/provenance des dépendances et tests d'installation vierge. La présence ou réutilisabilité dans les autres dépôts n'est **pas attestée** par cet inventaire.
 
