@@ -135,6 +135,27 @@ if __name__ == "__main__":
             self.assertEqual(self.store.admit.call_args.kwargs["now"], dt.datetime.fromtimestamp(1000, tz=dt.timezone.utc))
             self.assertIsInstance(self.store.admit.call_args.kwargs["now"], dt.datetime)
 
+        def test_integrated_sqlite_durability_synthetic(self):
+            # Integration gate: real event_store, synthetic payload, no external I/O.
+            import tempfile
+            from pathlib import Path
+            import event_store
+
+            timestamp = int(dt.datetime(2026, 11, 20, 12, tzinfo=dt.timezone.utc).timestamp())
+            verifier = AssertionVerifier(self.key, clock=lambda: timestamp)
+            body = dict(self.body, event="e1", domain="database", ci="db1",
+                        mode="SYNTHETIC", at="2026-11-20T12:00:00Z")
+            with tempfile.TemporaryDirectory() as directory:
+                path = str(Path(directory) / "events.sqlite")
+                event_store.initialize(path)
+                claims = dict(tenant="demo-a", instance="collector-a",
+                              permissions=["event:write"], exp=timestamp + 300)
+                raw = json.dumps(claims, sort_keys=True).encode()
+                token = raw.hex() + "." + hmac.new(self.key, raw, hashlib.sha256).hexdigest()
+                self.assertEqual(verified_admit(event_store, path, body, self.payload, token, verifier), "ACCEPT")
+                self.assertEqual(verified_admit(event_store, path, body, self.payload, token, verifier), "DUPLICATE")
+                self.assertEqual(event_store.read(path, tenant="demo-a", instance="collector-a", event="e1"), body)
+
         def test_digest_tampering_denied_before_write(self):
             with self.assertRaises(PermissionError):
                 verified_admit(self.store, "synthetic.db", self.body, b"altered",
