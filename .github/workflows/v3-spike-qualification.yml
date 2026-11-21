@@ -158,7 +158,7 @@ jobs:
           test -z "$(git status --porcelain)"
       - name: Install isolated security integration dependency
         run: python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
-      - name: Synthetic security boundary tests (strict 8 methods)
+      - name: Synthetic security boundary tests (strict 9 methods)
         run: |
           python3 -B - <<'PY'
           import ast
@@ -175,7 +175,7 @@ jobs:
           if len(classes) != 1:
               raise SystemExit(f"FAIL security test class collection: {len(classes)} != 1")
           tests = [node for node in classes[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_")]
-          expected = 8
+          expected = 9
           if len(tests) != expected:
               raise SystemExit(f"FAIL security test AST collection: {len(tests)} != {expected}")
           # Tests live under __main__; execute the source as __main__ while intercepting unittest.main.
