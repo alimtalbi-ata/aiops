@@ -1,0 +1,27 @@
+name: V3 selective convergence - offline Run Journey contract
+on:
+  pull_request:
+    paths:
+      - 'app/portal/acme_run_journey_projection.py'
+      - 'docs/contracts/team-c-san-payments-run-journey.schema.json'
+      - 'tests/fixtures/team_c/run-journey.valid.json'
+      - 'tests/test_team_c_san_payments_contract.py'
+      - '.github/workflows/v3-selective-run-journey.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile isolated projection and tests
+        run: python -m py_compile app/portal/acme_run_journey_projection.py tests/test_team_c_san_payments_contract.py
+      - name: Run offline positive and negative contract tests
+        run: python -m unittest discover -s tests -p 'test_team_c_san_payments_contract.py' -v
