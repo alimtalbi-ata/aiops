@@ -1,0 +1,27 @@
+name: INT-06A C offline contracts
+on:
+  push:
+    branches: [integration/aiops2-int06a-c-20261118]
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r app/requirements.txt pytest
+      - name: Offline tests only
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python -m pytest -q -rs tests/test_int06a_contract.py tests/test_worker_temporal_transition_receipts.py tests/test_worker_acme_simulated_hitl.py tests/test_acme_cross_lot_consumers.py tests/test_worker_demo_postcheck_boundary.py tests/test_core_unqualified_resolve.py --junitxml=int06a-offline.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: int06a-offline-${{ github.sha }}
+          path: int06a-offline.xml
