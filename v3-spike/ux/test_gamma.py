@@ -111,11 +111,25 @@ class GammaAcceptance(unittest.TestCase):
         for width in (320, 1280, 1920):
             with self.subTest(width=width):
                 p.set_viewport_size({"width": width, "height": 900})
-                p.locator("#policy").focus()
+                # Start from a known keyboard position; no programmatic .focus() oracle.
+                p.locator("body").click(position={"x": 1, "y": 1})
+                p.keyboard.press("ControlOrMeta+Home")
+                # Shift+Tab from the first navigation link would be browser-dependent.
+                # Reload the synthetic fixture to reset sequential keyboard focus.
+                p.reload()
+                for expected in ("#incident", "#run", "#evidence", "#itsm"):
+                    p.keyboard.press("Tab")
+                    self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), expected)
+                for control in ("run-choice", "admission", "policy"):
+                    p.keyboard.press("Tab")
+                    self.assertEqual(p.evaluate("document.activeElement.id"), control,
+                                     f"Tab order did not reach {control} at {width}px")
                 self.assertTrue(p.locator("#policy").evaluate(
-                    "(el) => el === document.activeElement && getComputedStyle(el).outlineStyle !== 'none' && parseFloat(getComputedStyle(el).outlineWidth) >= 3"
-                ), f"Keyboard focus indicator absent at {width}px")
-        self.assertEqual(self.blocked, [])
+                    "(el) => el === document.activeElement && el.matches(':focus-visible') && getComputedStyle(el).outlineStyle !== 'none' && parseFloat(getComputedStyle(el).outlineWidth) >= 3"
+                ), f"Keyboard :focus-visible indicator absent at {width}px")
+        self.assertEqual(self.allowed, [("GET", self.url)] * 4)
+        self.assertEqual(self.requests, [("GET", self.url)] * 4)
+        self.assertEqual(self.blocked, [], "Keyboard navigation attempted an unexpected request")
         self.assertFalse(self.errors)
     def test_viewports_and_states(self):
         p = self.page
