@@ -276,6 +276,8 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
+      - name: Install pinned synthetic test dependencies
+        run: python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0' 'unittest-xml-reporting==3.2.0'
       - name: Synthetic resource binding contract (strict 6 methods)
         run: |
           python3 -B - <<'PY'
@@ -339,12 +341,45 @@ jobs:
               raise SystemExit(f"FAIL pair decision: executed={result.testsRun} expected={expected}")
           print(f"PASS pair decision: executed={result.testsRun}", flush=True)
           PY
+      - name: ADR-003 SnapshotPair5 and adversarial6 (synthetic only)
+        run: |
+          set -eu
+          mkdir -p reports
+          PYTHONPATH=v3-spike/contracts python3 -B - <<'PY'
+          import importlib
+          import unittest
+          import xmlrunner
+          specs = (("test_snapshot_pair", "SnapshotPairTests", 5),
+                   ("test_snapshot_adversarial", "SnapshotAdversarialTests", 6))
+          good = True
+          for module_name, class_name, expected in specs:
+              module = importlib.import_module(module_name)
+              suite = unittest.defaultTestLoader.loadTestsFromTestCase(getattr(module, class_name))
+              actual = suite.countTestCases()
+              print(f"COLLECT {module_name}.{class_name}: {actual}/{expected}", flush=True)
+              if actual != expected:
+                  good = False
+                  continue
+              result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
+              good = result.wasSuccessful() and result.testsRun == expected and good
+          if not good:
+              raise SystemExit("FAIL synthetic SnapshotPair/adversarial gate")
+          print("PASS synthetic SnapshotPair5/adversarial6; backend atomicity NOT_ATTESTED")
+          PY
       - name: Receipt
         if: always()
         run: |
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "resource_binding=synthetic_only runtime=NOT_RUN deploy_authorized=false"
+      - name: Publish snapshot JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-snapshot-junit
+          path: reports/*.xml
+          if-no-files-found: error
+          retention-days: 14
 
   compose-static:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
