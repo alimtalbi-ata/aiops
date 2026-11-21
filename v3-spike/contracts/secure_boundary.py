@@ -3,6 +3,7 @@
 The verifier key is injected by a trusted service, never from an event or client.
 This module is NOT an HTTP authentication service or a production identity provider.
 """
+import datetime as dt
 import hashlib
 import hmac
 import json
@@ -90,7 +91,7 @@ def verified_admit(store, path, body, payload: bytes, assertion: str, verifier: 
     actual = hashlib.sha256(payload).hexdigest()
     if not isinstance(body.get("digest"), str) or not hmac.compare_digest(actual, body["digest"]):
         raise PermissionError("unauthorized")
-    return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=verifier.now())
+    return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=dt.datetime.fromtimestamp(verifier.now(), tz=dt.timezone.utc))
 
 
 def verified_read(store, path, assertion: str, verifier: AssertionVerifier, *, tenant: str, instance: str, event: str):
@@ -131,7 +132,8 @@ if __name__ == "__main__":
                                     self.assertion(["event:write"]), self.verifier)
             self.assertEqual(result, "ACCEPT")
             self.store.admit.assert_called_once()
-            self.assertEqual(self.store.admit.call_args.kwargs["now"], 1000)
+            self.assertEqual(self.store.admit.call_args.kwargs["now"], dt.datetime.fromtimestamp(1000, tz=dt.timezone.utc))
+            self.assertIsInstance(self.store.admit.call_args.kwargs["now"], dt.datetime)
 
         def test_digest_tampering_denied_before_write(self):
             with self.assertRaises(PermissionError):
