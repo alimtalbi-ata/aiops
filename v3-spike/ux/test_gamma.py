@@ -100,7 +100,7 @@ class GammaAcceptance(unittest.TestCase):
         p.goto(self.url)
         self.assertEqual(p.url, self.url)
         self.assertEqual(p.evaluate("document.activeElement.tagName"), "BODY")
-        for target in ("#incident", "#run", "#evidence", "#binding", "#itsm"):
+        for target in ("#incident", "#run", "#evidence", "#itsm"):
             p.keyboard.press("Tab")
             self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), target)
         p.keyboard.press("Tab")
