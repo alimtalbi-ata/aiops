@@ -1,0 +1,116 @@
+name: ACME golden demo readiness (offline)
+on:
+  pull_request:
+    paths:
+      - 'tests/test_acme_isolated_remediation_simulator.py'
+      - 'tests/test_acme_simulation_evidence_gate.py'
+      - 'tests/test_acme_demo_simulation_pipeline.py'
+      - 'app/portal/acme_incident_cockpit.py'
+      - 'app/portal/acme_lifecycle_read_model.py'
+      - 'app/portal/acme_isolated_remediation_simulator.py'
+      - 'app/portal/acme_simulation_evidence_gate.py'
+      - 'app/portal/acme_demo_simulation_pipeline.py'
+      - 'app/worker/main.py'
+      - 'tests/test_worker_temporal_workflow_stop.py'
+      - 'tests/test_worker_orchestration_integrated_demo.py'
+      - 'app/worker/acme_simulated_hitl.py'
+      - 'tests/test_worker_acme_simulated_hitl.py'
+      - 'scripts/acme_demo_readiness.py'
+      - 'scripts/acme_receipt_model.py'
+      - 'tests/test_acme_demo_readiness.py'
+      - 'tests/fixtures/acme/**'
+      - 'docs/contracts/acme-receipt.schema.json'
+      - '.github/workflows/acme-demo-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Pydantic v2 validation dependency
+        run: python -m pip install 'pydantic>=2.5,<3'
+      - name: Exact source compile
+        run: python -m py_compile scripts/acme_receipt_model.py scripts/acme_demo_readiness.py tests/test_acme_demo_readiness.py
+      - name: Validate all 17 versioned JSON fixtures
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("tests/fixtures/acme")
+          required = {
+              "valid", "wrong_reason", "real_ticket", "real_approval",
+              "missing_attempt_id", "malformed_attempt_id", "live_effects",
+              "real_glpi", "fake_human", "docker_mutation", "boolean_zero",
+              "missing_twin", "failed_worker", "empty_stages",
+              "missing_ticket_id", "stale", "future",
+          }
+          found = {p.stem for p in root.glob("*.json")}
+          assert found == required, f"Missing/unexpected fixtures: {required ^ found}"
+          for name in sorted(required):
+              value = json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
+              assert isinstance(value, dict), name
+          print(f"Validated {len(required)} JSON fixtures")
+          PY
+      - name: Verify versioned ACME JSON Schema matches Pydantic model
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.acme_receipt_model import AcmeReceipt
+          path = Path("docs/contracts/acme-receipt.schema.json")
+          expected = AcmeReceipt.model_json_schema(mode="validation")
+          actual = json.loads(path.read_text(encoding="utf-8"))
+          if actual != expected:
+              raise SystemExit("ACME receipt JSON Schema drift: regenerate from AcmeReceipt.model_json_schema(mode='validation')")
+          print("ACME receipt JSON Schema matches Pydantic v2 model")
+          PY
+      - name: Contract tests (fixture driven, no external API)
+        run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
+      - name: Worker no-effect contract (in-memory authority fixtures)
+        run: python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v
+      - name: CLI gate self-check and negative receipts
+        run: |
+          set -eu
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          export ACME_FIXTURE_TEMP="$temp_dir"
+          # The checked-in fixture uses a fixed UTC clock for deterministic unit tests.
+          # Refresh only collected_at in temporary CLI copies, never in Git fixtures.
+          python - <<'PY'
+          import datetime as dt
+          import json
+          import os
+          from pathlib import Path
+          source = Path("tests/fixtures/acme")
+          target = Path(os.environ["ACME_FIXTURE_TEMP"])
+          now = dt.datetime.now(dt.timezone.utc)
+          for path in sorted(source.glob("*.json")):
+              receipt = json.loads(path.read_text(encoding="utf-8"))
+              if path.stem not in ("stale", "future"):
+                  receipt["collected_at"] = now.isoformat()
+              else:
+                  offset = dt.timedelta(days=-2 if path.stem == "stale" else 2)
+                  receipt["collected_at"] = (now + offset).isoformat()
+              (target / path.name).write_text(json.dumps(receipt), encoding="utf-8")
+          PY
+          python scripts/acme_demo_readiness.py "$temp_dir/valid.json"
+          for f in "$temp_dir"/*.json; do
+            [ "$(basename "$f")" = "valid.json" ] && continue
+            set +e
+            python scripts/acme_demo_readiness.py "$f"
+            rc=$?
+            set -e
+            if [ "$rc" -ne 2 ]; then
+              echo "ERROR: $(basename "$f") expected gate rejection exit 2, got $rc"
+              exit 1
+            fi
+          done
+          echo "All 16 negative fixtures rejected with exit code 2"
