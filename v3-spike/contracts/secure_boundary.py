@@ -72,6 +72,7 @@ class AssertionVerifier:
 
 def _authorized(principal: VerifiedPrincipal, permission: str, tenant: str, instance: str):
     if (not isinstance(tenant, str) or not isinstance(instance, str) or
+            not tenant.isascii() or not instance.isascii() or
             permission not in principal.permissions or
             not hmac.compare_digest(principal.tenant, tenant) or
             not hmac.compare_digest(principal.instance, instance)):
@@ -169,6 +170,20 @@ if __name__ == "__main__":
                 self.verifier.verify(token)
             with self.assertRaises(PermissionError):
                 self.verifier.verify(self.assertion([42]))
+            self.store.admit.assert_not_called()
+            # Non-ASCII caller scopes must deny, not leak TypeError from compare_digest.
+            for scope in ("ténant", "instancé"):
+                with self.subTest(scope=scope), self.assertRaisesRegex(PermissionError, "^unauthorized$"):
+                    verified_admit(self.store, "synthetic.db", dict(self.body, tenant=scope),
+                                   self.payload, self.assertion(["event:write"]), self.verifier)
+            for expiry, accepted in ((1300, True), (1301, False), (1000, False)):
+                with self.subTest(expiry=expiry):
+                    token = self.assertion(["event:write"], exp=expiry)
+                    if accepted:
+                        self.assertEqual(self.verifier.verify(token).tenant, "demo-a")
+                    else:
+                        with self.assertRaisesRegex(PermissionError, "^unauthorized$"):
+                            self.verifier.verify(token)
             self.store.admit.assert_not_called()
 
             fetch = Mock(return_value={"synthetic": True})
