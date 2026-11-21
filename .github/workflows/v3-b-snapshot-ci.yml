@@ -1,0 +1,72 @@
+name: V3 B snapshot isolated synthetic gate
+on:
+  push:
+    branches: [v3-spike/b-snapshot-contract-20261121]
+    paths:
+      - 'v3-spike/contracts/**'
+      - '.github/workflows/v3-b-snapshot-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  snapshot-adversarial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact commit receipt
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          date -u +%FT%TZ
+          python3 --version
+          echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID job=$GITHUB_JOB"
+      - name: Execute synthetic suites with JUnit
+        run: |
+          set -eu
+          python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0' 'unittest-xml-reporting==3.2.0'
+          mkdir -p reports
+          PYTHONPATH=v3-spike/contracts python3 -B - <<'PY'
+          import importlib, pathlib, sys, unittest
+          import xmlrunner
+          modules = [
+              ("event_store", "Tests", 17),
+              ("secure_boundary", "SecurityTests", 9),
+              ("resource_binding", "BindingContractTests", 6),
+              ("test_authenticated_binding", "AuthenticatedBindingTests", 4),
+              ("test_pair_decision", "PairDecisionTests", 7),
+              ("test_snapshot_pair", "SnapshotPairTests", 5),
+              ("test_snapshot_adversarial", "SnapshotAdversarialTests", 6),
+          ]
+          all_good = True
+          for module_name, cls, expected in modules:
+              mod = importlib.import_module(module_name)
+              suite = unittest.defaultTestLoader.loadTestsFromTestCase(getattr(mod, cls))
+              actual = suite.countTestCases()
+              print(f"COLLECT {module_name}.{cls}: {actual}/{expected}", flush=True)
+              if actual != expected:
+                  all_good = False
+                  continue
+              result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
+              if not result.wasSuccessful() or result.testsRun != expected:
+                  all_good = False
+          if not all_good:
+              raise SystemExit("FAIL B suite gate")
+          print("PASS B synthetic suite gate", flush=True)
+          PY
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID job=$GITHUB_JOB runtime=NOT_RUN"
+      - name: Publish JUnit reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-b-synthetic-junit
+          path: reports/*.xml
+          if-no-files-found: warn
+          retention-days: 14
