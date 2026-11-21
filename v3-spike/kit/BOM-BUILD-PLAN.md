@@ -12,11 +12,17 @@ Statut: **DRAFT / NO-GO release**. Portée: serveur **neuf** seulement. Debian s
 | Data/event SQLite | `v3-spike/contracts/event_store.py` | 17 méthodes synthétiques, persistance de test |
 | Frontière de sécurité | `v3-spike/contracts/secure_boundary.py` | 9 méthodes synthétiques; ni IAM ni ACL backend produit |
 | GAMMA | `v3-spike/ux/test_gamma.py` | 5 méthodes navigateur synthétiques |
-| CI | `.github/workflows/v3-spike-qualification.yml` | Six jobs (SQLite 17, sécurité 9, GAMMA 5, kit 6, resource-binding 6, Compose default/DEMO); vérifier run ID/job ID/logs/UTC avant PASS |
+| CI | `.github/workflows/v3-spike-qualification.yml` | Six jobs (SQLite 17, sécurité 9, GAMMA 5, kit 6, resource-binding 6 + authenticated-binding 4, Compose default/DEMO); vérifier run ID/job ID/logs/UTC avant PASS |
 
-| Liaison Event/Twin/Evidence | `v3-spike/contracts/resource_binding.py` | 6 méthodes synthétiques; Event v1 lie explicitement `twin_identifier` et `evidence_identifier`, mais aucune ACL ni association CMDB attestée |\n\n**Manques bloquants** : Core produit, Temporal, Worker, Policy, HITL, Evidence, intégrations systèmes/stockage/réseau/applications/terminaux/cloud, workflows ITIL 4, installateur unique, migrations, sauvegarde/restauration, upgrade/rollback, secrets locaux, SBOM, signature, release, licence/provenance des dépendances et tests d'installation vierge. La présence ou réutilisabilité dans les autres dépôts n'est **pas attestée** par cet inventaire.
+| Liaison Event/Twin/Evidence | `v3-spike/contracts/resource_binding.py` | 6 méthodes synthétiques et 4 tests d'intégration authentifiée; Event v1 lie explicitement `twin_identifier` et `evidence_identifier`, mais aucune ACL ni association CMDB attestée |
 
-## État de qualification au 2026-11-21 (UTC)\n\nSix jobs sont définis dans le workflow; cela prouve seulement la **présence du code CI**. Aucune exécution PASS n'est attestée par un run ID, un job ID numérique et des logs horodatés. La consultation des runs au SHA `16ade3487a3c600239e8cbcf7e055492fef904da` retourne `[]` via une interface **limitée aux événements pull_request**; ce résultat ne permet aucune conclusion sur les événements push. Tests Python exact-source, Chromium, `docker compose config`, installation vierge et redémarrage: **NOT_ATTESTED / NOT_RUN**. La validation indépendante D du contrat de substitution reste nécessaire.\n\n## BOM OCI: aucune image produit approuvée
+**Manques bloquants** : Core produit, Temporal, Worker, Policy, HITL, Evidence, intégrations systèmes/stockage/réseau/applications/terminaux/cloud, workflows ITIL 4, installateur unique, migrations, sauvegarde/restauration, upgrade/rollback, secrets locaux, SBOM, signature, release, licence/provenance des dépendances et tests d'installation vierge. La présence ou réutilisabilité dans les autres dépôts n'est **pas attestée** par cet inventaire.
+
+## État de qualification au 2026-11-21 (UTC)
+
+Six jobs sont définis dans le workflow; cela prouve seulement la **présence du code CI**. Aucune exécution PASS n'est attestée par un run ID, un job ID numérique et des logs horodatés. La consultation des runs au SHA `16ade3487a3c600239e8cbcf7e055492fef904da` retourne `[]` via une interface **limitée aux événements pull_request**; ce résultat ne permet aucune conclusion sur les événements push. Tests Python exact-source, Chromium, `docker compose config`, installation vierge et redémarrage: **NOT_ATTESTED / NOT_RUN**. La validation indépendante D du contrat de substitution reste nécessaire.
+
+## BOM OCI: aucune image produit approuvée
 
 | Rôle | Référence actuelle | Digest OCI réel | Licence/provenance | Usage |
 | --- | --- | --- | --- | --- |
