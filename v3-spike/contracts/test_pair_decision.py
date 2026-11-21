@@ -10,7 +10,7 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from secure_boundary import AssertionVerifier, verified_resource_read
+from secure_boundary import AssertionVerifier
 from resource_binding import Resource, ScopedFixtureBackend, verify_binding, policy_evaluate, _identifier, _scope, _digest
 
 
@@ -37,15 +37,16 @@ def authenticated_pair_decision(*, event, assertion, verifier, fetch):
         if (principal.tenant != tenant or principal.instance != instance or
                 not {"twin:read", "evidence:read"}.issubset(principal.permissions)):
             return "DENY"
-        def checked_fetch(*, resource, tenant, instance, identifier):
-            return verify_binding(fetch, resource=resource, tenant=tenant,
-                                  instance=instance, identifier=identifier)
-        twin = verified_resource_read(
-            checked_fetch, assertion, verifier, resource="twin",
-            tenant=tenant, instance=instance, identifier=twin_id)
-        evidence = verified_resource_read(
-            checked_fetch, assertion, verifier, resource="evidence",
-            tenant=tenant, instance=instance, identifier=evidence_id)
+        # One trusted verification sample: no re-verification between reads.
+        # Validate the Twin binding and event/digest before fetching Evidence.
+        twin = verify_binding(fetch, resource="twin", tenant=tenant,
+                              instance=instance, identifier=twin_id)
+        if twin is None:
+            return "DENY"
+        if twin.event != event["event"] or twin.payload_digest != event["digest"]:
+            return "DENY"
+        evidence = verify_binding(fetch, resource="evidence", tenant=tenant,
+                                  instance=instance, identifier=evidence_id)
         return policy_evaluate(event=event, twin=twin, evidence=evidence)
     except (PermissionError, KeyError, TypeError, ValueError, AttributeError):
         return "DENY"
@@ -102,6 +103,25 @@ class PairDecisionTests(unittest.TestCase):
             fetch = Mock(side_effect=lambda **kw: bad if kw["resource"] == "twin" else self.evidence)
             with self.subTest(bad=repr(bad)):
                 self.assertEqual(self.decide(fetch=fetch), "DENY")
+
+    def test_single_verification_clock_sample(self):
+        ticks = iter((1000, 1001))
+        verifier = AssertionVerifier(self.key, clock=lambda: next(ticks))
+        self.assertEqual(authenticated_pair_decision(
+            event=self.event, assertion=self.token(), verifier=verifier,
+            fetch=self.backend.fetch), "ALLOW_SYNTHETIC")
+        self.assertEqual(next(ticks), 1001)
+
+    def test_twin_event_or_digest_mismatch_never_fetches_evidence(self):
+        before = dict(self.backend._rows)
+        for bad in (Resource("twin", "demo-a", "collector-a", "ci1", "other", self.digest),
+                    Resource("twin", "demo-a", "collector-a", "ci1", "e1", "b" * 64)):
+            fetch = Mock(side_effect=lambda **kw: bad if kw["resource"] == "twin" else self.evidence)
+            with self.subTest(bad=repr(bad)):
+                self.assertEqual(self.decide(fetch=fetch), "DENY")
+                self.assertEqual(fetch.call_count, 1)
+                self.assertEqual(fetch.call_args.kwargs["resource"], "twin")
+        self.assertEqual(before, self.backend._rows)
 
     def test_missing_evidence_and_no_mutation(self):
         before = dict(self.backend._rows)
