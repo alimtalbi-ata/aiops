@@ -156,3 +156,18 @@ User instruction: **continue collecting historical functionality, scripts, confi
 **Meaning of complete:** coverage of the **changed-file lists for the specifically enumerated PRs**, not an assertion that all repository branches, other PRs, other repositories or implicit runtime dependencies have been harvested. Source copies do not imply integration, correctness, authorization or deployability.
 
 **User restriction:** NO tests executed, NO collector invoked, NO deployment/merge, NO live service calls. CI workflow files copied under documentation paths are inert. Existing active workflow from earlier implementation remains in the PR but no execution result is claimed.
+
+
+## Port 8 — Broaden source coverage beyond the initial seven PRs (2026-11-21)
+
+**Collection only; NO tests executed.** Source paths are copied byte-for-byte as UTF-8 text into inert `docs/convergence/v3/source-imports/<origin>/` directories, with no runtime activation, overwrite of canonical entrypoints, CI installation, or deployment.
+
+- **PR #830** `feature/demo-studio-five-minute`: all **9** listed changed files archived under `demo-830/`, including `app/portal/demo_studio.py`, portal/Twin dependents and entrypoints, Dockerfile, workflow, documentation and historical test.
+- **PRs #826, #827, #828** (TEAM B same-origin Twin): both changed paths for **each PR** archived under `team-b-826/`, `team-b-827/`, `team-b-828/`. All three source versions of `acme_impact_read_model.py` share blob `301c1bd927fc5f273dd78bc460feba80f24405d5`; HTTP test shares `650d97718dd569ec03dab8eba916ddbbd2a771a4`. No canonical impact router overwrite.
+- **PR #809** `feat/ui-dark-saas-premium-20261117`: all **28** listed changed paths archived under `ui-809/`, including actor/tenant read policy, incident read policy, operator session, Postgres session schema, GLPI SCSS, Grafana dashboards, Prometheus YAML, Compose, UX and auth contracts, test sources.
+- **PR #801** `feature/github-debian-openai-bridge-v1-20261116`: all **4** changed paths archived under `bridge-801/`, including the prototype agent and workflow; no agent execution.
+- **PR #810** `integration/convergence-host-golden-selective-20261117`: all **9** listed changed paths archived under `host-810/`, including Dockerfile, Compose, portal variant, CI and smoke-test sources.
+
+**Additional PR inventory discovered:** #821 (central 7770 cutover), #817/#816/#815 (INT06A), #814 (ABC), #813 (E2E), #811 (Frontend Premium), and earlier historical PRs back to #753 in the inspected recent-PR listing. These and PR #792's much larger portable install kit are **not all fully archived**. The source-harvest is therefore **NOT globally complete**; scope is explicit to prevent a false completion claim.
+
+**No tests executed in Port 8, no operational collection, no merge or deploy.**
