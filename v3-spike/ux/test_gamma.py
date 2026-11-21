@@ -134,9 +134,9 @@ class GammaAcceptance(unittest.TestCase):
                     p.keyboard.press("Tab")
                     self.assertEqual(p.evaluate("document.activeElement.id"), control,
                                      f"Tab order did not reach {control} at {width}px")
-                self.assertTrue(p.locator("#policy").evaluate(
-                    "(el) => el === document.activeElement && el.matches(':focus-visible') && getComputedStyle(el).outlineStyle !== 'none' && parseFloat(getComputedStyle(el).outlineWidth) >= 3"
-                ), f"Keyboard :focus-visible indicator absent at {width}px")
+                    self.assertTrue(p.evaluate(
+                        "document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle !== 'none' && parseFloat(getComputedStyle(document.activeElement).outlineWidth) >= 3"
+                    ), f"Keyboard focus indicator absent for {control} at {width}px")
         self.assertEqual(self.allowed, [("GET", self.url)] * 4)
         self.assertEqual(self.requests, [("GET", self.url)] * 4)
         self.assertEqual(self.blocked, [], "Keyboard navigation attempted an unexpected request")
