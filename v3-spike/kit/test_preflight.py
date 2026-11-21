@@ -26,16 +26,17 @@ class IsolationTests(unittest.TestCase):
         source = Path(__file__).resolve().with_name("docker-compose.yml").read_text(encoding="utf-8")
         validate_source(source)
         for bad in (
-            source.replace("    profiles: [demo]\\n", ""),
+            source.replace("    profiles: [demo]\n", ""),
             source.replace("    profiles: [demo]", "    profiles: [enterprise]"),
             source.replace("    profiles: [demo]", "    profiles: demo"),
             source.replace("    profiles: [demo]", "    profiles: []"),
             source.replace("    profiles: [demo]", "    profiles: [demo, extra]"),
-            source.replace("  core:\\n", "  core:\\n    profiles: [demo]\\n"),
-            source.replace("  gamma:\\n", "  gamma:\\n    profiles: [demo]\\n"),
-            source.replace("    profiles: [demo]", "    profiles: [demo]\\n    profiles: [demo]"),
+            source.replace("  core:\n", "  core:\n    profiles: [demo]\n"),
+            source.replace("  gamma:\n", "  gamma:\n    profiles: [demo]\n"),
+            source.replace("    profiles: [demo]", "    profiles: [demo]\n    profiles: [demo]"),
         ):
             with self.subTest(bad=bad[-100:]):
+                self.assertNotEqual(source, bad, 'mutation must change source')
                 with self.assertRaises(ValueError):
                     validate_source(bad)
     def test_base(self):
