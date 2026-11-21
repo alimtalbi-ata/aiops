@@ -167,7 +167,7 @@ jobs:
           path = pathlib.Path("v3-spike/contracts/secure_boundary.py")
           source = path.read_text(encoding="utf-8")
           tree = ast.parse(source, filename=str(path))
-          classes = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "SecurityTests"]
+          classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == "SecurityTests"]
           if len(classes) != 1:
               raise SystemExit(f"FAIL security test class collection: {len(classes)} != 1")
           tests = [node for node in classes[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_")]
