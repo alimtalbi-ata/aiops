@@ -130,3 +130,13 @@ User instruction: **continue collecting historical functionality, scripts, confi
 **TEAM A / PR #822:** original branch `feature/team-a-acme-portal-ux-20261119` @ `b19bc42059759deaadc6e46788881582e5ab9823`. Archived divergent cockpit HTML (`56934c505b1afb995dccf721ca7ab10131f7d42a`) and GLPI operator view (`f653e24e0564d77a4e3cf7e692cec43f4eb3cdf2`) under `docs/convergence/v3/source-imports/team-a-822/` without overwriting canonical code.
 
 **Not yet exhaustively collected:** all historical branches/PRs outside the inspected #812/#818/#822/#823/#824/#825 source set; exact entire repository branch inventory and satellites have not been copied. Do not claim global completeness. Further work should prioritize other P0/P1 source PRs, inventory file conflicts and archive non-activated variants.
+
+
+## Port 6 — Additional P0/P1 historical source harvest (no tests, 2026-11-21)
+
+- **PR #808** `feature/acme-workbench-demo-qualification-addon-20261117`: archived **15 qualification scripts** and **2 portal modules** under `docs/convergence/v3/source-imports/acme-808/` preserving source paths. Includes evidence projection, OIDC/ACL preflight, authority boundaries, browser receipt, Core/Worker binding, autonomous loop qualification, route inventory and receipt contracts. These are **inert historical copies**, not activated.
+- **PR #829** `feature/central-proactive-cron-v1`: archived **8 deployment/proactive observer scripts** under `docs/convergence/v3/source-imports/proactive-829/`: installer, build handoff, candidate, update discovery, watchdog, rollback, portal build and archive verifier. Deliberately **not installed**, no cron enabled, no deploy action.
+- **Additional PRs inspected for inventory:** #802 (`integration/acme-demo-readiness-gate-20261116`), #799 (`test/aiops2-correlation-freshness-replay-20261116`), with changed filenames identified; not yet completely copied.
+- **No test executed** and no claim of exhaustive coverage across all historical PRs, branches or satellite repositories.
+
+**Collection strategy:** copy missing non-conflicting code into active paths only when explicitly suitable; archive divergent entrypoints, workflows, executable deploy scripts and QA source in `docs/convergence/v3/source-imports/<source>/` to prevent accidental runtime activation. Do not automatically promote archival files into the running system.
