@@ -65,3 +65,20 @@
 **Critical compatibility issue:** `app/portal/acme_impact_read_model.py` already exists on target (blob `07e345de81812d0847c6f7983ec23e8627a03604`, 18,322 chars), but source #825 has a **different and larger** variant (blob `538ae6a9fcaf249debb051391d076ae65ffddc2d`, 32,290 chars). The target version does not expose `twin_evidence`/`twin_consumer`; source adds cockpit API/page routes and read models. **DO NOT overwrite the target module blindly**: requires method-by-method review, preservation of existing routes/auth and exact tests. `app/portal/main.py` still imports target router; no new routes were registered by this port. The imported cockpit functions are staged as code, not yet reachable in UI.
 
 **Status:** `DEPENDENCIES_PORTED`, `TWIN_OFFLINE_TESTS_PENDING_CI`, `COCKPIT_ROUTE_HOLD`. The fixture identity is verified, import dependency paths inspected; **execution of tests and runtime wiring not verified**. If the CI fails, fix on this draft PR before further ports. The next integration step is a **selective, minimal change to the existing impact router** (or separate safe read-only router) with integration tests and explicit CENTRAL review.
+
+
+## Port 3 — Active read-only cockpit route on the existing portal (2026-11-21)
+
+**Implemented on PR #843, not copied wholesale:**
+- `app/portal/acme_v3_cockpit_adapter.py` — new adapter that uses the target branch's **existing** `build_acme_impact_read_model()` and safely reads the same local ACME fixture, checks matching SHA-256, Run/incident IDs, impact path and affected CI IDs, then adds Twin evidence/consumer and deterministic signal context. The imported cockpit and Run Journey projection operate on the resulting view.
+- `app/portal/main.py` — **two surgical additions**: import and `include_router` for the adapter. The original `acme_impact_read_model.py` (blob `07e345de81812d0847c6f7983ec23e8627a03604`) is left untouched.
+- `tests/test_acme_v3_cockpit_adapter.py` — tests for projection authority boundaries, JSON+HTML endpoints, legacy impact endpoint non-regression, digest mismatch 503 and missing fixture 503.
+- `.github/workflows/v3-selective-run-journey.yml` — pinned FastAPI/Pydantic/httpx/pytest for integration tests, PYTHONPATH and new exact-PR route tests.
+
+**New proposed paths:**
+- `GET /api/demo/v3/acme-incident-cockpit`
+- `GET /demo/v3/acme-incident-cockpit`
+
+**Runtime behavior if merged and deployed:** purely synthetic local fixture read, no upstream calls or writes, no GLPI/Temporal/Worker activity. Explicit `UNKNOWN` / `DENY_LIVE_ACTION` / `NOT_RUN` / `MISSING`; existing routes remain unchanged. Fixture mutation between reads causes a digest mismatch and a fail-closed HTTP 503 rather than cross-snapshot evidence mixing.
+
+**Important distinction:** the new routes are **wired in the PR source code**, but are **not live on any host** until merge/deploy; no such action was taken. CI exact-head, browser rendering, security review and Debian runtime are **NOT VERIFIED**. Do not promote to GO until test evidence is available. The legacy synthetic route was already public; the new routes use the same strictly local public demo boundary, **not tenant-authorized operational data**.
