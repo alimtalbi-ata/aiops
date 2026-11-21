@@ -1,7 +1,7 @@
 import copy
 import unittest
 from pathlib import Path
-from preflight import validate
+from preflight import validate, validate_source
 
 def fixture():
     services = {}
@@ -22,6 +22,22 @@ def fixture():
 class IsolationTests(unittest.TestCase):
     def test_valid(self):
         validate(fixture())
+    def test_source_profiles_fail_closed(self):
+        source = Path(__file__).resolve().with_name("docker-compose.yml").read_text(encoding="utf-8")
+        validate_source(source)
+        for bad in (
+            source.replace("    profiles: [demo]\\n", ""),
+            source.replace("    profiles: [demo]", "    profiles: [enterprise]"),
+            source.replace("    profiles: [demo]", "    profiles: demo"),
+            source.replace("    profiles: [demo]", "    profiles: []"),
+            source.replace("    profiles: [demo]", "    profiles: [demo, extra]"),
+            source.replace("  core:\\n", "  core:\\n    profiles: [demo]\\n"),
+            source.replace("  gamma:\\n", "  gamma:\\n    profiles: [demo]\\n"),
+            source.replace("    profiles: [demo]", "    profiles: [demo]\\n    profiles: [demo]"),
+        ):
+            with self.subTest(bad=bad[-100:]):
+                with self.assertRaises(ValueError):
+                    validate_source(bad)
     def test_base(self):
         c = fixture()
         del c["services"]["demo"]
