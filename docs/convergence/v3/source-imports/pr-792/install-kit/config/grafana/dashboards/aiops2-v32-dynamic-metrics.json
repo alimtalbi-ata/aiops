@@ -1,0 +1,191 @@
+{
+  "uid": "aiops2-metrics-explorer-v32",
+  "title": "AIOPS2 | Dynamic Metrics Explorer",
+  "description": "Dynamic Prometheus target health and scrape performance.",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "refresh": "30s",
+  "editable": false,
+  "tags": [
+    "AIOPS2",
+    "observability",
+    "dynamic",
+    "v32"
+  ],
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Prometheus job",
+        "type": "query",
+        "datasource": "ACME-Prometheus",
+        "refresh": 2,
+        "query": "label_values(up, job)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Scrape availability",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"$job\"}",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "title": "Scrape duration",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "scrape_duration_seconds{job=~\"$job\"}",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Samples scraped",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "scrape_samples_scraped{job=~\"$job\"}",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Target health (last 5m)",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min_over_time(up{job=~\"$job\"}[5m])",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "title": "Target scrape sample history",
+      "type": "timeseries",
+      "datasource": "ACME-Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "scrape_samples_post_metric_relabeling{job=~\"$job\"}",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "title": "Scope",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Job selector is derived from Prometheus. Scrape duration measures collection time, **not** service request latency. Application p95/p99 requires histogram instrumentation."
+      }
+    }
+  ]
+}
