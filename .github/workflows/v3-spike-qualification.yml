@@ -225,16 +225,17 @@ jobs:
           for profile in default demo; do
             if [ "$profile" = default ]; then
               docker compose -f docker-compose.yml config --format json > /tmp/v3-compose.json
+              docker compose -f docker-compose.yml config --services > /tmp/v3-services.txt
             else
               docker compose -f docker-compose.yml --profile demo config --format json > /tmp/v3-compose.json
+              docker compose -f docker-compose.yml --profile demo config --services > /tmp/v3-services.txt
             fi
             python3 -B preflight.py < /tmp/v3-compose.json
-            python3 -B - "$profile" /tmp/v3-compose.json <<'PY'
-          import json,sys
+            python3 -B - "$profile" /tmp/v3-services.txt <<'PY'
+          import sys
           profile=sys.argv[1]
-          data=json.load(open(sys.argv[2]))
+          actual=set(open(sys.argv[2]).read().splitlines())
           expected={"gamma","core"} | ({"demo"} if profile=="demo" else set())
-          actual=set(data["services"])
           if actual!=expected:
               raise SystemExit(f"FAIL profile={profile} services={actual} expected={expected}")
           print(f"PASS compose-static profile={profile} services={sorted(actual)}")
