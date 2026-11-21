@@ -118,9 +118,23 @@ jobs:
           date -u +%FT%TZ
           git rev-parse HEAD
           python3 --version
-      - name: Synthetic kit unit tests
+      - name: Synthetic kit unit tests (strict 5 methods)
         working-directory: v3-spike/kit
-        run: python3 -B -m unittest -v test_preflight
+        run: |
+          python3 -B - <<'PY'
+          import unittest
+          import test_preflight
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_preflight.IsolationTests)
+          expected = 5
+          actual = suite.countTestCases()
+          print(f"kit-unit collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit(f"FAIL kit test collection: {actual} != {expected}")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit(f"FAIL kit tests: executed={result.testsRun} expected={expected}")
+          print(f"PASS kit tests: executed={result.testsRun}", flush=True)
+          PY
       - name: Receipt
         if: always()
         run: |
