@@ -26,25 +26,44 @@ class AssertionVerifier:
         self._key = key
         self._clock = clock
 
+    def now(self) -> int:
+        return int(self._clock())
+
     def verify(self, assertion: str) -> VerifiedPrincipal:
+        if not isinstance(assertion, str) or len(assertion) > 8192 or not assertion.isascii():
+            raise PermissionError("unauthorized")
         try:
             payload_hex, signature = assertion.split(".")
+            if len(signature) != 64 or len(payload_hex) > 8192 or len(payload_hex) % 2:
+                raise PermissionError("unauthorized")
             payload = bytes.fromhex(payload_hex)
             expected = hmac.new(self._key, payload, hashlib.sha256).hexdigest()
             if not hmac.compare_digest(signature, expected):
                 raise PermissionError("unauthorized")
-            claims = json.loads(payload)
+            def unique_pairs(pairs):
+                result = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("duplicate claim")
+                    result[key] = value
+                return result
+            claims = json.loads(payload, object_pairs_hook=unique_pairs)
+            if not isinstance(claims, dict):
+                raise PermissionError("unauthorized")
             if set(claims) != {"tenant", "instance", "permissions", "exp"}:
                 raise PermissionError("unauthorized")
-            if not all(isinstance(claims[k], str) and claims[k] for k in ("tenant", "instance")):
+            if not all(isinstance(claims[k], str) and 1 <= len(claims[k]) <= 128 and
+                       claims[k].isascii() and all(c.isalnum() or c in "._:-" for c in claims[k])
+                       for k in ("tenant", "instance")):
                 raise PermissionError("unauthorized")
             permissions = claims["permissions"]
-            if not isinstance(permissions, list) or len(permissions) != len(set(permissions)):
+            if not isinstance(permissions, list) or len(permissions) > 4 or not all(isinstance(p, str) for p in permissions) or len(permissions) != len(set(permissions)):
                 raise PermissionError("unauthorized")
             if any(p not in ("event:write", "event:read", "evidence:read", "twin:read") for p in permissions):
                 raise PermissionError("unauthorized")
             exp = claims["exp"]
-            if type(exp) is not int or not self._clock() < exp <= self._clock() + 300:
+            current = self.now()
+            if type(exp) is not int or not current < exp <= current + 300:
                 raise PermissionError("unauthorized")
             return VerifiedPrincipal(claims["tenant"], claims["instance"], frozenset(permissions))
         except (ValueError, TypeError, KeyError, UnicodeError, json.JSONDecodeError) as exc:
@@ -52,22 +71,25 @@ class AssertionVerifier:
 
 
 def _authorized(principal: VerifiedPrincipal, permission: str, tenant: str, instance: str):
-    if (permission not in principal.permissions or
+    if (not isinstance(tenant, str) or not isinstance(instance, str) or
+            permission not in principal.permissions or
             not hmac.compare_digest(principal.tenant, tenant) or
             not hmac.compare_digest(principal.instance, instance)):
         raise PermissionError("unauthorized")
 
 
-def verified_admit(store, path, body, payload: bytes, assertion: str, verifier: AssertionVerifier, now):
+def verified_admit(store, path, body, payload: bytes, assertion: str, verifier: AssertionVerifier):
     """Verify source, permission and actual bytes BEFORE any store mutation."""
     principal = verifier.verify(assertion)
+    if not isinstance(body, dict):
+        raise PermissionError("unauthorized")
     _authorized(principal, "event:write", body.get("tenant", ""), body.get("instance", ""))
     if not isinstance(payload, bytes) or len(payload) > 1024 * 1024:
         raise PermissionError("unauthorized")
     actual = hashlib.sha256(payload).hexdigest()
     if not isinstance(body.get("digest"), str) or not hmac.compare_digest(actual, body["digest"]):
         raise PermissionError("unauthorized")
-    return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=now)
+    return store.admit(path, body, tenant=principal.tenant, instance=principal.instance, now=verifier.now())
 
 
 def verified_read(store, path, assertion: str, verifier: AssertionVerifier, *, tenant: str, instance: str, event: str):
@@ -105,30 +127,50 @@ if __name__ == "__main__":
 
         def test_verified_admission(self):
             result = verified_admit(self.store, "synthetic.db", self.body, self.payload,
-                                    self.assertion(["event:write"]), self.verifier, now=1000)
+                                    self.assertion(["event:write"]), self.verifier)
             self.assertEqual(result, "ACCEPT")
             self.store.admit.assert_called_once()
+            self.assertEqual(self.store.admit.call_args.kwargs["now"], 1000)
 
         def test_digest_tampering_denied_before_write(self):
             with self.assertRaises(PermissionError):
                 verified_admit(self.store, "synthetic.db", self.body, b"altered",
-                               self.assertion(["event:write"]), self.verifier, now=1000)
+                               self.assertion(["event:write"]), self.verifier)
             self.store.admit.assert_not_called()
 
         def test_tenant_impersonation_denied(self):
             with self.assertRaises(PermissionError):
                 verified_admit(self.store, "synthetic.db", self.body, self.payload,
-                               self.assertion(["event:write"], tenant="other"), self.verifier, now=1000)
+                               self.assertion(["event:write"], tenant="other"), self.verifier)
             self.store.admit.assert_not_called()
 
         def test_signature_and_expiry_denied(self):
             for token in (self.assertion(["event:write"])[:-1] + "0",
                           self.assertion(["event:write"], exp=999)):
                 with self.subTest(token=token), self.assertRaises(PermissionError):
-                    verified_admit(self.store, "synthetic.db", self.body, self.payload, token, self.verifier, now=1000)
+                    verified_admit(self.store, "synthetic.db", self.body, self.payload, token, self.verifier)
             self.store.admit.assert_not_called()
 
         def test_read_and_resource_acl(self):
+            for token in (None, 42, "", "a" * 9000):
+                with self.subTest(token=str(token)[:20]), self.assertRaises(PermissionError):
+                    self.verifier.verify(token)
+            for tenant in (None, 42, []):
+                with self.subTest(tenant=tenant), self.assertRaises(PermissionError):
+                    verified_admit(self.store, "synthetic.db", dict(self.body, tenant=tenant),
+                                   self.payload, self.assertion(["event:write"]), self.verifier)
+            for body in (None, 42, []):
+                with self.subTest(body=body), self.assertRaises(PermissionError):
+                    verified_admit(self.store, "synthetic.db", body, self.payload,
+                                   self.assertion(["event:write"]), self.verifier)
+            duplicate = b'{"tenant":"demo-a","tenant":"other","instance":"collector-a","permissions":["event:write"],"exp":1100}'
+            token = duplicate.hex() + "." + hmac.new(self.key, duplicate, hashlib.sha256).hexdigest()
+            with self.assertRaises(PermissionError):
+                self.verifier.verify(token)
+            with self.assertRaises(PermissionError):
+                self.verifier.verify(self.assertion([42]))
+            self.store.admit.assert_not_called()
+
             fetch = Mock(return_value={"synthetic": True})
             with self.assertRaises(PermissionError):
                 verified_read(self.store, "synthetic.db", self.assertion(["event:write"]),
