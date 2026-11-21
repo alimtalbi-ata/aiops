@@ -102,6 +102,13 @@ class GammaAcceptance(unittest.TestCase):
         self.assertTrue(p.locator("#policy").evaluate("(el) => el.matches(':focus-visible')"))
         p.keyboard.press("Enter")
         self.assertIn("DENIED", p.locator("#decision").inner_text())
+        # Reverse and forward traversal must remain keyboard reachable after activation.
+        for key, expected in (("Shift+Tab", "admission"), ("Shift+Tab", "run-choice"),
+                              ("Tab", "admission"), ("Tab", "policy")):
+            p.keyboard.press(key)
+            self.assertEqual(p.evaluate("document.activeElement.id"), expected)
+            self.assertTrue(p.evaluate("document.activeElement.matches(':focus-visible')"),
+                            f"Focus invisible after {key} to {expected}")
         self.assertEqual(self.allowed, [("GET", self.url)] * 2)
         self.assertEqual(self.requests, [("GET", self.url)] * 2)
         self.assertEqual(self.blocked, [], "Keyboard flow attempted an unexpected request")
