@@ -43,7 +43,7 @@ jobs:
           if count != 5:
               raise SystemExit("FAIL: test collection mismatch")
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 6:
+          if not result.wasSuccessful() or result.testsRun != 5:
               raise SystemExit("FAIL: browser acceptance")
           print("PASS: 5/5 Chromium synthetic acceptance", flush=True)
           PY
