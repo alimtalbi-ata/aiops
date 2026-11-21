@@ -1,0 +1,138 @@
+{
+  "uid": "aiops2-logs-explorer-v32",
+  "title": "AIOPS2 | Dynamic Logs Explorer",
+  "description": "Live logs; variables must be configured against actual Loki stream labels.",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "refresh": "30s",
+  "editable": false,
+  "tags": [
+    "AIOPS2",
+    "observability",
+    "dynamic",
+    "v32"
+  ],
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service (Loki)",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "aiops2-loki-v31"
+        },
+        "refresh": 2,
+        "query": {
+          "type": 1,
+          "label": "service_name",
+          "stream": ""
+        },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "search",
+        "label": "Regex message",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Log ingestion status",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Live Loki queries below. Empty results mean **no matching ingested logs**, not zero incidents. Labels depend on the real ingestion pipeline; start with all streams, then narrow using the filters.\n\nThis dashboard expects Loki `service_name` labels. If existing streams lack them, they will not match; verify labels in Explore before adjusting the collector."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Log volume by stream",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "aiops2-loki-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service_name=~\"$service\"}[$__interval]))",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Log volume grouped by job when present; streams without job label may appear unlabeled."
+    },
+    {
+      "id": 3,
+      "title": "Live log events",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "aiops2-loki-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=~\"$service\"} |~ \"$search\"",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    }
+  ]
+}
