@@ -142,3 +142,58 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "deploy_authorized=false activation_authorized=false"
           echo "runtime=NOT_RUN"
+
+  secure-boundary:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact SHA and clean checkout
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+      - name: Synthetic security boundary tests (strict 5 methods)
+        run: |
+          python3 -B - <<'PY'
+          import ast
+          import pathlib
+          import sys
+          import unittest
+          from unittest import mock
+          path = pathlib.Path("v3-spike/contracts/secure_boundary.py")
+          source = path.read_text(encoding="utf-8")
+          tree = ast.parse(source, filename=str(path))
+          classes = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "SecurityTests"]
+          if len(classes) != 1:
+              raise SystemExit(f"FAIL security test class collection: {len(classes)} != 1")
+          tests = [node for node in classes[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_")]
+          expected = 5
+          if len(tests) != expected:
+              raise SystemExit(f"FAIL security test AST collection: {len(tests)} != {expected}")
+          # Tests live under __main__; execute the source as __main__ while intercepting unittest.main.
+          namespace = {"__name__": "__main__", "__file__": str(path)}
+          with mock.patch.object(unittest, "main", return_value=None):
+              exec(compile(source, str(path), "exec"), namespace)
+          cls = namespace.get("SecurityTests")
+          if not isinstance(cls, type) or not issubclass(cls, unittest.TestCase):
+              raise SystemExit("FAIL SecurityTests not available")
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(cls)
+          actual = suite.countTestCases()
+          print(f"secure-boundary collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit(f"FAIL security test collection: {actual} != {expected}")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit(f"FAIL security tests: executed={result.testsRun} expected={expected}")
+          print(f"PASS security tests: executed={result.testsRun}", flush=True)
+          PY
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "security_boundary=synthetic_only runtime=NOT_RUN deploy_authorized=false"
