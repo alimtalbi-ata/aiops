@@ -30,10 +30,12 @@ class AttestedSnapshotTests(unittest.TestCase):
                               permissions=list(permissions), exp=1100), sort_keys=True).encode()
         return raw.hex() + "." + hmac.new(self.auth_key, raw, hashlib.sha256).hexdigest()
 
-    def response(self, twin_rev="rev1", evidence_rev="rev1", receipt=None, pair=None):
+    _AUTO_RECEIPT = object()
+
+    def response(self, twin_rev="rev1", evidence_rev="rev1", receipt=_AUTO_RECEIPT, pair=None):
         return AttestedPair(self.pair if pair is None else pair, twin_rev, evidence_rev,
                             self.witness.issue_fixture_receipt(self.event, twin_rev)
-                            if receipt is None else receipt)
+                            if receipt is self._AUTO_RECEIPT else receipt)
 
     def decide(self, response=None, event=None, token=None, backend=None):
         before = dict(self.state)
