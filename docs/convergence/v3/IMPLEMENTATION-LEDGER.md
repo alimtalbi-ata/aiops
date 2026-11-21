@@ -113,3 +113,20 @@
 **Dependency observations, no tests:** authority readers depend on `acme_runtime_context`; continuity additionally imports `worker.acme_simulated_hitl`; offline collector imports readers, continuity and `worker.int06a_contract`; INT06A registration imports `temporalio` and remains **unregistered** in `app/worker/main.py` on this PR. `int07_offline_collector.py` is **source code only**, not invoked. Existing live routes/worker entrypoints were not changed by this collection tranche.
 
 **Historical tests/CI:** earlier commits on this draft PR contain tests and CI changes, but **none were executed in this collection-only tranche**. No CI outcome or functional validation is claimed. Further collecting should preserve file provenance and avoid overwriting existing divergent files.
+
+
+## Port 5 — Large-scale archival collection without test execution (2026-11-21)
+
+User instruction: **continue collecting historical functionality, scripts, configurations and associated artifacts into PR #843; do not run tests.** This tranche performed GitHub file reads and content-copy commits only. No runtime collectors, tests, workflows, deployments, or merges were intentionally triggered.
+
+**INT07 / PR #818 additional functional sources:**
+- Live-path additions (not imported into active routers): `app/portal/aiops_theme.css`, `app/portal/portal_usability.js` (source blobs `f552a2ee939bfc1596df6c29818d2f52ca0fed6e`, `101da4384c8fbd0a524eddbe78390ce0fe25f5ce`).
+- Divergent canonical files archived **under** `docs/convergence/v3/source-imports/int07/` preserving original paths: `app/portal/acme_explore_story.py` (`20e77e66a961c6b85138b6d043deeef855dede63`), `app/portal/acme_run_detail.py` (`217bf48e1eba1bdad7b5668ebae608669c512c91`), `app/portal/glpi_operator_view.py` (`f653e24e0564d77a4e3cf7e692cec43f4eb3cdf2`), `app/core/main.py` (`d56c42e7330e683989d8c3c25e0766cc947c1a2b`), `app/worker/main.py` (`70232842f0cc2d933ba2e68c871afefe356eca50`), `app/portal/main.py` (`8fcfbda3d20db60cfed15117e8e86e423a02fb77`). The live canonical entrypoints remain intact.
+- Archived historical CI configs: `int06a-c-offline.yml`, `int06a-frontend-offline.yml`, `int06a-integrated-offline.yml`, `int07-integrated-offline.yml`, `acme-demo-readiness.yml`, `quality.yml`, all under `docs/convergence/v3/source-imports/int07/.github/workflows/` to **avoid activating copied workflows**.
+- Archived INT07 test/QA sources under `docs/convergence/v3/source-imports/int07/tests/` and `.../qa/playwright/` (23 files: authority, context, INT06A/INT07, worker, Core, Twin, UI, browser and JS contract cases). **Copied only; never executed.**
+
+**TEAM D / PR #823:** original branch `qa/team-d-playwright-20261119` @ `fda248f967c966524af602e30fc654ad05dd477c`. Archived five historical files under `docs/convergence/v3/source-imports/team-d-823/`: Playwright README, report, pytest.ini, smoke script and GitHub workflow, with no activation.
+
+**TEAM A / PR #822:** original branch `feature/team-a-acme-portal-ux-20261119` @ `b19bc42059759deaadc6e46788881582e5ab9823`. Archived divergent cockpit HTML (`56934c505b1afb995dccf721ca7ab10131f7d42a`) and GLPI operator view (`f653e24e0564d77a4e3cf7e692cec43f4eb3cdf2`) under `docs/convergence/v3/source-imports/team-a-822/` without overwriting canonical code.
+
+**Not yet exhaustively collected:** all historical branches/PRs outside the inspected #812/#818/#822/#823/#824/#825 source set; exact entire repository branch inventory and satellites have not been copied. Do not claim global completeness. Further work should prioritize other P0/P1 source PRs, inventory file conflicts and archive non-activated variants.
