@@ -22,7 +22,7 @@ class SnapshotAdversarialTests(unittest.TestCase):
         self.twin = Resource("twin", "tenant-a", "instance-a", "twin1", "event1", self.digest)
         self.evidence = Resource("evidence", "tenant-a", "instance-a", "evidence1", "event1", self.digest)
         self.backend = Mock(return_value=SnapshotPair("revision1", self.twin, self.evidence))
-        self.state = {"writes": 0}
+        self.backend_state = {"writes": 0, "records": {"twin1": "R1", "evidence1": "R1"}}
 
     def token(self, *, tenant="tenant-a", permissions=("twin:read", "evidence:read"), exp=1100):
         raw = json.dumps(dict(tenant=tenant, instance="instance-a",
@@ -30,17 +30,22 @@ class SnapshotAdversarialTests(unittest.TestCase):
         return raw.hex() + "." + hmac.new(self.key, raw, hashlib.sha256).hexdigest()
 
     def decide(self, *, event=None, token=None, backend=None):
-        return snapshot_pair_decision(event=self.event if event is None else event,
-                                      assertion=self.token() if token is None else token,
-                                      verifier=self.verifier,
-                                      fetch_pair=self.backend if backend is None else backend)
+        # Observe the actual fixture backend state, not an unconnected counter.
+        before = (self.backend_state["writes"], dict(self.backend_state["records"]))
+        decision = snapshot_pair_decision(event=self.event if event is None else event,
+                                          assertion=self.token() if token is None else token,
+                                          verifier=self.verifier,
+                                          fetch_pair=self.backend if backend is None else backend)
+        after = (self.backend_state["writes"], dict(self.backend_state["records"]))
+        self.assertEqual(before, after, "read decision mutated instrumented backend state")
+        return decision
 
     def test_revoked_permission_prevents_backend_access(self):
         for permissions in ((), ("twin:read",), ("evidence:read",)):
             backend = Mock()
             self.assertEqual(self.decide(token=self.token(permissions=permissions), backend=backend), "DENY")
             backend.assert_not_called()
-        self.assertEqual(self.state["writes"], 0)
+        self.assertEqual(self.backend_state["writes"], 0)
 
     def test_expired_or_cross_tenant_prevents_backend_access(self):
         for token in (self.token(exp=1000), self.token(tenant="tenant-b"), "bad"):
@@ -52,7 +57,7 @@ class SnapshotAdversarialTests(unittest.TestCase):
         backend = Mock(side_effect=PermissionError("revoked"))
         self.assertEqual(self.decide(backend=backend), "DENY")
         backend.assert_called_once()
-        self.assertEqual(self.state["writes"], 0)
+        self.assertEqual(self.backend_state["writes"], 0)
 
     def test_malformed_snapshot_id_denied_before_fetch(self):
         for identifier in (None, "../revision", "révision", "x" * 129, []):
@@ -69,7 +74,19 @@ class SnapshotAdversarialTests(unittest.TestCase):
         )
         for pair in cases:
             self.assertEqual(self.decide(backend=Mock(return_value=pair)), "DENY")
-        self.assertEqual(self.state["writes"], 0)
+        self.assertEqual(self.backend_state["writes"], 0)
+
+    def test_mutation_oracle_rejects_backend_side_effect(self):
+        # Negative control: prove the oracle fails if fetch_pair writes.
+        def mutating_fetch(**kwargs):
+            self.backend_state["writes"] += 1
+            self.backend_state["records"]["twin1"] = "R2"
+            return SnapshotPair("revision1", self.twin, self.evidence)
+
+        with self.assertRaisesRegex(AssertionError, "mutated instrumented backend state"):
+            self.decide(backend=mutating_fetch)
+        self.assertEqual(self.backend_state["writes"], 1)
+        self.assertEqual(self.backend_state["records"]["twin1"], "R2")
 
     def test_lying_backend_same_label_is_not_real_attestation(self):
         # A dishonest adapter can mix R1/R2 rows with unchanged public fields.
@@ -78,7 +95,7 @@ class SnapshotAdversarialTests(unittest.TestCase):
         decision = self.decide(backend=Mock(return_value=mixed))
         self.assertEqual(decision, "ALLOW_SYNTHETIC")
         self.assertNotEqual(decision, "ALLOW")
-        self.assertEqual(self.state["writes"], 0)
+        self.assertEqual(self.backend_state["writes"], 0)
 
 
 if __name__ == "__main__":
