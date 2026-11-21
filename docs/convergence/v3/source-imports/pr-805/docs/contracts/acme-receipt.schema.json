@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "AcmeIds": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "minLength": 1,
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "incident_id": {
+          "minLength": 1,
+          "title": "Incident Id",
+          "type": "string"
+        },
+        "proposal_id": {
+          "minLength": 1,
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "run_id": {
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "ticket_id": {
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "incident_id",
+        "run_id",
+        "ticket_id",
+        "proposal_id",
+        "approval_id"
+      ],
+      "title": "AcmeIds",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "approval_issuer": {
+      "const": "TWIN_ACME_SIMULATED",
+      "title": "Approval Issuer",
+      "type": "string"
+    },
+    "attempt_id": {
+      "pattern": "^ACME-SIM-[A-F0-9]{16}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "collected_at": {
+      "format": "date-time",
+      "title": "Collected At",
+      "type": "string"
+    },
+    "docker_mutations": {
+      "maximum": 0,
+      "minimum": 0,
+      "title": "Docker Mutations",
+      "type": "integer"
+    },
+    "human_approval_claimed": {
+      "const": false,
+      "title": "Human Approval Claimed",
+      "type": "boolean"
+    },
+    "ids": {
+      "$ref": "#/$defs/AcmeIds"
+    },
+    "live_effects_allowed": {
+      "const": false,
+      "title": "Live Effects Allowed",
+      "type": "boolean"
+    },
+    "mode": {
+      "const": "SIMULATION",
+      "title": "Mode",
+      "type": "string"
+    },
+    "real_glpi_writes_allowed": {
+      "const": false,
+      "title": "Real Glpi Writes Allowed",
+      "type": "boolean"
+    },
+    "reason": {
+      "const": "SIMULATED_SANDBOX_ONLY",
+      "title": "Reason",
+      "type": "string"
+    },
+    "scenario_id": {
+      "const": "ACME-SAN-PAYMENTS",
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "schema": {
+      "const": "aiops.debian-acme-sim-e2e.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "stages": {
+      "additionalProperties": {
+        "const": "PASS",
+        "type": "string"
+      },
+      "title": "Stages",
+      "type": "object"
+    },
+    "status": {
+      "const": "PASS",
+      "title": "Status",
+      "type": "string"
+    },
+    "tenant_id": {
+      "const": "ACME-TEST",
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "collected_at",
+    "attempt_id",
+    "tenant_id",
+    "scenario_id",
+    "mode",
+    "status",
+    "reason",
+    "approval_issuer",
+    "human_approval_claimed",
+    "live_effects_allowed",
+    "real_glpi_writes_allowed",
+    "docker_mutations",
+    "stages",
+    "ids"
+  ],
+  "title": "AcmeReceipt",
+  "type": "object"
+}
