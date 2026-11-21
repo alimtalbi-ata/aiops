@@ -1,0 +1,330 @@
+name: aiops2-canonical-design
+services:
+  portal:
+    image: aiops2-portal:glpi-sync-v1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - copilot
+    - core
+    build:
+      context: ../app
+      dockerfile: portal/Dockerfile
+    volumes:
+    - portal-fs-demo-data:/data/fs-demo
+    - portal-fs-demo-state:/var/lib/aiops-fs-demo
+    networks:
+    - aiops2-internal
+  worker:
+    image: aiops2-worker:fs-demo-candidate-20261105
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - core
+    - evidence
+    - intelligence
+    - policy
+    - twin
+    build:
+      context: ../app
+      dockerfile: worker/Dockerfile
+    networks:
+    - aiops2-internal
+  evidence:
+    image: aiops2-evidence:prometheus-fix-20261104
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - postgres
+    build:
+      context: ../app
+      dockerfile: evidence/Dockerfile
+    networks:
+    - aiops2-internal
+  policy:
+    image: aiops2-policy:prometheus-fix-20261104
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    build:
+      context: ../app
+      dockerfile: policy/Dockerfile
+    networks:
+    - aiops2-internal
+  intelligence:
+    image: aiops2-intelligence:intelligence-event-verified-v1-20261109
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    build:
+      context: ../app
+      dockerfile: intelligence/Dockerfile
+    networks:
+    - aiops2-internal
+  twin:
+    image: aiops2-twin:fs1009-decimal-metrics-candidate-20261106
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - postgres
+    build:
+      context: ../app
+      dockerfile: twin/Dockerfile
+    networks:
+    - aiops2-internal
+  copilot:
+    image: aiops2-noc-rag-copilot:v1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - core
+    - evidence
+    - twin
+    build:
+      context: ../app
+      dockerfile: copilot/Dockerfile
+    networks:
+    - aiops2-internal
+  postgres:
+    image: postgres:16-alpine
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    networks:
+    - aiops2-internal
+    environment:
+      POSTGRES_DB: ${AIOPS_DB_NAME:?required}
+      POSTGRES_USER: ${AIOPS_DB_USER:?required}
+      POSTGRES_PASSWORD: ${AIOPS_DB_PASSWORD:?required}
+  temporal-postgres:
+    image: postgres:16-alpine
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - temporal-postgres-data:/var/lib/postgresql/data
+    - ../installer/temporal/init-visibility-db.sh:/docker-entrypoint-initdb.d/20-temporal-visibility.sh:ro
+    networks:
+    - aiops2-internal
+    environment:
+      POSTGRES_DB: ${TEMPORAL_DB_NAME:?required}
+      POSTGRES_USER: ${TEMPORAL_DB_USER:?required}
+      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD:?required}
+  temporal:
+    image: temporalio/server:1.31.0
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - temporal-postgres
+    build:
+      context: ../build/temporal
+      dockerfile: Dockerfile
+    networks:
+    - aiops2-internal
+    volumes:
+    - ../config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    environment:
+      DB: postgres12
+      DB_PORT: '5432'
+      POSTGRES_SEEDS: temporal-postgres
+      POSTGRES_USER: ${TEMPORAL_DB_USER:?required}
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:?required}
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/development-sql.yaml
+  temporal-ui:
+    image: temporalio/ui:2.49.1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - temporal
+    networks:
+    - aiops2-internal
+    environment:
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+  glpi-db:
+    image: mariadb:11.4
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - glpi-db-data:/var/lib/mysql
+    networks:
+    - aiops2-internal
+  n8n:
+    image: n8nio/n8n:2.40.6
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - postgres
+    volumes:
+    - n8n-data:/home/node/.n8n
+    networks:
+    - aiops2-internal
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - prometheus-data:/prometheus
+    - ../config/prometheus:/etc/prometheus:ro
+    networks:
+    - aiops2-internal
+  grafana:
+    image: grafana/grafana:13.2.2
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - prometheus
+    volumes:
+    - grafana-data:/var/lib/grafana
+    - ../config/grafana/provisioning:/etc/grafana/provisioning:ro
+    - ../config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+    - aiops2-internal
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - alertmanager-data:/alertmanager
+    - ../config/alertmanager:/etc/alertmanager:ro
+    networks:
+    - aiops2-internal
+  simulator:
+    image: aiops2-acme-sandbox-simulator:e9a21e3e13f9
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    build:
+      context: ../app
+      dockerfile: simulator/Dockerfile
+    networks:
+    - aiops2-internal
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - cloudbeaver-data:/opt/cloudbeaver/workspace
+    networks:
+    - aiops2-internal
+  fs385-ingest:
+    image: python:3.12-alpine
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    build:
+      context: ../services/fs385-ingest
+      dockerfile: Dockerfile
+    networks:
+    - aiops2-internal
+  core:
+    image: aiops2-core:metrics-plaintext-candidate-20261112
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - postgres
+    build:
+      context: ../app
+      dockerfile: core/Dockerfile
+    networks:
+    - aiops2-internal
+  glpi:
+    image: glpi/glpi:11.0.9
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - glpi-db
+    volumes:
+    - glpi-data:/var/glpi
+    networks:
+    - aiops2-internal
+  loki:
+    image: grafana/loki:3.5.0
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - loki-data:/loki
+    - ../config/loki/loki.yaml:/etc/loki/config.yaml:ro
+    networks:
+    - aiops2-internal
+  tempo:
+    image: grafana/tempo:2.7.2
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    volumes:
+    - tempo-data:/var/tempo
+    - ../config/tempo/tempo.yaml:/etc/tempo/config.yaml:ro
+    networks:
+    - aiops2-internal
+  otel:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+    depends_on:
+    - loki
+    - tempo
+    networks:
+    - aiops2-internal
+    volumes:
+    - ../config/otel/otel.yaml:/etc/otelcol/config.yaml:ro
+volumes:
+  postgres-data: {}
+  temporal-postgres-data: {}
+  glpi-db-data: {}
+  glpi-data: {}
+  grafana-data: {}
+  prometheus-data: {}
+  alertmanager-data: {}
+  n8n-data: {}
+  loki-data: {}
+  tempo-data: {}
+  cloudbeaver-data: {}
+  portal-fs-demo-data: {}
+  portal-fs-demo-state: {}
+networks:
+  aiops2-internal:
+    driver: bridge
