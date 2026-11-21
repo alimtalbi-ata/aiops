@@ -218,3 +218,25 @@ This tranche contains **159 additional PR #792 source files** copied (beyond Por
 This port collected the remaining historical documentation, tools, qualification shell scripts, SQL invariants and historical Python test sources, in addition to the runtime/config/install-kit snapshots from Ports 10–11. **The 408/408 claim is about PR #792's changed-file list only**, not all files in its branch or all historical PRs/repos, and does not imply functional integration, binary fidelity for non-text files, or validated execution.
 
 **Strict user restriction upheld:** no tests executed, no CI/workflow runs, no scripts or installers invoked, no migrations, deployments, or merges. PR remains draft.
+
+
+## Port 13 — Source coverage closure for Data/Twin, receipts, NOC and INT07 (2026-11-22)
+
+**NO TESTS EXECUTED.** Collected historical changed-file sources under inert `docs/convergence/v3/source-imports/`:
+- **#812 Data/Twin**: 16/16 files under `pr-812/`.
+- **#805 strict Pydantic receipts and fixtures**: 27/27 files under `pr-805/`.
+- **#807 capture pipeline reuse**: 1/1 file under `pr-807/`.
+- **#806 screenshot scaffold**: 4/4 files under `pr-806/`, including capture script and scene config; **capture not run**.
+- **#800 NOC gate**: 2/2 files under `pr-800/`.
+- **#797 NOC source regression**: 1/1 file under `pr-797/`.
+- **#795 multipath ambiguity**: 1/1 file under `pr-795/`.
+- **#794 Twin edge proof**: 2/2 files under `pr-794/`.
+- **#782 offline source contract**: 2/2 files under `pr-782/`.
+- **#771 offline NOC prototype**: 1/1 file under `pr-771/`.
+- **#818 INT07**: completed 92/92 changed-file source snapshots under `int07/`, including files previously integrated into canonical active paths but not yet separately preserved with source provenance.
+- **#824 TEAM C**: 9/9 source snapshots under `team-c-824/`.
+- **#825 TEAM C**: 9/9 source snapshots under `team-c-825/`.
+- **#823 TEAM D**: 6/6 source snapshots under `team-d-823/`.
+- **#822 TEAM A**: 4/4 source snapshots under `team-a-822/`.
+
+Direct GitHub PR changed-filename set comparisons confirm zero missing for **#818, #824, #825, #823, #822, #812, #805 and #792** at this port. These are **source snapshots**, not validated or deployed integration; no workflows, tests, scripts, browser capture, migrations, agents or collectors were executed. Historical PRs before #771 and other branches/repositories remain unverified; global exhaustiveness is **not** asserted.
