@@ -1,0 +1,228 @@
+name: ACME golden demo readiness (offline)
+on:
+  pull_request:
+    paths:
+      - 'scripts/acme_demo_readiness.py'
+      - 'scripts/acme_receipt_model.py'
+      - 'scripts/acme_qualification_addon.py'
+      - 'scripts/acme_worker_receipt_contract.py'
+      - 'scripts/acme_core_worker_binding.py'
+      - 'scripts/acme_portal_acl_preflight.py'
+      - 'scripts/acme_viewer_access_policy.py'
+      - 'scripts/acme_oidc_integration_preflight.py'
+      - 'scripts/acme_server_authority_boundary.py'
+      - 'scripts/acme_autonomous_loop_qualification.py'
+      - 'scripts/acme_readonly_runtime_recipe.py'
+      - 'scripts/acme_workbench_evidence_projection.py'
+      - 'tests/test_acme_workbench_evidence_projection.py'
+      - 'tests/test_acme_workbench_portal_page.py'
+      - 'tests/test_acme_workbench_portal_http.py'
+      - 'tests/acme_workbench_browser_smoke.py'
+      - 'tests/acme_workbench_browser_app.py'
+      - 'scripts/acme_isolated_browser_receipt.py'
+      - 'tests/test_acme_isolated_browser_receipt.py'
+      - 'scripts/acme_isolated_png_integrity.py'
+      - 'tests/test_acme_isolated_png_integrity.py'
+      - 'scripts/acme_isolated_browser_bundle.py'
+      - 'tests/test_acme_isolated_browser_bundle.py'
+      - 'app/portal/acme_milestones.py'
+      - 'tests/test_acme_public_milestones.py'
+      - 'tests/test_acme_public_qualification_snapshot.py'
+      - 'app/portal/acme_qualification_view.py'
+      - 'tests/test_acme_readonly_runtime_recipe.py'
+      - 'tests/test_acme_readonly_http_integration.py'
+      - 'tests/test_acme_autonomous_loop_qualification.py'
+      - 'tests/test_acme_server_authority_boundary.py'
+      - 'tests/test_acme_oidc_integration_preflight.py'
+      - 'scripts/acme_evidence_read_seam.py'
+      - 'tests/test_acme_evidence_read_seam.py'
+      - 'tests/test_acme_viewer_access_policy.py'
+      - 'tests/test_acme_portal_acl_preflight.py'
+      - 'tests/test_acme_core_worker_binding.py'
+      - 'tests/test_acme_worker_receipt_contract.py'
+      - 'tests/test_acme_qualification_addon.py'
+      - 'scripts/acme_portal_route_inventory.py'
+      - 'tests/test_acme_portal_route_inventory.py'
+      - 'app/portal/main.py'
+      - 'tests/test_acme_demo_readiness.py'
+      - 'tests/fixtures/acme/**'
+      - 'docs/contracts/acme-receipt.schema.json'
+      - '.github/workflows/acme-demo-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Pydantic v2 validation dependency
+        run: python -m pip install 'pydantic>=2.5,<3' 'fastapi>=0.110,<1' 'httpx>=0.27,<1' 'requests>=2.31,<3'
+      - name: Exact source compile
+        run: python -m py_compile scripts/acme_receipt_model.py scripts/acme_demo_readiness.py scripts/acme_qualification_addon.py tests/test_acme_demo_readiness.py tests/test_acme_qualification_addon.py scripts/acme_portal_route_inventory.py tests/test_acme_portal_route_inventory.py scripts/acme_worker_receipt_contract.py tests/test_acme_worker_receipt_contract.py scripts/acme_core_worker_binding.py tests/test_acme_core_worker_binding.py scripts/acme_portal_acl_preflight.py tests/test_acme_portal_acl_preflight.py scripts/acme_viewer_access_policy.py tests/test_acme_viewer_access_policy.py scripts/acme_oidc_integration_preflight.py tests/test_acme_oidc_integration_preflight.py scripts/acme_evidence_read_seam.py tests/test_acme_evidence_read_seam.py scripts/acme_server_authority_boundary.py tests/test_acme_server_authority_boundary.py scripts/acme_autonomous_loop_qualification.py tests/test_acme_autonomous_loop_qualification.py scripts/acme_readonly_runtime_recipe.py tests/test_acme_readonly_runtime_recipe.py tests/test_acme_readonly_http_integration.py scripts/acme_workbench_evidence_projection.py tests/test_acme_workbench_evidence_projection.py tests/test_acme_workbench_portal_page.py tests/test_acme_public_qualification_snapshot.py tests/test_acme_workbench_portal_http.py app/portal/acme_qualification_view.py
+      - name: Validate all 17 versioned JSON fixtures
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("tests/fixtures/acme")
+          required = {
+              "valid", "wrong_reason", "real_ticket", "real_approval",
+              "missing_attempt_id", "malformed_attempt_id", "live_effects",
+              "real_glpi", "fake_human", "docker_mutation", "boolean_zero",
+              "missing_twin", "failed_worker", "empty_stages",
+              "missing_ticket_id", "stale", "future",
+          }
+          found = {p.stem for p in root.glob("*.json")}
+          assert found == required, f"Missing/unexpected fixtures: {required ^ found}"
+          for name in sorted(required):
+              value = json.loads((root / f"{name}.json").read_text(encoding="utf-8"))
+              assert isinstance(value, dict), name
+          print(f"Validated {len(required)} JSON fixtures")
+          PY
+      - name: Verify versioned ACME JSON Schema matches Pydantic model
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.acme_receipt_model import AcmeReceipt
+          path = Path("docs/contracts/acme-receipt.schema.json")
+          expected = AcmeReceipt.model_json_schema(mode="validation")
+          actual = json.loads(path.read_text(encoding="utf-8"))
+          if actual != expected:
+              raise SystemExit("ACME receipt JSON Schema drift: regenerate from AcmeReceipt.model_json_schema(mode='validation')")
+          print("ACME receipt JSON Schema matches Pydantic v2 model")
+          PY
+      - name: Contract tests (fixture driven, no external API)
+        run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v
+      - name: ACME Workbench Demo addon tests (offline, fail-closed)
+        run: python -m unittest discover -s tests -p 'test_acme_qualification_addon.py' -v
+      - name: ACME Portal scene route inventory source tests (no browser)
+        run: python -m unittest discover -s tests -p 'test_acme_portal_route_inventory.py' -v
+      - name: ACME Worker no-effect receipt contract (offline, no Temporal)
+        run: python -m unittest discover -s tests -p 'test_acme_worker_receipt_contract.py' -v
+      - name: ACME Core Worker identity binding tests (offline)
+        run: python -m unittest discover -s tests -p 'test_acme_core_worker_binding.py' -v
+      - name: ACME Portal ACL preflight negative tests (source only)
+        run: python -m unittest discover -s tests -p 'test_acme_portal_acl_preflight.py' -v
+      - name: ACME viewer tenant run policy negative tests (offline)
+        run: python -m unittest discover -s tests -p 'test_acme_viewer_access_policy.py' -v
+      - name: ACME OIDC integration preflight fail-closed tests
+        run: python -m unittest discover -s tests -p 'test_acme_oidc_integration_preflight.py' -v
+      - name: ACME evidence read seam no-I/O-before-ACL tests
+        run: python -m unittest discover -s tests -p 'test_acme_evidence_read_seam.py' -v
+      - name: ACME server authority boundary fail-closed tests
+        run: python -m unittest discover -s tests -p 'test_acme_server_authority_boundary.py' -v
+      - name: ACME autonomous loop qualification negative tests
+        run: python -m unittest discover -s tests -p 'test_acme_autonomous_loop_qualification.py' -v
+      - name: ACME sandbox read-only recipe offline tests (no HTTP)
+        run: python -m unittest discover -s tests -p 'test_acme_readonly_runtime_recipe.py' -v
+      - name: ACME ephemeral loopback HTTP integration (no external services)
+        run: python -m unittest discover -s tests -p 'test_acme_readonly_http_integration.py' -v
+      - name: ACME Workbench nine-stage seven-scene projection fail-closed tests
+        run: python -m unittest discover -s tests -p 'test_acme_workbench_evidence_projection.py' -v
+      - name: ACME Workbench Portal route source safety tests
+        run: python -m unittest discover -s tests -p 'test_acme_workbench_portal_page.py' -v
+      - name: ACME public Workbench snapshot fail-closed tests
+        run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_acme_public_qualification_snapshot.py' -v
+      - name: ACME public milestone contract fail-closed tests
+        env:
+          PYTHONPATH: 'app:.'
+        run: python -m unittest discover -s tests -p 'test_acme_public_milestones.py' -v
+      - name: ACME Workbench in-process HTTP read-only qualification
+        env:
+          AIOPS_INTERNAL_TOKEN: 'CI-ONLY-FAKE-TOKEN-NO-RUNTIME-AUTHORITY'
+        run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_acme_workbench_portal_http.py' -v
+      - name: CLI gate self-check and negative receipts
+        run: |
+          set -eu
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          export ACME_FIXTURE_TEMP="$temp_dir"
+          # The checked-in fixture uses a fixed UTC clock for deterministic unit tests.
+          # Refresh only collected_at in temporary CLI copies, never in Git fixtures.
+          python - <<'PY'
+          import datetime as dt
+          import json
+          import os
+          from pathlib import Path
+          source = Path("tests/fixtures/acme")
+          target = Path(os.environ["ACME_FIXTURE_TEMP"])
+          now = dt.datetime.now(dt.timezone.utc)
+          for path in sorted(source.glob("*.json")):
+              receipt = json.loads(path.read_text(encoding="utf-8"))
+              if path.stem not in ("stale", "future"):
+                  receipt["collected_at"] = now.isoformat()
+              else:
+                  offset = dt.timedelta(days=-2 if path.stem == "stale" else 2)
+                  receipt["collected_at"] = (now + offset).isoformat()
+              (target / path.name).write_text(json.dumps(receipt), encoding="utf-8")
+          PY
+          python scripts/acme_demo_readiness.py "$temp_dir/valid.json"
+          for f in "$temp_dir"/*.json; do
+            [ "$(basename "$f")" = "valid.json" ] && continue
+            set +e
+            python scripts/acme_demo_readiness.py "$f"
+            rc=$?
+            set -e
+            if [ "$rc" -ne 2 ]; then
+              echo "ERROR: $(basename "$f") expected gate rejection exit 2, got $rc"
+              exit 1
+            fi
+          done
+          echo "All 16 negative fixtures rejected with exit code 2"
+
+  isolated-browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated Portal browser test dependencies
+        run: python -m pip install 'fastapi>=0.110,<1' 'uvicorn>=0.30,<1' 'requests>=2.31,<3' 'playwright>=1.50,<2'
+      - name: Install Chromium (test runner only)
+        run: python -m playwright install --with-deps chromium
+      - name: Chromium isolated ACME Workbench navigation and NO_GO
+        env:
+          PYTHONPATH: 'tests:app:.'
+        run: python tests/acme_workbench_browser_smoke.py
+      - name: Negative PNG integrity and forged authority tests
+        run: python -m unittest discover -s tests -p 'test_acme_isolated_png_integrity.py' -v
+      - name: Independently verify captured PNG bytes
+        run: python scripts/acme_isolated_png_integrity.py --directory /tmp/acme-workbench-ci-captures
+      - name: Validate isolated browser receipt contract
+        run: python -m unittest discover -s tests -p 'test_acme_isolated_browser_receipt.py' -v
+      - name: Write non-authoritative CI-only browser receipt
+        env:
+          ACME_BROWSER_RECEIPT_PATH: ${{ runner.temp }}/acme-browser-receipt.json
+        run: python scripts/acme_isolated_browser_receipt.py
+      - name: Negative bundle and SHA binding tests
+        run: python -m unittest discover -s tests -p 'test_acme_isolated_browser_bundle.py' -v
+      - name: Cross-verify CI source SHA and browser evidence bundle
+        env:
+          ACME_BROWSER_RECEIPT_PATH: ${{ runner.temp }}/acme-browser-receipt.json
+        run: PYTHONPATH=. python -m scripts.acme_isolated_browser_bundle --captures-dir /tmp/acme-workbench-ci-captures --receipt "$ACME_BROWSER_RECEIPT_PATH" --expected-source-sha "$GITHUB_SHA"
+      - name: Publish isolated Chromium screenshots and byte hashes
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-workbench-isolated-browser-pngs
+          path: /tmp/acme-workbench-ci-captures/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish CI-only browser receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-workbench-isolated-browser-receipt
+          path: ${{ runner.temp }}/acme-browser-receipt.json
+          if-no-files-found: error
+          retention-days: 7
