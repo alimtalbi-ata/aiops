@@ -92,6 +92,10 @@ class GammaAcceptance(unittest.TestCase):
         p.locator("#policy").focus()
         p.keyboard.press("Enter")
         self.assertIn("DENIED", p.locator("#decision").inner_text())
+        self.assertEqual(self.allowed, [("GET", self.url)])
+        self.assertEqual(self.requests, [("GET", self.url)])
+        self.assertEqual(self.blocked, [], "Keyboard flow attempted an unexpected request")
+        self.assertFalse(self.errors, "Keyboard flow raised a JavaScript error")
     def test_accessibility_semantics(self):
         p = self.page
         self.assertEqual(p.locator("html").get_attribute("lang"), "en")
@@ -128,5 +132,9 @@ class GammaAcceptance(unittest.TestCase):
                 for token in ("DEMO", "UNBOUND", "UNKNOWN", "MISSING", "NOT_RUN"):
                     self.assertIn(token, p.locator("body").inner_text())
                 self.assertIn("Runtime attested: false", p.locator("#evidence").inner_text())
+        self.assertEqual(self.allowed, [("GET", self.url)])
+        self.assertEqual(self.requests, [("GET", self.url)])
+        self.assertEqual(self.blocked, [], "Responsive flow attempted an unexpected request")
+        self.assertFalse(self.errors, "Responsive flow raised a JavaScript error")
 if __name__ == "__main__":
     unittest.main(verbosity=2)
