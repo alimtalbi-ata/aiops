@@ -209,3 +209,12 @@ Additional historical **source-only** copies were created under `docs/convergenc
 - Evaluation/build tooling, readonly demo source and deploy isolation configuration.
 
 This tranche contains **159 additional PR #792 source files** copied (beyond Port 10's 50), but does **not** claim the full PR #792 changed-file inventory is complete; remaining historical documentation, tools and tests still need to be inventoried and harvested. File copies are inert snapshots, not an installable/reconciled runtime. **No tests, builds, migrations, deployments, collectors, agents or workflows were run.**
+
+
+## Port 12 — Complete PR #792 changed-file source inventory (2026-11-21)
+
+**Verified by direct filename-set comparison** against GitHub's paginated `list_pr_changed_filenames` for source **PR #792** and target **PR #843**: **408/408** source changed paths have corresponding inert copies under `docs/convergence/v3/source-imports/pr-792/`; **zero missing source paths**. The final four missing paths (`app/test_provider/Dockerfile`, `app/worker/acme_simulated_hitl.py`, `install-kit/app/intelligence/__init__.py`, `install-kit/app/policy/Dockerfile`) were copied after comparison, and comparison repeated.
+
+This port collected the remaining historical documentation, tools, qualification shell scripts, SQL invariants and historical Python test sources, in addition to the runtime/config/install-kit snapshots from Ports 10–11. **The 408/408 claim is about PR #792's changed-file list only**, not all files in its branch or all historical PRs/repos, and does not imply functional integration, binary fidelity for non-text files, or validated execution.
+
+**Strict user restriction upheld:** no tests executed, no CI/workflow runs, no scripts or installers invoked, no migrations, deployments, or merges. PR remains draft.
