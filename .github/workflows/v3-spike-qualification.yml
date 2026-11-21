@@ -239,6 +239,26 @@ jobs:
               raise SystemExit(f"FAIL binding tests: executed={result.testsRun} expected={expected}")
           print(f"PASS binding tests: executed={result.testsRun}", flush=True)
           PY
+      - name: Authenticated binding integration (strict 4 methods)
+        run: |
+          python3 -B - <<'PY'
+          import pathlib
+          import sys
+          import unittest
+          root = pathlib.Path("v3-spike/contracts").resolve()
+          sys.path.insert(0, str(root))
+          import test_authenticated_binding
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_authenticated_binding.AuthenticatedBindingTests)
+          expected = 4
+          actual = suite.countTestCases()
+          print(f"authenticated-binding collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit(f"FAIL authenticated binding collection: {actual} != {expected}")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit(f"FAIL authenticated binding: executed={result.testsRun} expected={expected}")
+          print(f"PASS authenticated binding: executed={result.testsRun}", flush=True)
+          PY
       - name: Receipt
         if: always()
         run: |
