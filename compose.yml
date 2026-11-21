@@ -192,6 +192,7 @@ services:
     ports: ["3000:3000"]
     environment:
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD_required}"
+      GF_USERS_DEFAULT_THEME: dark
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -234,7 +235,9 @@ services:
       GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD:?GLPI_DB_PASSWORD_required}
       GLPI_SKIP_AUTOINSTALL: "false"
       GLPI_SKIP_AUTOUPDATE: "false"
-    volumes: [aiops2-glpi-data:/var/glpi]
+    volumes:
+      - aiops2-glpi-data:/var/glpi
+      - ./config/glpi/themes:/var/glpi/files/_themes:ro
     networks: [aiops2-integration]
     depends_on: {aiops2-glpi-db: {condition: service_healthy}}
 

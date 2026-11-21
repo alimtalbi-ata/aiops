@@ -1,0 +1,27 @@
+// AIOps 2.0 Dark SaaS Premium — GLPI 11 custom palette
+// Palette name is derived from this filename: aiops-premium.
+// Keep all rules scoped to this palette: GLPI loads every palette concurrently.
+$is-dark: true;
+
+:root[data-glpi-theme="aiops-premium"] {
+    // Brand accents: electric violet + electric blue.
+    --tblr-primary-rgb: 139, 92, 246;
+    --tblr-primary: #8b5cf6;
+    --tblr-primary-fg: #ffffff;
+    --tblr-secondary: #172136;
+    --tblr-secondary-fg: #f4f7ff;
+    --tblr-link-color-rgb: 56, 189, 248;
+    --tblr-body-bg: #080b14;
+    --tblr-body-color: #f4f7ff;
+    --tblr-border-color: #293650;
+    --tblr-muted: #9aa8c7;
+
+    --glpi-mainmenu-bg: #0c1120;
+    --glpi-mainmenu-fg: #f4f7ff;
+
+    // Four static swatches used by GLPI's palette selector.
+    --glpi-palette-color-1: #080b14;
+    --glpi-palette-color-2: #172136;
+    --glpi-palette-color-3: #8b5cf6;
+    --glpi-palette-color-4: #38bdf8;
+}

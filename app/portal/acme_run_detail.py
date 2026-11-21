@@ -251,14 +251,14 @@ def run_detail_page(rid: str, request: Request,
         for name in JOURNEY
     )
     rows = []
-    for name in JOURNEY:
+    for index, name in enumerate(JOURNEY, 1):
         item = data.get("journey", {}).get(name, {"state": "UNKNOWN", "reason": data.get("reason", "AUTH_REQUIRED")})
         title = html.escape(name)
         item_state = html.escape(item["state"], quote=True)
         reason = html.escape(item.get("reason", "SOURCE_ONLY_NOT_RUNTIME_ATTESTED"), quote=True)
         rows.append(
-            f'<section id="{name.lower().replace(" ", "-")}" class="panel">'
-            f'<h2>{title}</h2><p>{item_state}</p><p class="muted">{reason}</p></section>'
+            f'<section id="{name.lower().replace(" ", "-")}" class="panel run-journey-step">'
+            f'<span class="run-step-number">Étape {index:02d}</span><h2>{title}</h2><p class="run-step-state">{item_state}</p><p class="muted">{reason}</p></section>'
         )
     source = html.escape(data.get("source", "UNKNOWN"), quote=True)
     provenance = html.escape(data.get("provenance", "UNKNOWN"), quote=True)
@@ -290,7 +290,8 @@ def run_detail_page(rid: str, request: Request,
         '<p class="muted">Tenant ACL: NOT QUALIFIED. No Evidence bytes, AI decision, '
         'HITL approval, Payments impact or verification is attested here.</p>'
         '<p><a href="/itsm">GLPI / ITSM native handoff — read-only, UNKNOWN</a></p>'
-        f'<nav aria-label="ACME journey">{nav}</nav>{"".join(rows)}'
+        '<section class="run-explorer-guide"><h2>Run Explorer</h2><p>Parcours en lecture seule : modèle des étapes, pas une chronologie observée. Les preuves restent indisponibles tant que les droits tenant ne sont pas qualifiés.</p></section>'
+        f'<nav class="run-journey-nav" aria-label="ACME journey">{nav}</nav><div class="run-journey-grid">{"".join(rows)}</div>'
         '</main></body></html>'
     )
     return HTMLResponse(page, status_code=status, headers={
