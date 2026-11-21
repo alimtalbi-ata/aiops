@@ -124,9 +124,27 @@ jobs:
           from pathlib import Path
           text = Path("v3-spike/kit/BOM-BUILD-PLAN.md").read_text(encoding="utf-8")
           assert chr(92) + "n" not in text, "FAIL literal escaped newlines in BOM"
-          assert "| Liaison Event/Twin/Evidence |" in text, "FAIL missing binding row"
+          import re
+          def validate_table(source):
+              lines = source.splitlines()
+              matches = [i for i, line in enumerate(lines) if line.startswith("| Liaison Event/Twin/Evidence |")]
+              assert len(matches) == 1, "FAIL binding row missing or duplicated"
+              i = matches[0]
+              assert i > 0 and lines[i-1].startswith("| CI |"), "FAIL binding row detached from inventory table"
+              start = next((j for j in range(i, -1, -1) if lines[j].startswith("| Élément |")), None)
+              assert start is not None, "FAIL inventory header absent"
+              assert all(line.startswith("|") and line.endswith("|") for line in lines[start:i+1]), "FAIL inventory table discontinuity"
+          validate_table(text)
+          # Negative mutation: one blank line must be rejected.
+          mutated = text.replace("| Liaison Event/Twin/Evidence |", "\\n| Liaison Event/Twin/Evidence |", 1)
+          try:
+              validate_table(mutated)
+          except AssertionError:
+              pass
+          else:
+              raise AssertionError("FAIL BOM lint accepted blank-line mutation")
           assert "\n## État de qualification" in text, "FAIL missing qualification section"
-          for term in ("SQLite 17", "sécurité 9", "GAMMA 5", "kit 6", "resource-binding 6", "authenticated-binding 4", "Compose default/DEMO"):
+          for term in ("SQLite 17", "sécurité 9", "GAMMA 5", "kit 6", "resource-binding 6", "authenticated-binding 4", "pair-decision 5", "Compose default/DEMO"):
               assert term in text, f"FAIL BOM missing {term}"
           print("PASS BOM structure and six-job inventory; no runtime qualification")
           PY
@@ -270,6 +288,26 @@ jobs:
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL authenticated binding: executed={result.testsRun} expected={expected}")
           print(f"PASS authenticated binding: executed={result.testsRun}", flush=True)
+          PY
+      - name: Paired authenticated decision (strict 5 methods)
+        run: |
+          python3 -B - <<'PY'
+          import pathlib
+          import sys
+          import unittest
+          root = pathlib.Path("v3-spike/contracts").resolve()
+          sys.path.insert(0, str(root))
+          import test_pair_decision
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_pair_decision.PairDecisionTests)
+          expected = 5
+          actual = suite.countTestCases()
+          print(f"pair-decision collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit(f"FAIL pair decision collection: {actual} != {expected}")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit(f"FAIL pair decision: executed={result.testsRun} expected={expected}")
+          print(f"PASS pair decision: executed={result.testsRun}", flush=True)
           PY
       - name: Receipt
         if: always()
