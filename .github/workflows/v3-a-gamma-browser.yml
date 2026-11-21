@@ -61,7 +61,7 @@ jobs:
           if suite.countTestCases() != 6:
               raise SystemExit("FAIL: offline collection mismatch")
           result = xmlrunner.XMLTestRunner(output="reports/offline", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 5:
+          if not result.wasSuccessful() or result.testsRun != 6:
               raise SystemExit("FAIL: offline Chromium acceptance")
           print("PASS: offline 6/6", flush=True)
           PY
