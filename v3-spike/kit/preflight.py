@@ -40,6 +40,19 @@ def validate(config):
         require(type(health) is dict and health.get("test") == expected_health, "missing or unsafe healthcheck: " + name)
         require(health.get("disable") is not True and set(health) <= {"test", "interval", "timeout", "retries", "start_period", "start_interval"}, "unsafe healthcheck options: " + name)
         require(type(health.get("retries")) is int and 1 <= health["retries"] <= 12, "healthcheck retries: " + name)
+        # docker compose config --format json normalizes durations to integer nanoseconds.
+        # Keep health checks responsive; reject bools, strings and unbounded delays.
+        for key, lower, upper in (
+            ("interval", 1_000_000_000, 60_000_000_000),
+            ("timeout", 1_000_000_000, 10_000_000_000),
+            ("start_period", 0, 120_000_000_000),
+            ("start_interval", 1_000_000_000, 60_000_000_000),
+        ):
+            if key in health:
+                duration = health[key]
+                require(type(duration) is int and lower <= duration <= upper, "healthcheck duration " + key + ": " + name)
+        require("interval" in health and "timeout" in health, "healthcheck timing missing: " + name)
+        require(health["timeout"] <= health["interval"], "healthcheck timeout exceeds interval: " + name)
         deps = s.get("depends_on", {})
         require(type(deps) is dict, "depends_on type: " + name)
         if name == "gamma":
