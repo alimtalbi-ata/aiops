@@ -1,0 +1,163 @@
+# AIOps 2.0 — Decision Log
+
+**Author:** Abdelhalim Talbi  
+Use this file for durable architecture/product decisions. Add new entries; do not silently rewrite history. Status may be changed with a dated rationale.
+
+## ADR-0001 — Keep one canonical runtime
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Consolidate around the AIOps 2.0 runtime and its canonical Run/Incident state; do not build another parallel orchestration/control plane.
+- **Reason:** Reduce duplicate state, integration drift and operational burden.
+- **Consequences:** Historical platforms are reused through adapters and explicit contracts; production cutover requires qualification and rollback.
+
+## ADR-0002 — Reuse AIOps v1/V145 before rebuilding
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** When a historical capability is faster to reuse and can meet current safety/quality standards, adapt it rather than rewrite it.
+- **Candidates:** Decision intelligence; evidence fusion/matrix/acquisition/enrichment; semantic evidence engine; decision adapter; functional bridge/read model; decision cockpit.
+- **Qualification condition:** Inspect source, dependencies, contract, tests, ownership, data stores and actual behavior. Directory presence or old demo status is insufficient.
+- **Consequences:** Maintain a reuse matrix and record why each component is reused, adapted, replaced or retired.
+
+## ADR-0003 — Keep the Portal out of direct database writes
+
+- **Date:** Existing repository README; reaffirmed 2026-10-19
+- **Status:** Accepted; implementation must be tested
+- **Decision:** Portal calls Core APIs; Core owns state transitions and persistence boundaries.
+- **Reason:** Consistent authorization, validation, audit and schema evolution.
+
+## ADR-0004 — Durable orchestration owns Run progression
+
+- **Date:** Existing repository README; reaffirmed 2026-10-19
+- **Status:** Accepted; implementation must be tested
+- **Decision:** Temporal/Worker own durable workflow progression; n8n is an integration boundary and must not own Run state.
+- **Reason:** Retry, recovery and lifecycle consistency.
+
+## ADR-0005 — Evidence and events are auditable records
+
+- **Date:** Existing repository README; reaffirmed 2026-10-19
+- **Status:** Accepted; implementation must be tested
+- **Decision:** Events and Evidence are append-only; provenance/freshness and decision links are required. Unknown or missing proof stays `UNKNOWN`.
+- **Reason:** Reproducibility, forensic traceability and safe decisions.
+
+## ADR-0006 — Fail-closed live remediation
+
+- **Date:** Existing repository README and prior project constraints; reaffirmed 2026-10-19
+- **Status:** Accepted
+- **Decision:** Live actions require deterministic policy authorization, explicit mode, validated identity/ownership/fencing, preconditions, approval when required, idempotency, verification and reconciliation. LLM confidence alone never authorizes a high-risk action.
+- **Reason:** Prevent duplicate ownership, stale decisions, unsafe actions and unverified recovery.
+
+## ADR-0007 — Preserve the PC11K5 fencing invariant
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Preserve the invariant chain: claim → fencing/ownership → preconditions → effect → evidence → reconciliation. No integration may weaken stale-owner/duplicate-owner blocking.
+- **Reason:** Correctness under concurrency and partial failure.
+- **Qualification:** Existing fencing/concurrency/PostgreSQL tests must be included in regression runs.
+
+## ADR-0008 — GitHub is the durable handover source
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Keep continuity, architecture, component descriptions, decisions, test protocols, release notes and next actions in `alimtalbi-ata/aiops`. Work on branches, commit, and open PRs; preserve `main`.
+- **Rule:** Every significant development session must update the relevant docs before closing. Verify commit/PR URLs before reporting completion.
+
+## ADR-0009 — Separate test evidence by strength
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Label evidence as source inspection, static test, unit/contract test, isolated integration, synthetic E2E, or live production verification.
+- **Reason:** Avoid claiming runtime or production qualification from static evidence.
+
+## ADR-0010 — Block LIVE execution until real adapters are qualified
+
+- **Date:** 2026-10-19
+- **Status:** Accepted as an interim safety control; merged in PR #5 at commit `493336fb51fcda41d1ece8fc1822bb13f1ef232c`
+- **Decision:** The current worker must not progress LIVE runs by emitting generic stage-completion evidence or fixed confidence values. It records an explicit adapter-unavailable event and transitions the Run to BLOCKED.
+- **Reason:** The repository does not yet provide qualified live evidence acquisition, CMDB/RAG/analyst/critic integrations, HITL approval evidence, or verified remediation/rollback adapters. Synthetic placeholder claims must not be marked non-synthetic merely because mode is LIVE.
+- **Policy changes:** P1 always escalates; critic validation is required input rather than a trusted default; LIVE actions require explicit evidence freshness, preconditions, fencing/ownership, and human approval for effects.
+- **Consequence:** LIVE execution remains intentionally unavailable until each adapter and end-to-end failure/recovery path is implemented and qualified. DEMO/REPLAY/STORY remain explicitly synthetic.
+- **Qualification:** Deterministic unit cases are added, but they must be executed in the pinned runtime before merge. This ADR does not claim production qualification.
+
+## ADR-0011 — Generate secrets on fresh install and reject insecure defaults
+
+- **Date:** 2026-10-19
+- **Status:** Accepted; merged via [PR #7](https://github.com/alimtalbi-ata/aiops/pull/7) at commit `1bdd7235687f8b2c7081278e4dd86b8a17939ff3`.
+- **Decision:** New installs generate random credentials and set restrictive `.env` permissions. Existing `.env` files are not silently overwritten or rotated. Preflight rejects known defaults unless the operator explicitly opts into isolated demo mode. Internal admin/token values must match under the current service contract.
+- **Reason:** Prevent accidental deployment with public, predictable demo credentials without breaking existing database credentials through automatic rotation.
+- **Qualification:** CI tests generation, permission mode, non-rotation, default rejection, demo opt-in and token consistency. Full deployment/upgrade qualification remains required.
+
+## ADR-0012 — No insecure application or Compose credential fallback
+
+- **Date:** 2026-10-19
+- **Status:** Accepted; merged via [PR #9](https://github.com/alimtalbi-ata/aiops/pull/9) at commit `e6251c1ce195937b1af6019e389c9f6b3f68e2dc`.
+- **Decision:** Application services fail fast when internal credentials are absent. Compose requires secret variables rather than silently substituting known demo values. The secure environment template has blank secret fields; the known-value demo template is separate and opts into demo mode explicitly.
+- **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
+- **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
+- **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+
+## ADR-0013 — Qualify the analysis core before ACME twin and demo expansion
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Make the Analyst/Critic/Evidence/Policy quality contract and offline qualification gates the immediate engineering priority. The ACME digital twin and demonstration/video phase starts only after core gates pass.
+- **Reason:** A convincing UI or simulation cannot compensate for ungrounded diagnoses, weak evidence provenance, unsafe decisions or non-reproducible learning.
+- **Controls:** Versioned analyst/critic schemas; evidence IDs for material claims; explicit unknowns and contradictions; independent deterministic policy; P1 escalation; fail-closed behavior on missing/stale evidence, invalid output or critic failure; approval bound to immutable action hash; separate proposed/approved/executed/verified states.
+- **Learning:** Store immutable linked analysis, critique, policy, human feedback and verified outcomes. Only reviewed provenance-complete cases enter the trusted gold set; no silent online learning from raw tickets.
+- **Qualification:** Use the new core analysis quality contract and qualification matrix. No status may be marked PASS without an executed test artifact. No production server testing in Phase A.
+
+
+## ADR-0014 — Persist every AI decision and make recovery/qualification repeatable
+
+- **Date:** 2026-10-19
+- **Status:** Accepted on feature branch; awaiting PR review and complete CI qualification.
+- **Decision:** Treat the repository as the continuity ledger and rebuild around verified outcomes. Additive SQL migration 009 stores analysis, critique, policy decision, proposal, approval, effect, verification, reconciliation, learning and evaluation records. Core endpoints persist and expose the analysis/critic/policy chain; action proposals must reference a valid analysis and clean validated critique.
+- **Safety:** Proposals are advisory-only. Approval binds the exact proposal hash, target and action scope. Synthetic modes cannot authorize real approvals. CRITICAL proposals require two distinct actors and roles. LIVE effect execution remains disabled. Gold-set eligibility requires a non-synthetic LIVE source, human review and a passed verification record.
+- **Operations:** Add a checksummed upgrade runner that verifies the legacy schema before adopting migrations 000–008; full-stack database/volume backup and explicitly guarded restore; redacted diagnostics; a cumulative ZIP and checksum; synthetic model-evaluation fixtures with NOT_RUN semantics if no provider is configured.
+- **Reliability:** Internal POST calls are not retried implicitly because a timeout may occur after commit; idempotency and Temporal retry policy own the retry boundary. GET calls may retry transient transport/server errors; client errors are not retried.
+- **Qualification:** CI builds all application images, runs unit/static/security contracts, applies the complete migration chain to disposable PostgreSQL, and exercises the upgrade runner on a legacy-only schema. Real-model inference, full Temporal E2E, host installation and live adapters remain unqualified.
+
+## ADR-0015 — Core owns durable terminal SIM-GLPI receipt (ACME-TEST only)
+
+- **Date:** 2026-11-02
+- **Status:** Proposed in Draft [#358](https://github.com/alimtalbi-ata/aiops/pull/358); **NO_GO for stable/host until exact-head CI and rollback qualify**.
+- **Context:** PREPARED→Twin simulated approval→Policy SIMULATE→Temporal Worker SIMULATED_NO_EFFECT→Core RESOLVED must be causal. Deriving a SIM-GLPI ticket's RESOLVED status from Run and not storing Worker receipt digest made independent verification impossible; a terminal retry also contacted an expired Twin approval.
+- **Options:** (A) infer ticket state from Run; (B) mutate existing immutable attempt ledger; (C) add an append-only Core terminal ticket ledger with a Worker SHA256 receipt and a uniquely consumed Twin nonce digest. **Choose C**. No new service or stack.
+- **Decision (RG-ACME-18):** migration 018 adds `aiops.acme_sandbox_terminal_tickets` keyed by ACME-TEST attempt, append-only, with separate ticket status, Worker receipt JSON+SHA256, nonce SHA256, approval validity window and canonical terminal ticket SHA256. Core alone atomically inserts the ticket record, marks Incident/Run RESOLVED and writes the terminal event, or commits none. Readback recomputes both digests, checks all IDs and SOURCE bindings, and fails 503 on missing/mismatched evidence. SHA256 establishes integrity, **not human authority**.
+- **Decision (RG-ACME-19):** an already committed terminal POST replays from persisted Core evidence before any external Twin/Policy/Worker GET. Unresolved attempts require fresh independent readbacks, PREPARED state, valid simulated issuer and no LIVE effect.
+- **Tests:** `test_10_core_only_finalization_after_independent_no_effect`, `test_12_reject_worker_receipt_digest_mismatch`, `test_13_terminal_ticket_is_independent_and_immutable`, `test_14_stale_twin_approval_denies_terminal_write`, `test_15_native_pg16_terminal_backup_restore`, `test_16_forged_worker_glpi_write_denied_even_with_valid_digest`. CI is disposable PG16, not joined Temporal or Debian.
+- **Decision (RG-ACME-21):** before host promotion, exercise the *production registered* Temporal `acme_simulated_no_effect` activity against a real disposable PG16 Core PREPARED Incident/Run, persist its canonical Worker receipt via Core-only RESOLVED and independently read back the terminal SIM-GLPI ticket. Twin and Policy readbacks in this CI test are explicitly synthetic fixtures; this does **not** qualify signed Twin HTTP, real host E2E, IdP/GLPI authority, or LIVE. Test: `test_17_registered_temporal_worker_same_pg16_run`; CI receipt `aiops.acme-pg16-temporal-joined-ci.v1` contains correlated IDs and no secrets. **Pending exact-head CI until a successful run is observed.**
+- **Security integration:** selective port of reviewed #356 Twin immutable signed `idempotency_key` (fixes real approval issuance) and Simulator service-specific origin allowlist (prevents internal bearer SSRF). Existing source test `test_twin_real_issue_persists_signed_idempotency_and_immutable_readback` and negative origin tests are required on the integrated SHA.
+- **Consequences:** additive 018 remains after application rollback; never delete immutable audit. Flag off + targeted image rollback preserve volumes/DB. Portal SIM-GLPI remains read-only and fail-closed without verified actor+tenant ACL; no fake IdP/GLPI ALLOW. Approval freshness and nonce consumption apply only to the isolated simulated scenario.
+
+## ADR-0016 — ACME-TEST SAN topology must be sourced, isolated and versioned
+
+- **Date/status:** 2026-11-02; proposed source-only after Debian five-service deployment, **NO_GO for E2E** until host requalification.
+- **Context:** The actual Debian 2026-11-02T22:26:30Z poller verified five new healthy images and PG16 scratch restore but sandbox E2E stopped at `SANDBOX_CAPABILITY_MISSING_TWIN` before POST. Twin capabilities require a persisted path `ACME-SAN-FABRIC-A → ACME-SVC-PAYMENTS`; no sandbox topology migration had seeded that path. No human GLPI or LIVE authority is involved.
+- **Options:** (A) fabricate a positive capability response; (B) bypass the Twin graph; (C) insert deterministic ACME-TEST synthetic nodes and edges in existing Twin PG16, reject mixed/live provenance and require real graph traversal. **Choose C**; never A/B.
+- **RG-ACME-22:** additive migration 019 creates nine strictly namespaced `ACME-TEST-*` synthetic nodes (Dell/Pure arrays, two FC fabrics, RHEL multipath, payments/ERP, replication/backup) and eight edges; idempotent inserts with provenance conflict checks, no real CMDB writes. Test `test_18_real_pg16_acme_twin_san_path_is_isolated`.
+- **RG-ACME-23:** Twin refuses any reachable node without `site=ACME-TEST-SIMULATION`, even if the graph reaches Payments. Test `test_19_mixed_live_twin_graph_refused_and_cleaned`. Source fixture topology is not evidence of actual SAN state.
+- **Deployment:** source PR and release intent separated; source merge keeps release disabled. A later reviewed immutable source pin may enable targeted Compose upgrade, native PG16 backup/scratch restore and host E2E. Rollback five images, retain additive 019 and immutable receipts; no `down -v`, prune or LIVE.
+
+- **CI conflict resolved (2026-11-02):** baseline `005_seed_acme.sql` already owns `ACME-SAN-FABRIC-A` and `ACME-SVC-PAYMENTS` with site PARIS, so initial 019 rightly failed `acme_sandbox_twin_node_provenance_conflict` in full migration CI. **Never relabel or overwrite existing demo/CMDB nodes.** Namespace new sandbox graph `ACME-TEST-SAN-FABRIC-A` → `ACME-TEST-HOST-RHEL-MPATH-01` → `ACME-TEST-SVC-PAYMENTS`; update Twin, Worker and E2E contracts/tests accordingly. The source conflict was caught before any host promotion.
+
+
+## ADR-PROPOSED-ACME-20261117 — Versioned offline readiness fixtures
+
+- **Date:** 2026-11-17
+- **Status:** Proposed / PR review, **not accepted** as an L0 host decision.
+- **Scope:** Keep the existing #802 offline readiness gate unchanged; move its 17 synthetic positive/negative test inputs to versioned JSON files and check the same fixtures through unit tests and the CLI in GitHub Actions.
+- **Rationale:** Single inspectable synthetic test data source, explicit negative-case enforcement, no external service dependencies.
+- **Boundary:** The gate still does not attest executed SHA or cross-stage identity/provenance. A GO_SIMULATION_ONLY offline verdict is **not** an E2E runtime or production approval.
+- **Tracking:** [#804](https://github.com/alimtalbi-ata/aiops/issues/804), `docs/architecture/ACME-DEPENDENCY-MATRIX-2026-11-17.md`. Convergence-as-host remains PROPOSED; this branch is based on #802 for a narrow review and does not authorize a merge.
+
+
+## ADR-PROPOSED-ACME-PYDANTIC-20261117 — Strict synthetic receipt validation
+
+- **Date:** 2026-11-17
+- **Status:** Proposed in draft PR #805, not an accepted deployment decision.
+- **Change:** Replace manual receipt checks with strict Pydantic v2 `AcmeReceipt` / `AcmeIds` models, preserving `assess()` signature and `NO_GO` fail-closed semantics.
+- **Dependency boundary:** Pydantic v2 is mandatory for gate execution; no silent stdlib fallback. CI installs `pydantic>=2.5,<3`; isolated runner packaging remains an open qualification. No external API calls occur during validation, but package installation may require network access.
+- **Limitations:** SHA of executed code and inter-stage identity/provenance are still not verified; no Debian/runtime/LIVE approval. Tracking #804.
