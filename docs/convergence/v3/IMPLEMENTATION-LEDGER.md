@@ -41,3 +41,27 @@
 5. Obtain explicit CENTRAL approval before merge or deployment.
 
 **Do not mark `INTEGRATED` or `QUALIFIED` merely because Python code and a CI workflow have been added.**
+
+
+## Port 2 — ACME cockpit, Twin and Analyst/Critic dependency modules (#812 / #822 / #825)
+
+**Added actual source modules** from `team-c/san-payments-cockpit-integration-20261119` (PR #825, head `9500b05f1512f59bb6158f92c81eef880d24a9ed`):
+
+| Module | Source blob SHA | Dependency classification |
+|---|---|---|
+| `app/portal/acme_signal_context.py` | `c6fc538d9a32acd0546a2603c3873ebc33696abd` | `acme_fixture_contract` present on target |
+| `app/portal/acme_twin_provenance.py` | `c7d2b35e29892046743c8425539f365986582b85` | `acme_fixture_contract` present; fixture blob `ad91678e81c6875a94e699d37645a971615dfb1e` **identical** between source and target |
+| `app/portal/acme_twin_consumer.py` | `96749e3f62fccbc8bb19ba6f2f790d4f18868bf9` | stdlib only |
+| `app/portal/acme_lifecycle_read_model.py` | `055fe32afd55a9623c94ac87d3a3cff05875a943` | imports existing `acme_impact_read_model` and imported Twin consumer |
+| `app/portal/acme_itil_readiness.py` | `47f95e66e8d7f538c97871a8f8dc29d5aba0594b` | imported lifecycle |
+| `app/portal/acme_evidence_collection_plan.py` | `b1cb1c18e9aa8992ba56e0acfb25064a06ba8b0d` | imported lifecycle + ITIL |
+| `app/portal/acme_analyst_critic_review.py` | `74d2293daae59c80bc0601e252eb5a94ec611b0f` | imported lifecycle + evidence plan |
+| `app/portal/acme_workbench_presentation.py` | `9d5da4e571414212db6cf22eccab943cdeb2a73d` | stdlib only |
+| `app/portal/acme_incident_cockpit.py` | `2a7e70c22b8b81427d2e6775e942f8917b315b66` | imported signal/lifecycle/ITIL/Evidence/Analyst/Run Journey |
+| `app/portal/acme_incident_cockpit_html.py` | `8a0799c99d97d96f94661cb4d9c78fe267d6b8ed` | imported workbench presentation + Evidence requirements |
+
+**Imported tests:** `tests/test_acme_signal_context.py` (blob `f771d3e3f1b99cc31b826a7a0fa6830ce1b66aa9`), `tests/test_acme_twin_consumer.py` (`1cb6749a10c171b4debcd49ea02549a91066ea5e`), `tests/test_acme_twin_provenance.py` (`cc101c30ee436c066c705f259b468f68b65fc01b`). Extended exact-PR workflow to compile all imported modules and run these three suites plus Run Journey contract tests.
+
+**Critical compatibility issue:** `app/portal/acme_impact_read_model.py` already exists on target (blob `07e345de81812d0847c6f7983ec23e8627a03604`, 18,322 chars), but source #825 has a **different and larger** variant (blob `538ae6a9fcaf249debb051391d076ae65ffddc2d`, 32,290 chars). The target version does not expose `twin_evidence`/`twin_consumer`; source adds cockpit API/page routes and read models. **DO NOT overwrite the target module blindly**: requires method-by-method review, preservation of existing routes/auth and exact tests. `app/portal/main.py` still imports target router; no new routes were registered by this port. The imported cockpit functions are staged as code, not yet reachable in UI.
+
+**Status:** `DEPENDENCIES_PORTED`, `TWIN_OFFLINE_TESTS_PENDING_CI`, `COCKPIT_ROUTE_HOLD`. The fixture identity is verified, import dependency paths inspected; **execution of tests and runtime wiring not verified**. If the CI fails, fix on this draft PR before further ports. The next integration step is a **selective, minimal change to the existing impact router** (or separate safe read-only router) with integration tests and explicit CENTRAL review.
