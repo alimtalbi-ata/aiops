@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import Mock
 
 from secure_boundary import AssertionVerifier, verified_resource_read
-from resource_binding import Resource, ScopedFixtureBackend, verify_binding, policy_evaluate
+from resource_binding import Resource, ScopedFixtureBackend, verify_binding, policy_evaluate, _identifier, _scope, _digest
 
 
 def authenticated_pair_decision(*, event, assertion, verifier, fetch):
@@ -26,6 +26,12 @@ def authenticated_pair_decision(*, event, assertion, verifier, fetch):
     try:
         tenant, instance = event["tenant"], event["instance"]
         twin_id, evidence_id = event["twin_identifier"], event["evidence_identifier"]
+        _scope(tenant)
+        _scope(instance)
+        _identifier(twin_id)
+        _identifier(evidence_id)
+        _identifier(event["event"])
+        _digest(event["digest"])
         # Verify once and require both permissions before any backend access.
         principal = verifier.verify(assertion)
         if (principal.tenant != tenant or principal.instance != instance or
