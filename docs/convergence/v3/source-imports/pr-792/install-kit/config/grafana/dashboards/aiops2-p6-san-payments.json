@@ -1,0 +1,112 @@
+{
+  "uid": "aiops2-p6-san-payments",
+  "title": "AIOPS2 | SAN / Payments Evidence (DEMO)",
+  "description": "Synthetic SAN/Payments events, correlated by run ID.",
+  "tags": [
+    "AIOPS2",
+    "P6",
+    "DEMO",
+    "business-observability"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "label": "Run ID",
+        "type": "textbox",
+        "query": "acme-demo-8c327a673c51",
+        "current": {
+          "text": "acme-demo-8c327a673c51",
+          "value": "acme-demo-8c327a673c51"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "SAN / Payments scenario",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**DEMO / synthetic.** Filter the verified ACME telemetry for SAN fabric degradation, multipath warnings and Payments synthetic operations. Missing data is not interpreted as healthy status."
+      }
+    },
+    {
+      "id": 2,
+      "title": "SAN / Multipath logs",
+      "description": "",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "aiops2-loki-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 11
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=\"aiops2-acme-v291-synthetic\"} |= \"$run_id\" |~ \"(?i)(SAN|fabric|multipath|FC|CRC)\"",
+          "queryType": "range",
+          "maxLines": 500
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Payments synthetic spans",
+      "description": "TraceQL query for synthetic Payments operation spans; empty if none match.",
+      "type": "table",
+      "datasource": {
+        "type": "tempo",
+        "uid": "aiops2-tempo-v31"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 11
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{ span.run.id = \"$run_id\" && name =~ \".*authorize_payment.*\" }",
+          "queryType": "traceql",
+          "limit": 100
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}
