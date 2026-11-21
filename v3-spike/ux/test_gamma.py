@@ -77,6 +77,18 @@ class GammaAcceptance(unittest.TestCase):
         self.assertEqual(self.blocked, [])
         self.assertEqual(self.requests, [("GET", self.url)])
         self.assertFalse(self.errors)
+        binding = p.locator("#binding-case")
+        self.assertIn("DENY", p.locator("#binding-result").inner_text())
+        for scenario, expected in (("matched", "ALLOW_SYNTHETIC"), ("twin-substituted", "DENY"),
+                                   ("evidence-substituted", "DENY"), ("unknown", "DENY")):
+            binding.select_option(scenario)
+            self.assertIn(expected, p.locator("#binding-result").inner_text())
+            p.locator("#policy").click()
+            self.assertIn("DENIED", p.locator("#decision").inner_text())
+        self.assertEqual(self.allowed, [("GET", self.url)])
+        self.assertEqual(self.blocked, [])
+        self.assertEqual(self.requests, [("GET", self.url)])
+        self.assertFalse(self.errors)
     def test_keyboard(self):
         p = self.page
         for target in ["#incident", "#run", "#evidence", "#itsm"]:
@@ -88,7 +100,7 @@ class GammaAcceptance(unittest.TestCase):
         p.goto(self.url)
         self.assertEqual(p.url, self.url)
         self.assertEqual(p.evaluate("document.activeElement.tagName"), "BODY")
-        for target in ("#incident", "#run", "#evidence", "#itsm"):
+        for target in ("#incident", "#run", "#evidence", "#binding", "#itsm"):
             p.keyboard.press("Tab")
             self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), target)
         p.keyboard.press("Tab")
@@ -98,13 +110,15 @@ class GammaAcceptance(unittest.TestCase):
         p.keyboard.press("Tab")
         self.assertEqual(p.evaluate("document.activeElement.id"), "admission")
         p.keyboard.press("Tab")
+        self.assertEqual(p.evaluate("document.activeElement.id"), "binding-case")
+        p.keyboard.press("Tab")
         self.assertEqual(p.evaluate("document.activeElement.id"), "policy")
         self.assertTrue(p.locator("#policy").evaluate("(el) => el.matches(':focus-visible')"))
         p.keyboard.press("Enter")
         self.assertIn("DENIED", p.locator("#decision").inner_text())
         # Reverse and forward traversal must remain keyboard reachable after activation.
-        for key, expected in (("Shift+Tab", "admission"), ("Shift+Tab", "run-choice"),
-                              ("Tab", "admission"), ("Tab", "policy")):
+        for key, expected in (("Shift+Tab", "binding-case"), ("Shift+Tab", "admission"),
+                              ("Tab", "binding-case"), ("Tab", "policy")):
             p.keyboard.press(key)
             self.assertEqual(p.evaluate("document.activeElement.id"), expected)
             self.assertTrue(p.evaluate("document.activeElement.matches(':focus-visible')"),
@@ -117,11 +131,11 @@ class GammaAcceptance(unittest.TestCase):
         p = self.page
         self.assertEqual(p.locator("html").get_attribute("lang"), "en")
         self.assertEqual(p.locator('nav[aria-label="Incident sections"] a').count(), 4)
-        for control in ("run-choice", "admission"):
+        for control in ("run-choice", "admission", "binding-case"):
             with self.subTest(control=control):
                 self.assertEqual(p.locator(f'label[for="{control}"]').count(), 1)
                 self.assertEqual(p.locator(f'#{control}').count(), 1)
-        for status in ("run-result", "admission-result", "decision"):
+        for status in ("run-result", "admission-result", "binding-result", "decision"):
             with self.subTest(status=status):
                 self.assertEqual(p.locator(f'#{status}').get_attribute("role"), "status")
                 self.assertTrue(p.locator(f'#{status}').inner_text().strip())
@@ -137,7 +151,7 @@ class GammaAcceptance(unittest.TestCase):
                     p.keyboard.press("Tab")
                     self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), expected)
                     self.assertTrue(p.evaluate("document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle !== 'none' && parseFloat(getComputedStyle(document.activeElement).outlineWidth) >= 3"), f"Navigation focus indicator absent for {expected} at {width}px")
-                for control in ("run-choice", "admission", "policy"):
+                for control in ("run-choice", "admission", "binding-case", "policy"):
                     p.keyboard.press("Tab")
                     self.assertEqual(p.evaluate("document.activeElement.id"), control,
                                      f"Tab order did not reach {control} at {width}px")
