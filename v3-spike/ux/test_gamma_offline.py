@@ -35,6 +35,11 @@ class GammaOffline(unittest.TestCase):
             p.keyboard.press("Tab")
             self.assertEqual(p.evaluate("document.activeElement.id"), target)
             self.assertTrue(p.evaluate("document.activeElement.matches(':focus-visible')"))
+        p.keyboard.press("Shift+Tab")
+        self.assertEqual(p.evaluate("document.activeElement.id"), "binding-case")
+        self.assertTrue(p.evaluate("document.activeElement.matches(':focus-visible')"))
+        p.keyboard.press("Tab")
+        self.assertEqual(p.evaluate("document.activeElement.id"), "policy")
         p.keyboard.press("Enter")
         self.assertIn("DENIED", p.locator("#decision").inner_text())
     def test_snapshot_fail_closed(self):
