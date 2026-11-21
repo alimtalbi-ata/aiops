@@ -82,3 +82,34 @@
 **Runtime behavior if merged and deployed:** purely synthetic local fixture read, no upstream calls or writes, no GLPI/Temporal/Worker activity. Explicit `UNKNOWN` / `DENY_LIVE_ACTION` / `NOT_RUN` / `MISSING`; existing routes remain unchanged. Fixture mutation between reads causes a digest mismatch and a fail-closed HTTP 503 rather than cross-snapshot evidence mixing.
 
 **Important distinction:** the new routes are **wired in the PR source code**, but are **not live on any host** until merge/deploy; no such action was taken. CI exact-head, browser rendering, security review and Debian runtime are **NOT VERIFIED**. Do not promote to GO until test evidence is available. The legacy synthetic route was already public; the new routes use the same strictly local public demo boundary, **not tenant-authorized operational data**.
+
+
+## Port 4 — COLLECTION-ONLY, explicit CENTRAL instruction (2026-11-21)
+
+**Instruction:** collect functionality, scripts and configuration/contracts from historical source branches and copy into PR #843. **No tests run, no collection execution, no runtime qualification.** These are source imports, not active production integrations.
+
+**Exact source:** PR #818 branch `integration/aiops2-int07-abc-20261118` (HEAD at inspection `636205a7b24de08ff6c52e4b956a42904b58cee9`).
+
+**New Python modules copied verbatim:**
+- `app/worker/acme_simulated_hitl.py` — blob `cb20618d60117f373831da28b73f65df3103a84c`
+- `app/portal/acme_runtime_context.py` — `5fcb5a81c2c57fb68158ab8b2e3e22148c903845`
+- `app/portal/acme_authority_readers.py` — `f76c8de6798fbe4e37d1c90c82167ea49f157eef`
+- `app/portal/acme_authority_continuity.py` — `1a8ac66d9af68b14e00726d7f05e68d3ea8bbdad`
+- `app/worker/int06a_contract.py` — `d6fe8fa2676795f2866bdf2b712b045072392649`
+- `app/worker/int06a_registration.py` — `94fe5a19e7a9a26db86dbb1dd21d7d020d9b7b42`
+- `app/worker/int07_offline_collector.py` — `58c3853970b186468688cf30a9a4bf72d016882e`
+
+**Scripts copied verbatim:** `scripts/acme_demo_readiness.py` (`bed51f1a96ccd3798e54d3303961d1a2a3cb69ea`), `scripts/acme_receipt_model.py` (`360870d12a9ff132d7a42c64e34a23cbe04bbc3c`).
+
+**Configuration/contracts and source documentation copied verbatim:**
+- `docs/contracts/acme-receipt.schema.json` — `d8766a858092cd919c4703f3c76678d169f5f7a2`
+- `docs/contracts/int06a-c.md` — `3c2b529cc1d8e6e0a7e532baec2d0e106b99bdb4`
+- `docs/contracts/int06b-b-authorities-proposal.md` — `d87e975998c20887d7faabc25ad667ad194eb14a`
+- `docs/contracts/int06b-bc-continuity.md` — `e7ca4c9bcd584e0dbdbe46accb473fee3aa075a7`
+- `docs/architecture/ACME-TWIN-PROVENANCE.md` — `772f97e274122915bc70b13d6218a0dbf3c81bfa`
+- `docs/architecture/INT06A-FRONTEND-PRESENTATION.md` — `14a32a02cd61b0d90d04456241093d77c11cf8b0`
+- `docs/demo/TEAM-C-SAN-PAYMENTS-E2E.md` — `a9b400c3ac61c38600410caa09c820f842e3c6cf`
+
+**Dependency observations, no tests:** authority readers depend on `acme_runtime_context`; continuity additionally imports `worker.acme_simulated_hitl`; offline collector imports readers, continuity and `worker.int06a_contract`; INT06A registration imports `temporalio` and remains **unregistered** in `app/worker/main.py` on this PR. `int07_offline_collector.py` is **source code only**, not invoked. Existing live routes/worker entrypoints were not changed by this collection tranche.
+
+**Historical tests/CI:** earlier commits on this draft PR contain tests and CI changes, but **none were executed in this collection-only tranche**. No CI outcome or functional validation is claimed. Further collecting should preserve file provenance and avoid overwriting existing divergent files.
