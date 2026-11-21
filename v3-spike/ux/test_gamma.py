@@ -80,9 +80,12 @@ class GammaAcceptance(unittest.TestCase):
         binding = p.locator("#binding-case")
         self.assertIn("DENY", p.locator("#binding-result").inner_text())
         for scenario, expected in (("matched", "ALLOW_SYNTHETIC"), ("twin-substituted", "DENY"),
-                                   ("evidence-substituted", "DENY"), ("unknown", "DENY")):
+                                   ("evidence-substituted", "DENY"), ("revision-mismatch", "DENY"),
+                                   ("unattested-snapshot", "DENY"), ("unknown", "DENY")):
             binding.select_option(scenario)
             self.assertIn(expected, p.locator("#binding-result").inner_text())
+            self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
+            self.assertIn("DENIED", p.locator("#snapshot-status").inner_text())
             p.locator("#policy").click()
             self.assertIn("DENIED", p.locator("#decision").inner_text())
         self.assertEqual(self.allowed, [("GET", self.url)])
@@ -135,7 +138,7 @@ class GammaAcceptance(unittest.TestCase):
             with self.subTest(control=control):
                 self.assertEqual(p.locator(f'label[for="{control}"]').count(), 1)
                 self.assertEqual(p.locator(f'#{control}').count(), 1)
-        for status in ("run-result", "admission-result", "binding-result", "decision"):
+        for status in ("run-result", "admission-result", "binding-result", "snapshot-status", "decision"):
             with self.subTest(status=status):
                 self.assertEqual(p.locator(f'#{status}').get_attribute("role"), "status")
                 self.assertTrue(p.locator(f'#{status}').inner_text().strip())
@@ -174,7 +177,7 @@ class GammaAcceptance(unittest.TestCase):
                     self.assertGreaterEqual(bounds["x"], -1, f"{section} left-clipped at {width}px")
                     self.assertLessEqual(bounds["x"] + bounds["width"], width + 1, f"{section} right-clipped at {width}px")
                 self.assertTrue(p.locator("#itsm").is_visible())
-                for token in ("DEMO", "UNBOUND", "UNKNOWN", "MISSING", "NOT_RUN"):
+                for token in ("DEMO", "UNBOUND", "UNKNOWN", "MISSING", "NOT_RUN", "transactional attestation"):
                     self.assertIn(token, p.locator("body").inner_text())
                 self.assertIn("Runtime attested: false", p.locator("#evidence").inner_text())
         self.assertEqual(self.allowed, [("GET", self.url)])
