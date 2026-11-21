@@ -197,3 +197,53 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "security_boundary=synthetic_only runtime=NOT_RUN deploy_authorized=false"
+
+  compose-static:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Syntax-only fixture references: never pull or execute these images.
+      GAMMA_IMAGE: fixture/gamma@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      CORE_IMAGE: fixture/core@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      DEMO_IMAGE: fixture/demo@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact SHA and clean checkout
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+      - name: Validate canonical Compose for default and demo (no containers)
+        working-directory: v3-spike/kit
+        run: |
+          set -eu
+          docker compose version
+          test "$(find . -maxdepth 1 -name '*compose*.yml' -o -name '*compose*.yaml' | wc -l)" -eq 1
+          for profile in default demo; do
+            if [ "$profile" = default ]; then
+              docker compose -f docker-compose.yml config --format json > /tmp/v3-compose.json
+            else
+              docker compose -f docker-compose.yml --profile demo config --format json > /tmp/v3-compose.json
+            fi
+            python3 -B preflight.py < /tmp/v3-compose.json
+            python3 -B - "$profile" /tmp/v3-compose.json <<'PY'
+          import json,sys
+          profile=sys.argv[1]
+          data=json.load(open(sys.argv[2]))
+          expected={"gamma","core"} | ({"demo"} if profile=="demo" else set())
+          actual=set(data["services"])
+          if actual!=expected:
+              raise SystemExit(f"FAIL profile={profile} services={actual} expected={expected}")
+          print(f"PASS compose-static profile={profile} services={sorted(actual)}")
+          PY
+          done
+          echo "NO_PULL NO_UP NO_RUNTIME"
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "compose_static_only=true runtime=NOT_RUN deploy_authorized=false"
