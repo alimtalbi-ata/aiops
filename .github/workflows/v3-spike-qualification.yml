@@ -166,6 +166,23 @@ jobs:
               raise SystemExit(f"FAIL kit tests: executed={result.testsRun} expected={expected}")
           print(f"PASS kit tests: executed={result.testsRun}", flush=True)
           PY
+      - name: OCI BOM structural tests (strict 5 methods, NOT attestation)
+        working-directory: v3-spike/kit
+        run: |
+          python3 -B - <<'PY'
+          import unittest
+          import test_oci_release_gate
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_oci_release_gate.OCIReleaseStructureTests)
+          expected = 5
+          actual = suite.countTestCases()
+          print(f"oci-structure collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit(f"FAIL OCI structural collection: {actual} != {expected}")
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit(f"FAIL OCI structural tests: executed={result.testsRun} expected={expected}")
+          print("OCI_STRUCTURE_ONLY_PASS; registry/signature/license/provenance NOT_ATTESTED", flush=True)
+          PY
       - name: Receipt
         if: always()
         run: |
