@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.env.*
+!.env.example
+
+# Generated deployment kits, diagnostic bundles and private recovery material
+dist/
+backups/
+reports/
+*.dump
+*.sha256
