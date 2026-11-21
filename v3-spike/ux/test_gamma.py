@@ -129,6 +129,7 @@ class GammaAcceptance(unittest.TestCase):
                 for expected in ("#incident", "#run", "#evidence", "#itsm"):
                     p.keyboard.press("Tab")
                     self.assertEqual(p.evaluate("document.activeElement.getAttribute('href')"), expected)
+                    self.assertTrue(p.evaluate("document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle !== 'none' && parseFloat(getComputedStyle(document.activeElement).outlineWidth) >= 3"), f"Navigation focus indicator absent for {expected} at {width}px")
                 for control in ("run-choice", "admission", "policy"):
                     p.keyboard.press("Tab")
                     self.assertEqual(p.evaluate("document.activeElement.id"), control,
