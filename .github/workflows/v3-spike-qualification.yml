@@ -446,7 +446,7 @@ jobs:
               raise SystemExit("FAIL synthetic SnapshotPair/adversarial gate")
           print("PASS synthetic SnapshotPair5/adversarial7; backend atomicity NOT_ATTESTED")
           PY
-      - name: Independently witnessed snapshot (strict 38 synthetic methods)
+      - name: Independently witnessed snapshot (strict 40 synthetic methods)
         run: |
           set -eu
           mkdir -p reports
@@ -455,7 +455,7 @@ jobs:
           import xmlrunner
           import test_attested_snapshot
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_attested_snapshot.AttestedSnapshotTests)
-          expected = 38
+          expected = 40
           actual = suite.countTestCases()
           print(f"attested-snapshot collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
@@ -463,7 +463,7 @@ jobs:
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL attested snapshot: executed={result.testsRun} expected={expected}")
-          print("PASS synthetic witnessed snapshot38; real backend transaction/ACL NOT_ATTESTED", flush=True)
+          print("PASS synthetic witnessed snapshot40; real backend transaction/ACL NOT_ATTESTED", flush=True)
           PY
       - name: Receipt
         if: always()
