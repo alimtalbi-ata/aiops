@@ -50,6 +50,7 @@ class IsolationTests(unittest.TestCase):
             ("cap_add", ["SYS_ADMIN"]), ("cap_drop", []),
             ("security_opt", ["seccomp:unconfined"]), ("read_only", "true"),
             ("privileged", True), ("network_mode","host"),
+            ("entrypoint", ["/bin/sh"]), ("entrypoint", "/bin/sh"),
             ("networks", {"edge":None}), ("image","python:latest"),
             ("volumes",[dict(type="bind",source="/",target="/fixture.py",read_only=True)]),
             ("environment",{"FIXTURE_ROLE":"gamma","TOKEN":"synthetic"}),
