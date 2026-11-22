@@ -1,0 +1,739 @@
+{
+  "status": "PRIVATE_DRAFT_NOT_DEPLOYABLE",
+  "service_count": 24,
+  "variable_references": 81,
+  "potential_secret_references": 24,
+  "contains_secret_values": false,
+  "manual_review_required": true,
+  "approved_for_git": false,
+  "services": {
+    "alertmanager": {
+      "variables": [],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "cloudbeaver": {
+      "variables": [],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": true,
+      "reviewed": false
+    },
+    "copilot": {
+      "variables": [
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "CORE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "EVIDENCE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "TWIN_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "core": {
+      "variables": [
+        {
+          "name": "ADMIN_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DATABASE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POLICY_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "WORKER_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "evidence": {
+      "variables": [
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DATABASE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "fs385-ingest": {
+      "variables": [],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": true,
+      "reviewed": false
+    },
+    "glpi": {
+      "variables": [
+        {
+          "name": "GLPI_DB_HOST",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_DB_NAME",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_DB_PASSWORD",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_DB_PORT",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_DB_USER",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_SKIP_AUTOINSTALL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_SKIP_AUTOUPDATE",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "glpi-db": {
+      "variables": [
+        {
+          "name": "MARIADB_DATABASE",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "MARIADB_PASSWORD",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "MARIADB_ROOT_PASSWORD",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "MARIADB_USER",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "grafana": {
+      "variables": [
+        {
+          "name": "GF_SECURITY_ADMIN_PASSWORD",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "intelligence": {
+      "variables": [
+        {
+          "name": "AIOPS_EVIDENCE_MAX_AGE_SECONDS",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "LLM_API_KEY",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "LLM_BASE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "LLM_MODEL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "LLM_TIMEOUT_SECONDS",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "loki": {
+      "variables": [],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "n8n": {
+      "variables": [
+        {
+          "name": "DB_POSTGRESDB_DATABASE",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DB_POSTGRESDB_HOST",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DB_POSTGRESDB_PASSWORD",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DB_POSTGRESDB_PORT",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DB_POSTGRESDB_USER",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DB_TYPE",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "N8N_ENCRYPTION_KEY",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "N8N_SECURE_COOKIE",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "otel": {
+      "variables": [],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "policy": {
+      "variables": [
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "portal": {
+      "variables": [
+        {
+          "name": "AIOPS_DEMO_DATA",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_DEMO_LAUNCH_ENABLED",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_PORTAL_HOST_PORT",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_PORTAL_OPERATOR_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_PORTAL_READ_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "COPILOT_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "CORE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_API_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_APP_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "GLPI_USER_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "TWIN_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "postgres": {
+      "variables": [
+        {
+          "name": "POSTGRES_DB",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "prometheus": {
+      "variables": [],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "simulator": {
+      "variables": [
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "CORE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "tempo": {
+      "variables": [],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "temporal": {
+      "variables": [
+        {
+          "name": "BIND_ON_IP",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DB",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DB_PORT",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DYNAMIC_CONFIG_FILE_PATH",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POSTGRES_PWD",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POSTGRES_SEEDS",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "CUSTOM_TEMPORAL_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "temporal-postgres": {
+      "variables": [
+        {
+          "name": "POSTGRES_DB",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "temporal-ui": {
+      "variables": [
+        {
+          "name": "TEMPORAL_ADDRESS",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "PINNED_UPSTREAM_IMAGE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "twin": {
+      "variables": [
+        {
+          "name": "AIOPS_ADMIN_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "DATABASE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    },
+    "worker": {
+      "variables": [
+        {
+          "name": "AIOPS_ADMIN_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_EVIDENCE_MAX_AGE_SECONDS",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_FS_BRIDGE_TOKEN_FILE",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_FS_BRIDGE_UNIX_SOCKET",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "AIOPS_INTERNAL_TOKEN",
+          "potential_secret": true,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "CORE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "EVIDENCE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "INTELLIGENCE_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "POLICY_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "PORTAL_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "TEMPORAL_ADDRESS",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "TEMPORAL_NAMESPACE",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        },
+        {
+          "name": "TWIN_URL",
+          "potential_secret": false,
+          "required": "TO_REVIEW",
+          "default": null,
+          "source": "historical_inventory"
+        }
+      ],
+      "strategy": "BUILD_FROM_SOURCE",
+      "requires_runtime_reconstruction": false,
+      "reviewed": false
+    }
+  }
+}

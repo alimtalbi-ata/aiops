@@ -11,6 +11,7 @@ from portal.noc_correlation import router as noc_correlation_router
 from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.noc_grafana_health import router as noc_grafana_health_router
 from portal.acme_impact_read_model import router as acme_impact_router
+from portal.acme_v3_cockpit_adapter import router as acme_v3_cockpit_router
 from portal.acme_explore_story import router as acme_explore_story_router
 from portal.acme_run_detail import router as acme_run_detail_router
 from portal.glpi_operator_view import router as glpi_operator_view_router
@@ -36,6 +37,7 @@ app.include_router(noc_correlation_router)
 app.include_router(noc_demo_rag_router)
 app.include_router(noc_grafana_health_router)
 app.include_router(acme_impact_router)
+app.include_router(acme_v3_cockpit_router)
 app.include_router(acme_explore_story_router)
 app.include_router(acme_run_detail_router)
 app.include_router(glpi_operator_view_router)

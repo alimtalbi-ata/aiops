@@ -1,0 +1,39 @@
+name: Debian poller safe receipt
+on:
+  pull_request:
+    paths:
+      - 'deploy/deploy-demo-studio-v2.sh'
+      - 'deploy/debian-poller-qualification.py'
+      - 'deploy/debian-portal-preflight.py'
+      - 'deploy/debian-portal-release.json'
+      - 'deploy/debian-portal-deploy.sh'
+      - 'deploy/debian-portal-canonicalize.py'
+      - 'deploy/debian-portal-host-contracts.py'
+      - 'tests/test_debian_portal_preflight.py'
+      - 'tests/test_debian_portal_host_contracts.py'
+      - 'tests/test_debian_poller_qualification.py'
+      - '.github/workflows/debian-poller-qualification.yml'
+  push:
+    branches: ['deploy/aiops2-stable']
+permissions:
+  contents: read
+jobs:
+  safe-receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Exact-head reporter/preflight tests
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          bash -n deploy/debian-acme-sandbox-upgrade.sh
+          bash -n deploy/deploy-demo-studio-v2.sh
+          python3 -m py_compile deploy/debian-poller-qualification.py deploy/debian-portal-preflight.py deploy/debian-portal-canonicalize.py deploy/debian-portal-host-contracts.py
+          python3 -m unittest discover -s tests -p test_debian_poller_qualification.py -v
+          python3 -m unittest discover -s tests -p test_debian_portal_preflight.py -v
+          python3 -m unittest discover -s tests -p test_debian_portal_host_contracts.py -v

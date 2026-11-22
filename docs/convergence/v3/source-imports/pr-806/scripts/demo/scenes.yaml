@@ -1,0 +1,15 @@
+# PROPOSED scene contract, NOT confirmed Portal routes. Replace paths and selectors after route review.
+# No screenshots can be certified while these placeholders remain.
+base_url: "${PORTAL_URL:-http://127.0.0.1:17777}"
+viewport: {width: 1600, height: 900}
+output_dir: "docs/demo/evidence/ACME-SAN-PAYMENTS/screenshots"
+mode_banner_must_contain: "SIMULATION"
+scenes:
+  - {id: "01", name: "noc-overview-simulation", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='noc-cockpit']", assert_text: ["SIMULATION", "ACME"], file: "01-noc-overview-simulation.png"}
+  - {id: "02", name: "signals-correlation", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='signals-list']", assert_text: ["SIMULATION"], file: "02-signals-correlation.png"}
+  - {id: "03", name: "twin-dependency-path", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='twin-graph']", file: "03-twin-dependency-path.png"}
+  - {id: "04", name: "analyst-critic", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='analyst-panel']", file: "04-analyst-critic.png"}
+  - {id: "05", name: "policy-hitl-simulated", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='policy-decision']", assert_text: ["SIMULATED"], file: "05-policy-hitl-simulated.png"}
+  - {id: "06", name: "itsm-worker-receipt", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='worker-receipt']", assert_text: ["SIM-GLPI-", "worker_no_effect"], file: "06-itsm-worker-receipt.png"}
+  - {id: "07", name: "timeline-export-proof", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='run-timeline']", file: "07-timeline-export-proof.png"}
+  - {id: "08", name: "readiness-verdict", path: "NOT_IMPLEMENTED", wait_for: "[data-testid='readiness-verdict']", assert_text: ["GO_SIMULATION_ONLY"], file: "08-readiness-verdict.png", optional: true}

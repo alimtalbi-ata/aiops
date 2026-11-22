@@ -1,0 +1,33 @@
+name: INT06A frontend dedicated offline
+on:
+  pull_request:
+    branches: [integration/aiops2-int06a-20261118]
+  push:
+    branches: [integration/aiops2-int06a-a-20261118]
+permissions:
+  contents: read
+jobs:
+  frontend:
+    if: github.event_name == 'push' || github.head_ref == 'integration/aiops2-int06a-a-20261118'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "PyJWT[crypto]==2.10.1" "uvicorn==0.35.0" "playwright==1.55.0"
+      - run: python -m unittest discover -s tests -p 'test_acme_workbench_presentation.py' -v
+      - run: node --test tests/test_portal_incident_filters.cjs tests/test_portal_run_selection.cjs tests/test_portal_usability_client.cjs
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m unittest discover -s tests -p 'test_int06a_frontend_browser.py' -v
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/int06a-ux
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: int06a-ux-${{ github.sha }}
+          path: ${{ runner.temp }}/int06a-ux
+          if-no-files-found: error

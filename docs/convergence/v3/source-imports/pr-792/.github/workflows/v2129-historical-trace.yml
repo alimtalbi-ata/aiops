@@ -1,0 +1,26 @@
+name: V2.12.9 Historical Trace Qualification
+on:
+  push:
+    branches: [feat/v28-transactional-denial-fencing-20261020]
+    paths:
+      - 'tools/qualify_historical_trace_v2129.py'
+      - 'tests/test_qualify_historical_trace_v2129.py'
+      - '.github/workflows/v2129-historical-trace.yml'
+      - 'docs/demo/ACME-V2129-HISTORICAL-TRACE.md'
+  pull_request:
+  workflow_dispatch:
+jobs:
+  historical-trace:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Historical trace tests
+        run: |
+          python -m unittest discover -s tests -p 'test_qualify_historical_trace_v2129.py' -v
+          python -m unittest discover -s tests -p 'test_verify_offline_manifest_v2128.py' -v
+          python -m unittest discover -s tests -p 'test_summarize_core_historical_v2125.py' -v

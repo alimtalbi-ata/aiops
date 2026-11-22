@@ -1,0 +1,25 @@
+name: ACME golden demo readiness (offline)
+on:
+  pull_request:
+    paths:
+      - 'scripts/acme_demo_readiness.py'
+      - 'tests/test_acme_demo_readiness.py'
+      - '.github/workflows/acme-demo-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exact source compile
+        run: python -m py_compile scripts/acme_demo_readiness.py tests/test_acme_demo_readiness.py
+      - name: Contract tests, no dependencies, no external API
+        run: python -m unittest discover -s tests -p 'test_acme_demo_readiness.py' -v

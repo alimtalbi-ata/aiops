@@ -1,0 +1,29 @@
+name: GitHub Debian bridge offline contracts
+
+on:
+  pull_request:
+    paths:
+      - 'ops/github-openai-bridge/**'
+      - '.github/workflows/github-debian-bridge-offline.yml'
+  push:
+    paths:
+      - 'ops/github-openai-bridge/**'
+      - '.github/workflows/github-debian-bridge-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exact source compile
+        run: python -m py_compile ops/github-openai-bridge/agent.py ops/github-openai-bridge/test_agent.py
+      - name: Offline allowlist and redaction tests
+        run: python -m unittest discover -s ops/github-openai-bridge -p 'test_*.py' -v

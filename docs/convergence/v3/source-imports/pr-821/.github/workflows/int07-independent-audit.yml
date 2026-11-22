@@ -1,0 +1,67 @@
+name: INT07 independent evidence audit
+on:
+  push:
+    branches: [feature/mission-control-central-unified]
+    paths: ['.github/workflows/int07-independent-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+  packages: read
+  attestations: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DIGEST: sha256:469e265e56d58eaf1a19735bf362d7b387aa90cb0898038b443cd6a5144e9d5b
+      IMAGE: ghcr.io/alimtalbi-ata/aiops/aiops-portal-int07
+    steps:
+      - name: Download original evidence and check archive
+        run: |
+          set -Eeuo pipefail
+          mkdir evidence
+          gh api repos/alimtalbi-ata/aiops/actions/artifacts/14559196307/zip > evidence.zip
+          echo '97681ed4f7242acd8a685a09e258ef343824d27640e7aa94753e00a7f2afc57b  evidence.zip' | sha256sum -c -
+          unzip -q evidence.zip -d evidence
+          python - <<'PY'
+          import json, pathlib, hashlib, os
+          d=pathlib.Path("evidence")
+          r=json.loads((d/"qualification-receipt.json").read_text())
+          b=json.loads((d/"build.json").read_text())
+          p=json.loads((d/"int07-source-bound-provenance.json").read_text())
+          assert r["source_sha"] == p["source"]["commit"] == b["source_sha"] == "636205a7b24de08ff6c52e4b956a42904b58cee9"
+          assert r["qualifier_sha"] == p["qualifier"]["commit"] == "4ea75a4fbd977a79777d660e5b6de77652ca9593"
+          assert str(r["workflow_run_id"]) == str(p["workflow"]["run_id"]) == "44581498897"
+          assert str(r["workflow_job_id"]) == "135763040975"
+          assert r["registry_manifest_digest"] == b["registry_digest"] == os.environ["DIGEST"]
+          assert r["local_image_id"] == b["local_image_id"]
+          assert r["runner_environment"] == "github-hosted"
+          assert r["playwright"]["status"] == "PASS"
+          assert r["deploy_authorized"] is False and r["promotion_authorized"] is False
+          with (d/"int07-image.tar").open("rb") as f:
+              assert hashlib.file_digest(f,"sha256").hexdigest() == r["image_archive_sha256"]
+          print(json.dumps(r,indent=2))
+          PY
+      - name: Verify both attestations independently against immutable digest
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          gh attestation verify "oci://$IMAGE@$DIGEST" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/int07-image-qualification.yml" --deny-self-hosted-runners --format json > slsa-verified.json
+          gh attestation verify "oci://$IMAGE@$DIGEST" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/int07-image-qualification.yml" --deny-self-hosted-runners --predicate-type https://aiops.example/attestations/int07-source-materials/v1 --format json > materials-verified.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          expected=json.loads(Path("evidence/int07-source-bound-provenance.json").read_text())
+          results=json.loads(Path("materials-verified.json").read_text())
+          assert any(x["verificationResult"]["statement"]["predicate"] == expected and any(s["digest"]["sha256"] == os.environ["DIGEST"].split(":")[1] for s in x["verificationResult"]["statement"]["subject"]) for x in results)
+          print("Exact signed materials match original evidence")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: int07-independent-audit
+          path: |
+            slsa-verified.json
+            materials-verified.json
+            evidence/qualification-receipt.json

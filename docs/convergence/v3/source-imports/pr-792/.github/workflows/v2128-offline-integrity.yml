@@ -1,0 +1,24 @@
+name: V2.12.8 Offline Integrity
+on:
+  push:
+    branches:
+      - feat/v28-transactional-denial-fencing-20261020
+    paths:
+      - 'tools/verify_offline_manifest_v2128.py'
+      - 'tests/test_verify_offline_manifest_v2128.py'
+      - '.github/workflows/v2128-offline-integrity.yml'
+      - 'docs/demo/ACME-V2128-OFFLINE-INTEGRITY.md'
+  pull_request:
+  workflow_dispatch:
+jobs:
+  integrity-unit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline positive and negative tests
+        run: python -m unittest discover -s tests -p 'test_verify_offline_manifest_v2128.py' -v

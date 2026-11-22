@@ -1,0 +1,100 @@
+"""Customer-facing Grafana preview route is synthetic, read-only and fail-closed."""
+import os, sys
+from pathlib import Path
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
+
+def client():
+ with patch.dict(os.environ,{'AIOPS_INTERNAL_TOKEN':'unit-test-only'}):
+  from portal.main import app
+ return TestClient(app)
+
+def test_synthetic_grafana_preview_route_is_safe():
+ response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==200
+ assert response.headers['cache-control']=='no-store'
+ assert "default-src 'none'" in response.headers['content-security-policy']
+ for marker in ('SAN → Payments','UNKNOWN / BLOCKED','LOCAL_SYNTHETIC_FIXTURE_NOT_AUTHENTICATED','NO-GO','acme-synthetic','État candidat','firing'):
+  assert marker in response.text
+ assert '<script' not in response.text
+
+def test_synthetic_grafana_preview_fails_closed_when_register_missing():
+ with patch('pathlib.Path.read_text',side_effect=OSError('no evidence template')):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==503
+ assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
+
+def test_customer_can_navigate_both_synthetic_views_without_network():
+ c=client()
+ cockpit=c.get('/demo/acme-incident-cockpit')
+ preview=c.get('/demo/acme-grafana-pilot-preview')
+ assert cockpit.status_code==200 and preview.status_code==200
+ assert "href='/demo/acme-grafana-pilot-preview'" in cockpit.text
+ assert "href='/demo/acme-incident-cockpit'" in preview.text
+ assert 'NO-GO LIVE' in cockpit.text
+ assert 'UNKNOWN / BLOCKED' in preview.text
+
+def test_grafana_preview_reuses_canonical_san_payments_incident_ids():
+ from portal.acme_impact_read_model import build_acme_impact_read_model
+ from portal.acme_incident_cockpit import project_synthetic_incident_cockpit
+ cockpit=project_synthetic_incident_cockpit(build_acme_impact_read_model())
+ page=client().get('/demo/acme-grafana-pilot-preview')
+ assert page.status_code==200
+ assert cockpit['incident_id'] in page.text
+ assert cockpit['business_impact_incident_id'] in page.text
+ assert cockpit['source_sha256'] in page.text
+ assert 'ne prouvent aucune corrélation runtime' in page.text
+
+def test_grafana_preview_fails_closed_when_incident_fixture_invalid():
+ with patch('portal.acme_impact_read_model.build_acme_impact_read_model',return_value={'schema':'invalid'}):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==503
+ assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
+
+def test_command_center_exposes_customer_demo_entrypoint():
+ response=client().get('/')
+ assert response.status_code==200
+ assert 'href="/demo/acme-incident-cockpit">SAN → Payments (DEMO)</a>' in response.text
+
+def test_container_packaged_register_matches_canonical_blocked_template():
+ import json
+ root=Path(__file__).resolve().parents[1]
+ packaged=root/'app/portal/acme-readonly-pilot-register.template.json'
+ canonical=root/'docs/ops/AIOPS2-READONLY-PILOT-EVIDENCE-REGISTER.template.json'
+ assert packaged.read_bytes()==canonical.read_bytes()
+ register=json.loads(packaged.read_text(encoding='utf-8'))
+ assert register['decision']=='BLOCKED'
+ assert register['live_actions_authorized'] is False
+ assert all(source['status']=='UNKNOWN' for source in register['sources'].values())
+ dockerfile=(root/'app/portal/Dockerfile').read_text(encoding='utf-8')
+ assert 'COPY portal /app/portal' in dockerfile
+
+def test_grafana_preview_fails_closed_when_incident_fixture_unavailable():
+ with patch('portal.acme_impact_read_model.build_acme_impact_read_model',side_effect=OSError('fixture absent')):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==503
+ assert response.json()['detail']=='synthetic_grafana_pilot_preview_unqualified'
+
+def test_grafana_preview_uses_only_portal_packaged_register():
+ original=Path.read_text
+ def read_text(path,*args,**kwargs):
+  if '/docs/' in str(path).replace('\\\\','/'):
+   raise AssertionError('runtime must not read repository docs')
+  return original(path,*args,**kwargs)
+ with patch('pathlib.Path.read_text',new=read_text):
+  response=client().get('/demo/acme-grafana-pilot-preview')
+ assert response.status_code==200
+ assert 'UNKNOWN / BLOCKED' in response.text
+
+
+def test_customer_demo_routes_reject_write_methods_with_security_headers():
+ c = client()
+ for route in ('/demo/acme-incident-cockpit',
+               '/demo/acme-grafana-pilot-preview'):
+  for method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+   response = c.request(method, route, json={'approve_live': True})
+   assert response.status_code == 405, (route, method, response.status_code)
+   assert response.headers['cache-control'] == 'no-store'
+   assert "default-src 'none'" in response.headers['content-security-policy']
+   assert response.headers['x-content-type-options'] == 'nosniff'

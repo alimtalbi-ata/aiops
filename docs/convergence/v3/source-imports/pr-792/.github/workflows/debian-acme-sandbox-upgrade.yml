@@ -1,0 +1,31 @@
+name: Debian ACME sandbox in-place upgrade source safety
+
+on:
+  pull_request:
+    paths:
+      - deploy/debian-acme-sandbox-upgrade.sh
+      - deploy/debian-acme-sandbox-release.json
+      - deploy/deploy-demo-studio-v2.sh
+      - tests/test_debian_acme_sandbox_upgrade_contract.py
+      - .github/workflows/debian-acme-sandbox-upgrade.yml
+
+permissions:
+  contents: read
+
+jobs:
+  safe-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Exact-head bash syntax and safe contract (no host Docker)
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          bash -n deploy/debian-acme-sandbox-upgrade.sh
+          bash -n deploy/deploy-demo-studio-v2.sh
+          python3 -m unittest discover -s tests -p 'test_debian_acme_sandbox_upgrade_contract.py' -v

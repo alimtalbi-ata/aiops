@@ -1,0 +1,118 @@
+# BROUILLON DE CONCEPTION - NE PAS DEPLOYER
+# Images et services non encore qualifies.
+name: aiops2-canonical-design
+services:
+  portal:
+    image: aiops2-portal:glpi-sync-v1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  worker:
+    image: aiops2-worker:fs-demo-candidate-20261105
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  evidence:
+    image: aiops2-evidence:prometheus-fix-20261104
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  policy:
+    image: aiops2-policy:prometheus-fix-20261104
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  intelligence:
+    image: aiops2-intelligence:intelligence-event-verified-v1-20261109
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  twin:
+    image: aiops2-twin:fs1009-decimal-metrics-candidate-20261106
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  copilot:
+    image: aiops2-noc-rag-copilot:v1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  postgres:
+    image: postgres:16-alpine
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  temporal-postgres:
+    image: postgres:16-alpine
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  temporal:
+    image: temporalio/server:1.31.0
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  temporal-ui:
+    image: temporalio/ui:2.49.1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  glpi-db:
+    image: mariadb:11.4
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  n8n:
+    image: n8nio/n8n:2.40.6
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  grafana:
+    image: grafana/grafana:13.2.2
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  simulator:
+    image: aiops2-acme-sandbox-simulator:e9a21e3e13f9
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED
+  fs385-ingest:
+    image: python:3.12-alpine
+    profiles:
+    - design-only
+    labels:
+      aiops2.design-status: NOT_VALIDATED

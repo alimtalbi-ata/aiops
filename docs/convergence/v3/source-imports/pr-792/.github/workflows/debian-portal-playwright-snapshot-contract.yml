@@ -1,0 +1,45 @@
+name: Debian real-host Playwright screenshot script offline contracts
+on:
+  pull_request:
+    branches:
+      - deploy/aiops2-stable
+    paths:
+      - deploy/debian-portal-playwright-snapshot.py
+      - tests/test_debian_portal_playwright_snapshot_script.py
+      - .github/workflows/debian-portal-playwright-snapshot-contract.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screenshot-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify tested source is exact PR HEAD
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile standalone host Playwright tool
+        run: python -m py_compile deploy/debian-portal-playwright-snapshot.py tests/test_debian_portal_playwright_snapshot_script.py
+      - name: Validate URL fence, local-only screenshots and receipt security
+        run: python -m unittest discover -s tests -p test_debian_portal_playwright_snapshot_script.py -v
+      - name: Assert no operator credentials or host browser claims from CI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          data=Path("deploy/debian-portal-playwright-snapshot.py").read_text()
+          for marker in ("ANONYMOUS_SYNTHETIC_UI_ONLY", "NOT_VERIFIED",
+                         "request.method == \"GET\"", "service_workers=\"block\"",
+                         "no-sandbox", "sha256", "os.chmod"):
+              assert marker in data, marker
+          assert "accept_downloads=False" in data
+          assert "getDisplayMedia(" not in data
+          assert "Authorization: Bearer" not in data
+          PY

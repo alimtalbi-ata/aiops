@@ -1,0 +1,27 @@
+name: INT07 integrated offline
+on:
+  push:
+    branches: [integration/aiops2-int07-abc-20261118]
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: app:tests
+      C_CONTRACT_PATH: app/worker/int06a_contract.py
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r app/requirements.txt pytest
+      - run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python -m pytest -q tests/test_acme_runtime_context.py tests/test_acme_authority_readers.py tests/test_acme_authority_continuity.py tests/test_int07_offline_collector.py tests/test_int06a_contract.py tests/test_int06a_integrated_refusals.py --junitxml=int07.xml
+          python -c "import xml.etree.ElementTree as E; r=E.parse('int07.xml'); assert not r.findall('.//skipped')"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: int07-offline
+          path: int07.xml

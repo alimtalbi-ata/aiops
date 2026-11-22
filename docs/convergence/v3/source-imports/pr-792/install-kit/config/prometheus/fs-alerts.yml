@@ -1,0 +1,13 @@
+groups:
+  - name: aiops2-real-filesystem
+    rules:
+      - alert: AIOps2FilesystemUsageHigh
+        expr: aiops2_fs_lab_used_percent{filesystem="/fs-lab",ci="CI-FS-LAB-12M"} >= 90
+        for: 0s
+        labels:
+          severity: warning
+          source: real-filesystem
+          ci: CI-FS-LAB-12M
+        annotations:
+          summary: "Filesystem /fs-lab above 90%"
+          description: "Real filesystem usage is {{ $value }} percent."

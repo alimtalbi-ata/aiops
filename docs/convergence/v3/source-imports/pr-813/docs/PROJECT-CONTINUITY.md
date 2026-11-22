@@ -1,0 +1,464 @@
+# AIOps 2.0 — Project Continuity Record
+
+**Author:** Abdelhalim Talbi  
+**Repository:** https://github.com/alimtalbi-ata/aiops  
+**Default branch:** `main` (DEV baseline; GitHub currently reports branch protection disabled; use focused PRs and architect-enforced exact-head gates)  
+**Last updated:** 2026-11-08
+
+## Why this document exists
+
+This is the restart point for future ChatGPT sessions and contributors. Read it before proposing work. Update it whenever a material decision, architecture, interface contract, operational discovery, test result, or delivery changes. Do not rely on chat history as the only record.
+
+## Current direction
+
+Consolidate AIOps 2.0 around one coherent runtime and operations experience. Reuse proven historical AIOps v1 / V145 capabilities when they are faster and safer to adapt than to rebuild. Do not equate a directory, old demo, PID file, or running process with a qualified component: inspect source, contracts, dependencies, tests, and runtime behavior first.
+
+## Known environment snapshot (reported 2026-10-19)
+
+- Host: `SRV-DEB-05`, Debian 13; working root `/home/aiops`.
+- AIOps 2.0 runtime families exist, including V8 clean deployment line, V28.3.x Command Center line, and later architecture/implementation investigations.
+- Reported active services include portal, core, worker, policy, RAG, intelligence, Temporal, twin, copilot, simulator, evidence, integration, Prometheus and Grafana. Re-check live state before every deployment; this is a dated snapshot, not a current guarantee.
+- Historical AIOps v1 source and evidence live under `/home/aiops/aiops-v1`.
+- V145-related directories include decision intelligence, evidence fusion/matrix/acquisition/enrichment, semantic evidence engine, decision adapter, functional bridge, functional read model and decision cockpit.
+- A first read-only audit was attempted on 2026-10-19. Its terminal paste/output is partially corrupted; module presence and file listings are useful leads, but the report does not qualify these modules or prove their behavior.
+
+## Non-negotiable operating rules
+
+1. **Protect production.** No restart, destructive cleanup, migration, config change, token rotation or production cutover without explicit scope, backup/rollback and a verified preflight.
+2. **Preserve main.** Work in a dedicated branch, commit to GitHub, and open a PR. Do not claim a commit exists until GitHub confirms it.
+3. **Keep evidence.** Every change must include tests run, exact outcomes, limitations, changed files, and rollback notes. Distinguish source inspection, static tests, integration tests, and live production verification.
+4. **No false qualification.** Never label a demo, synthetic run, expected output, or unexecuted test as a real runtime proof.
+5. **Fail closed.** Missing, stale, contradictory or unproven evidence is `UNKNOWN`; it must not be silently treated as healthy or successful.
+6. **Security boundary.** Keep secrets out of Git, reports, screenshots, chat and logs. Never commit `.env`, tokens, private keys, database files or production exports.
+7. **Cumulative handover.** Keep architecture, decisions, component catalog, compatibility/contracts, test evidence and release notes in the repository and update them with every significant delivery.
+8. **Reuse before rebuild.** Compare historical v1/V145 code and contracts with current runtime responsibilities; adapt only where boundaries and tests can be made explicit.
+9. **Do not silently fallback.** If a preferred adapter/tool is unavailable, report it and require a documented fallback decision.
+10. **Do not break PC11K5 fencing guarantees.** Ownership, fencing, preconditions, effect, evidence and reconciliation invariants must remain intact.
+
+## Required reading order for a new session
+
+1. `README.md`
+2. `docs/PROJECT-CONTINUITY.md`
+3. `docs/ARCHITECTURE-AND-BOUNDARIES.md`
+4. `docs/DECISION-LOG.md`
+5. `docs/COMPONENT-CATALOG-AND-REUSE.md`
+6. `docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md`
+7. Latest release notes and evidence manifests for the target version.
+
+## Latest source review (2026-10-19)
+
+A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE-AUDIT-2026-10-19.md). The safety patch was merged via [PR #5](https://github.com/alimtalbi-ata/aiops/pull/5) at commit `493336fb51fcda41d1ece8fc1822bb13f1ef232c`: P1 escalates before evidence checks; policy no longer defaults critic validation to true and requires explicit freshness/precondition/fencing/approval inputs; the worker blocks LIVE runs before generating placeholder evidence and marks the Run BLOCKED. Added `tests/test_policy_safety.py` and `.github/workflows/quality.yml`; GitHub Actions run [39223403723](https://github.com/alimtalbi-ata/aiops/actions/runs/39223403723) passed compileall, policy unit tests and static audit. Container build, runtime qualification and synthetic E2E remain unrun. The current main branch includes this conservative guard; LIVE execution is still not qualified. Container build, runtime qualification and synthetic E2E remain unrun. A second hardening change merged via [PR #7](https://github.com/alimtalbi-ata/aiops/pull/7), commit `1bdd7235687f8b2c7081278e4dd86b8a17939ff3`: fresh installs generate random secrets, existing `.env` files are preserved, preflight rejects default secrets outside explicit demo mode, and the admin/internal tokens are checked for consistency. A third change merged via [PR #9](https://github.com/alimtalbi-ata/aiops/pull/9), commit `e6251c1ce195937b1af6019e389c9f6b3f68e2dc`: runtime credential fallbacks were removed, Compose now requires explicit secrets, the secure template is blank, and known demo values are isolated in `config/.env.demo.example`. CI run [39224781141](https://github.com/alimtalbi-ata/aiops/actions/runs/39224781141) passed Python compilation, policy tests, secret-preflight tests, static checks and `docker compose config`.
+
+## Next work queue
+
+- [x] Add deterministic policy safety tests and run them in GitHub Actions; preserve the run link in the source audit.
+- [ ] Review and merge the LIVE safety patch only after tests pass and its diff is inspected.
+- [ ] Run a corrected, truly read-only inventory of historical v1/V145 source, contracts, tests, and service ownership.
+- [x] Audit and harden runtime secret fallbacks and Compose interpolation; merged via PR #9 with passing CI.
+- [ ] Inspect current repository tree and deployment files; compare Git-tracked code to the host deployment without copying secrets.
+- [ ] Build a reuse matrix: reuse unchanged / adapt behind adapter / replace / retire, each with evidence and owner.
+- [ ] Establish one canonical incident/run/evidence/decision schema and versioned API contracts.
+- [ ] Verify the complete event path from ingestion to correlation, CMDB enrichment, evidence acquisition, analysis/critic, policy gate, HITL, remediation, verification, rollback and learning.
+- [ ] Test replay/simulation separately from LIVE execution, with explicit authorization and idempotency.
+- [ ] Add deterministic E2E and failure-injection qualification before enabling any new live action.
+- [ ] Produce cumulative deployment ZIP and updated docs/evidence for each version where a release is requested.
+
+## Update rule
+
+Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+
+## 2026-10-27 — P0 portal integration/navigation increment (PR #46)
+
+- Ported only `app/portal/platform_registry.py` from PR #36 (source blob `969b5f7fdc4f654cca5f6d3b6ed6e2a004f5fd8d`), with separate operator-configured external navigation and `GET /api/portal/components`.
+- `GET /api/portal/bootstrap` and the portal homepage now treat failed/malformed Core dashboard, Run list and Twin summary reads as `UNKNOWN`/`null`, not fabricated empty healthy data. The response state `READABLE_UNVERIFIED` is not runtime attestation.
+- Compose external portal port defaults to `17777` (override `AIOPS_PORTAL_HOST_PORT`); qualification/static checks and synthetic E2E default were aligned. This is source configuration only, not a claim about Debian runtime.
+- External links to n8n, Thruk, Checkmk, Grafana, GLPI are disabled until explicitly configured. No proxy, RBAC qualification, live screenshots or service integration proof. Evidence/incident dedicated read models await access-control design.
+- Targeted tests are in `tests/test_portal_integrations.py` and `tests/test_portal_read_models.py`; quality workflow is reused. Initial PR head `dbdbfbe0113e862d9428c69af14ca278a84aa2e8` passed [GitHub Actions 40574864665](https://github.com/alimtalbi-ata/aiops/actions/runs/40574864665), including compilation, portal unit tests, static audit and Compose config. This is not container E2E or Debian qualification.
+- Full operator configuration, limitations and next steps: `docs/portal/INTEGRATION-NAVIGATION-P0.md`. Continue with authenticated RBAC read models and real ephemeral integration services; preserve UNKNOWN and LIVE fencing.
+
+
+## 2026-10-27 — NOC authenticated read-model seam (draft PR)
+
+A targeted port from PR #36 adds `app/portal/noc_runtime.py` with signed/HMAC-verified read-only NOC snapshots, operator Bearer auth and an explicitly UNKNOWN portal NOC panel. The source and tests are not runtime qualification. Full configuration, trust and multi-tenant limitations are documented in `docs/architecture/NOC-SIGNED-READMODEL-BRIDGE-20261027.md`. Next: real Checkmk/Thruk upstream provider and correlation to canonical Core Run/Incident, then evidence-grounded Analyst/Critic via NIM/Ollama adapter PR #44. No Debian or LIVE access performed.
+
+## 2026-10-27 — P1 ACME SAN → Payments synthetic impact (draft PR #50)
+
+A targeted port of PR #36's fixture, dependency DAG validator and read-only impact view adds `GET /api/demo/acme-impact` and `GET /demo/acme-impact` to the canonical portal, with a visible navigation link. Source SAN P1 incident `ACME-DEMO-SAN-001` and Payments P2 impact `ACME-DEMO-PAY-002` are stable synthetic fixture IDs; derived run and ticket labels are not Core/Temporal or GLPI IDs. No real GLPI ticket or runtime capture is claimed. Tests are wired into existing quality workflow; verify latest PR #50 check conclusion before merging. Next: authenticated correlation of real Core Run/Incident/GLPI IDs, preserving mode and evidence provenance. See `docs/demo/ACME-SAN-PAYMENTS-IMPACT-20261027.md`.
+
+## 2026-10-27 — NOC signed payload to canonical Run read-only correlation (candidate)
+
+The P0 NOC track adds `app/portal/noc_correlation.py` and a guarded portal drilldown in a dedicated draft PR. It reuses the PR #36 / merged PR #47 signed NOC read-model contract without importing synthetic RAG fixtures into the runtime. Exact Run/Incident identity is compared with the independently fetched Core Run; mismatches are UNKNOWN. A matching identity is explicitly MATCHED_UNATTESTED and does not establish live monitoring, Grafana or RAG quality. DEMO/REPLAY/STORY remain synthetic; LIVE is unqualified. No DB writes or remediation.
+
+**Known blockers:** no verified real Checkmk/Thruk or Grafana integration, no per-tenant Core/portal read ACL, no runtime attestation or actual model grounding. The inspected Core GET endpoint is unauthenticated; do not expose it publicly. See `docs/architecture/NOC-CANONICAL-RUN-CORRELATION-20261027.md` and the corresponding dated automation run log for tested scope and limitations.
+
+
+## 2026-10-27 23:16 Europe/Paris — P0 NOC correlation merged, synthetic RAG fixture drilldown (PR #54)
+
+- PR #52 was reviewed against main SHA `b85383f201c976397a512c9beb31857ddf7c1638` and GitHub Actions quality run [40585273487](https://github.com/alimtalbi-ata/aiops/actions/runs/40585273487), which reported completed/success for the correlation test and existing quality gates. It was merged with squash commit `81ab8ae2bfae8f8b5767578b8fcd772f82fffe82`. This proves unit/static/Compose-config checks, **not real Checkmk/Thruk or Core integration**.
+- Merged [PR #54](https://github.com/alimtalbi-ata/aiops/pull/54) (squash SHA `b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`, verified green [CI run 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546)) ports only PR #36's six synthetic RAG reference cases into the canonical portal. `GET /api/noc/demo-rag` requires the operator read token and returns exact asset citations with SHA-256, `SYNTHETIC_REFERENCE_ONLY` or `UNKNOWN`; the NOC panel offers an explicit DEMO drilldown. There is no actual LLM inference, NIM/Ollama call, Grafana observation, source runtime attestation or LIVE action.
+- Security and qualification: no multi-tenant Core/portal ACL yet; the shared read token is **not tenant-scoped**. The synthetic endpoint must not be promoted to real RAG without pre/post-retrieval ACL, authoritative citations, source freshness and canonical Run binding. Existing `quality.yml` runs the new offline contract tests; PR #54 Actions are green for static/contract/Compose checks only; no real service integration is qualified. See `docs/architecture/NOC-SYNTHETIC-RAG-DRILLDOWN-20261027.md` and `docs/automation-runs/2026-10-27-2316-p0-noc-rag-fixture.md`.
+
+## 2026-10-28 07:09 Europe/Paris — NOC signed tenant-scope refusal (draft)
+
+On main starting SHA `88cb4ed01706ac09bb8e01fdceead422cab2590d`, a dedicated P0 draft adds a conservative tenant-scope fence to the existing signed NOC read-model bridge. HMAC verification authenticates bytes but cannot authorize cross-tenant reads with a shared operator token. Nested tenant/org/workspace/account/customer claims (including null, camelCase and Unicode compatibility spellings) now cause a redacted 503 instead of a silently unscoped projection. The scan is bounded. Unscoped signed DEMO read models remain read-only and unattested. Tests run via existing `quality.yml`; see `docs/automation-runs/2026-10-28-0709-p0-noc-signed-tenant-fence.md`. This is not a tenant ACL implementation, Checkmk/Thruk integration, Grafana observation or LIVE qualification. Next: authenticated tenant identity and Core ACL enforcement with real ephemeral services.
+
+## 2026-10-28 08:16 Europe/Paris — NOC scope aliases after PR #99
+
+After merging [PR #99](https://github.com/alimtalbi-ata/aiops/pull/99) at `aae50b02557143ea5a7f0f2633271a0602de8800`, the signed NOC tenant fence receives a narrow follow-up for indirect scope names (`ownerTenantId`, `projectTenantID`, `orgRef`, `accountRef`, etc.) before any projection. Tests cover rejection of validly HMAC-signed nested claims and non-regression for unrelated metadata. No authenticated Core tenant ACL or Checkmk/Thruk integration is claimed; all observed/LLM/LIVE qualification remains blocked. See `docs/automation-runs/2026-10-28-0816-p0-noc-scope-aliases.md`.
+
+## P0 portail — navigation intégrations authentifiée (2026-10-28 09:09 Europe/Paris)
+
+- [PR #103](https://github.com/alimtalbi-ata/aiops/pull/103) fusionnée par squash dans `main` au SHA `9ccbdd5a9e19826fd03f83bc071671473648c45a`, après tests GitHub Actions verts sur le dernier HEAD : [push 40654514583](https://github.com/alimtalbi-ata/aiops/actions/runs/40654514583), [PR 40654521757](https://github.com/alimtalbi-ata/aiops/actions/runs/40654521757) ; [CI post-fusion 40654630767](https://github.com/alimtalbi-ata/aiops/actions/runs/40654630767) également `completed/success`.
+- `GET /api/portal/components` est protégé par le Bearer viewer partagé NOC ; l'HTML anonyme ne divulgue plus les URLs d'intégration ; la navigation utilise un jeton à usage unique, une requête sans cookies et un rendu DOM fail-closed. Les 4 tests Node DOM couvrent faux état LIVE, URL script, identité dupliquée, HTTP refusé et réponse tardive après effacement. Reprise ciblée du contrat de PR #36, sans merge massif.
+- **Limites :** le portail historique lit toujours Core/Twin anonymement ; DEMO et Copilot ne sont pas encore protégés dans `main`. Les PR #74/#57/#70/#51 doivent être convergées, et #98 requalifiée comme chevauchement. Aucune qualification réelle des conteneurs, navigateur, Ollama/NGX, Debian, ni LIVE. Journal : [2026-10-28T0906-P0-portal-navigation-browser-contract.md](automation-runs/2026-10-28T0906-P0-portal-navigation-browser-contract.md).
+
+## 2026-10-28 10:04 Europe/Paris — P0 Core/Twin anonymous shell and read gate (merged #114)
+
+A small port from draft PR #74 replaces anonymous Core/Twin fetches with an UNKNOWN-only shell and adds explicit viewer Bearer bootstrap reads, reusing the merged PR #36 NOC token gate rather than duplicating auth. The one-shot browser view rejects malformed or falsely LIVE-attested envelopes. Tests are added to existing quality workflow. This is source/contract work only, not tenant ACL, container integration or Debian LIVE qualification. See `docs/portal/BOOTSTRAP-CONVERGENCE-P0.md` and the dated automation log. Next: converge DEMO/Copilot auth PR #57/#70, then tenant ACL and real container integration.
+
+### P0 Core/Twin promotion — 2026-10-28 10:09 Europe/Paris
+
+[PR #114](https://github.com/alimtalbi-ata/aiops/pull/114) merged at `cea1ed7b54ed34cf4b036b6d5f20bf968c9dac09` after green [push CI 40661742307](https://github.com/alimtalbi-ata/aiops/actions/runs/40661742307), [PR CI 40661749480](https://github.com/alimtalbi-ata/aiops/actions/runs/40661749480), and [post-merge CI 40661890151](https://github.com/alimtalbi-ata/aiops/actions/runs/40661890151). Core/Twin bootstrap now requires the shared viewer token and anonymous home is UNKNOWN-only. Tests are in-process plus synthetic DOM; only Grafana is tested as a real ephemeral container. DEMO/Copilot remain unsecured in main, no LIVE qualification. See the 10:04 automation journal.
+
+## 2026-10-28 10:30 Europe/Paris — Policy LIVE HITL convergence (draft PR #118)
+
+- `main` starting SHA `bb4665ab0eb41b43df43ea893e28ac86ef640863` still allowed LIVE mutating Policy `PASS/ALLOW` with a caller-controlled `human_approved=true`. The earlier draft #76 was conflicted with main. PR [#118](https://github.com/alimtalbi-ata/aiops/pull/118) ported only the two Policy code/test files from #76; merged at `b33f655695949d6fef9e7d72b537d9810859c494` after [PR CI #40664618475](https://github.com/alimtalbi-ata/aiops/actions/runs/40664618475) and [post-merge CI #40664759313](https://github.com/alimtalbi-ata/aiops/actions/runs/40664759313) succeeded. PR #76 was closed as superseded. No mass merge of #36 or #49.
+- Four LIVE effect commands are denied independently of the boolean. Added HTTP in-process negative tests for forged approvals, invalid modes/commands and synthetic SIMULATE behavior; the existing quality workflow is reused. Verify the exact latest GitHub Actions run before merging; no container integration or LIVE proof is claimed.
+- Remaining P0: Core-owned authenticated actor/RBAC, immutable incident/Run/recipe/target/params binding, expiring single-use approval consumption, append-only Evidence, Temporal resume and sandbox-only postchecks/rollback. Stack #49→#106 remains draft and must be reconciled selectively.
+- No Debian/NGX access, deploy, production secret or LIVE command. See `docs/automation-runs/20261028-1030-hitl-policy-convergence.md`.
+
+## 2026-10-28 11:01 Europe/Paris — P0 Golden DEMO operator RBAC (merged #122)
+
+The legacy `POST /api/demo` no longer accepts anonymous writes. [PR #122](https://github.com/alimtalbi-ata/aiops/pull/122) was merged as `2253bd21bd948a349b9b7a4a941ecf1e3357d96c` after green [push CI](https://github.com/alimtalbi-ata/aiops/actions/runs/40668539080), [PR CI](https://github.com/alimtalbi-ata/aiops/actions/runs/40668555197), and [post-merge CI](https://github.com/alimtalbi-ata/aiops/actions/runs/40668685395). The operator token is separate from viewer/internal credentials, generated for new installs and passed explicitly via Compose. Upstream receipts are checked and projected as `DEMO_SUBMITTED_UNVERIFIED`, never LIVE. HTTP tests are in-process; only Grafana has a real ephemeral-container CI test. Existing `.env` files remain unchanged and must be configured manually. Core/Temporal, Copilot auth, browser captures and Debian/LIVE remain unqualified. See [automation journal](automation-runs/2026-10-28T1101-P0-golden-demo-operator-rbac.md).
+
+
+## 2026-10-28 11:08 Europe/Paris — P0 NOC authenticated Core synthetic projection (draft)
+
+Dedicated P0 branch from main `723ca6458c722a1aa0e57ddb5eee3374d20cc830`: shared tenant-scope refusal logic extracted from the existing signed NOC adapter into `app/shared/tenant_scope.py`; new Core-only `GET /api/noc/runs/{rid}` requires the internal Bearer token, joins the actual Incident in PostgreSQL, denies LIVE/non-synthetic/missing/tenant-scoped records and returns only four Run fields. The portal's signed NOC correlation now calls this bounded Core endpoint rather than the legacy anonymous full Run endpoint. No tenant ACL, observed Checkmk, RAG diagnosis, Grafana metric or LIVE attestation is claimed. The existing `quality.yml` is extended with real Core HTTP and PostgreSQL 16 ephemeral integration; no mocks in that integration. Tests/CI outcome and PR link: see the dated journal `docs/automation-runs/2026-10-28-1108-p0-noc-core-read-auth.md`. Legacy Core read endpoints remain outside this incremental change and require a separate access-control design.
+
+## 2026-10-28 11:15 Europe/Paris — Worker simulation/Policy fence (draft)
+
+Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current main. The Worker rejects invalid execution modes before Temporal connection or stage effects; DEMO/REPLAY/STORY send OBSERVE to Policy, not EXECUTE. LIVE continues to hit the existing emergency stop and Policy HITL refusal. The helper and AST regression tests are reused without a mass merge. This is unit/static qualification only; no Core/Temporal/Twin/Evidence integration or HITL approval claimed. See `docs/automation-runs/2026-10-28-1115-p0-worker-policy-mode.md` for exact CI status and follow-up.
+
+
+## 2026-10-30 — 48-hour architecture convergence and AI benchmark baseline
+
+- **Branch:** `architecture/48h-convergence-20261030`. This is a documentation/architecture tranche based on `main`; it does not merge application code or change a deployed environment.
+- **Reference architecture:** `docs/architecture/AIOPS2-REFERENCE-ARCHITECTURE-2026-10-30.md` establishes one control plane and data authority: Core owns Incident/Run and business transitions; Temporal owns durable orchestration; Evidence is append-only; Twin/CMDB supplies sourced topology; Analyst/Critic are advisory; Policy is deterministic; HITL binds a verified human decision to an immutable proposal; execution remains separately fenced; Portal is a read-model/API client.
+- **ITIL 4:** the customer story explicitly maps Monitoring/Event Management, Incident Management, Service Desk, Service Configuration, Problem, Knowledge, Change Enablement, Release/Deployment, Service Validation, Information Security, Service Level Management and Continual Improvement. This is process alignment, not certification.
+- **48-hour plan:** `docs/planning/AIOPS2-48H-DELIVERY-PLAN-2026-10-30.md` sequences inventory, vertical-slice integration, AI benchmarking, failure injection and cumulative release-kit rehearsal.
+- **AI benchmark:** `docs/architecture/AIOPS2-AI-BENCHMARK-GOVERNANCE-2026-10-30.md` reuses `tools/evaluate_ai_core.py`, `eval/ai-core-cases.json` and the Core evaluation ledger found on the HITL candidate branch. Source review found quality metrics but no qualified per-invocation token/cost/latency telemetry; those metrics must remain UNKNOWN until instrumented.
+- **Reuse and PR convergence:** `docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md` records current PRs #185, #187–#194 and the older schedule/deployment proposals. It directs selective reuse, not mass merge.
+- **Schedules:** `docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md` retains the five existing schedules and assigns 5/5 as architecture/release coordinator. It prefers #188's daily quality + 15-minute read-only runtime smoke design over duplicate #189 cadence, subject to merge and runner installation. Debian auto-deploy #146/#153 stays disabled.
+- **Customer story:** `docs/customer-story/ACME-P1-SAN-PAYMENTS-ITIL-DEMO-2026-10-30.md` defines one synthetic P1 journey with explicit provenance and no-effect boundaries.
+- **Observed repository state:** many open PRs overlap Core, Portal, Worker, Compose and quality workflows. #185 is a large ACME candidate whose PR body reports earlier CI/package evidence and DEMO_LOCAL=GO / RELEASE_STABLE=NO_GO; #190's latest head requires CI recheck; #192/#193/#194 are complementary but require identity and schema convergence; #187 is untested observability expansion; #188/#189 duplicate schedule intent. No PR is merged by this tranche.
+- **Operational limits:** no SSH/Debian host access, runner installation, cron modification, Docker restart, live migration, production data mutation, GLPI write, stable promotion or LIVE remediation was performed. Current source and CI findings are not host runtime proof.
+- **Next:** revalidate exact current PR heads and CI, implement a shared AI invocation telemetry contract in the existing evaluator/provider path, integrate the single ACME customer journey, then package only after clean install/upgrade/rollback and exact-SHA gates.
+
+
+### 2026-10-30 12:15 UTC — AI invocation telemetry and candidate dependency revalidation
+
+- PR #196 (`feat/ai-benchmark-telemetry-20261030`, stacked on #194) adds per-call provider usage, measured latency, retries, bounded request bytes/output tokens, and evaluator aggregation. Corrected head `388b7c48a108f70315b9fae92de72d10ac399704` passed AIOps quality run `41053026110` (6/6 jobs), Offline Integrity `41053026078`, Historical Trace `41053026102`, V2.8 Core `41053026140`. This is CI using the deterministic provider, not a real DGX/model benchmark.
+- Missing token usage remains UNKNOWN; cost remains UNKNOWN until pricing is pinned. Detailed invocation rows are report artifacts, not yet a dedicated DB ledger; per-tenant/run quotas remain unimplemented.
+- PR #185 current head `02dd3aa45a4adc0d3f7613f04288a71f77d9061e` has 6/6 quality jobs and a deployment-kit artifact, but its base is `feat/cron-stable-reconciled-20261028`, not main. That base diverges from main (672 commits ahead, 43 behind). Use as scenario/package source; do not merge its full branch into main.
+- PR #195 architecture docs were updated with these exact findings; new docs-only CI run `41053331399` is in progress at this update.
+- Existing Schedule 5/5 has been reoriented as architect/release coordinator and an immediate run was requested. The run was in progress; no completion is claimed.
+
+
+## 2026-10-30 12:15 UTC — 5/5 exact-head integration and qualification stop
+
+- The single scenario candidate remains draft [#185](https://github.com/alimtalbi-ata/aiops/pull/185), now at `5782d6fcece32cfd38ada0d50bfe68a8b74bd164`. One selective commit copied eight exact source blobs from 1/5 `f50d3da`, 2/5 `ca6feab`, 3/5 `18ff72e`, and 4/5 `901c5bb`. No `demo_v2.py`, `main`, stable or Debian changes.
+- Exact-head V2.8 isolated qualification [41053319372](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319372) **FAILED**: `test_v28_portal_ui.PortalPageContractTests.test_demo_live_trace_is_source_backed` expects legacy `gates.decision`, while the current read-only scoped Core contract requires `gates.items`; 59 tests, one error. Do not weaken scope validation. Handoff to 2/5 for a fixture/contract-consistent fix. Quality [41053319020](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319020) was still in progress at this snapshot; Historical and Offline succeeded.
+- #193 exact-head Quality [41024125286](https://github.com/alimtalbi-ata/aiops/actions/runs/41024125286) initially failed during pip download (`IncompleteRead`), not a test assertion; the targeted rerun finished six jobs SUCCESS. #196 [388b7c4](https://github.com/alimtalbi-ata/aiops/pull/196) now implements provider usage/latency telemetry on top of #194 and its four exact-head workflows succeeded; not yet integrated into #185 or validated on a deployed model.
+- The existing evaluator dataset contains five synthetic cases; local archive harness unit tests were **3/3 PASS**, with dataset SHA256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`. No model inference was executed; p50/p95, provider tokens and cost remain UNKNOWN. See `docs/architecture/AIOPS2-AI-BENCHMARK-BASELINE-2026-10-30.md`.
+- `deploy/aiops2-stable` still matches `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3`. The stable portal deployer copies only `demo_v2.py` and its test and patches `main.py` locally; the candidate poller enforces stable-only and refuses untransported paths. Actual installed Debian cron, `applied.sha`, four-image transport, GLPI/Evidence read and rollback are not attested. **Single release decision: NO-GO.**
+
+
+### 2026-10-30 12:20 UTC — artifact-level AI benchmark inspection
+
+- Downloaded and inspected exact CI runtime report artifact `12974854416` from AIOps quality run `41053026110`.
+- Evaluation `EVAL-d7fd00c3b558414e82df074c02502ddc`, dataset `aiops-core-qualification-1.0.0`, SHA-256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`, provider/model `openai-compatible / ci-deterministic`.
+- Five cases passed all current quality metrics (1.00 each). Ten model calls had 100% fixture usage coverage, 20 fixed placeholder tokens total, P50 1.69 ms, P95 3.24 ms, zero retries; cost UNKNOWN.
+- **Interpretation:** the CI provider reports fixed 1+1 token placeholders per call. This verifies token/latency telemetry wiring and evaluator aggregation only; it is not a real DGX/model benchmark or cost estimate.
+- Synthetic Runtime E2E Run `RUN-FB8DDB7C6B22B5F4`: RESOLVED, 12 evidence records, P1, Critic validated, Policy PASS/SIMULATE, zero effect receipts, LIVE disabled.
+- Detailed report: `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`.
+
+
+### 2026-10-30 12:22 UTC — five-schedule handoff and ancestry audit
+
+- Schedules 1/5–4/5 delivered new source commits: `f50d3dac` (ACME), `ca6feab` (Portal), `18ff72e` (NOC/Evidence/GLPI), `901c5bb` (Policy/HITL). Their schedules report targeted suites 70/70, 62/62, NOC UTC fail-closed corrections, and 48/48 plus 195/195 respectively.
+- Exact commit Actions runs were not found at this check. Treat these as schedule-reported targeted test results, not GitHub CI qualification.
+- Each branch is divergent from main (711/43, 740/43, 736/43, 739/43). The compare operation reports large ancestry/file differences; do not copy complete branch trees. 5/5 has been instructed to obtain exact commit diffs and port only minimal source/test changes to a clean main-based integration branch.
+- PR #185 current head 02dd3aa also remains based on a divergent stable branch. It is a demo/package source, not directly mergeable.
+- AI benchmark artifact baseline is documented at `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`; the 20 tokens and P95 3.24 ms are deterministic placeholders and not real model metrics.
+
+
+### 2026-10-30 12:20 UTC — package completion after initial gate snapshot
+
+- New #185 HEAD `5782d6f` Quality completed **6/6 SUCCESS**, but V2.8 remained **FAILED** (58/59 PASS, legacy gates fixture error). Exact CI artifact `12975971501` verified (445 CRC, 395 SHA256, eight source blobs), extracted archive **253/253** targeted tests PASS, isolated Portal **14/14** GET 200, POST 405 and unknown run 404. The same package's evaluator harness passed **3/3** without model calls.
+- The PR #185 base branch is **672 commits ahead / 43 behind** `main`; do not merge the 72-file PR directly. Preserve a clean-main selective integration plan. `RELEASE_STABLE=NO_GO` until all exact-head CI and Debian/runtime/rollback gates pass.
+
+
+### 2026-10-30 12:25 UTC — RC1.4 deployment-kit archive audit
+
+- Downloaded artifact `aiops2-core-deployment-kit` ID `12974884559` from exact CI run `41053026110`.
+- Outer artifact contains inner `AIOps-2.1.0-core-rc1.4-Core-Deployment-Kit-20261030T120953Z.zip`, 763,130 bytes, SHA-256 `4c7bd6a707fc24a308de033ee7f1b02b6df123cfd7c2615eea9cecb7b7be2646`.
+- Inner archive: 455 entries; `FILES-SHA256SUMS` lists 405 files; all 405 hashes verified, zero missing/mismatch.
+- Contains migration 011, Intelligence service, AI evaluation harness, OIDC/HITL code and qualification JSON reports.
+- Manifest explicitly states `real_model_qualification=NOT_RUN`, `production_qualification=NOT_RUN`. Its `git_commit=6273ad48...` is the temporary packaging tree SHA, not PR head or Debian `applied.sha`.
+- The package does **not** contain the new architecture/ITIL/48h docs from PR #195. It is a reproducible RC candidate from the stacked #194/#196 tree, not the final cumulative kit for the main-based architecture.
+- Audit report: `docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md`.
+
+
+### 2026-10-30 12:27 UTC — second RC1.4 kit and V2.8 candidate failure
+
+- Latest PR #185 head `5782d6fcece32cfd38ada0d50bfe68a8b74bd164`: Quality 6/6 PASS, Offline and Historical PASS, V2.8 FAILED (58 PASS / 1 ERROR). Failing test expects the old `gates.decision` response while the new scoped reader returns `gates.items`; correct the test fixture, preserve fail-closed identity validation.
+- Downloaded PR #185 artifact `12975971501`: inner SHA-256 `af627c8af804eec25e643e7b3a7169bb6e513ee6cae8687c18bc4c47c2c0aa5d`, 445 entries, 395/395 file checksums verified. It lacks migration 011, OIDC verifier and AI per-call telemetry.
+- Compared with #196 artifact `12974884559` (inner SHA `4c7bd6a...`, 455 entries, 405/405 checksums) which includes migration 011/OIDC/telemetry but not the latest ACME branch fixes or architecture docs.
+- These two RC1.4 packages are valid but non-cumulative and built from different divergent trees. Final kit must be rebuilt from a single clean integrated source SHA.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair
+
+- Issue #186 read before action. #185 moved from `5782d6f` to exact commit [`2b2af9cd21e48be741a3906b7a12cfffa3371f7b`](https://github.com/alimtalbi-ata/aiops/commit/2b2af9cd21e48be741a3906b7a12cfffa3371f7b): **only** `tests/test_v28_portal_ui.py` changed. The old mock returned `gates.decision`; the corrected mock returns `gates.items[0].decision`. Portal identity guard unchanged. The previous kit extracted locally with the exact two-line fixture change passed V2.8 **59/59**, targeted tests **253/253**, and `py_compile` PASS; these local results do not constitute new-head packaging verification.
+- Exact new-head [V2.8 #41055650146](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650146) **SUCCESS (2/2 jobs)**, [Offline #41055650247](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650247) SUCCESS, [Historical #41055650640](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650640) SUCCESS. [Quality #41055650123](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650123) **IN_PROGRESS at this snapshot**; no all-green claim yet.
+- Main-based 1/5 #198 `8f48b1b`, 3/5 #197 `d9d0981`, 4/5 #199 `e0fc68f` have exact-head Quality SUCCESS; 2/5 has no safe main-based Portal route to attach its guards. They are independent small slices, **not** a cumulative release.
+- #196 latest `6b6a3b3991e8a4b5b83ff4c6534dfa4b34f72932` has Quality/Offline/Historical/V2.8 SUCCESS; synthetic provider tokens/latency are not real-model results. Both audited RC1.4 ZIPs remain incomplete. #185 base still diverges from main (741 ahead / 43 behind after fixture commit). **RELEASE_STABLE=NO_GO**, no merge, host action or LIVE.
+
+
+### 2026-10-30 12:32 UTC — final exact-head CI and kit inspection
+
+#185 `2b2af9cd21e48be741a3906b7a12cfffa3371f7b`: all four exact-head workflows now **SUCCESS** — Quality [41055650123](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650123) **6/6**, V2.8 41055650146 **2/2**, Offline 41055650247 and Historical 41055650640. Downloaded new artifact `12976991134`; inner ZIP SHA256 `3ff78df871c3e32b72d1f9c4d077cee0301b5aeeb3dae0edab20a415719fc2aa`, 445/445 CRC, 395/395 SHA256, updated test blob Git SHA `ca08e07e612e66d10936c0793d3f11c469147bd8`. Tests on **new exact archive** V2.8 **59/59**, selected 11-module suite **253/253**, compileall PASS; loopback read-only preview **14/14 GET 200**, POST 405, unknown run 404. **New artifact still lacks migration 011/OIDC/AI per-call telemetry and architecture docs.** #195 documentation CI for prior commit `fe4e92f`: [41055915595](https://github.com/alimtalbi-ata/aiops/actions/runs/41055915595) SUCCESS. These results do not authorize stable or Debian deployment.
+
+### 2026-10-30 13:12 UTC — release handoff
+
+One ITIL4-aligned synthetic ACME SAN→Payments P1 path; source-verified Incident/Run/Evidence/GLPI links or UNKNOWN, Analyst→Critic→Policy→HITL SIMULATE→VERIFY. #185 repaired head `2b2af9c` has exact-head Quality/V2.8/Offline/Historical SUCCESS, and fresh ZIP checks 395/395, V2.8 59/59, AI harness 3/3. Its base is 741 ahead/43 behind main; archive omits migration 011, OIDC, #196 telemetry and #195 docs. #197/#198/#199 are separate main-based green patches; 2/5 main Portal run-detail route missing. Keep #185 as demo-only scenario candidate, construct a clean cumulative main-based SHA before any stable gate. #188 preferred; #189 duplicate unmerged; no Debian/GLPI/LIVE action. `RELEASE_STABLE=NO_GO`.
+
+## 2026-10-30 14:00 UTC — 5/5 main-based integration staging
+
+Draft [#201](https://github.com/alimtalbi-ata/aiops/pull/201) at `2ceda14c8a21fe71e88b3228879799e6c37a5387` is a clean `main@27deb9b1` one-commit staging integration, **not a release**. It selects six exact code/test blobs from #197/#198/#199 and fourteen architecture/ITIL/benchmark/release docs from this PR #195; the Quality workflow adds isolated tests for 1/5 and 3/5 to the existing 4/5 test. No Portal, Core API, Worker, Compose, DB, cron or Debian mutation. CI run [41068355452](https://github.com/alimtalbi-ata/aiops/actions/runs/41068355452) was **IN_PROGRESS** at this snapshot; no PASS claimed. #185 remains historical divergent scenario source; #201 is the sole clean-main integration staging candidate, not a cumulative kit. T0 PENDING; T1/T2 NOT_TESTED; T3 NOT_ATTESTED; T4 NOT_TESTED; T5 NO_GO.
+
+### 2026-10-30 14:16 UTC — 5/5 release inventory guard
+
+Main-based integration draft #201 advanced to `03a5b0cce44e56d7ae315ee7df16e850a5e35b11`: added fail-closed cumulative ZIP inventory/source gate, 10/10 local offline tests and Quality test step. New exact-head CI pending; prior #201 `0bd8b4c` Quality SUCCESS 3/3 does not qualify this head. Historical #185 ZIP remains integrity-valid (395/395 checksums) but feature-incomplete; source checkout/manifest SHA mismatch and install/rollback proof block release. No host, cron, GLPI, LIVE, main/stable or merge action.
+
+### 2026-10-30 15:12 UTC — 5/5 integration/benchmark qualification
+
+The one clean main-based integration [#201](https://github.com/alimtalbi-ata/aiops/pull/201) is now `7474c74c9e6a79c5d28d6624f7b9be2100a792ac` (main comparison 17 ahead / 0 behind, 34 changed files). Selective #198 synthetic SAN→Payments fixture port: `tests/test_acme_san_payments_fixture_contract.py` source blob `675a0af6`, pinned seed `67f0124a`; `.github/workflows/quality.yml` explicitly runs its six tests. [Exact-head Quality 41077972849](https://github.com/alimtalbi-ata/aiops/actions/runs/41077972849) **SUCCESS 3/3**, six fixture tests **6/6 PASS**. This is a synthetic seed contract, not tenant/GLPI/Payments runtime proof.
+
+[#196](https://github.com/alimtalbi-ata/aiops/pull/196) head `48b353b1` remains highly divergent from main (851 ahead/43 behind). Its [Quality 41070920303](https://github.com/alimtalbi-ata/aiops/actions/runs/41070920303) is green 8/8 but **both Ollama model evaluation jobs failed all 3 repeats internally** (ReadTimeout; evaluator exit 1; zero cases analyzed; usage/latency/cost UNKNOWN). Fix fail-closed workflow status and diagnose model timeout before benchmark promotion. #201 still lacks migration 011/OIDC/outbox/AI telemetry and cumulative install/rollback evidence. Stable/LIVE NO-GO; no Debian action.
+
+<!-- convergence-5of5-477da60-20261030 -->
+### 2026-10-30 5/5 48h integration checkpoint
+
+**Audit UTC:** 2026-10-30T16:15:33.055Z. **Release candidate:** [#201](https://github.com/alimtalbi-ata/aiops/pull/201), base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, exact HEAD [`477da60d92dc777e1e635eea4c5510c350a5d90c`](https://github.com/alimtalbi-ata/aiops/commit/477da60d92dc777e1e635eea4c5510c350a5d90c), **28 ahead / 0 behind**, draft and unmerged. [Exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) **QUEUED** at audit; previous #201 [Quality 41082715412](https://github.com/alimtalbi-ata/aiops/actions/runs/41082715412) **3/3 SUCCESS** on old `59ba22f1`, not on this new SHA.
+
+Six source-verified fail-closed blobs from #198/#202 were selectively committed to #201. Source CI and new-head CI are pending; this is **source integration, not a passed T0 or a T2/T3 runtime proof**. OIDC/outbox, telemetry and cumulative kit still missing. See execution board and #186. Stable NO-GO.
+
+
+## 2026-10-31 21:50 Europe/Paris — Autonomous development team and integration policy
+
+Five existing ChatGPT schedules have been reassigned as four specialist developer teams (ACME/Twin, Portal/GLPI, Core/NOC/CMDB, Policy/HITL) and one architect/integrator. All five are enabled and configured hourly in Europe/Paris, staggered at :00/:10/:20/:30/:45. Immediate runs were requested. The automation service still reports `next_run_time=null`; hourly recurrence is configured but not yet independently attested.
+
+The repository is development-only. #221 daily quality schedule was merged into main at `77a9d415464c67190c428d8c1559cf22db149d0e`; post-merge quality run #41240948760 was in progress at the time of this entry. The architect owns integration and merge; specialist teams work in owned branches and PRs.
+
+Branch review found #195 architecture branch 218 commits ahead of main, #201 112 commits ahead, #202 43 commits ahead, #198 47 commits ahead, #205 50 commits ahead, and #204 diverged by 900 commits / 43 behind with a 300-file diff. These histories are not to be merged wholesale. The strategy is selective file/commit integration onto a clean main-based candidate, with exact-head CI rerun and revert plan. Current GitHub API reports `main.protected=false`; manual integration gates remain mandatory.
+
+The durable operating model is `docs/operations/AIOPS2-AUTONOMOUS-DEV-TEAM-OPERATING-MODEL-2026-10-31.md`. The customer value target remains one ITIL 4-aligned ACME synthetic journey: Event → Incident → Twin impact → Analyst/Critic → Evidence → Policy/HITL → SIMULATE → verification → resolution/reopen and continual improvement. No production or LIVE qualification is claimed.
+\n\n## 2026-10-31 22:05 Europe/Paris — Architect integration checkpoint\n\n**Current DEV main:** `2c87bc931b170208b7c2f253218d0f939381355a`.\n\nMerged #221 (daily hosted quality schedule) and #224 (enterprise reference architecture, ITIL 4 customer journey, autonomous five-schedule team model, automation control plane and offline heartbeat validator). Post-merge main quality runs: #41240948760 and #41241604652, both **3/3 SUCCESS**. PR #195 was closed as superseded after selective port; its 218-commit history was not imported.\n\nFive ChatGPT team automations are enabled and hourly in Europe/Paris at staggered starts 22:00, 22:10, 22:20, 22:30 and 22:45. Immediate runs completed. Their API still returns `next_run_time=null`; recurring future runs are not yet attested.\n\nCurrent specialist handoffs: #198 ACME 3/3 CI but 3 new tests not included (keep Draft); #223 Portal 3/3 CI but stacked on stale #201; #205 Core new head lacks CI and has a reproduced CMDB entity-provenance defect; #204 Policy 4 qualification workflows green but remains stacked on #194/Draft. #201 is 112 commits ahead of old main and behind current main; no wholesale merge.\n\nGitHub still reports `main.protected=false`. Debian host cron, runtime and report publication remain NOT_ATTESTED; the expected `latest.json` does not exist. `RELEASE_STABLE=NO_GO`; no production or LIVE.\n
+
+## 2026-11-08 — SRV-DEB-05 runtime inventory checkpoint
+
+**Evidence source:** read-only Docker audit supplied for host `SRV-DEB-05`, captured 2026-11-08. Full timestamped detail: [operations/SRV-DEB-05-INVENTORY-2026-11-08.md](operations/SRV-DEB-05-INVENTORY-2026-11-08.md).
+
+Observed snapshot: 78 containers (59 running, 18 exited, 1 created), five Compose projects, 18 Docker networks and 59 listed Docker volumes. These are point-in-time Docker observations, not application readiness or production qualification. Many containers have no configured health check; several rollback/before-metrics containers are exited and some are unhealthy. The audit was read-only: no HTTP/database access, container lifecycle operation, volume removal or configuration modification.
+
+The active runtime is not one clean homogeneous stack: separate `aiops2-rebuild`, `aiops2-v27-qual`, `aiops2-e2e-v1`, `aiops2-metrics-cutover` and `aiops2-demo-observability` Compose projects coexist. Some containers have mismatched Compose project labels/names; one metrics-cutover Compose source path references a missing temporary file. Do not infer ownership or retire anything from container names alone.
+
+Core, Portal, Worker, Temporal, Twin, Evidence, Policy, Intelligence, GLPI/MariaDB, n8n, Prometheus, Grafana, Alertmanager, OpenTelemetry, Loki, Tempo, CloudBeaver and FS qualification/ingestion surfaces are represented in the observed container inventory. The precise runtime-to-source-to-feature mapping remains to be established against Compose definitions, source commits, image digests, contracts and tests. Intended responsibilities remain governed by the existing [component catalog](COMPONENT-CATALOG-AND-REUSE.md) and [architecture boundaries](ARCHITECTURE-AND-BOUNDARIES.md).
+
+**Next maintenance actions:** refresh the snapshot after material deployment changes; reconcile each runtime container with exact Compose file hashes and image digests; update the existing component catalog and reuse decisions; attach exact-head CI and runtime evidence; explicitly record unresolved drift. No production/LIVE qualification or retirement approval is implied by this inventory.
+
+
+## 2026-11-08 — Existing Debian cron reuse decision (no new scheduler)
+
+**User direction:** reuse the cron jobs already present on Debian to inspect the installed infrastructure, maintain the installation/function documentation, and publish sanitized evidence to the canonical GitHub repository. Do not create a duplicate cron or a parallel documentation registry.
+
+**What GitHub currently proves:**
+
+- Main `.github/workflows/quality.yml` has a GitHub-hosted daily schedule at `02:23 UTC` and `workflow_dispatch`. It validates source/CI; it does **not** connect to SRV-DEB-05 or inventory its Docker runtime.
+- PR #188 ("Add scheduled AIOps2 qualification and Debian runtime smoke") remains **open/Draft**. Its review explicitly blocks the self-hosted runner because the proposed smoke uses `docker exec` and unrestricted Docker access. Do not merge/install this runner as written.
+- PR #189's six-hour schedule is redundant and was explicitly excluded in the scheduling decision. Do not reactivate or duplicate it.
+- The automation heartbeat gate already treats Debian cron state as `UNATTESTED` until it has a timestamped success receipt and next-run evidence. The existing test `test_debian_unattested_is_not_healthy` ensures that missing proof is WARN, not PASS.
+- The earlier continuity record explicitly states Debian cron/runtime/report publication were NOT_ATTESTED and `latest.json` was absent at that checkpoint.
+
+**Operational status:** Debian cron entries, their owner, schedule, target scripts, last execution, exit status and GitHub publication credentials have not been inspected in this session. Therefore reuse of a specific host cron is **NOT_VERIFIED**; no claim is made that a working inventory cron currently exists.
+
+**Required next step (read-only discovery on SRV-DEB-05):** inspect existing user and system crontabs, cron spool and timer definitions; map each existing job to its script, owner, cadence, last log/receipt, permissions and destination. Do not print environment values, command-line secrets or token contents. Identify one existing, appropriate inventory/reporting job and extend that job in place only after review. If no suitable job exists, stop and request approval rather than silently installing a new schedule.
+
+**Target behavior for the existing job, subject to review:**
+
+1. Collect read-only Docker metadata (projects, container state/health, image tag and digest, Compose labels/files, networks, mounts/volumes) and safe OS/service metadata.
+2. Map each observed service to the existing component catalog and architecture boundaries; record feature/source/PR mapping only when exact evidence exists.
+3. Compare with the previous snapshot and report additions, removals, version drift, missing Compose files, health changes and unknown ownership.
+4. Never run `docker exec`, `docker compose up/down`, restart/stop/remove, image/volume prune, database queries or application mutations as part of inventory collection.
+5. Redact credentials and secret-bearing environment/configuration values before any artifact leaves the host. Never upload `.env`, raw environment dumps, database contents, private keys, tokens, or customer payloads.
+6. Publish a timestamped sanitized report and checksum to the existing GitHub repository using the already-approved publication mechanism, least privilege and a narrowly scoped token/deploy key. Do not introduce a new secret or broad Docker-enabled self-hosted runner.
+7. Update the canonical continuity, component catalog and architecture records only when meaningful changes are verified; retain timestamped historical evidence. Do not overwrite a more authoritative source/decision with accidental runtime drift.
+8. Emit a signed/hashed execution receipt with start/end time, exit code, inventory timestamp, Git commit and upload result. Feed that receipt into the existing heartbeat gate; absence, stale data or failed upload must remain WARN/FAIL, never PASS.
+
+**No infrastructure action authorized by this documentation update:** no Debian cron change, runner installation, Docker access, restart, container/volume cleanup, database access or deployment.
+
+
+## 2026-11-08 — Debian cron inventory/report pipeline discovered
+
+**Evidence:** user-supplied read-only command output from SRV-DEB-05, captured around 2026-11-08 01:17 Europe/Paris. No configuration or service changes were made by the inspection.
+
+### Observed schedule (user crontab `aiops`)
+
+| Schedule | Command | Observed purpose / status |
+|---|---|---|
+| Every minute | `/home/aiops/aiops2-auto-deploy/poll.sh`, protected by `flock` | Existing deployment polling path. Treat as potentially change-capable; do not alter or invoke manually until script is reviewed. |
+| Every minute | `/home/aiops/.local/bin/aiops-debian-reporter`, protected by `flock` | Existing Debian report generator; likely primary inventory collector, exact scope/output still unverified. |
+| Every minute | `/home/aiops/.local/bin/aiops-publish-report`, protected by `flock` | Existing report publisher, marked `AIOPS2_REPORT_SSH_PUBLISH`; destination, branch, file list and credential scope still unverified. |
+| Every 10 minutes | `$HOME/aiops2-operations/fs-watch.sh` | Existing FS watch; scope and write behavior still unverified. |
+
+Cron service reports `active`. System crontab and `/etc/cron.d` show standard Debian entries (anacron, e2scrub_all, placeholder); root crontab inspection prompted for sudo password and therefore root crontab contents are **UNKNOWN**, not empty. Cron journal shows the three per-minute aiops jobs being launched repeatedly between 01:12 and 01:17 Europe/Paris, and normal session closures. This proves scheduling/launch, **not** successful script exit, fresh inventory generation, successful SSH/GitHub publication or data correctness. No script exit codes, reporter output contents, publisher destination or successful commit receipt were included in the evidence.
+
+### Decision
+
+Reuse the existing `aiops-debian-reporter` → `aiops-publish-report` chain as the preferred inventory/documentation publication path, subject to read-only script and artifact review. Do not add another cron, duplicate reporter, GitHub runner or parallel registry. Preserve the current `flock` guards and all existing schedules while reviewing. Do not touch `poll.sh` or `fs-watch.sh` as part of the reporter change until their behavior is understood.
+
+### Remaining proof required
+
+1. Read the four referenced scripts without executing them; record SHA-256, owner/mode and whether each is tracked in Git.
+2. Inspect only sanitized reporter output metadata: output path, timestamp, schema, inventory coverage, redaction behavior and last successful generation.
+3. Inspect publisher logic: exact SSH destination/repository/branch/path, host-key verification, retry/error handling, file allowlist and whether it can publish secrets or unrelated workspace files.
+4. Verify the published GitHub commit and compare its report timestamp/checksum to the host's latest generated artifact.
+5. Inspect reporter/publisher logs for exit/error summaries and lock contention; do not dump raw logs if they may contain secrets.
+6. Only after the above, update the existing component catalog, runtime inventory and continuity records from verified evidence. Keep runtime facts separate from source/feature claims.
+
+**Current qualification:** cron scheduler ACTIVE; task launches OBSERVED; reporter success NOT_VERIFIED; publisher success NOT_VERIFIED; GitHub freshness NOT_VERIFIED; root crontab UNKNOWN. No new cron or runtime changes authorized.
+
+
+## 2026-11-08 — Existing reporter/publisher source audit and five-stack comparison objective
+
+**Source evidence:** read-only source and metadata audit supplied for SRV-DEB-05. The four scripts were printed for inspection, not executed. SHA-256:
+- `aiops-debian-reporter`: `71246acf9b642fa18bfa4c19651c8e52ecc6fb7405ad3c4c4ef798adb12ad1f5`
+- `aiops-publish-report`: `cb500ddaf896070d5dccbd05996e8a7081f5788946743c25737debb8046b6355`
+- `poll.sh`: `ccfe96805977953bfd3380301800991635181ed8a2c73b9544c32a1b62b10511`
+- `fs-watch.sh`: `eadf8e8046ce1f92828e8af6c0aed91762de11853b8694d1ebabbedef71f5107`
+
+### What the existing reporting chain actually does
+
+- `aiops-debian-reporter` is a fixed-probe, read-only Python collector. It gathers host OS/kernel/architecture/uptime, load, memory, disk usage, loopback TCP probes (5432, 7233, 17777, 3000, 9090), and Docker containers.
+- Docker collection uses `docker ps --all --format {{.Names}}`, capped at 80 names, then one `docker inspect` per container. Current per-container fields are only state, health (or no-healthcheck), configured image string and inspect success. It does **not** currently record immutable image digest, Compose project/config-file labels, service name, source commit, mounts/volumes, network attachments, published ports, build provenance, application version, feature set or test results.
+- The collector writes a local `latest.json` with a 64 KiB cap and a local lock. Its GitHub API publishing function exists in the source, but `main()` explicitly only collects locally; the separate SSH publisher is the scheduled publication path.
+- `aiops-publish-report` copies that one JSON report to `ops/debian-reports/SRV-DEB-05/latest.json` on branch `ops/debian-runtime-reports`. It clones/fetches that branch, fast-forward only, commits only when content changes, and pushes. This is **not** currently a push to `main` and does not publish the source catalog or a component comparison.
+- The cron journal observed launches, but no execution receipt, successful exit code or matching GitHub commit was provided. Publication success and report freshness remain NOT_VERIFIED.
+
+### Other existing scheduled jobs — do not conflate with inventory
+
+- `poll.sh` runs every minute and follows protected `deploy/aiops2-stable`. When it detects a new descendant commit, it invokes `deploy/deploy-demo-studio-v2.sh`. This is a deployment mechanism, not an inventory job; preserve it and do not reuse it for component comparisons.
+- `fs-watch.sh` runs every 10 minutes. It uses `docker inspect` and `docker exec` against the FS lab to measure disk usage, then records selected rebuild container states to a local log. It declares remediation disabled. Keep this separate from the reporter and do not expand its scope without review.
+- The crontab evidence contains four user entries (three every minute and one every 10 minutes), not five cron entries. The earlier Docker audit separately observed five Compose projects: `aiops2-rebuild`, `aiops2-v27-qual`, `aiops2-e2e-v1`, `aiops2-metrics-cutover` and `aiops2-demo-observability`. Treat these as five development/runtime stacks, not as cron schedules, unless a further host inventory proves otherwise.
+
+### User's target: one comparative development qualification pipeline
+
+Use the existing reporter → publisher chain as the single collection/publication cadence, and evolve its report schema so one run compares the five observed development stacks component-by-component. Do not add another cron. The comparison must identify the best integrated and most advanced *usable* candidate, not merely the highest version number.
+
+For each component in each stack, capture only evidence-backed facts: Compose project/service, image tag and immutable digest, source repository and exact commit when available, build provenance, API/event contracts and dependency versions, config/migration compatibility, health/readiness, and linked CI/integration/E2E results. Feature maturity must be linked to implemented code, issue/PR and passing tests; do not infer a feature from an image tag or container name.
+
+Score/compare candidates on (1) functional feature coverage and usability, (2) integration with Core/Policy/Worker/Portal/Twin/Evidence and existing workflows, (3) passing contract/integration/E2E tests, (4) operational stability and recovery/rollback, and (5) compatibility and data/schema safety. Keep an evidence link and confidence/status for every score. Mark missing provenance or missing tests UNKNOWN/NOT_QUALIFIED rather than awarding a pass. A newer build with weaker integration or failing tests must not displace a proven usable candidate.
+
+The output should be a component decision matrix with one recommended candidate, alternatives, feature delta, integration/test evidence, blockers and rollback reference. Preserve all five development stacks during comparison. No automatic deployment, stack deletion, volume cleanup, database migration or promotion is part of the comparison job. Any consolidation is a later, separately approved change after backup and rollback qualification.
+
+### Publication/data handling
+
+The user confirms these are development stacks and simulated data and wants their project information available in the central GitHub repository. Publish the sanitized infrastructure inventory, component/version matrix, feature evidence and test results to the existing repository. Do not publish authentication material (for example the local GitHub token file), private keys, credentials or session headers; those remain credentials even in development. Preserve report history with timestamped artifacts rather than only overwriting `latest.json`.
+
+**Current status:** script source audited; current reporter coverage insufficient for component-level comparison; current publisher targets a dedicated ops branch; no cron or runtime configuration changed; no script executed; no candidate version selected.
+
+
+## 2026-11-08 — Priority correction: preserve the last 48 hours of Debian development first
+
+**User's explicit priority:** prioritize what is already installed, with first priority given to development deployed on Debian during the last 48 hours. The goal is to retain the strongest actually integrated and usable work, not to prefer the highest version number or an attractive but uninstalled GitHub branch.
+
+### Mandatory order of precedence
+
+1. **Recent Debian deployed state (last 48 hours):** preserve first. This includes deployed container/image identities and digests, Compose definitions and overrides, source commits/worktrees, configuration, networks, mounts and named volumes, generated artifacts, test evidence, and rollback material. Treat all of these as valuable until inventoried and backed up.
+2. Other components already installed and working on the main Debian development platform.
+3. Existing qualification/E2E stacks and their test evidence.
+4. GitHub branches, worktrees, patches and candidate features not yet deployed.
+5. Older/duplicate environments, only considered for retirement after comparison and explicit approval.
+
+A newer tag, a more recent branch commit, or a larger feature list never overrides verified recent deployed state without a documented comparison and passing compatibility/integration tests.
+
+### Preservation gate before consolidation
+
+- Establish a timestamped baseline of the current Debian runtime and compare it with available deployment receipts, Git commits, image digests and filesystem timestamps to identify changes in the last 48 hours. Timestamps alone are clues, not proof of deployment chronology.
+- Capture immutable image IDs/digests, container configuration metadata, Compose project/config-file labels, effective Compose source file paths and checksums, Git commit and dirty-worktree status, network/mount/volume associations, and health/test results.
+- Back up the exact source/configuration and required simulated development data; verify archive checksums and that backups are readable before any cleanup.
+- Record dependencies and feature/integration evidence for each component. Mark unknown provenance as UNKNOWN; do not replace unknown with a guessed version or commit.
+- Create a per-component preservation manifest and a rollback path. Keep all five observed development stacks intact while the comparison is underway.
+- Only after the preservation gate passes may a candidate be recommended. Any cleanup, environment retirement, image replacement, volume deletion, database migration or promotion is a separate explicitly approved operation.
+
+### Selection rule
+
+The preferred implementation is the one that maximizes verified usable features and integration while retaining the recent Debian work. The recent Debian deployment is the baseline/reference candidate, not an automatic winner if tests show it is broken; any proposed replacement must demonstrate feature parity or a documented feature gain, contract and schema compatibility, passing relevant tests, operational readiness, and a tested rollback. Do not discard useful partial work: record feature deltas and porting opportunities.
+
+### Current evidence limitation
+
+The supplied audits show current running containers and identify existing cron reporter/publisher scripts, but do not yet establish a complete timestamped per-component deployment history for the last 48 hours. The existing reporter omits image digests, Compose labels, source commits, mounts and feature/test evidence. Therefore the recent-deployment preservation inventory is **NOT YET COMPLETE**. Do not claim that any specific version is the best until this gap is closed.
+
+**Execution constraint:** use the existing Debian reporter → publisher chain as the inventory path after reviewing and extending it safely. No new cron, no deployment poller reuse, no automatic cleanup, no service restart, and no destructive consolidation.
+
+
+## 2026-11-08 — Initial GitHub-side preservation review (last 48 hours)
+
+**Scope:** GitHub history, PR metadata and check-run results only. This is not a Debian host inspection and does not prove which candidate is installed on SRV-DEB-05.
+
+### Main branch baseline
+
+Within the inspected 48-hour window, the latest non-documentation commit visible on `main` is `fbe692c20e50` (2026-11-06 23:13:30 UTC), titled `fix(fs1111): validate rendered nonempty history series without brittle five-path wait`. The subsequent 2026-11-08 commits in this window are documentation-only inventory/continuity updates. Therefore the GitHub default branch does not, by itself, contain a full record of the recent Debian runtime changes.
+
+### Candidate work and evidence
+
+| PR | Component / scope | GitHub state | Observed checks / limitations | Preservation decision |
+|---|---|---|---|---|
+| [#448](https://github.com/alimtalbi-ata/aiops/pull/448) | Twin Decimal metrics FS1009–FS1027 | Merged 2026-11-06 into `fix/fs-1002-prometheus-metrics-content-type`, not evidence of merge to main | PR records operator-reported host qualifications FS1015/1019/1020/1021/1024 and a source hash; verify exact host/image mapping before using as deployed baseline | Preserve source, exporter hash, overlay, scripts and branch history; candidate evidence is useful but target branch matters |
+| [#443](https://github.com/alimtalbi-ata/aiops/pull/443) | Worker FS147 read-only Policy transport | Open / Draft; head `4693d0fdec` | Check runs `grafana-real-integration`, `core-postgres-noc-real-integration`, `policy-and-static` completed success; PR states exact-head pytest and real bridge/Analyst/Critic/Policy/Core/GLPI E2E are not verified | Preserve; not yet usable end-to-end / not qualified for deployment |
+| [#450](https://github.com/alimtalbi-ata/aiops/pull/450) | Core FS147 native action-bound HITL and outbox fencing | Open / Draft; head `947c32198a` | Three named check runs completed success; PR states tests are synthetic predicates and authenticated GLPI/PG16/Temporal integration, concurrent revocation, host image SHA and exact-head CI remain blockers | Preserve; useful contract candidate, not operational HITL approval |
+| [#449](https://github.com/alimtalbi-ata/aiops/pull/449) | FS147 receipt/release gate | Open / Draft; head `a1f6d18e0e` | `runtime-e2e` and `quality-build-package` failed; contract/static/integrity and other listed checks succeeded | Preserve failure evidence and fix blockers; NO_GO |
+| [#451](https://github.com/alimtalbi-ata/aiops/pull/451) | Twin SAN isolation for FS147 | Open / Draft; head `2a3fa9f866` | `database-migrations` failed; other listed checks succeeded; fixtures synthetic and no real host FS147 E2E claimed | Preserve; fix migration check and retain isolation tests |
+| [#431](https://github.com/alimtalbi-ata/aiops/pull/431) | Worker FS V28 detection isolation from SAN Twin writes | Open / Draft against `deploy/aiops2-stable`; head `fd347ec92a` | Listed isolated, static/unit, build, runtime-E2E and migration checks succeeded; PR explicitly says no claim that evidence exists on host or full Worker/Temporal/Evidence/Portal E2E passes | Strong candidate for isolated qualification; do not merge/deploy from status alone |
+
+### Current conclusion
+
+- Do not select one universal "best version" yet. Component candidates have different scopes and different levels of evidence.
+- Preserve the last-48-hour Debian deployment as the first baseline; the exact host image digest, source commit, Compose overlay and volume/data mapping are still unavailable from the GitHub-only view.
+- The most useful immediate code comparison is component-scoped: Twin metrics (#448 source lineage), Worker FS-V28 isolation (#431), and FS147 Core/Worker/Twin slices (#443/#450/#451), while the overall FS147 receipt gate (#449) remains NO_GO due failed checks.
+- Green check runs are not proof of host deployment or full service integration. Draft PRs remain unmerged; do not promote automatically.
+- Next evidence required from Debian: image IDs/digests, Compose labels and effective file hashes, dirty worktree commits, mount/volume mapping, deployment receipts and a verified backup manifest for the last 48 hours.
+
+This review is a preservation/qualification decision only. No PR was merged, no code deployed, and no Debian runtime was changed.
+
+
+### 2026-11-08 02:03 UTC — GitHub-only qualification delta
+
+- [Core FS147 PR #450](https://github.com/alimtalbi-ata/aiops/pull/450) is still open/draft, now at exact HEAD [`ac2e3822dd073411ee7450940a5716cdc88fca5a`](https://github.com/alimtalbi-ata/aiops/commit/ac2e3822dd073411ee7450940a5716cdc88fca5a). GitHub Actions `AIOps quality gates` run [42434613507](https://github.com/alimtalbi-ata/aiops/actions/runs/42434613507) completed SUCCESS for that SHA. This is **CI evidence only**: native GLPI 147 approval, Temporal resume, Debian installation and cross-service E2E remain UNKNOWN/NOT_QUALIFIED.
+- [Integration FS147 PR #449](https://github.com/alimtalbi-ata/aiops/pull/449) remains at `a1f6d18e0e529b434e8cf45db2e294cc504411af`: isolated receipt run [42379782717](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782717) SUCCESS, general quality run [42379782613](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782613) FAILURE. No integration release qualification.
+- **Priority blocker unchanged:** existing Debian reporter/publisher lacks immutable image IDs/digests, Compose labels/config hashes, worktree dirty state, mounts/volumes, deployment receipts, test evidence and verified backup/rollback for the five preserved stacks. This GitHub review does not inspect SRV-DEB-05, its four cron entries, or establish deployed chronology. Do not consolidate, deploy or mutate any stack. FS1113 candidate remains separate from FS147 and from stable `aiops2-portal:fs1073-csp-candidate`.
+
+
+### 2026-11-08 03:03 UTC — Core correlation delta, preservation gate unchanged
+
+- [Core FS147 PR #450](https://github.com/alimtalbi-ata/aiops/pull/450) advanced from `ac2e3822dd073411ee7450940a5716cdc88fca5a` to [`bbe8b2b46d10e91a2100690941e7a6e2ae0e119a`](https://github.com/alimtalbi-ata/aiops/commit/bbe8b2b46d10e91a2100690941e7a6e2ae0e119a): comparison shows **two new files**, `app/core/fs147_correlation_chain.py` (60 lines) and `tests/test_fs147_correlation_chain.py` (61 lines). Pure offline tests cover tenant/alert/incident/run/evidence identity mismatch, untrusted identifiers, ticket 147, DEMO/LIVE boundaries and deterministic replay. [AIOps quality gates #42438550623](https://github.com/alimtalbi-ata/aiops/actions/runs/42438550623) completed SUCCESS for this HEAD; **CODE/CI only**, not authenticated GLPI, PG16, Temporal or host E2E.
+- [Integration PR #449](https://github.com/alimtalbi-ata/aiops/pull/449) remains at `a1f6d18e0e529b434e8cf45db2e294cc504411af`; [general quality gate #42379782613](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782613) FAILURE and [isolated receipt gate #42379782717](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782717) SUCCESS. These are distinct qualification levels.
+- **One priority blocker:** no newly authenticated SRV-DEB-05 preservation inventory for the five Compose stacks. Existing reporter -> publisher must attest immutable image identities, source/dirty worktrees, effective Compose/overrides, mount/volume and simulated-data retention, test receipts and verified rollback. Four crontab entries are not five stacks. Do not infer deployment from GitHub SHA, image tags or file dates. No host inspection or deployment was performed in this GitHub-only cycle. FS1113 remains non-production and separate from FS147.
+
+
+## ACME E2E selective receipt port — 2026-11-18 (proposed in draft)
+
+See [E2E handover](contracts/acme-e2e-handover.md). Offline structural gate only; runtime NOT_TESTED. Existing orchestration retained.
