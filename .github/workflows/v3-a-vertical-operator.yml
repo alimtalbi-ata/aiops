@@ -29,7 +29,7 @@ jobs:
         run: |
           python3 -m pip install --disable-pip-version-check 'playwright==1.56.0' 'unittest-xml-reporting==3.2.0'
           python3 -m playwright install --with-deps chromium
-      - name: Run seven synthetic Chromium vertical tests
+      - name: Run eight synthetic Chromium vertical tests
         run: |
           mkdir -p reports/vertical
           python3 -B - <<'PY'
@@ -40,14 +40,14 @@ jobs:
           sys.modules[spec.name]=module
           spec.loader.exec_module(module)
           suite=unittest.defaultTestLoader.loadTestsFromTestCase(module.VerticalOperator)
-          if suite.countTestCases()!=7:
-              raise SystemExit("FAIL: expected seven vertical tests")
+          if suite.countTestCases()!=8:
+              raise SystemExit("FAIL: expected eight vertical tests")
           result=xmlrunner.XMLTestRunner(output="reports/vertical",verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun!=7:
+          if not result.wasSuccessful() or result.testsRun!=8:
               raise SystemExit("FAIL: vertical Chromium")
-          print("PASS: vertical Chromium 7/7 synthetic",flush=True)
+          print("PASS: vertical Chromium 8/8 synthetic",flush=True)
           PY
-      - name: Validate JUnit exact seven and no failures
+      - name: Validate JUnit exact eight and no failures
         if: always()
         run: |
           python3 - <<'PY'
@@ -66,8 +66,8 @@ jobs:
                   if any(int(suite.attrib.get(k,"0")) for k in ("failures","errors","skipped")): raise SystemExit("FAIL: JUnit failures")
                   if any(c.find(tag) is not None for c in cases for tag in ("failure","error","skipped")): raise SystemExit("FAIL: JUnit case failure")
                   total+=len(cases)
-          if total!=7: raise SystemExit("FAIL: JUnit expected seven")
-          print("PASS: vertical JUnit 7/7")
+          if total!=8: raise SystemExit("FAIL: JUnit expected eight")
+          print("PASS: vertical JUnit 8/8")
           PY
       - name: UTC receipt
         if: always()
