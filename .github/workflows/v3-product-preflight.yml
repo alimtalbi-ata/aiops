@@ -5,6 +5,8 @@ on:
     paths:
       - 'v3-spike/kit/product_preflight.py'
       - 'v3-spike/kit/test_product_preflight.py'
+      - 'v3-spike/kit/verify_junit.py'
+      - 'v3-spike/kit/test_verify_junit.py'
       - 'v3-spike/kit/product-bom.json'
       - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
@@ -40,6 +42,22 @@ jobs:
           assert result.wasSuccessful() and result.testsRun == count, 'FAIL product BOM tests'
           print('PASS product BOM static and CLI 15/15; runtime NOT_RUN')
           PY
+      - name: Verify eight adversarial JUnit mutations
+        run: |
+          set -eu
+          PYTHONPATH=v3-spike/kit python3 -B -m unittest -v test_verify_junit
+      - name: Verify product JUnit receipt integrity
+        run: |
+          set -eu
+          python3 -B v3-spike/kit/verify_junit.py reports --expected 15
+      - name: Product BOM file gate (fail closed)
+        run: |
+          set -eu
+          if [ ! -f v3-spike/kit/product-bom.json ]; then
+            echo 'FAIL product BOM: canonical product-bom.json missing; fixtures do not qualify product'
+            exit 1
+          fi
+          python3 -B v3-spike/kit/product_preflight.py v3-spike/kit/product-bom.json
       - name: Upload JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
