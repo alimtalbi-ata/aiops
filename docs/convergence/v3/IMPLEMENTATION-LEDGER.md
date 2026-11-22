@@ -240,3 +240,14 @@ This port collected the remaining historical documentation, tools, qualification
 - **#822 TEAM A**: 4/4 source snapshots under `team-a-822/`.
 
 Direct GitHub PR changed-filename set comparisons confirm zero missing for **#818, #824, #825, #823, #822, #812, #805 and #792** at this port. These are **source snapshots**, not validated or deployed integration; no workflows, tests, scripts, browser capture, migrations, agents or collectors were executed. Historical PRs before #771 and other branches/repositories remain unverified; global exhaustiveness is **not** asserted.
+
+
+## Port 14 — Historical R1 trust gates and broad PR #784 snapshot (2026-11-22)
+
+**Collection only. NO TEST EXECUTION.** All new files are inert source copies under `docs/convergence/v3/source-imports/`, not active workflows, executed scripts, applied migrations or reconciled runtime.
+
+- Fully collected changed-file snapshots for **#791, #790, #789, #788, #787, #786, #785, #783, #781, #780, #779, #778, #777, #776, #775, #774, #773, #772, #770, #769, #768, #767 and #766**. These cover source identity, tenant canonicalization, Analyst/Critic authority, freshness, correlation, NOC browser/a11y and exact-head quality acceptance.
+- **PR #784** (`docs/r1-quality-exact-sha-triage-20261116-1236`): **183/183 changed-file snapshots** copied under `pr-784/`, verified by exact source-vs-target GitHub PR changed-filename comparison (zero missing). Preserved GLPI read-only and signed xref, OIDC principal/nonce, Temporal execution start, tenant/actor authorization, synthetic NOC, ACME evidence/ITIL and demo, SQL migration definitions, workflow configs, scripts and historical tests.
+- PR #784's broad source snapshot is **not** a claim that all the historical behavior is integrated or secure. The historical tests have **not** been run; their presence is archival evidence only.
+
+**Remaining scope:** other older PRs, historical branches and external/satellite repos require continued inventory. No tests, scripts, collectors, browser capture, CI workflows, migrations, deployments or merges were initiated.
