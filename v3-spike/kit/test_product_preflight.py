@@ -1,4 +1,4 @@
-"""Synthetic product BOM negative tests. No client data, Docker, or host changes."""
+"""Synthetic product BOM negative tests; no Docker, secrets or host changes."""
 import unittest
 from product_preflight import REQUIRED, validate
 
@@ -34,6 +34,24 @@ class ProductPreflightTests(unittest.TestCase):
     def test_duplicate_secret_reference(self):
         b = valid(); b["services"]["hitl"]["secrets"] = ["X", "X"]
         self.assertRaises(ValueError, validate, b)
+    def test_optional_service_cannot_own_migration(self):
+        b = valid(); b["services"]["core"]["migration"] = False
+        b["services"]["demo"] = {"image": "example.org/demo@sha256:" + "b"*64,
+            "profile": "demo", "secrets": [], "migration": True}
+        self.assertRaises(ValueError, validate, b)
+    def test_duplicate_migration_owner(self):
+        b = valid(); b["services"]["worker"]["migration"] = True
+        self.assertRaises(ValueError, validate, b)
+    def test_optional_migration_with_core_still_rejected(self):
+        b = valid()
+        b["services"]["demo"] = {"image": "example.org/demo@sha256:" + "b"*64,
+            "profile": "demo", "secrets": [], "migration": True}
+        self.assertRaises(ValueError, validate, b)
+    def test_optional_non_migrating_service_allowed(self):
+        b = valid()
+        b["services"]["demo"] = {"image": "example.org/demo@sha256:" + "b"*64,
+            "profile": "demo", "secrets": [], "migration": False}
+        self.assertEqual(validate(b)["services"], 8)
 
 if __name__ == "__main__":
     unittest.main()
