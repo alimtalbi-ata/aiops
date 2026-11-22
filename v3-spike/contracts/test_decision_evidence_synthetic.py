@@ -78,6 +78,17 @@ class DecisionEvidenceTests(unittest.TestCase):
         backend = dict(self.backend, resource_id="R"*257)
         self.assertEqual(self.check(backend=backend)["decision"], "DENY")
         self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+    def test_encoded_payload_budget_denied(self):
+        e = dict(self.env)
+        for field in ("tenant_id", "principal_id", "event_id", "resource_id", "twin_revision",
+                      "policy_version", "approval_id", "nonce", "issuer_key_id"):
+            e[field] = "é"*256
+        self.assertEqual(self.check(e, mac="0"*64)["decision"], "DENY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+    def test_valid_fixture_still_simulates(self):
+        result = self.check()
+        self.assertEqual(result["decision"], "SIMULATE_ONLY")
+        self.assertIs(result["production_authorized"], False)
     def test_atomic_race_two_connections(self):
         with tempfile.TemporaryDirectory() as folder:
             path = folder + "/nonces.sqlite"
