@@ -81,6 +81,12 @@ class IsolationTests(unittest.TestCase):
                         validate(c)
     def test_network_driver_opts(self):
         self.healthcheck_bounds_per_service()
+        for field, bad in (("enable_ipv4", False), ("enable_ipv6", True)):
+            with self.subTest(field=field):
+                c = fixture()
+                c["networks"]["edge"][field] = bad
+                with self.assertRaisesRegex(ValueError, "unsafe network IP families"):
+                    validate(c)
         c = fixture()
         c["networks"]["edge"]["driver_opts"] = {"com.docker.network.bridge.host_binding_ipv4": "0.0.0.0"}
         with self.assertRaises(ValueError):
