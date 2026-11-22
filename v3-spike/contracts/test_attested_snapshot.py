@@ -219,5 +219,161 @@ class AttestedSnapshotTests(unittest.TestCase):
                 self.assertEqual(result, "DENY")
                 backend.assert_called_once()
 
+
+    def test_authorization_revoked_during_fetch_denied(self):
+        access = {"granted": True}
+        backend = Mock()
+        def revoke(**kwargs):
+            access["granted"] = False
+            return self.response()
+        backend.side_effect = revoke
+        decision = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            authorization_probe=lambda: access["granted"])
+        self.assertEqual(decision, "DENY")
+        backend.assert_called_once()
+        self.assertFalse(access["granted"])
+
+    def test_authorization_revoked_before_fetch_no_backend_read(self):
+        backend = Mock(return_value=self.response())
+        decision = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            authorization_probe=lambda: False)
+        self.assertEqual(decision, "DENY")
+        backend.assert_not_called()
+
+    def test_authorization_probe_must_return_exact_true(self):
+        for verdict in ("yes", 1, ["granted"], None):
+            with self.subTest(verdict=verdict):
+                backend = Mock(return_value=self.response())
+                decision = attested_snapshot_decision(
+                    event=self.event, assertion=self.token(), verifier=self.verifier,
+                    fetch_pair=backend, witness=self.witness,
+                    authorization_probe=lambda: verdict)
+                self.assertEqual(decision, "DENY")
+                backend.assert_not_called()
+
+    def test_authorization_probe_errors_fail_closed(self):
+        for calls in ((RuntimeError("before"),), (True, RuntimeError("after"))):
+            with self.subTest(calls=repr(calls)):
+                backend = Mock(return_value=self.response())
+                probe = Mock(side_effect=list(calls))
+                decision = attested_snapshot_decision(
+                    event=self.event, assertion=self.token(), verifier=self.verifier,
+                    fetch_pair=backend, witness=self.witness, authorization_probe=probe)
+                self.assertEqual(decision, "DENY")
+                self.assertEqual(backend.call_count, 0 if len(calls) == 1 else 1)
+
+    def test_authorization_probe_stable_true_synthetic_only(self):
+        backend = Mock(return_value=self.response())
+        probe = Mock(return_value=True)
+        decision = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, authorization_probe=probe)
+        self.assertEqual(decision, "ALLOW_SYNTHETIC")
+        self.assertEqual(probe.call_count, 3)
+        backend.assert_called_once()
+
+
+    def test_authorization_revoked_by_witness_denied(self):
+        access = {"granted": True}
+        witness = Mock()
+        def revoke(*args):
+            access["granted"] = False
+            return True
+        witness.verify.side_effect = revoke
+        probe = Mock(side_effect=lambda: access["granted"])
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=witness, authorization_probe=probe)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(probe.call_count, 3)
+        backend.assert_called_once()
+
+    def test_witness_mutation_of_state_denied(self):
+        witness = Mock()
+        def mutate(*args):
+            self.state["writes"] += 1
+            return True
+        witness.verify.side_effect = mutate
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=Mock(return_value=self.response()), witness=witness,
+            state_probe=lambda: tuple(sorted(self.state.items())))
+        self.assertEqual(result, "DENY")
+        self.assertEqual(self.state["writes"], 1)
+
+    def test_witness_mutation_of_event_denied(self):
+        original = dict(self.event)
+        witness = Mock()
+        def mutate(*args):
+            self.event["digest"] = "a" * 64
+            return True
+        witness.verify.side_effect = mutate
+        try:
+            result = attested_snapshot_decision(
+                event=self.event, assertion=self.token(), verifier=self.verifier,
+                fetch_pair=Mock(return_value=self.response()), witness=witness)
+            self.assertEqual(result, "DENY")
+        finally:
+            self.event.clear()
+            self.event.update(original)
+
+    def test_stable_probes_checked_three_times_only_synthetic(self):
+        backend = Mock(return_value=self.response())
+        auth = Mock(return_value=True)
+        state = Mock(return_value=("stable",))
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            authorization_probe=auth, state_probe=state)
+        self.assertEqual(result, "ALLOW_SYNTHETIC")
+        self.assertEqual(auth.call_count, 3)
+        self.assertEqual(state.call_count, 3)
+        backend.assert_called_once()
+
+
+    def test_aliased_mutable_probe_detects_in_place_backend_mutation(self):
+        # The probe returns the SAME dict object each time; equality without
+        # a frozen baseline would compare the mutated object to itself.
+        state = {"nested": {"writes": 0}}
+        def mutate(**kwargs):
+            state["nested"]["writes"] += 1
+            return self.response()
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=mutate, witness=self.witness, state_probe=lambda: state)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(state["nested"]["writes"], 1)
+
+    def test_aliased_mutable_probe_detects_witness_mutation(self):
+        state = {"history": ["rev1"]}
+        witness = Mock()
+        def mutate(*args):
+            state["history"].append("rev2")
+            return True
+        witness.verify.side_effect = mutate
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=Mock(return_value=self.response()), witness=witness,
+            state_probe=lambda: state)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(state["history"], ["rev1", "rev2"])
+
+    def test_uncopyable_probe_fails_closed(self):
+        class Uncopyable:
+            def __deepcopy__(self, memo):
+                raise RuntimeError("unfreezable observation")
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            state_probe=lambda: Uncopyable())
+        self.assertEqual(result, "DENY")
+        backend.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
