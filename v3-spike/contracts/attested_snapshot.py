@@ -105,6 +105,13 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
             raise PermissionError("observable mutation during attestation")
         if event != original_event:
             raise PermissionError("event mutated during attestation")
+        # A state observer can itself revoke access on its final invocation.
+        # Recheck authorization after that observer; this remains a synthetic
+        # best-effort boundary, NOT atomic authorization in a real backend.
+        if authorization_probe is not None and authorization_probe() is not True:
+            raise PermissionError("authorization revoked by final state observation")
+        if event != original_event:
+            raise PermissionError("event mutated during final authorization")
         return response.pair
 
     try:
