@@ -273,7 +273,7 @@ class AttestedSnapshotTests(unittest.TestCase):
             event=self.event, assertion=self.token(), verifier=self.verifier,
             fetch_pair=backend, witness=self.witness, authorization_probe=probe)
         self.assertEqual(decision, "ALLOW_SYNTHETIC")
-        self.assertEqual(probe.call_count, 4)
+        self.assertEqual(probe.call_count, 5)
         backend.assert_called_once()
 
 
@@ -331,8 +331,8 @@ class AttestedSnapshotTests(unittest.TestCase):
             fetch_pair=backend, witness=self.witness,
             authorization_probe=auth, state_probe=state)
         self.assertEqual(result, "ALLOW_SYNTHETIC")
-        self.assertEqual(auth.call_count, 4)
-        self.assertEqual(state.call_count, 3)
+        self.assertEqual(auth.call_count, 5)
+        self.assertEqual(state.call_count, 4)
         backend.assert_called_once()
 
 
@@ -464,6 +464,42 @@ class AttestedSnapshotTests(unittest.TestCase):
         finally:
             self.event.clear()
             self.event.update(original)
+
+    def test_final_authorization_mutates_state_denied(self):
+        # Fourth auth probe writes after third state observation.
+        state = {"writes": 0}
+        auth_calls = {"n": 0}
+        def auth_probe():
+            auth_calls["n"] += 1
+            if auth_calls["n"] == 4:
+                state["writes"] += 1
+            return True
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            state_probe=lambda: state, authorization_probe=auth_probe)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(state["writes"], 1)
+        backend.assert_called_once()
+
+    def test_fourth_state_probe_revokes_acl_denied(self):
+        # Re-observation must not allow a late ACL revocation.
+        access = {"granted": True}
+        observations = {"n": 0}
+        def state_probe():
+            observations["n"] += 1
+            if observations["n"] == 4:
+                access["granted"] = False
+            return ("stable",)
+        auth = Mock(side_effect=lambda: access["granted"])
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=Mock(return_value=self.response()), witness=self.witness,
+            state_probe=state_probe, authorization_probe=auth)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(observations["n"], 4)
+        self.assertEqual(auth.call_count, 5)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
