@@ -135,7 +135,7 @@ class VerticalOperator(unittest.TestCase):
         self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
         self.assertIn("NOT_RUN", self.page.locator("#run-value").inner_text())
         f=fixture()
-        f["event"]["id"]="bad\\ncontrol"
+        f["event"]["id"]="bad\ncontrol"
         self.load(f)
         self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
         self.page.locator("#eligibility").click()
