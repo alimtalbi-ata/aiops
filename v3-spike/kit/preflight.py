@@ -23,6 +23,18 @@ def validate_source(source):
         require(declarations == expected, "unsafe source profiles: " + name)
         require(not re.search(r"(?m)^\s+profiles\s*:", block.replace("    profiles: [demo]", "") if name == "demo" else block), "nested/duplicate profiles: " + name)
 
+def duration_ns(value):
+    """Compose JSON may encode a duration as ns integer or Go-style unit string."""
+    if type(value) is int:
+        return value
+    if type(value) is str:
+        match = re.fullmatch(r"([0-9]+)(ns|us|ms|s|m|h)", value)
+        require(match is not None, "invalid healthcheck duration")
+        multiplier = {"ns": 1, "us": 1000, "ms": 1000000,
+                      "s": 1000000000, "m": 60000000000, "h": 3600000000000}
+        return int(match.group(1)) * multiplier[match.group(2)]
+    raise ValueError("invalid healthcheck duration")
+
 def validate(config):
     validate_source(Path(__file__).resolve().with_name("docker-compose.yml").read_text(encoding="utf-8"))
     services = config["services"]
@@ -70,9 +82,9 @@ def validate(config):
         ):
             if key in health:
                 duration = health[key]
-                require(type(duration) is int and lower <= duration <= upper, "healthcheck duration " + key + ": " + name)
+                require(lower <= duration_ns(duration) <= upper, "healthcheck duration " + key + ": " + name)
         require("interval" in health and "timeout" in health, "healthcheck timing missing: " + name)
-        require(health["timeout"] <= health["interval"], "healthcheck timeout exceeds interval: " + name)
+        require(duration_ns(health["timeout"]) <= duration_ns(health["interval"]), "healthcheck timeout exceeds interval: " + name)
         deps = s.get("depends_on", {})
         require(type(deps) is dict, "depends_on type: " + name)
         if name == "gamma":
