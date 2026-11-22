@@ -1,6 +1,11 @@
 """Synthetic product BOM negative tests; no Docker, secrets or host changes."""
 import unittest
-from product_preflight import REQUIRED, validate
+import json
+import tempfile
+from pathlib import Path
+from contextlib import redirect_stdout
+from io import StringIO
+from product_preflight import REQUIRED, validate, main
 
 def valid():
     return {"schema": 1, "services": {
@@ -11,6 +16,38 @@ def valid():
     }}
 
 class ProductPreflightTests(unittest.TestCase):
+    def test_cli_accepts_synthetic_fixture_only_as_static(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bom.json"
+            path.write_text(json.dumps(valid()), encoding="utf-8")
+            output = StringIO()
+            with redirect_stdout(output):
+                rc = main([str(path)])
+            self.assertEqual(rc, 0)
+            self.assertEqual(json.loads(output.getvalue())["runtime_attested"], False)
+
+    def test_cli_rejects_mutable_image(self):
+        bom = valid()
+        bom["services"]["core"]["image"] = "example.org/core:latest"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bom.json"
+            path.write_text(json.dumps(bom), encoding="utf-8")
+            output = StringIO()
+            with redirect_stdout(output):
+                rc = main([str(path)])
+            self.assertEqual(rc, 2)
+            self.assertEqual(json.loads(output.getvalue())["status"], "STATIC_FAIL")
+
+    def test_cli_rejects_invalid_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bom.json"
+            path.write_text("{invalid", encoding="utf-8")
+            output = StringIO()
+            with redirect_stdout(output):
+                rc = main([str(path)])
+            self.assertEqual(rc, 2)
+            self.assertEqual(json.loads(output.getvalue())["status"], "STATIC_FAIL")
+
     def test_valid_static(self):
         self.assertFalse(validate(valid())["runtime_attested"])
     def test_missing_service(self):
