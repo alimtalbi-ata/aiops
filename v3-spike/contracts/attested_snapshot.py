@@ -56,10 +56,12 @@ class SyntheticIndependentWitness:
             return False
 
 
-def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witness, state_probe=None):
+def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witness, state_probe=None, authorization_probe=None):
     """Synthetic decision; optional trusted state probe rejects observable fetch mutations.
 
-    state_probe must be owned outside the adapter under test. This is NOT
+    state_probe and authorization_probe must be owned outside the adapter under test.
+    authorization_probe is optional for legacy synthetic fixtures; absence is
+    NEVER proof of revocation safety. This is NOT
     production transaction isolation or a guarantee against hidden side effects.
     """
     if not isinstance(event, dict) or not callable(getattr(witness, "verify", None)):
@@ -67,13 +69,21 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
 
     if state_probe is not None and not callable(state_probe):
         return "DENY"
+    if authorization_probe is not None and not callable(authorization_probe):
+        return "DENY"
 
     def checked_fetch_pair(**kwargs):
         # A malicious adapter must not rewrite the caller event between ACL and receipt checks.
         original_event = dict(event)
+        # Trusted authorization probe is independent of fetch_pair; exact True only.
+        # It is rechecked after the backend call to catch observable revocation.
+        if authorization_probe is not None and authorization_probe() is not True:
+            raise PermissionError("authorization revoked before fetch")
         before = state_probe() if state_probe is not None else None
         response = fetch_pair(**kwargs)
         after = state_probe() if state_probe is not None else None
+        if authorization_probe is not None and authorization_probe() is not True:
+            raise PermissionError("authorization revoked after fetch")
         if event != original_event:
             raise PermissionError("event mutated during fetch")
         if state_probe is not None and (before != after):
