@@ -1,0 +1,33 @@
+name: V3 B Twin Evidence Synthetic
+on:
+  push:
+    branches:
+      - 'v3-spike/b-attested-snapshot-20261121'
+    paths:
+      - 'v3-spike/contracts/twin_evidence_boundary.py'
+      - 'v3-spike/contracts/test_twin_evidence_boundary.py'
+      - '.github/workflows/v3-b-twin-evidence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  twin-evidence-synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Exact-source synthetic unittest and JUnit
+        run: |
+          python -m pip install --disable-pip-version-check unittest-xml-reporting==3.2.0
+          cd v3-spike/contracts
+          python -m xmlrunner discover -s . -p 'test_twin_evidence_boundary.py' -o ../../reports/twin-evidence
+      - name: Upload JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-evidence-junit
+          path: reports/twin-evidence/
+          if-no-files-found: error
