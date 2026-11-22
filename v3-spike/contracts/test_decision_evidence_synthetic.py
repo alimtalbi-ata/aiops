@@ -71,9 +71,23 @@ class DecisionEvidenceTests(unittest.TestCase):
         self.assertEqual(self.check(e, mac="0"*64)["decision"], "DENY")
         self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
     def test_control_character_denied_without_mutation(self):
-        e = dict(self.env, principal_id="principal-1\\n")
-        self.assertEqual(self.check(e, mac="0"*64)["decision"], "DENY")
-        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+        # Exercise the canonical field-bounds guard, not backend mismatch or a bad MAC.
+        for control in ("\\n", "\\t", "\\x00", "\\x7f"):
+            with self.subTest(codepoint=ord(control)):
+                e = dict(self.env, principal_id="principal-1" + control)
+                backend = dict(self.backend, principal_id=e["principal_id"])
+                result = self.check(e, mac=sign_fixture(self.env, KEY), backend=backend)
+                self.assertEqual(result, {"decision": "DENY", "reason": "invalid_or_replayed"})
+                self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+                self.assertFalse(self.db.in_transaction)
+    def test_control_character_in_backend_is_not_authorization(self):
+        # An untrusted backend context must not turn a malformed envelope into approval.
+        for control in ("\\n", "\\x00"):
+            with self.subTest(codepoint=ord(control)):
+                e = dict(self.env, resource_id="opaque-1" + control)
+                backend = dict(self.backend, resource_id=e["resource_id"])
+                self.assertEqual(self.check(e, mac=sign_fixture(self.env, KEY), backend=backend)["decision"], "DENY")
+                self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
     def test_oversized_backend_identifier_denied(self):
         backend = dict(self.backend, resource_id="R"*257)
         self.assertEqual(self.check(backend=backend)["decision"], "DENY")
