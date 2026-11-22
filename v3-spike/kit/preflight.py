@@ -36,9 +36,10 @@ def validate(config):
         ipam = net.get("ipam", {})
         require(type(ipam) is dict and set(ipam) <= {"driver", "config"} and ipam.get("driver", "default") == "default" and ipam.get("config", []) in ([], None), "unsafe network IPAM")
         require(net.get("external", False) is False and net.get("driver", "bridge") == "bridge", "unsafe network")
-    allowed = {"image","user","read_only","cap_drop","security_opt","ports","networks","volumes","environment","command","healthcheck","depends_on","profiles"}
+    allowed = {"image","user","read_only","cap_drop","security_opt","ports","networks","volumes","environment","command","healthcheck","depends_on","profiles","entrypoint"}
     for name, s in services.items():
         require(type(s) is dict and set(s) <= allowed, "unexpected service field: " + name)
+        require(s.get("entrypoint") in (None, []), "unsafe entrypoint: " + name)
         require(type(s.get("image")) is str and re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", s["image"]), "unpinned image")
         require(s.get("user") == "65532:65532" and s.get("read_only") is True, "missing isolation")
         require(s.get("cap_drop") == ["ALL"], "cap_drop")
