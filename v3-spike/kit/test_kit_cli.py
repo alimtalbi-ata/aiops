@@ -103,6 +103,19 @@ class KitCliTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             cli.plan("install", link)
 
+    def test_reject_privileged_mount_and_network_mutations(self):
+        original = self.compose.read_text()
+        mutations = (
+            original.replace("    read_only: true", "    privileged: true\n    read_only: true", 1),
+            original.replace("./fixture.py:/fixture.py:ro", "/etc:/host:rw", 1),
+            original.replace("    internal: true", "    external: true", 1),
+        )
+        for mutated in mutations:
+            self.assertNotEqual(mutated, original)
+            self.compose.write_text(mutated)
+            with self.assertRaises(ValueError):
+                cli.plan("install", self.root)
+
     def test_no_docker_subprocess_from_planner(self):
         with mock.patch.object(subprocess, "run", side_effect=AssertionError("unexpected Docker execution")):
             self.assertEqual(cli.plan("install", self.root)["action"], "install")
