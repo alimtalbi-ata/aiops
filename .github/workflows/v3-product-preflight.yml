@@ -8,12 +8,14 @@ on:
       - 'v3-spike/kit/verify_junit.py'
       - 'v3-spike/kit/test_verify_junit.py'
       - 'v3-spike/kit/product-bom.json'
+      - 'v3-spike/kit/docker-compose.yml'
+      - 'v3-spike/kit/fixture.py'
       - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  product-bom-static:
+  synthetic-dev:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -50,19 +52,11 @@ jobs:
         run: |
           set -eu
           python3 -B v3-spike/kit/verify_junit.py reports --expected 18 --source v3-spike/kit/test_product_preflight.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest reports/receipt-manifest.json
-      - name: Product BOM file gate (fail closed)
-        run: |
-          set -eu
-          if [ ! -f v3-spike/kit/product-bom.json ]; then
-            echo 'FAIL product BOM: canonical product-bom.json missing; fixtures do not qualify product'
-            exit 1
-          fi
-          python3 -B v3-spike/kit/product_preflight.py v3-spike/kit/product-bom.json
       - name: Upload JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: v3-product-bom-junit
+          name: v3-synthetic-dev-junit
           path: |
             reports/*.xml
             reports/receipt-manifest.json
@@ -73,4 +67,35 @@ jobs:
         run: |
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
-          echo "runtime=NOT_RUN deploy_authorized=false"
+          echo "qualification=synthetic-dev runtime=NOT_RUN deploy_authorized=false"
+  product-qualification:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify SHA and product BOM provenance gate
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          date -u +%FT%TZ
+          test -f v3-spike/kit/product-bom.json || { echo 'FAIL: product BOM absent; synthetic fixtures cannot qualify product'; exit 1; }
+          python3 -B v3-spike/kit/product_preflight.py v3-spike/kit/product-bom.json
+          echo 'FAIL: OCI digest existence, licenses and provenance not yet independently verified'
+          exit 1
+      - name: Product Compose gate
+        if: success()
+        run: |
+          set -eu
+          test -f v3-spike/product/docker-compose.yml || { echo 'FAIL: canonical PRODUCT compose absent'; exit 1; }
+          cd v3-spike/product
+          docker compose -f docker-compose.yml config --quiet
+          docker compose --profile demo -f docker-compose.yml config --quiet
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "qualification=product runtime=NOT_RUN deploy_authorized=false"
