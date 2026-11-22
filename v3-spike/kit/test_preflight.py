@@ -85,6 +85,20 @@ class IsolationTests(unittest.TestCase):
         c["networks"]["edge"]["driver_opts"] = {"com.docker.network.bridge.host_binding_ipv4": "0.0.0.0"}
         with self.assertRaises(ValueError):
             validate(c)
+    def test_demo_image_override_requires_digest(self):
+        # D P1: a mutable DEMO_IMAGE must fail just like CORE_IMAGE.
+        for service in ("gamma", "core", "demo"):
+            for bad in ("python:latest", "example.invalid/fixture:v1",
+                        "example.invalid/fixture@sha256:" + "g"*64,
+                        "example.invalid/fixture@sha256:" + "a"*63):
+                with self.subTest(service=service, image=bad):
+                    c = fixture()
+                    original = c["services"][service]["image"]
+                    c["services"][service]["image"] = bad
+                    self.assertNotEqual(original, bad, "mutation must be effective")
+                    with self.assertRaisesRegex(ValueError, "unpinned image"):
+                        validate(c)
+
     def test_network_external(self):
         c = fixture()
         c["networks"]["edge"]["external"] = True
