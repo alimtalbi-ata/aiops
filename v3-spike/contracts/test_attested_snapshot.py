@@ -273,7 +273,7 @@ class AttestedSnapshotTests(unittest.TestCase):
             event=self.event, assertion=self.token(), verifier=self.verifier,
             fetch_pair=backend, witness=self.witness, authorization_probe=probe)
         self.assertEqual(decision, "ALLOW_SYNTHETIC")
-        self.assertEqual(probe.call_count, 4)
+        self.assertEqual(probe.call_count, 5)
         backend.assert_called_once()
 
 
