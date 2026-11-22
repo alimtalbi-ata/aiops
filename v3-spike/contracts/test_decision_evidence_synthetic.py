@@ -81,9 +81,17 @@ class DecisionEvidenceTests(unittest.TestCase):
                 self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
                 self.assertFalse(self.db.in_transaction)
     def test_oversized_backend_identifier_denied(self):
-        backend = dict(self.backend, resource_id="R"*257)
-        self.assertEqual(self.check(backend=backend)["decision"], "DENY")
+        # Keep the signed envelope and backend identity equal: otherwise DENY
+        # could be caused solely by a resource mismatch, not field bounds.
+        from decision_evidence_synthetic import canonical
+        e = dict(self.env, resource_id="R"*257)
+        backend = dict(self.backend, resource_id=e["resource_id"])
+        with self.assertRaisesRegex(ValueError, "field_bounds"):
+            canonical(e)
+        result = self.check(e, mac=sign_fixture(self.env, KEY), backend=backend)
+        self.assertEqual(result, {"decision": "DENY", "reason": "invalid_or_replayed"})
         self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+        self.assertFalse(self.db.in_transaction)
     def test_encoded_payload_budget_denied(self):
         e = dict(self.env)
         for field in ("tenant_id", "principal_id", "event_id", "resource_id", "twin_revision",
