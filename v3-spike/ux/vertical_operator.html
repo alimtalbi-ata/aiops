@@ -40,6 +40,7 @@ function validate(x){
  if(g.view!=="incident"||JSON.stringify(g.incident)!==JSON.stringify(i)||JSON.stringify(g.twin)!==JSON.stringify(t)||JSON.stringify(g.policy)!==JSON.stringify(p)||JSON.stringify(g.run)!==JSON.stringify(r)||JSON.stringify(g.receipt)!==JSON.stringify(c))throw Error("GAMMA projection mismatch");
  return {e,i,t,p,r,c};
 }
+$("payload").addEventListener("input",()=>{++importGeneration;reset("UNKNOWN / DENY — edited projection requires explicit inspection.");$("file-status").textContent="Editor changed; inspect explicitly. No upload.";});
 $("load").addEventListener("click",()=>{
  reset();try{const {e,i,t,p,r,c}=validate(JSON.parse($("payload").value));
  $("incident-value").textContent=`${i.id} · ${i.severity} · ${i.status} · event ${e.id} (${e.source})`;
