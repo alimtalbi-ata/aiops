@@ -88,6 +88,12 @@ jobs:
                   suites = [root] if root.tag == "testsuite" else list(root) if root.tag == "testsuites" else []
                   if not suites or any(suite.tag != "testsuite" for suite in suites):
                       raise SystemExit(f"FAIL: malformed JUnit suite in {file}")
+                  if root.tag == "testsuites":
+                      for key in ("failures", "errors", "skipped"):
+                          if int(root.attrib.get(key, "0")) != 0:
+                              raise SystemExit(f"FAIL: JUnit root {key} counter in {file}")
+                      if "tests" in root.attrib and int(root.attrib["tests"]) != sum(len(s.findall("testcase")) for s in suites):
+                          raise SystemExit(f"FAIL: JUnit root test count mismatch in {file}")
                   for suite in suites:
                       cases = suite.findall("testcase")
                       declared = int(suite.attrib.get("tests", "-1"))
