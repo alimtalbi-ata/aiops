@@ -27,19 +27,15 @@ jobs:
         run: |
           set -eu
           mkdir -p reports
+          python3 -m pip install --disable-pip-version-check 'unittest-xml-reporting==3.2.0'
           python3 -B - <<'PY'
           import sys, unittest
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
+          import xmlrunner
           sys.path.insert(0, 'v3-spike/kit')
           suite = unittest.defaultTestLoader.discover('v3-spike/kit', pattern='test_product_preflight.py')
           count = suite.countTestCases()
           assert count == 8, f'FAIL collection {count} != 8'
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
-          root = ET.Element('testsuite', name='product-bom-static', tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)), skipped=str(len(result.skipped)))
-          for i in range(result.testsRun):
-              ET.SubElement(root, 'testcase', classname='ProductPreflightTests', name=f'case_{i+1}')
-          ET.ElementTree(root).write('reports/product-bom.xml', encoding='utf-8', xml_declaration=True)
+          result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           assert result.wasSuccessful() and result.testsRun == 8, 'FAIL product BOM tests'
           print('PASS product BOM static 8/8; runtime NOT_RUN')
           PY
