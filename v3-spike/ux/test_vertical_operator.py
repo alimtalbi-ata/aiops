@@ -71,6 +71,23 @@ class VerticalOperator(unittest.TestCase):
         self.page.locator("#clear").click()
         self.assertEqual("",self.page.locator("#projection-file").input_value())
 
+    def test_pending_file_read_cannot_restore_cleared_projection(self):
+        self.page.evaluate("""() => {
+          window.pendingFileText = {};
+          File.prototype.text = function() {
+            return new Promise(resolve => { window.pendingFileText.resolve = resolve; });
+          };
+        }""")
+        self.page.locator("#projection-file").set_input_files(
+            {"name":"delayed.json","mimeType":"application/json","buffer":b"{}"})
+        self.page.wait_for_function("typeof window.pendingFileText.resolve === 'function'")
+        self.page.locator("#clear").click()
+        self.page.evaluate("(text) => window.pendingFileText.resolve(text)", json.dumps(fixture(True)))
+        self.page.wait_for_timeout(100)
+        self.assertEqual("", self.page.locator("#payload").input_value())
+        self.assertIn("UNKNOWN", self.page.locator("#state").inner_text())
+        self.assertIn("DENIED", self.page.locator("#decision").inner_text())
+
     def test_keyboard_and_viewports(self):
         for width in (320,1280,1920):
             self.page.set_viewport_size({"width":width,"height":900})
