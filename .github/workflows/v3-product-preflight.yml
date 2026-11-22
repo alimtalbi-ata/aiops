@@ -170,14 +170,14 @@ jobs:
       - name: Checkout reviewed B synthetic trust boundary at immutable SHA
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: cb97e302abe186fe5b3e96ab7db431b1be9ed569
+          ref: b1c519ded11ca9c8369c18d7e3465e221502477f
           path: b-contract
           persist-credentials: false
       - name: Run exact 24 B trust-boundary adversarial tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git -C b-contract rev-parse HEAD)" = "cb97e302abe186fe5b3e96ab7db431b1be9ed569"
+          test "$(git -C b-contract rev-parse HEAD)" = "b1c519ded11ca9c8369c18d7e3465e221502477f"
           python3 -m venv .venv-trust
           .venv-trust/bin/python -m pip install --disable-pip-version-check 'unittest-xml-reporting==3.2.0'
           mkdir -p trust-junit
@@ -202,7 +202,7 @@ jobs:
           assert reports, 'FAIL no JUnit'
           manifest = {'timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                       'integration_sha': os.environ['GITHUB_SHA'],
-                      'source_sha': 'cb97e302abe186fe5b3e96ab7db431b1be9ed569',
+                      'source_sha': 'b1c519ded11ca9c8369c18d7e3465e221502477f',
                       'run_id': os.environ['GITHUB_RUN_ID'], 'job': os.environ['GITHUB_JOB'],
                       'tests_expected': 24, 'semantic_manifest': 'trust-junit/semantic-manifest.json',
                       'sha256': {str(x): hashlib.sha256(x.read_bytes()).hexdigest()
@@ -221,7 +221,7 @@ jobs:
         if: always()
         run: |
           date -u +%FT%TZ
-          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=cb97e302abe186fe5b3e96ab7db431b1be9ed569 runtime=NOT_RUN production_authorized=false"
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=b1c519ded11ca9c8369c18d7e3465e221502477f runtime=NOT_RUN production_authorized=false"
   product-qualification:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
