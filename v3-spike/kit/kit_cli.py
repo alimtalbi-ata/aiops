@@ -9,7 +9,7 @@ import yaml
 
 ACTIONS = ("preflight", "install", "health", "upgrade", "rollback", "backup", "restore")
 COMPOSE = "docker-compose.yml"
-DIGEST = re.compile(r"[^\\s@]+@sha256:[0-9a-f]{64}\\Z")
+DIGEST = re.compile(r"[^\s@]+@sha256:[0-9a-f]{64}\Z")
 IMAGE_VARIABLES = {"gamma": "GAMMA_IMAGE", "core": "CORE_IMAGE", "demo": "DEMO_IMAGE"}
 
 class UniqueLoader(yaml.SafeLoader):
@@ -115,7 +115,7 @@ def main(argv=None):
     try:
         receipt = plan(args.action, args.kit_dir)
     except (ValueError, OSError) as exc:
-        parser.exit(2, "PLAN_FAIL: " + str(exc) + "\\n")
+        parser.exit(2, "PLAN_FAIL: " + str(exc) + "\n")
     print(json.dumps(receipt, sort_keys=True))
     return 3 if receipt["blocked"] else 0
 
