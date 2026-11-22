@@ -18,7 +18,9 @@ class TwinEvidenceView:
 def correlate(conn, *, tenant, instance, principal, event, revision, evidence_sha256, inspect=None):
     """Return only SIMULATE_ONLY or DENY. Inspector receives immutable data, never conn.
 
-    Python closures are not a sandbox: truly hostile callbacks need process isolation.
+    In-process inspectors are explicitly unsupported: a Python closure can capture
+    the SQLite connection and disable its authorizer. Fail closed before calling it.
+    A separate process/serialized protocol is required for untrusted inspection.
     Caller must own the SQLite connection; external side effects are out of scope.
     """
     started = False
@@ -26,6 +28,8 @@ def correlate(conn, *, tenant, instance, principal, event, revision, evidence_sh
         if not all(isinstance(v, str) and v for v in
                    (tenant, instance, principal, event, revision, evidence_sha256)):
             return {"decision": "DENY", "reason": "invalid_input"}
+        if inspect is not None:
+            return {"decision": "DENY", "reason": "untrusted_inspector"}
         if len(evidence_sha256) != 64 or conn.in_transaction:
             return {"decision": "DENY", "reason": "invalid_state"}
         conn.execute("BEGIN IMMEDIATE")
@@ -43,8 +47,6 @@ def correlate(conn, *, tenant, instance, principal, event, revision, evidence_sh
         if not hmac.compare_digest(computed, ev[1]) or not hmac.compare_digest(computed, evidence_sha256):
             return {"decision": "DENY", "reason": "digest"}
         view = TwinEvidenceView(tenant, instance, event, revision, twin[1], ev[2], computed)
-        if inspect is not None and inspect(view) is not True:
-            return {"decision": "DENY", "reason": "inspection"}
         if conn.execute("SELECT allowed FROM acl WHERE tenant=? AND principal=?",
                         (tenant, principal)).fetchone() != (1,):
             return {"decision": "DENY", "reason": "revoked"}
