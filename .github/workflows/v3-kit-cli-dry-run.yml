@@ -5,6 +5,7 @@ on:
     paths:
       - 'v3-spike/kit/kit_cli.py'
       - 'v3-spike/kit/test_kit_cli.py'
+      - 'v3-spike/kit/docker-compose.yml'
       - '.github/workflows/v3-kit-cli-dry-run.yml'
   workflow_dispatch:
 permissions:
@@ -45,7 +46,7 @@ jobs:
           if suite.countTestCases() != 16:
               raise SystemExit("FAIL expected exactly sixteen CLI tests")
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 13:
+          if not result.wasSuccessful() or result.testsRun != suite.countTestCases():
               raise SystemExit("FAIL CLI dry-run tests")
           print("PASS synthetic CLI dry-run 16/16")
           PY
