@@ -159,6 +159,65 @@ jobs:
         run: |
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA compose_static_only=true runtime=NOT_RUN"
+  decision-evidence-contract:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Checkout reviewed B synthetic trust boundary at immutable SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e
+          path: b-contract
+          persist-credentials: false
+      - name: Run exact 19 B trust-boundary adversarial tests
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C b-contract rev-parse HEAD)" = "60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e"
+          python3 -m venv .venv-trust
+          .venv-trust/bin/python -m pip install --disable-pip-version-check 'unittest-xml-reporting==3.2.0'
+          mkdir -p trust-junit
+          .venv-trust/bin/python - <<'PY'
+          import sys, unittest, xmlrunner
+          sys.path.insert(0, 'b-contract/v3-spike/contracts')
+          suite = unittest.defaultTestLoader.loadTestsFromName('test_decision_evidence_synthetic')
+          assert suite.countTestCases() == 19, f'FAIL trust collection: {suite.countTestCases()} != 19'
+          result = xmlrunner.XMLTestRunner(output='trust-junit', verbosity=2).run(suite)
+          assert result.wasSuccessful() and result.testsRun == 19, 'FAIL trust execution'
+          print('PASS B synthetic DecisionEvidence 19/19; not production authorization')
+          PY
+          python3 - <<'PY'
+          import json, os, pathlib, hashlib, datetime
+          p = pathlib.Path('b-contract/v3-spike/contracts/decision_evidence_synthetic.py')
+          t = pathlib.Path('b-contract/v3-spike/contracts/test_decision_evidence_synthetic.py')
+          reports = sorted(pathlib.Path('trust-junit').glob('*.xml'))
+          assert reports, 'FAIL no JUnit'
+          manifest = {'timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                      'integration_sha': os.environ['GITHUB_SHA'],
+                      'source_sha': '60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e',
+                      'run_id': os.environ['GITHUB_RUN_ID'], 'job': os.environ['GITHUB_JOB'],
+                      'tests_expected': 19,
+                      'sha256': {str(x): hashlib.sha256(x.read_bytes()).hexdigest()
+                                 for x in [p,t,*reports]}}
+          pathlib.Path('trust-junit/manifest.json').write_text(json.dumps(manifest, indent=2))
+          PY
+      - name: Upload B trust contract JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-b-decision-evidence-contract-junit
+          path: trust-junit/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e runtime=NOT_RUN production_authorized=false"
   product-qualification:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
