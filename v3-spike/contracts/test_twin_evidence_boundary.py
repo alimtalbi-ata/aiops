@@ -52,6 +52,7 @@ class BoundaryTests(unittest.TestCase):
                 v.tenant = "b"
             self.assertFalse(hasattr(v, "execute"))
             return True
+        check(TwinEvidenceView("a", "opaque-1", "event-1", "r1", "twin", "proof", self.kw["evidence_sha256"]))
         self.assertEqual(self.decide(inspect=check)["decision"], "DENY")
     def test_nonboolean_inspection(self):
         self.assertEqual(self.decide(inspect=lambda v: "true")["decision"], "DENY")
