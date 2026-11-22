@@ -116,6 +116,30 @@ class KitCliTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cli.plan("install", self.root)
 
+    def test_reject_healthcheck_cmd_true(self):
+        original = self.compose.read_text()
+        mutated = original.replace('test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(\'http://127.0.0.1:8080/health\', timeout=2)"]', 'test: ["CMD", "true"]', 1)
+        self.assertNotEqual(mutated, original, "mutation must change the fixture")
+        self.compose.write_text(mutated)
+        with self.assertRaisesRegex(ValueError, "healthcheck"):
+            cli.plan("install", self.root)
+
+    def test_reject_healthcheck_disabled(self):
+        original = self.compose.read_text()
+        mutated = original.replace("      retries: 12", "      retries: 12\n      disable: true", 1)
+        self.assertNotEqual(mutated, original, "mutation must change the fixture")
+        self.compose.write_text(mutated)
+        with self.assertRaisesRegex(ValueError, "healthcheck"):
+            cli.plan("install", self.root)
+
+    def test_reject_healthcheck_none(self):
+        original = self.compose.read_text()
+        mutated = original.replace('test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(\'http://127.0.0.1:8080/health\', timeout=2)"]', 'test: ["NONE"]', 1)
+        self.assertNotEqual(mutated, original, "mutation must change the fixture")
+        self.compose.write_text(mutated)
+        with self.assertRaisesRegex(ValueError, "healthcheck"):
+            cli.plan("install", self.root)
+
     def test_no_docker_subprocess_from_planner(self):
         with mock.patch.object(subprocess, "run", side_effect=AssertionError("unexpected Docker execution")):
             self.assertEqual(cli.plan("install", self.root)["action"], "install")
