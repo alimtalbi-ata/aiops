@@ -70,6 +70,23 @@ class GammaOffline(unittest.TestCase):
         self.assertIn("ALLOW_SYNTHETIC", p.locator("#binding-result").inner_text())
         p.locator("#policy").click()
         self.assertIn("DENIED", p.locator("#decision").inner_text())
+    def test_policy_reset_on_binding_change(self):
+        p = self.page
+        p.locator("#binding-case").select_option("matched")
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
+        p.locator("#binding-case").select_option("revision-mismatch")
+        self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
+        self.assertIn("DENY", p.locator("#binding-result").inner_text())
+        self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
+        p.locator("#binding-case").select_option("matched")
+        self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
+        self.assertIn("ALLOW_SYNTHETIC", p.locator("#binding-result").inner_text())
+        self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
     def test_viewports(self):
         p = self.page
         for width in (320, 1280, 1920):
