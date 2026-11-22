@@ -60,7 +60,7 @@ jobs:
           tree=ast.parse(source.read_text(encoding="utf-8"))
           classes=[node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=="VerticalOperator"]
           if len(classes)!=1: raise SystemExit("FAIL: missing or duplicate VerticalOperator class")
-          expected={"test_vertical_operator.VerticalOperator."+node.name for node in classes[0].body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name.startswith("test_")}
+          expected={"gamma_vertical.VerticalOperator."+node.name for node in classes[0].body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name.startswith("test_")}
           if len(expected)!=8: raise SystemExit("FAIL: expected eight distinct source test identities")
           actual=[]
           total=0
