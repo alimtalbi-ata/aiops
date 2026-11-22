@@ -73,6 +73,20 @@ class VerticalOperatorE2E(unittest.TestCase):
         self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
         self.assert_safe()
 
+    def test_oversized_identifier_rejected(self):
+        receipt = cli_receipt()
+        receipt["event"]["id"] = "X" * 257
+        self.inspect(receipt)
+        self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
+        self.assert_safe()
+
+    def test_control_character_rejected(self):
+        receipt = cli_receipt()
+        receipt["event"]["id"] = "bad\\nidentifier"
+        self.inspect(receipt)
+        self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
+        self.assert_safe()
+
     def test_production_authorization_rejected(self):
         receipt = cli_receipt("--approved-synthetic")
         receipt["production_authorized"] = True
