@@ -90,5 +90,18 @@ class ProductPreflightTests(unittest.TestCase):
             "profile": "demo", "secrets": [], "migration": False}
         self.assertEqual(validate(b)["services"], 8)
 
+    def test_registry_port_digest_allowed(self):
+        b = valid()
+        b["services"]["core"]["image"] = "registry.example:5000/team/core@sha256:" + "a"*64
+        self.assertEqual(validate(b)["status"], "STATIC_PASS")
+    def test_registry_port_mutable_tag_rejected(self):
+        b = valid()
+        b["services"]["core"]["image"] = "registry.example:5000/team/core:latest"
+        self.assertRaises(ValueError, validate, b)
+    def test_registry_port_short_digest_rejected(self):
+        b = valid()
+        b["services"]["core"]["image"] = "registry.example:5000/team/core@sha256:abc"
+        self.assertRaises(ValueError, validate, b)
+
 if __name__ == "__main__":
     unittest.main()
