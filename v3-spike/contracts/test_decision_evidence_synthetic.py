@@ -66,6 +66,18 @@ class DecisionEvidenceTests(unittest.TestCase):
             self.assertTrue(self.db.in_transaction)
         finally:
             self.db.rollback()
+    def test_oversized_nonce_denied_without_mutation(self):
+        e = dict(self.env, nonce="N"*257)
+        self.assertEqual(self.check(e, mac="0"*64)["decision"], "DENY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+    def test_control_character_denied_without_mutation(self):
+        e = dict(self.env, principal_id="principal-1\\n")
+        self.assertEqual(self.check(e, mac="0"*64)["decision"], "DENY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+    def test_oversized_backend_identifier_denied(self):
+        backend = dict(self.backend, resource_id="R"*257)
+        self.assertEqual(self.check(backend=backend)["decision"], "DENY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
     def test_atomic_race_two_connections(self):
         with tempfile.TemporaryDirectory() as folder:
             path = folder + "/nonces.sqlite"
