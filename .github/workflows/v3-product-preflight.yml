@@ -81,12 +81,12 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Execute eight exact-source synthetic vertical tests
+      - name: Execute eight unit and four black-box synthetic CLI tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           cd v3-spike/vertical
-          python3 -B -m unittest -v test_vertical_demo
+          python3 -B -m unittest -v test_vertical_demo test_vertical_cli_smoke
           python3 -B vertical_demo.py > ../../vertical-denied.json
           python3 -B vertical_demo.py --approved-synthetic > ../../vertical-simulated.json
           python3 - <<'PY'
