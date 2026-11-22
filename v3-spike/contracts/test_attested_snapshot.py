@@ -273,7 +273,7 @@ class AttestedSnapshotTests(unittest.TestCase):
             event=self.event, assertion=self.token(), verifier=self.verifier,
             fetch_pair=backend, witness=self.witness, authorization_probe=probe)
         self.assertEqual(decision, "ALLOW_SYNTHETIC")
-        self.assertEqual(probe.call_count, 3)
+        self.assertEqual(probe.call_count, 4)
         backend.assert_called_once()
 
 
@@ -331,7 +331,7 @@ class AttestedSnapshotTests(unittest.TestCase):
             fetch_pair=backend, witness=self.witness,
             authorization_probe=auth, state_probe=state)
         self.assertEqual(result, "ALLOW_SYNTHETIC")
-        self.assertEqual(auth.call_count, 3)
+        self.assertEqual(auth.call_count, 4)
         self.assertEqual(state.call_count, 3)
         backend.assert_called_once()
 
@@ -405,6 +405,46 @@ class AttestedSnapshotTests(unittest.TestCase):
         self.assertEqual(result, "DENY")
         self.assertEqual(state.call_count, 3)
         backend.assert_called_once()
+
+    def test_final_state_observation_revokes_acl_denied(self):
+        # Regression: previous final ACL check preceded the final state probe.
+        access = {"granted": True}
+        calls = {"state": 0}
+        def state_probe():
+            calls["state"] += 1
+            if calls["state"] == 3:
+                access["granted"] = False
+            return ("rev1",)
+        auth = Mock(side_effect=lambda: access["granted"])
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            state_probe=state_probe, authorization_probe=auth)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(calls["state"], 3)
+        self.assertEqual(auth.call_count, 4)
+        backend.assert_called_once()
+
+    def test_final_authorization_probe_mutates_event_denied(self):
+        # Last authorization check must not silently rewrite the caller event.
+        original = dict(self.event)
+        calls = {"auth": 0}
+        def auth_probe():
+            calls["auth"] += 1
+            if calls["auth"] == 4:
+                self.event["digest"] = "b" * 64
+            return True
+        try:
+            result = attested_snapshot_decision(
+                event=self.event, assertion=self.token(), verifier=self.verifier,
+                fetch_pair=Mock(return_value=self.response()), witness=self.witness,
+                authorization_probe=auth_probe)
+            self.assertEqual(result, "DENY")
+            self.assertEqual(calls["auth"], 4)
+        finally:
+            self.event.clear()
+            self.event.update(original)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
