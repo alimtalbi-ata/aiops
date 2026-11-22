@@ -91,6 +91,22 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(self.decide(inspect=lambda v: invoked.append(v) or True)["decision"], "DENY")
         self.assertEqual(invoked, [])
         self.assertEqual(self.decide()["decision"], "SIMULATE_ONLY")
+    def test_duplicate_acl_denied_even_when_first_allows(self):
+        self.db.execute("INSERT INTO acl VALUES (?,?,?)", ("a", "alice", 1))
+        self.assertEqual(self.decide()["reason"], "ambiguous_backend_rows")
+        self.assertFalse(self.db.in_transaction)
+    def test_duplicate_twin_denied_even_when_first_matches(self):
+        self.db.execute("INSERT INTO twin VALUES (?,?,?,?)", ("a", "opaque-1", "r1", "twin"))
+        self.assertEqual(self.decide()["reason"], "ambiguous_backend_rows")
+        self.assertFalse(self.db.in_transaction)
+    def test_duplicate_evidence_denied_even_when_first_matches(self):
+        self.db.execute("INSERT INTO evidence VALUES (?,?,?,?,?,?)",
+                        ("a", "opaque-1", "event-1", "r1", self.kw["evidence_sha256"], "proof"))
+        self.assertEqual(self.decide()["reason"], "ambiguous_backend_rows")
+        self.assertFalse(self.db.in_transaction)
+    def test_conflicting_acl_denied_regardless_of_row_order(self):
+        self.db.execute("INSERT INTO acl VALUES (?,?,?)", ("a", "alice", 0))
+        self.assertEqual(self.decide()["decision"], "DENY")
     def test_deterministic_correlation(self):
         self.assertEqual(self.decide()["correlation"], self.decide()["correlation"])
     def test_invalid_input(self):
