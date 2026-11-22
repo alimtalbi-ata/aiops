@@ -9,6 +9,7 @@ on:
       - 'v3-spike/kit/test_verify_junit.py'
       - 'v3-spike/kit/product-bom.json'
       - 'v3-spike/kit/docker-compose.yml'
+      - 'v3-spike/product/docker-compose.yml'
       - 'v3-spike/kit/fixture.py'
       - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
@@ -68,6 +69,26 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "qualification=synthetic-dev runtime=NOT_RUN deploy_authorized=false"
+  compose-static:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Compose default and demo independent of BOM provenance
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f v3-spike/product/docker-compose.yml || { echo 'FAIL: canonical product Compose absent'; exit 1; }
+          docker compose -f v3-spike/product/docker-compose.yml config --quiet
+          docker compose --profile demo -f v3-spike/product/docker-compose.yml config --quiet
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA compose_static_only=true runtime=NOT_RUN"
   product-qualification:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
@@ -83,10 +104,13 @@ jobs:
           date -u +%FT%TZ
           test -f v3-spike/kit/product-bom.json || { echo 'FAIL: product BOM absent; synthetic fixtures cannot qualify product'; exit 1; }
           python3 -B v3-spike/kit/product_preflight.py v3-spike/kit/product-bom.json
-          echo 'FAIL: OCI digest existence, licenses and provenance not yet independently verified'
-          exit 1
+          test -f v3-spike/product/oci-provenance.json || { echo 'FAIL: OCI provenance manifest absent'; exit 1; }
+          python3 -B v3-spike/kit/verify_product_provenance.py v3-spike/kit/product-bom.json v3-spike/product/oci-provenance.json
+      - name: Product BOM to Compose consistency
+        run: |
+          set -eu
+          python3 -B v3-spike/kit/verify_product_compose.py v3-spike/kit/product-bom.json v3-spike/product/docker-compose.yml
       - name: Product Compose gate
-        if: success()
         run: |
           set -eu
           test -f v3-spike/product/docker-compose.yml || { echo 'FAIL: canonical PRODUCT compose absent'; exit 1; }
