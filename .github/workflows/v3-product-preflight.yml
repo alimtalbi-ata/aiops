@@ -11,6 +11,10 @@ on:
       - 'v3-spike/kit/docker-compose.yml'
       - 'v3-spike/product/docker-compose.yml'
       - 'v3-spike/kit/fixture.py'
+      - 'v3-spike/vertical/**'
+      - 'v3-spike/kit/verify_product_provenance.py'
+      - 'v3-spike/kit/verify_product_compose.py'
+      - 'v3-spike/product/oci-provenance.json'
       - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
 permissions:
@@ -69,6 +73,44 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "qualification=synthetic-dev runtime=NOT_RUN deploy_authorized=false"
+  vertical-synthetic:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Execute five exact-source synthetic vertical tests
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          cd v3-spike/vertical
+          python3 -B -m unittest -v test_vertical_demo
+          python3 -B vertical_demo.py > ../../vertical-denied.json
+          python3 -B vertical_demo.py --approved-synthetic > ../../vertical-simulated.json
+          python3 - <<'PY'
+          import json
+          denied = json.load(open('vertical-denied.json'))
+          simulated = json.load(open('vertical-simulated.json'))
+          assert denied['policy']['decision'] == 'DENY'
+          assert simulated['policy']['decision'] == 'SIMULATE_ONLY'
+          assert not denied['production_authorized'] and not simulated['production_authorized']
+          assert not simulated['run']['executed_on_host']
+          print('PASS synthetic vertical denied/simulated; production NO-GO')
+          PY
+      - name: Upload synthetic vertical receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-vertical-synthetic-receipts
+          path: vertical-*.json
+          if-no-files-found: warn
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA synthetic_only=true runtime=NOT_RUN"
   compose-static:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
