@@ -30,9 +30,36 @@ def read_atomic(conn, tenant, instance, principal, event, expected_revision, exp
             raise PermissionError("acl")
         changes_before_hook = conn.total_changes
         if hook:
-            hook()
-            if conn.total_changes != changes_before_hook:
-                raise PermissionError("callback wrote within read-only snapshot")
+            # total_changes misses DDL, PRAGMA, ATTACH and some side effects.
+            # Enforce a read-only callback at SQLite's authorization boundary.
+            forbidden = {
+                sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE,
+                sqlite3.SQLITE_CREATE_TABLE, sqlite3.SQLITE_CREATE_TEMP_TABLE,
+                sqlite3.SQLITE_CREATE_INDEX, sqlite3.SQLITE_CREATE_TEMP_INDEX,
+                sqlite3.SQLITE_CREATE_VIEW, sqlite3.SQLITE_CREATE_TEMP_VIEW,
+                sqlite3.SQLITE_CREATE_TRIGGER, sqlite3.SQLITE_CREATE_TEMP_TRIGGER,
+                sqlite3.SQLITE_DROP_TABLE, sqlite3.SQLITE_DROP_TEMP_TABLE,
+                sqlite3.SQLITE_DROP_INDEX, sqlite3.SQLITE_DROP_TEMP_INDEX,
+                sqlite3.SQLITE_DROP_VIEW, sqlite3.SQLITE_DROP_TEMP_VIEW,
+                sqlite3.SQLITE_DROP_TRIGGER, sqlite3.SQLITE_DROP_TEMP_TRIGGER,
+                sqlite3.SQLITE_ALTER_TABLE, sqlite3.SQLITE_ATTACH,
+                sqlite3.SQLITE_DETACH, sqlite3.SQLITE_PRAGMA,
+                sqlite3.SQLITE_TRANSACTION, sqlite3.SQLITE_SAVEPOINT,
+                sqlite3.SQLITE_REINDEX, sqlite3.SQLITE_ANALYZE,
+            }
+            denied = [False]
+            def authorize(action, _arg1, _arg2, _db, _trigger):
+                if action in forbidden:
+                    denied[0] = True
+                    return sqlite3.SQLITE_DENY
+                return sqlite3.SQLITE_OK
+            conn.set_authorizer(authorize)
+            try:
+                hook()
+            finally:
+                conn.set_authorizer(None)
+            if denied[0] or conn.total_changes != changes_before_hook:
+                raise PermissionError("callback attempted a write or privileged operation")
         twin = conn.execute("SELECT revision,payload FROM twin WHERE tenant=? AND instance=?",
                             (tenant, instance)).fetchone()
         ev = conn.execute(
@@ -126,6 +153,25 @@ class AtomicBoundaryTests(unittest.TestCase):
             self.db.execute("UPDATE acl SET allowed=1 WHERE tenant='t1'")
         self.assertEqual(self.decide(hook=mutate), "DENY")
         self.assertEqual(self.db.execute("SELECT allowed FROM acl WHERE tenant='t1'").fetchone(), (1,))
+
+    def test_callback_ddl_create_table_denied_and_no_schema_change(self):
+        def ddl():
+            self.db.execute("CREATE TABLE injected (value TEXT)")
+        self.assertEqual(self.decide(hook=ddl), "DENY")
+        self.assertIsNone(self.db.execute(
+            "SELECT name FROM sqlite_master WHERE name='injected'").fetchone())
+
+    def test_callback_pragma_mutation_denied(self):
+        def pragma():
+            self.db.execute("PRAGMA user_version=42")
+        self.assertEqual(self.decide(hook=pragma), "DENY")
+        self.assertEqual(self.db.execute("PRAGMA user_version").fetchone(), (0,))
+
+    def test_callback_read_only_query_still_allowed(self):
+        def reader():
+            self.assertEqual(self.db.execute(
+                "SELECT payload FROM twin WHERE tenant='t1'").fetchone(), ('twin',))
+        self.assertEqual(self.decide(hook=reader), "ALLOW_SYNTHETIC")
 
     def test_competing_writer_blocked_during_snapshot(self):
         barrier = threading.Event()
