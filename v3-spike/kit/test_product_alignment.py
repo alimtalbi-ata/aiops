@@ -17,8 +17,7 @@ class ProductAlignmentTests(unittest.TestCase):
         self.bom = valid()
         self.compose = {"services": {name: {"image": entry["image"]}
                      for name, entry in self.bom["services"].items()}}
-        self.provenance = {"independently_verified": True,
-            "images": {name: {"image": entry["image"], "license": "TEST-ONLY",
+        self.provenance = {"images": {name: {"image": entry["image"], "license": "TEST-ONLY",
                               "source": "synthetic", "registry_receipt": "synthetic"}
                        for name, entry in self.bom["services"].items()}}
     def files(self):
@@ -52,15 +51,40 @@ class ProductAlignmentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "service set"):
             verify_provenance(b,p)
     def test_reject_provenance_false_attestation(self):
-        self.provenance["independently_verified"] = False
+        self.provenance["independently_verified"] = True
         b,_,p = self.files()
-        with self.assertRaisesRegex(ValueError, "independent"):
+        with self.assertRaisesRegex(ValueError, "untrusted attestation"):
             verify_provenance(b,p)
     def test_reject_provenance_empty_license(self):
         self.provenance["images"]["core"]["license"] = " "
         b,_,p = self.files()
         with self.assertRaisesRegex(ValueError, "license"):
             verify_provenance(b,p)
+    def test_reject_forged_true_attestation(self):
+        self.provenance["independently_verified"] = True
+        b,_,p = self.files()
+        with self.assertRaisesRegex(ValueError, "untrusted attestation"):
+            verify_provenance(b,p)
+    def test_reject_privileged(self):
+        self.compose["services"]["core"]["privileged"] = True
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "privileged"):
+            verify_compose(b,c)
+    def test_reject_host_network(self):
+        self.compose["services"]["core"]["network_mode"] = "host"
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "host namespace"):
+            verify_compose(b,c)
+    def test_reject_host_root_mount(self):
+        self.compose["services"]["core"]["volumes"] = ["/:/host:rw"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "bind mount"):
+            verify_compose(b,c)
+    def test_reject_protected_port(self):
+        self.compose["services"]["core"]["ports"] = ["7770:8080"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "protected port"):
+            verify_compose(b,c)
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
