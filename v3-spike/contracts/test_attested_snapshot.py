@@ -122,5 +122,72 @@ class AttestedSnapshotTests(unittest.TestCase):
         self.assertEqual(result, "DENY")
 
 
+
+    def test_independent_probe_denies_mutating_backend_even_with_valid_receipt(self):
+        # Unlike the test-only assert in decide(), this is an in-decision DENY.
+        def mutating_backend(**kwargs):
+            self.state["writes"] += 1
+            self.state["revision"] = "rev2"
+            return self.response()
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=mutating_backend, witness=self.witness,
+            state_probe=lambda: tuple(sorted(self.state.items())))
+        self.assertEqual(result, "DENY")
+        self.assertEqual(self.state["writes"], 1)
+
+    def test_independent_probe_accepts_unchanged_fixture_only_synthetically(self):
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            state_probe=lambda: tuple(sorted(self.state.items())))
+        self.assertEqual(result, "ALLOW_SYNTHETIC")
+        backend.assert_called_once()
+
+    def test_invalid_probe_denied_before_backend(self):
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, state_probe="untrusted")
+        self.assertEqual(result, "DENY")
+        backend.assert_not_called()
+
+
+    def test_probe_exception_before_fetch_fails_closed(self):
+        backend = Mock(return_value=self.response())
+        probe = Mock(side_effect=RuntimeError("probe unavailable"))
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, state_probe=probe)
+        self.assertEqual(result, "DENY")
+        backend.assert_not_called()
+
+    def test_probe_exception_after_fetch_fails_closed(self):
+        backend = Mock(return_value=self.response())
+        probe = Mock(side_effect=[tuple(sorted(self.state.items())),
+                                  RuntimeError("probe lost after fetch")])
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, state_probe=probe)
+        self.assertEqual(result, "DENY")
+        backend.assert_called_once()
+
+    def test_witness_and_backend_unexpected_errors_fail_closed(self):
+        for broken in ("witness", "backend"):
+            with self.subTest(broken=broken):
+                backend = Mock(return_value=self.response())
+                witness = self.witness
+                if broken == "witness":
+                    witness = Mock()
+                    witness.verify.side_effect = RuntimeError("witness unavailable")
+                else:
+                    backend.side_effect = RuntimeError("backend unavailable")
+                result = attested_snapshot_decision(
+                    event=self.event, assertion=self.token(), verifier=self.verifier,
+                    fetch_pair=backend, witness=witness)
+                self.assertEqual(result, "DENY")
+                backend.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
