@@ -1,0 +1,73 @@
+"""Negative mutation tests for BOM/Compose and provenance alignment; synthetic only."""
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import yaml
+from test_product_preflight import valid
+from verify_product_compose import verify as verify_compose
+from verify_product_provenance import verify as verify_provenance
+
+class ProductAlignmentTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.bom = valid()
+        self.compose = {"services": {name: {"image": entry["image"]}
+                     for name, entry in self.bom["services"].items()}}
+        self.provenance = {"independently_verified": True,
+            "images": {name: {"image": entry["image"], "license": "TEST-ONLY",
+                              "source": "synthetic", "registry_receipt": "synthetic"}
+                       for name, entry in self.bom["services"].items()}}
+    def files(self):
+        b, c, p = (self.root / n for n in ("bom.json", "docker-compose.yml", "provenance.json"))
+        b.write_text(json.dumps(self.bom))
+        c.write_text(yaml.safe_dump(self.compose))
+        p.write_text(json.dumps(self.provenance))
+        return b, c, p
+    def test_synthetic_alignment_static_only(self):
+        b,c,p = self.files()
+        self.assertTrue(verify_compose(b,c))
+        self.assertTrue(verify_provenance(b,p))
+    def test_reject_compose_image_swapped_between_services(self):
+        self.compose["services"]["core"]["image"] = self.bom["services"]["gamma"]["image"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "image mismatch"):
+            verify_compose(b,c)
+    def test_reject_compose_missing_service(self):
+        del self.compose["services"]["evidence"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "service set"):
+            verify_compose(b,c)
+    def test_reject_required_hidden_profile(self):
+        self.compose["services"]["core"]["profiles"] = ["demo"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "hidden"):
+            verify_compose(b,c)
+    def test_reject_provenance_missing_service(self):
+        del self.provenance["images"]["worker"]
+        b,_,p = self.files()
+        with self.assertRaisesRegex(ValueError, "service set"):
+            verify_provenance(b,p)
+    def test_reject_provenance_false_attestation(self):
+        self.provenance["independently_verified"] = False
+        b,_,p = self.files()
+        with self.assertRaisesRegex(ValueError, "independent"):
+            verify_provenance(b,p)
+    def test_reject_provenance_empty_license(self):
+        self.provenance["images"]["core"]["license"] = " "
+        b,_,p = self.files()
+        with self.assertRaisesRegex(ValueError, "license"):
+            verify_provenance(b,p)
+    def test_reject_old_images_only_bom_schema(self):
+        self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
+        b,c,p = self.files()
+        with self.assertRaises(ValueError):
+            verify_compose(b,c)
+        with self.assertRaises(ValueError):
+            verify_provenance(b,p)
+
+if __name__ == "__main__":
+    unittest.main()
