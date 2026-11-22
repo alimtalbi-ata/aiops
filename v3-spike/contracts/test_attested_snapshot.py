@@ -375,5 +375,36 @@ class AttestedSnapshotTests(unittest.TestCase):
         self.assertEqual(result, "DENY")
         backend.assert_not_called()
 
+
+    def test_post_witness_authorization_truthy_nonboolean_denied(self):
+        backend = Mock(return_value=self.response())
+        auth = Mock(side_effect=[True, True, 1])
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, authorization_probe=auth)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(auth.call_count, 3)
+        backend.assert_called_once()
+
+    def test_post_witness_authorization_exception_denied(self):
+        backend = Mock(return_value=self.response())
+        auth = Mock(side_effect=[True, True, RuntimeError("revocation store down")])
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, authorization_probe=auth)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(auth.call_count, 3)
+        backend.assert_called_once()
+
+    def test_post_witness_state_probe_exception_denied(self):
+        backend = Mock(return_value=self.response())
+        state = Mock(side_effect=[("rev1",), ("rev1",), RuntimeError("probe down")])
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, state_probe=state)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(state.call_count, 3)
+        backend.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
