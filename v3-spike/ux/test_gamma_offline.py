@@ -213,6 +213,26 @@ class GammaOffline(unittest.TestCase):
         self.assertEqual(p.evaluate("document.activeElement.id"), "policy")
         self.assertIn("DENIED", p.locator("#decision").inner_text())
 
+    def test_repeated_context_switches_remain_fail_closed(self):
+        p = self.page
+        # Stress alternating Run/receipt contexts; no stale binding or policy authorization.
+        for run, receipt in (("network", "accept"), ("storage", "duplicate"), ("network", "refused"), ("storage", "unknown")):
+            p.locator("#binding-case").select_option("matched")
+            self.assertIn("ALLOW_SYNTHETIC", p.locator("#binding-result").inner_text())
+            p.locator("#policy").click()
+            self.assertIn("DENIED", p.locator("#decision").inner_text())
+            p.locator("#run-choice").select_option(run)
+            self.assertEqual(p.locator("#binding-case").input_value(), "unknown")
+            self.assertEqual(p.locator("#admission").input_value(), "unknown")
+            self.assertIn("DENY", p.locator("#binding-result").inner_text())
+            self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
+            self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
+            p.locator("#admission").select_option(receipt)
+            self.assertEqual(p.locator("#binding-case").input_value(), "unknown")
+            self.assertIn("DENY", p.locator("#binding-result").inner_text())
+            p.locator("#policy").click()
+            self.assertIn("DENIED", p.locator("#decision").inner_text())
+
     def test_run_admission_reset(self):
         p = self.page
         p.locator("#admission").select_option("accept")
