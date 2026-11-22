@@ -86,5 +86,7 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
     try:
         return snapshot_pair_decision(event=event, assertion=assertion,
                                       verifier=verifier, fetch_pair=checked_fetch_pair)
-    except (PermissionError, ValueError, TypeError, AttributeError, KeyError):
+    except Exception:
+        # Fail closed on unexpected adapter/probe/witness errors; never leak an
+        # implementation exception into a decision or promote it to ALLOW.
         return "DENY"
