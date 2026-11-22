@@ -51,11 +51,11 @@ jobs:
           import xmlrunner
           from test_sqlite_atomic_boundary import AtomicBoundaryTests
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(AtomicBoundaryTests)
-          assert suite.countTestCases() == 17, "atomic boundary collection gate failed"
+          assert suite.countTestCases() == 19, "atomic boundary collection gate failed"
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 17:
+          if not result.wasSuccessful() or result.testsRun != 19:
               raise SystemExit("FAIL SQLite atomic boundary")
-          print("PASS 17 SQLite synthetic cases; production backend NOT_ATTESTED")
+          print("PASS 19 SQLite synthetic cases; production backend NOT_ATTESTED")
           PY
       - name: Publish JUnit
         if: always()
