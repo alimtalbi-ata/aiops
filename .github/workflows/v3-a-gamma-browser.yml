@@ -71,10 +71,16 @@ jobs:
           date -u +%FT%TZ
           echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID attempt=$GITHUB_RUN_ATTEMPT job=$GITHUB_JOB"
           echo "runtime=NOT_RUN production=DENIED"
+      - name: Assert both JUnit suites emitted XML
+        if: always()
+        run: |
+          set -eu
+          test -n "$(find reports -maxdepth 1 -name '*.xml' -type f -print -quit)"
+          test -n "$(find reports/offline -maxdepth 1 -name '*.xml' -type f -print -quit)"
       - name: Upload JUnit reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gamma-chromium-junit
           path: reports/
-          if-no-files-found: warn
+          if-no-files-found: error
