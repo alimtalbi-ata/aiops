@@ -69,9 +69,13 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
         return "DENY"
 
     def checked_fetch_pair(**kwargs):
+        # A malicious adapter must not rewrite the caller event between ACL and receipt checks.
+        original_event = dict(event)
         before = state_probe() if state_probe is not None else None
         response = fetch_pair(**kwargs)
         after = state_probe() if state_probe is not None else None
+        if event != original_event:
+            raise PermissionError("event mutated during fetch")
         if state_probe is not None and (before != after):
             raise PermissionError("observable backend mutation")
         if not isinstance(response, AttestedPair):
@@ -79,7 +83,7 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
         if (not isinstance(response.pair, SnapshotPair) or
                 response.twin_revision != response.evidence_revision or
                 response.twin_revision != kwargs["snapshot_id"] or
-                not witness.verify(event, response.twin_revision, response.receipt)):
+                witness.verify(event, response.twin_revision, response.receipt) is not True):
             raise PermissionError("invalid transaction receipt")
         return response.pair
 
