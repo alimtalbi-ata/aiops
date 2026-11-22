@@ -14,6 +14,7 @@ on:
       - 'v3-spike/vertical/**'
       - 'v3-spike/kit/verify_product_provenance.py'
       - 'v3-spike/kit/verify_product_compose.py'
+      - 'v3-spike/kit/test_product_alignment.py'
       - 'v3-spike/product/oci-provenance.json'
       - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
@@ -222,6 +223,42 @@ jobs:
         run: |
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=676900cd9bcd927c5d63d5ea11789eba094acd90 runtime=NOT_RUN production_authorized=false"
+  product-alignment-synthetic:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Execute eight BOM Compose provenance mutation tests
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2' 'unittest-xml-reporting==3.2.0'
+          mkdir -p alignment-junit
+          PYTHONPATH=v3-spike/kit python3 -B - <<'PY'
+          import unittest, xmlrunner
+          suite = unittest.defaultTestLoader.loadTestsFromName('test_product_alignment')
+          assert suite.countTestCases() == 8, f'FAIL expected 8, got {suite.countTestCases()}'
+          result = xmlrunner.XMLTestRunner(output='alignment-junit', verbosity=2).run(suite)
+          assert result.wasSuccessful() and result.testsRun == 8, 'FAIL alignment tests'
+          PY
+          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 8 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
+      - name: Upload alignment JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-product-alignment-junit
+          path: alignment-junit/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA synthetic_only=true runtime=NOT_RUN"
+
   product-qualification:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
@@ -241,6 +278,7 @@ jobs:
           python3 -B v3-spike/kit/verify_product_provenance.py v3-spike/kit/product-bom.json v3-spike/product/oci-provenance.json
       - name: Product BOM to Compose consistency
         run: |
+          python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
           set -eu
           python3 -B v3-spike/kit/verify_product_compose.py v3-spike/kit/product-bom.json v3-spike/product/docker-compose.yml
       - name: Product Compose gate
