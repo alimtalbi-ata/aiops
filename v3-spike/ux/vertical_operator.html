@@ -42,6 +42,7 @@ function validate(x){
 }
 $("payload").addEventListener("input",()=>{++importGeneration;reset("UNKNOWN / DENY — edited projection requires explicit inspection.");$("file-status").textContent="Editor changed; inspect explicitly. No upload.";});
 $("load").addEventListener("click",()=>{
+ ++importGeneration; // Explicit inspection supersedes any pending local file read.
  reset();try{const {e,i,t,p,r,c}=validate(JSON.parse($("payload").value));
  $("incident-value").textContent=`${i.id} · ${i.severity} · ${i.status} · event ${e.id} (${e.source})`;
  $("twin-value").textContent=`${t.resource} · ${t.correlation} (DEMO only) · event SHA256 ${t.evidence.event_sha256} · provenance UNKNOWN`;
