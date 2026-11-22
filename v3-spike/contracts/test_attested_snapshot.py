@@ -335,5 +335,45 @@ class AttestedSnapshotTests(unittest.TestCase):
         self.assertEqual(state.call_count, 3)
         backend.assert_called_once()
 
+
+    def test_aliased_mutable_probe_detects_in_place_backend_mutation(self):
+        # The probe returns the SAME dict object each time; equality without
+        # a frozen baseline would compare the mutated object to itself.
+        state = {"nested": {"writes": 0}}
+        def mutate(**kwargs):
+            state["nested"]["writes"] += 1
+            return self.response()
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=mutate, witness=self.witness, state_probe=lambda: state)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(state["nested"]["writes"], 1)
+
+    def test_aliased_mutable_probe_detects_witness_mutation(self):
+        state = {"history": ["rev1"]}
+        witness = Mock()
+        def mutate(*args):
+            state["history"].append("rev2")
+            return True
+        witness.verify.side_effect = mutate
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=Mock(return_value=self.response()), witness=witness,
+            state_probe=lambda: state)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(state["history"], ["rev1", "rev2"])
+
+    def test_uncopyable_probe_fails_closed(self):
+        class Uncopyable:
+            def __deepcopy__(self, memo):
+                raise RuntimeError("unfreezable observation")
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            state_probe=lambda: Uncopyable())
+        self.assertEqual(result, "DENY")
+        backend.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
