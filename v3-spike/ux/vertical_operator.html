@@ -10,20 +10,23 @@
 "use strict";
 const ids=["incident-value","twin-value","policy-value","run-value","receipt-value"];
 const $=id=>document.getElementById(id);
+let importGeneration=0;
 const defaults=["UNKNOWN — no event","UNKNOWN — correlation unverified","DENY — no verified decision","NOT_RUN — no receipt","UNKNOWN — no receipt"];
 function reset(message="UNKNOWN — no projection loaded; DENY."){ids.forEach((id,i)=>$(id).textContent=defaults[i]);$("state").textContent=message;$("decision").textContent="DENIED — no operational action permitted.";}
 $("projection-file").addEventListener("change",async event=>{
  const file=event.target.files?.[0];
+ const generation=++importGeneration;
  reset();
  $("payload").value="";
  if(!file){$("file-status").textContent="No file selected.";return;}
  if(file.size>1048576){$("file-status").textContent="REJECTED — file exceeds 1 MiB.";return;}
  try{
    const content=await file.text();
+   if(generation!==importGeneration)return;
    if(!content.trim()){throw Error("empty file");}
    $("payload").value=content;
    $("file-status").textContent="Local file loaded into editor; inspect explicitly to validate. No upload.";
- }catch(_err){reset("UNKNOWN / DENY — local file unreadable.");$("file-status").textContent="REJECTED — local file unreadable.";}
+ }catch(_err){if(generation!==importGeneration)return;reset("UNKNOWN / DENY — local file unreadable.");$("file-status").textContent="REJECTED — local file unreadable.";}
 });
 function validString(v){return typeof v==="string"&&v.trim().length>0;}
 function validate(x){
@@ -47,7 +50,7 @@ $("load").addEventListener("click",()=>{
  $("state").textContent="DEMO — structurally consistent C V0 projection; integrity and provenance UNKNOWN; operational DENY.";
  }catch(err){reset("UNKNOWN / DENY — invalid or incomplete synthetic projection: "+String(err.message));}
 });
-$("clear").addEventListener("click",()=>{$("payload").value="";$("projection-file").value="";$("file-status").textContent="No file selected.";reset();});
+$("clear").addEventListener("click",()=>{++importGeneration;$("payload").value="";$("projection-file").value="";$("file-status").textContent="No file selected.";reset();});
 $("eligibility").addEventListener("click",()=>{$("decision").textContent="DENIED — synthetic-only UI; no network or host execution.";});
 reset();
 </script></html>
