@@ -42,14 +42,14 @@ jobs:
           assert result.wasSuccessful() and result.testsRun == count, 'FAIL product BOM tests'
           print('PASS product BOM static and CLI 18/18; runtime NOT_RUN')
           PY
-      - name: Verify eight adversarial JUnit mutations
+      - name: Verify fourteen adversarial JUnit mutations
         run: |
           set -eu
           PYTHONPATH=v3-spike/kit python3 -B -m unittest -v test_verify_junit
       - name: Verify product JUnit receipt integrity
         run: |
           set -eu
-          python3 -B v3-spike/kit/verify_junit.py reports --expected 18
+          python3 -B v3-spike/kit/verify_junit.py reports --expected 18 --source v3-spike/kit/test_product_preflight.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest reports/receipt-manifest.json
       - name: Product BOM file gate (fail closed)
         run: |
           set -eu
@@ -63,7 +63,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: v3-product-bom-junit
-          path: reports/*.xml
+          path: |
+            reports/*.xml
+            reports/receipt-manifest.json
           if-no-files-found: error
           retention-days: 14
       - name: Receipt
