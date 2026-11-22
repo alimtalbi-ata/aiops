@@ -170,14 +170,14 @@ jobs:
       - name: Checkout reviewed B synthetic trust boundary at immutable SHA
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e
+          ref: cb97e302abe186fe5b3e96ab7db431b1be9ed569
           path: b-contract
           persist-credentials: false
-      - name: Run exact 19 B trust-boundary adversarial tests
+      - name: Run exact 24 B trust-boundary adversarial tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git -C b-contract rev-parse HEAD)" = "60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e"
+          test "$(git -C b-contract rev-parse HEAD)" = "cb97e302abe186fe5b3e96ab7db431b1be9ed569"
           python3 -m venv .venv-trust
           .venv-trust/bin/python -m pip install --disable-pip-version-check 'unittest-xml-reporting==3.2.0'
           mkdir -p trust-junit
@@ -185,11 +185,15 @@ jobs:
           import sys, unittest, xmlrunner
           sys.path.insert(0, 'b-contract/v3-spike/contracts')
           suite = unittest.defaultTestLoader.loadTestsFromName('test_decision_evidence_synthetic')
-          assert suite.countTestCases() == 19, f'FAIL trust collection: {suite.countTestCases()} != 19'
+          assert suite.countTestCases() == 24, f'FAIL trust collection: {suite.countTestCases()} != 24'
           result = xmlrunner.XMLTestRunner(output='trust-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 19, 'FAIL trust execution'
-          print('PASS B synthetic DecisionEvidence 19/19; not production authorization')
+          assert result.wasSuccessful() and result.testsRun == 24, 'FAIL trust execution'
+          print('PASS B synthetic DecisionEvidence 24/24; not production authorization')
           PY
+          # Verify semantic JUnit integrity against the exact B source before hashing receipts.
+          python3 -B v3-spike/kit/verify_junit.py trust-junit --expected 24 --source b-contract/v3-spike/contracts/test_decision_evidence_synthetic.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest trust-junit/semantic-manifest.json
+          # The shared verifier's 14 mutation tests independently exercise fail-closed semantics.
+          PYTHONPATH=v3-spike/kit python3 -B -m unittest -v test_verify_junit
           python3 - <<'PY'
           import json, os, pathlib, hashlib, datetime
           p = pathlib.Path('b-contract/v3-spike/contracts/decision_evidence_synthetic.py')
@@ -198,9 +202,9 @@ jobs:
           assert reports, 'FAIL no JUnit'
           manifest = {'timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                       'integration_sha': os.environ['GITHUB_SHA'],
-                      'source_sha': '60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e',
+                      'source_sha': 'cb97e302abe186fe5b3e96ab7db431b1be9ed569',
                       'run_id': os.environ['GITHUB_RUN_ID'], 'job': os.environ['GITHUB_JOB'],
-                      'tests_expected': 19,
+                      'tests_expected': 24, 'semantic_manifest': 'trust-junit/semantic-manifest.json',
                       'sha256': {str(x): hashlib.sha256(x.read_bytes()).hexdigest()
                                  for x in [p,t,*reports]}}
           pathlib.Path('trust-junit/manifest.json').write_text(json.dumps(manifest, indent=2))
@@ -217,7 +221,7 @@ jobs:
         if: always()
         run: |
           date -u +%FT%TZ
-          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=60911392a4b7c2b17c4a28fc68e0dce15d1bfa6e runtime=NOT_RUN production_authorized=false"
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=cb97e302abe186fe5b3e96ab7db431b1be9ed569 runtime=NOT_RUN production_authorized=false"
   product-qualification:
     if: github.ref == 'refs/heads/v3-spike/central-integration'
     runs-on: ubuntu-24.04
