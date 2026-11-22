@@ -13,7 +13,7 @@ def verify(bom_path, compose_path):
     if not isinstance(images, dict) or not images:
         raise ValueError("BOM images missing")
     for service, image in images.items():
-        if not re.search(r"(?m)^  " + re.escape(service) + r":\\s*$", compose):
+        if not re.search(r"(?m)^  " + re.escape(service) + r":\s*$", compose):
             raise ValueError("service missing: " + service)
         if image not in compose:
             raise ValueError("image mismatch: " + service)
