@@ -127,6 +127,20 @@ class VerticalOperator(unittest.TestCase):
         self.page.locator("#eligibility").click()
         self.assertIn("DENIED", self.page.locator("#decision").inner_text())
 
+    def test_pasted_size_and_control_character_rejected(self):
+        self.load(fixture())
+        self.assertIn("DEMO", self.page.locator("#state").inner_text())
+        self.page.locator("#payload").fill(" " * 1048577)
+        self.page.locator("#load").click()
+        self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
+        self.assertIn("NOT_RUN", self.page.locator("#run-value").inner_text())
+        f=fixture()
+        f["event"]["id"]="bad\\ncontrol"
+        self.load(f)
+        self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
+        self.page.locator("#eligibility").click()
+        self.assertIn("DENIED", self.page.locator("#decision").inner_text())
+
     def test_keyboard_and_viewports(self):
         for width in (320,1280,1920):
             self.page.set_viewport_size({"width":width,"height":900})
