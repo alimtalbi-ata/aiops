@@ -22,7 +22,7 @@ const admission=document.getElementById("admission");
 const admissionStates=Object.freeze({unknown:"UNKNOWN — no admission receipt.",accept:"ACCEPT — synthetic event admitted; evidence MISSING.",duplicate:"DUPLICATE — synthetic replay; no additional evidence.",refused:"REFUSED — synthetic storage unavailable; evidence UNKNOWN."});
 function renderAdmission(){document.getElementById("admission-result").textContent=admissionStates[admission.value] || admissionStates.unknown;document.getElementById("decision").textContent="No action requested.";}
 admission.addEventListener("change",renderAdmission);
-selector.addEventListener("change",()=>{admission.value="unknown";renderAdmission();});
+selector.addEventListener("change",()=>{admission.value="unknown";renderAdmission();bindingSelector.value="unknown";renderBinding();});
 const bindingCases=Object.freeze({unknown:"DENY — UNKNOWN provenance; Event/Twin/Evidence not verified.",matched:"ALLOW_SYNTHETIC — DEMO identifiers matched; operational action DENIED.", "twin-substituted":"DENY — DEMO Twin identifier mismatch.", "evidence-substituted":"DENY — DEMO Evidence identifier mismatch.", "revision-mismatch":"DENY — DEMO snapshot revision mismatch Twin R1 / Evidence R2.", "unattested-snapshot":"DENY — UNKNOWN snapshot provenance; atomicity not attested."});
 const bindingSelector=document.getElementById("binding-case");
 function renderBinding(){document.getElementById("binding-result").textContent=bindingCases[bindingSelector.value] || bindingCases.unknown;document.getElementById("snapshot-status").textContent="Snapshot: UNKNOWN — no transactional attestation; operational DENIED.";document.getElementById("decision").textContent="No action requested.";}
