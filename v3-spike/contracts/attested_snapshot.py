@@ -112,6 +112,15 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
             raise PermissionError("authorization revoked by final state observation")
         if event != original_event:
             raise PermissionError("event mutated during final authorization")
+        # The final authorization callback may itself mutate observable backend state.
+        # Re-observe it before returning a synthetic decision. This remains a
+        # best-effort fixture check, not an atomic transaction boundary.
+        if state_probe is not None and deepcopy(state_probe()) != before:
+            raise PermissionError("observable mutation during final authorization")
+        if authorization_probe is not None and authorization_probe() is not True:
+            raise PermissionError("authorization revoked during final observation")
+        if event != original_event:
+            raise PermissionError("event mutated during final observation")
         return response.pair
 
     try:
