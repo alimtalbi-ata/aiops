@@ -95,6 +95,14 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
                 response.twin_revision != kwargs["snapshot_id"] or
                 witness.verify(event, response.twin_revision, response.receipt) is not True):
             raise PermissionError("invalid transaction receipt")
+        # The witness is external code and may revoke access, mutate the event,
+        # or change observable state. A check only after fetch is insufficient.
+        if authorization_probe is not None and authorization_probe() is not True:
+            raise PermissionError("authorization revoked during attestation")
+        if state_probe is not None and state_probe() != before:
+            raise PermissionError("observable mutation during attestation")
+        if event != original_event:
+            raise PermissionError("event mutated during attestation")
         return response.pair
 
     try:
