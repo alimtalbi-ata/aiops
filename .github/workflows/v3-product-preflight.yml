@@ -5,6 +5,7 @@ on:
     paths:
       - 'v3-spike/kit/product_preflight.py'
       - 'v3-spike/kit/test_product_preflight.py'
+      - 'v3-spike/kit/product-bom.json'
       - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
 permissions:
@@ -23,7 +24,7 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           date -u +%FT%TZ
-      - name: Run eight isolated BOM tests and write JUnit
+      - name: Run twelve isolated BOM tests and write JUnit
         run: |
           set -eu
           mkdir -p reports
@@ -34,10 +35,10 @@ jobs:
           sys.path.insert(0, 'v3-spike/kit')
           suite = unittest.defaultTestLoader.discover('v3-spike/kit', pattern='test_product_preflight.py')
           count = suite.countTestCases()
-          assert count == 8, f'FAIL collection {count} != 8'
+          assert count == 12, f'FAIL collection {count} != 12'
           result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 8, 'FAIL product BOM tests'
-          print('PASS product BOM static 8/8; runtime NOT_RUN')
+          assert result.wasSuccessful() and result.testsRun == count, 'FAIL product BOM tests'
+          print('PASS product BOM static 12/12; runtime NOT_RUN')
           PY
       - name: Upload JUnit
         if: always()
