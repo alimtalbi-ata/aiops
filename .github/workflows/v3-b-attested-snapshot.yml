@@ -26,7 +26,7 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
       - name: Pinned synthetic test dependencies
         run: python3 -m pip install --disable-pip-version-check 'jsonschema==4.26.0' 'unittest-xml-reporting==3.2.0'
-      - name: Run thirty-seven adversarial witnessed snapshot tests
+      - name: Run thirty-eight adversarial witnessed snapshot tests
         env:
           PYTHONPATH: v3-spike/contracts
         run: |
@@ -36,11 +36,11 @@ jobs:
           import xmlrunner
           from test_attested_snapshot import AttestedSnapshotTests
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(AttestedSnapshotTests)
-          assert suite.countTestCases() == 37, "collection gate failed"
+          assert suite.countTestCases() == 38, "collection gate failed"
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 37:
+          if not result.wasSuccessful() or result.testsRun != 38:
               raise SystemExit("FAIL witnessed snapshot tests")
-          print("PASS 37 synthetic tests; real backend attestation NOT_ATTESTED")
+          print("PASS 38 synthetic tests; real backend attestation NOT_ATTESTED")
           PY
       - name: Publish JUnit
         if: always()
