@@ -28,8 +28,11 @@ def read_atomic(conn, tenant, instance, principal, event, expected_revision, exp
                                (tenant, principal)).fetchone()
         if allowed != (1,):
             raise PermissionError("acl")
+        changes_before_hook = conn.total_changes
         if hook:
             hook()
+            if conn.total_changes != changes_before_hook:
+                raise PermissionError("callback wrote within read-only snapshot")
         twin = conn.execute("SELECT revision,payload FROM twin WHERE tenant=? AND instance=?",
                             (tenant, instance)).fetchone()
         ev = conn.execute(
@@ -110,6 +113,19 @@ class AtomicBoundaryTests(unittest.TestCase):
             raise PermissionError("abort")
         self.assertEqual(self.decide(hook=mutate), "DENY")
         self.assertEqual(self.db.execute("SELECT payload FROM twin WHERE tenant='t1'").fetchone(), ('twin',))
+
+    def test_silent_twin_write_must_deny_and_rollback(self):
+        def mutate():
+            self.db.execute("UPDATE twin SET payload='evil' WHERE tenant='t1'")
+        self.assertEqual(self.decide(hook=mutate), "DENY")
+        self.assertEqual(self.db.execute("SELECT payload FROM twin WHERE tenant='t1'").fetchone(), ('twin',))
+
+    def test_silent_acl_write_then_restore_must_deny(self):
+        def mutate():
+            self.db.execute("UPDATE acl SET allowed=0 WHERE tenant='t1'")
+            self.db.execute("UPDATE acl SET allowed=1 WHERE tenant='t1'")
+        self.assertEqual(self.decide(hook=mutate), "DENY")
+        self.assertEqual(self.db.execute("SELECT allowed FROM acl WHERE tenant='t1'").fetchone(), (1,))
 
     def test_competing_writer_blocked_during_snapshot(self):
         barrier = threading.Event()
