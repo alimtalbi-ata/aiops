@@ -192,6 +192,27 @@ class GammaOffline(unittest.TestCase):
         self.assertIn("ACCEPT", p.locator("#admission-result").inner_text())
         self.assertIn("DENY", p.locator("#binding-result").inner_text())
 
+    def test_live_regions_and_focus_retention(self):
+        p = self.page
+        for status in ("run-result", "admission-result", "binding-result", "snapshot-status", "decision"):
+            node = p.locator(f"#{status}")
+            self.assertEqual(node.get_attribute("role"), "status")
+            self.assertEqual(node.get_attribute("aria-live"), "polite")
+            self.assertEqual(node.get_attribute("aria-atomic"), "true")
+        for control, value, status, marker in (
+            ("run-choice", "network", "run-result", "NETWORK"),
+            ("admission", "refused", "admission-result", "REFUSED"),
+            ("binding-case", "revision-mismatch", "binding-result", "DENY"),
+        ):
+            p.locator(f"#{control}").focus()
+            p.locator(f"#{control}").select_option(value)
+            self.assertEqual(p.evaluate("document.activeElement.id"), control)
+            self.assertIn(marker, p.locator(f"#{status}").inner_text())
+        p.locator("#policy").focus()
+        p.locator("#policy").click()
+        self.assertEqual(p.evaluate("document.activeElement.id"), "policy")
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
+
     def test_run_admission_reset(self):
         p = self.page
         p.locator("#admission").select_option("accept")
