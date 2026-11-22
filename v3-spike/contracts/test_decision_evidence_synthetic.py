@@ -72,7 +72,7 @@ class DecisionEvidenceTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
     def test_control_character_denied_without_mutation(self):
         # Exercise the canonical field-bounds guard, not backend mismatch or a bad MAC.
-        for control in ("\\n", "\\t", "\\x00", "\\x7f"):
+        for control in ("\n", "\t", "\x00", "\x7f"):
             with self.subTest(codepoint=ord(control)):
                 e = dict(self.env, principal_id="principal-1" + control)
                 backend = dict(self.backend, principal_id=e["principal_id"])
@@ -82,7 +82,7 @@ class DecisionEvidenceTests(unittest.TestCase):
                 self.assertFalse(self.db.in_transaction)
     def test_control_character_in_backend_is_not_authorization(self):
         # An untrusted backend context must not turn a malformed envelope into approval.
-        for control in ("\\n", "\\x00"):
+        for control in ("\n", "\x00"):
             with self.subTest(codepoint=ord(control)):
                 e = dict(self.env, resource_id="opaque-1" + control)
                 backend = dict(self.backend, resource_id=e["resource_id"])
