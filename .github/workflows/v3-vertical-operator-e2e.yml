@@ -36,12 +36,12 @@ jobs:
           import sys, unittest, xmlrunner
           sys.path.insert(0, 'v3-spike/vertical')
           suite = unittest.defaultTestLoader.loadTestsFromName('test_operator_e2e')
-          assert suite.countTestCases() == 4, 'FAIL E2E test collection != 4'
+          assert suite.countTestCases() == 6, 'FAIL E2E test collection != 6'
           result = xmlrunner.XMLTestRunner(output='vertical-e2e-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 4, 'FAIL CLI-GAMMA E2E'
-          print('PASS four exact-source CLI->Chromium E2E tests; synthetic only')
+          assert result.wasSuccessful() and result.testsRun == 6, 'FAIL CLI-GAMMA E2E'
+          print('PASS six exact-source CLI->Chromium E2E tests; synthetic only')
           PY
-          python3 -B v3-spike/kit/verify_junit.py vertical-e2e-junit --expected 4 --source v3-spike/vertical/test_operator_e2e.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest vertical-e2e-junit/manifest.json
+          python3 -B v3-spike/kit/verify_junit.py vertical-e2e-junit --expected 6 --source v3-spike/vertical/test_operator_e2e.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest vertical-e2e-junit/manifest.json
       - name: Upload E2E JUnit and source-bound manifest
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
