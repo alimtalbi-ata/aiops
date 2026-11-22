@@ -74,9 +74,14 @@ def read_atomic(conn, tenant, instance, principal, event, expected_revision, exp
             raise PermissionError("revoked")
         conn.execute("ROLLBACK")  # read-only receipt: no mutations survive
         return ("ALLOW_SYNTHETIC", twin[1], ev[2])
-    except (sqlite3.Error, PermissionError, ValueError, TypeError):
-        if conn.in_transaction:
-            conn.execute("ROLLBACK")
+    except Exception:
+        # Fail closed for arbitrary callback exceptions, including RuntimeError and
+        # assertion failures; never leave the caller connection in a transaction.
+        try:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass  # Connection may be unusable; never return ALLOW.
         return ("DENY", None, None)
 
 class AtomicBoundaryTests(unittest.TestCase):
@@ -166,6 +171,20 @@ class AtomicBoundaryTests(unittest.TestCase):
             self.db.execute("PRAGMA user_version=42")
         self.assertEqual(self.decide(hook=pragma), "DENY")
         self.assertEqual(self.db.execute("PRAGMA user_version").fetchone(), (0,))
+
+    def test_callback_runtime_error_denied_and_transaction_closed(self):
+        def crash():
+            raise RuntimeError("synthetic callback failure")
+        self.assertEqual(self.decide(hook=crash), "DENY")
+        self.assertFalse(self.db.in_transaction)
+        self.assertEqual(self.decide(), "ALLOW_SYNTHETIC")
+
+    def test_callback_assertion_error_denied_and_transaction_closed(self):
+        def crash():
+            raise AssertionError("synthetic callback assertion")
+        self.assertEqual(self.decide(hook=crash), "DENY")
+        self.assertFalse(self.db.in_transaction)
+        self.assertEqual(self.decide(), "ALLOW_SYNTHETIC")
 
     def test_callback_read_only_query_still_allowed(self):
         def reader():
