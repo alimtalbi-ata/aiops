@@ -28,7 +28,7 @@ $("projection-file").addEventListener("change",async event=>{
    $("file-status").textContent="Local file loaded into editor; inspect explicitly to validate. No upload.";
  }catch(_err){if(generation!==importGeneration)return;reset("UNKNOWN / DENY — local file unreadable.");$("file-status").textContent="REJECTED — local file unreadable.";}
 });
-function validString(v){return typeof v==="string"&&v.trim().length>0;}
+function validString(v){return typeof v==="string"&&v.length<=256&&v.trim().length>0&&!/[\u0000-\u001f\u007f]/.test(v);}
 function validate(x){
  if(!x||typeof x!=="object"||Array.isArray(x)||x.production_authorized!==false)throw Error("production_authorized must be false");
  const {event:e,incident:i,twin:t,policy:p,run:r,receipt:c,gamma:g}=x;
@@ -43,7 +43,7 @@ function validate(x){
 $("payload").addEventListener("input",()=>{++importGeneration;reset("UNKNOWN / DENY — edited projection requires explicit inspection.");$("file-status").textContent="Editor changed; inspect explicitly. No upload.";});
 $("load").addEventListener("click",()=>{
  ++importGeneration; // Explicit inspection supersedes any pending local file read.
- reset();try{const {e,i,t,p,r,c}=validate(JSON.parse($("payload").value));
+ reset();try{if(new TextEncoder().encode($("payload").value).length>1048576)throw Error("projection exceeds 1 MiB");const {e,i,t,p,r,c}=validate(JSON.parse($("payload").value));
  $("incident-value").textContent=`${i.id} · ${i.severity} · ${i.status} · event ${e.id} (${e.source})`;
  $("twin-value").textContent=`${t.resource} · ${t.correlation} (DEMO only) · event SHA256 ${t.evidence.event_sha256} · provenance UNKNOWN`;
  $("policy-value").textContent=`${p.decision} · HITL ${p.hitl} (UNVERIFIED synthetic label) · operational DENY`;
