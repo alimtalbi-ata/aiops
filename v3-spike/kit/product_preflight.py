@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 REQUIRED = {"gamma", "core", "temporal", "worker", "policy", "hitl", "evidence"}
-DIGEST = re.compile(r"^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$")
+DIGEST = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$")
 PROFILES = {"default", "demo", "enterprise"}
 # V3 preliminary contract: core is the sole schema migration owner.
 # Other services must not claim migration ownership until a versioned
