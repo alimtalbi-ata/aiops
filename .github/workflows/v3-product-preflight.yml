@@ -86,7 +86,23 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           cd v3-spike/vertical
-          python3 -B -m unittest -v test_vertical_demo test_vertical_cli_smoke
+          python3 -m pip install --disable-pip-version-check 'unittest-xml-reporting==3.2.0'
+          mkdir -p ../../vertical-junit/unit ../../vertical-junit/cli
+          python3 -B - <<'PYTEST'
+          import unittest
+          import xmlrunner
+          for module, expected, target in (
+              ('test_vertical_demo', 8, '../../vertical-junit/unit'),
+              ('test_vertical_cli_smoke', 4, '../../vertical-junit/cli'),
+          ):
+              suite = unittest.defaultTestLoader.loadTestsFromName(module)
+              count = suite.countTestCases()
+              assert count == expected, f'FAIL collection {module}: {count} != {expected}'
+              result = xmlrunner.XMLTestRunner(output=target, verbosity=2).run(suite)
+              assert result.wasSuccessful() and result.testsRun == expected, f'FAIL execution {module}'
+          PYTEST
+          python3 -B ../../v3-spike/kit/verify_junit.py ../../vertical-junit/unit --expected 8 --source test_vertical_demo.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest ../../vertical-junit/unit/manifest.json
+          python3 -B ../../v3-spike/kit/verify_junit.py ../../vertical-junit/cli --expected 4 --source test_vertical_cli_smoke.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest ../../vertical-junit/cli/manifest.json
           python3 -B vertical_demo.py > ../../vertical-denied.json
           python3 -B vertical_demo.py --approved-synthetic > ../../vertical-simulated.json
           python3 - <<'PY'
@@ -101,6 +117,16 @@ jobs:
           assert not simulated['run']['executed_on_host']
           print('PASS synthetic vertical denied/simulated; production NO-GO')
           PY
+      - name: Upload verified vertical JUnit and SHA manifests
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-vertical-synthetic-junit
+          path: |
+            vertical-junit/**/*.xml
+            vertical-junit/**/manifest.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload synthetic vertical receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
