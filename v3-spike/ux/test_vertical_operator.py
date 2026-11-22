@@ -141,6 +141,26 @@ class VerticalOperator(unittest.TestCase):
         self.page.locator("#eligibility").click()
         self.assertIn("DENIED", self.page.locator("#decision").inner_text())
 
+    def test_untrusted_identifiers_render_as_text_not_markup(self):
+        f=fixture()
+        f["event"]["id"]="<img src=x onerror=alert(1)>"
+        f["event"]["source"]="<svg onload=alert(2)>"
+        f["event"]["resource"]="<script>alert(3)</script>"
+        f["incident"]["id"]="<b>synthetic-incident</b>"
+        f["twin"]["resource"]=f["event"]["resource"]
+        f["twin"]["evidence"]["source"]=f["event"]["source"]
+        f["receipt"]["incident_id"]=f["incident"]["id"]
+        f["gamma"]["incident"]=f["incident"]
+        f["gamma"]["twin"]=f["twin"]
+        f["gamma"]["receipt"]=f["receipt"]
+        self.load(f)
+        self.assertIn("DEMO",self.page.locator("#state").inner_text())
+        self.assertIn("<img",self.page.locator("#incident-value").inner_text())
+        self.assertIn("<script>",self.page.locator("#twin-value").inner_text())
+        self.assertEqual(self.page.locator("#incident-value img, #incident-value svg, #twin-value script, #incident-value b").count(),0)
+        self.page.locator("#eligibility").click()
+        self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+
     def test_keyboard_and_viewports(self):
         for width in (320,1280,1920):
             self.page.set_viewport_size({"width":width,"height":900})
