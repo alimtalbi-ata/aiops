@@ -67,7 +67,8 @@ def validate_compose(compose, environ=None):
         expected = ("${DEMO_IMAGE:-${CORE_IMAGE}}" if name == "demo" else "${" + variable + ":?verified digest required}")
         if image != expected:
             raise ValueError("unsafe image declaration: " + name)
-        image_value = (env.get("CORE_IMAGE") if name == "demo" and variable not in env\n                       else env.get(variable))
+        image_value = (env.get("CORE_IMAGE") if name == "demo" and variable not in env
+                       else env.get(variable))
         if not isinstance(image_value, str) or not DIGEST.fullmatch(image_value):
             raise ValueError("missing or mutable image digest: " + name)
         if svc.get("read_only") is not True or svc.get("cap_drop") != ["ALL"] or svc.get("user") != "65532:65532":
