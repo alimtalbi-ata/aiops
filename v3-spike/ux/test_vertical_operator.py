@@ -3,7 +3,7 @@ import hashlib
 import json
 import unittest
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 HTML = Path(__file__).with_name("vertical_operator.html")
 def canonical(x): return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -56,14 +56,14 @@ class VerticalOperator(unittest.TestCase):
         payload=json.dumps(fixture(True)).encode("utf-8")
         self.page.locator("#projection-file").set_input_files(
             {"name":"synthetic.json","mimeType":"application/json","buffer":payload})
-        self.assertIn("No upload",self.page.locator("#file-status").inner_text())
+        expect(self.page.locator("#file-status")).to_contain_text("No upload")
         self.assertIn("synthetic-001",self.page.locator("#payload").input_value())
         self.assertIn("UNKNOWN",self.page.locator("#state").inner_text())
         self.page.locator("#load").click()
         self.assertIn("SIMULATE_ONLY",self.page.locator("#policy-value").inner_text())
         self.page.locator("#projection-file").set_input_files(
             {"name":"oversized.json","mimeType":"application/json","buffer":b"x"*1048577})
-        self.assertIn("REJECTED",self.page.locator("#file-status").inner_text())
+        expect(self.page.locator("#file-status")).to_contain_text("REJECTED")
         self.assertEqual("",self.page.locator("#payload").input_value())
         self.assertIn("UNKNOWN",self.page.locator("#incident-value").inner_text())
         self.page.locator("#eligibility").click()
