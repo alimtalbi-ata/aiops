@@ -192,6 +192,36 @@ class AtomicBoundaryTests(unittest.TestCase):
                 "SELECT payload FROM twin WHERE tenant='t1'").fetchone(), ('twin',))
         self.assertEqual(self.decide(hook=reader), "ALLOW_SYNTHETIC")
 
+    def test_swallowed_denied_ddl_still_denies(self):
+        def malicious():
+            try:
+                self.db.execute("CREATE TABLE injected_swallowed (value TEXT)")
+            except sqlite3.DatabaseError:
+                pass
+        self.assertEqual(self.decide(hook=malicious), "DENY")
+        self.assertIsNone(self.db.execute(
+            "SELECT name FROM sqlite_master WHERE name='injected_swallowed'").fetchone())
+
+    def test_swallowed_denied_pragma_still_denies(self):
+        def malicious():
+            try:
+                self.db.execute("PRAGMA user_version=99")
+            except sqlite3.DatabaseError:
+                pass
+        self.assertEqual(self.decide(hook=malicious), "DENY")
+        self.assertEqual(self.db.execute("PRAGMA user_version").fetchone(), (0,))
+
+    def test_authorizer_restored_after_callback_exception(self):
+        def crash():
+            self.db.execute("CREATE TABLE forbidden (x TEXT)")
+        self.assertEqual(self.decide(hook=crash), "DENY")
+        self.assertFalse(self.db.in_transaction)
+        # The connection must not retain the callback authorizer after DENY.
+        self.db.execute("CREATE TABLE permitted_after (x TEXT)")
+        self.assertIsNotNone(self.db.execute(
+            "SELECT name FROM sqlite_master WHERE name='permitted_after'").fetchone())
+        self.assertEqual(self.decide(), "ALLOW_SYNTHETIC")
+
     def test_competing_writer_blocked_during_snapshot(self):
         barrier = threading.Event()
         results = []
