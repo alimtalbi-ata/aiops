@@ -47,7 +47,7 @@ jobs:
               raise SystemExit("FAIL: browser acceptance")
           print("PASS: 5/5 Chromium synthetic acceptance", flush=True)
           PY
-      - name: Run offline Chromium six-case suite (no HTTP, exact HTML)
+      - name: Run offline Chromium seven-case suite (no HTTP, exact HTML)
         run: |
           mkdir -p reports/offline
           python3 -B - <<'PY'
@@ -58,12 +58,12 @@ jobs:
           sys.modules[spec.name] = module
           spec.loader.exec_module(module)
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.GammaOffline)
-          if suite.countTestCases() != 6:
+          if suite.countTestCases() != 7:
               raise SystemExit("FAIL: offline collection mismatch")
           result = xmlrunner.XMLTestRunner(output="reports/offline", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 6:
+          if not result.wasSuccessful() or result.testsRun != 7:
               raise SystemExit("FAIL: offline Chromium acceptance")
-          print("PASS: offline 6/6", flush=True)
+          print("PASS: offline 7/7", flush=True)
           PY
       - name: UTC receipt
         if: always()
