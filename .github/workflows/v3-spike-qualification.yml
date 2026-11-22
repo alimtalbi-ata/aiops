@@ -188,11 +188,11 @@ jobs:
               else:
                   raise AssertionError(f"FAIL BOM lint accepted {label} mutation")
           assert "\n## État de qualification" in text, "FAIL missing qualification section"
-          for term in ("SQLite 17", "sécurité 9", "GAMMA 5", "kit 6", "resource-binding 6", "authenticated-binding 4", "pair-decision 7", "Compose default/DEMO"):
+          for term in ("SQLite 17", "sécurité 9", "GAMMA 5", "kit 7", "resource-binding 6", "authenticated-binding 4", "pair-decision 7", "Compose default/DEMO"):
               assert term in text, f"FAIL BOM missing {term}"
           print("PASS BOM structure and six-job inventory; no runtime qualification")
           PY
-      - name: Synthetic kit unit tests (strict 6 methods)
+      - name: Synthetic kit unit tests (strict 7 methods)
         working-directory: v3-spike/kit
         run: |
           python3 -m pip install --disable-pip-version-check 'unittest-xml-reporting==3.2.0'
@@ -205,7 +205,7 @@ jobs:
           os.makedirs('reports', exist_ok=True)
           import test_preflight
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_preflight.IsolationTests)
-          expected = 6
+          expected = 7
           actual = suite.countTestCases()
           print(f"kit-unit collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
@@ -446,7 +446,7 @@ jobs:
               raise SystemExit("FAIL synthetic SnapshotPair/adversarial gate")
           print("PASS synthetic SnapshotPair5/adversarial7; backend atomicity NOT_ATTESTED")
           PY
-      - name: Independently witnessed snapshot (strict 18 synthetic methods)
+      - name: Independently witnessed snapshot (strict 20 synthetic methods)
         run: |
           set -eu
           mkdir -p reports
@@ -455,7 +455,7 @@ jobs:
           import xmlrunner
           import test_attested_snapshot
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_attested_snapshot.AttestedSnapshotTests)
-          expected = 18
+          expected = 20
           actual = suite.countTestCases()
           print(f"attested-snapshot collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
