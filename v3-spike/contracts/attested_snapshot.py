@@ -5,6 +5,7 @@ a deterministic test fixture, NOT a production backend attestation.
 A backend-provided snapshot_id alone never passes this gate.
 """
 from dataclasses import dataclass
+from copy import deepcopy
 import hashlib
 import hmac
 import json
@@ -79,9 +80,10 @@ def attested_snapshot_decision(*, event, assertion, verifier, fetch_pair, witnes
         # It is rechecked after the backend call to catch observable revocation.
         if authorization_probe is not None and authorization_probe() is not True:
             raise PermissionError("authorization revoked before fetch")
-        before = state_probe() if state_probe is not None else None
+        # Freeze the probe result: a backend can mutate an aliased dict/list in place.
+        before = deepcopy(state_probe()) if state_probe is not None else None
         response = fetch_pair(**kwargs)
-        after = state_probe() if state_probe is not None else None
+        after = deepcopy(state_probe()) if state_probe is not None else None
         if authorization_probe is not None and authorization_probe() is not True:
             raise PermissionError("authorization revoked after fetch")
         if event != original_event:
