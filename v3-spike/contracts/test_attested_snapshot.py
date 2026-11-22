@@ -273,7 +273,66 @@ class AttestedSnapshotTests(unittest.TestCase):
             event=self.event, assertion=self.token(), verifier=self.verifier,
             fetch_pair=backend, witness=self.witness, authorization_probe=probe)
         self.assertEqual(decision, "ALLOW_SYNTHETIC")
-        self.assertEqual(probe.call_count, 2)
+        self.assertEqual(probe.call_count, 3)
+        backend.assert_called_once()
+
+
+    def test_authorization_revoked_by_witness_denied(self):
+        access = {"granted": True}
+        witness = Mock()
+        def revoke(*args):
+            access["granted"] = False
+            return True
+        witness.verify.side_effect = revoke
+        probe = Mock(side_effect=lambda: access["granted"])
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=witness, authorization_probe=probe)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(probe.call_count, 3)
+        backend.assert_called_once()
+
+    def test_witness_mutation_of_state_denied(self):
+        witness = Mock()
+        def mutate(*args):
+            self.state["writes"] += 1
+            return True
+        witness.verify.side_effect = mutate
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=Mock(return_value=self.response()), witness=witness,
+            state_probe=lambda: tuple(sorted(self.state.items())))
+        self.assertEqual(result, "DENY")
+        self.assertEqual(self.state["writes"], 1)
+
+    def test_witness_mutation_of_event_denied(self):
+        original = dict(self.event)
+        witness = Mock()
+        def mutate(*args):
+            self.event["digest"] = "a" * 64
+            return True
+        witness.verify.side_effect = mutate
+        try:
+            result = attested_snapshot_decision(
+                event=self.event, assertion=self.token(), verifier=self.verifier,
+                fetch_pair=Mock(return_value=self.response()), witness=witness)
+            self.assertEqual(result, "DENY")
+        finally:
+            self.event.clear()
+            self.event.update(original)
+
+    def test_stable_probes_checked_three_times_only_synthetic(self):
+        backend = Mock(return_value=self.response())
+        auth = Mock(return_value=True)
+        state = Mock(return_value=("stable",))
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            authorization_probe=auth, state_probe=state)
+        self.assertEqual(result, "ALLOW_SYNTHETIC")
+        self.assertEqual(auth.call_count, 3)
+        self.assertEqual(state.call_count, 3)
         backend.assert_called_once()
 
 if __name__ == "__main__":
