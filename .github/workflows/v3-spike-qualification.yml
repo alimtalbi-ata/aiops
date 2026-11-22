@@ -513,7 +513,7 @@ jobs:
               docker compose -f docker-compose.yml --profile demo config --format json > /tmp/v3-compose.json
               docker compose -f docker-compose.yml --profile demo config --services > /tmp/v3-services.txt
             fi
-            python3 -B -c 'import json; c=json.load(open("/tmp/v3-compose.json")); print("COMPOSE_NETWORK_KEYS", {k: sorted(v) for k,v in c["networks"].items()}, flush=True)'
+            python3 -B -c 'import json; c=json.load(open("/tmp/v3-compose.json")); print("COMPOSE_NETWORK_KEYS", {k: sorted(v) for k,v in c["networks"].items()}, "COMPOSE_SERVICE_KEYS", {k: sorted(v) for k,v in c["services"].items()}, flush=True)'
           python3 -B preflight.py < /tmp/v3-compose.json
             python3 -B - "$profile" /tmp/v3-services.txt <<'PY'
           import sys
