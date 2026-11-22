@@ -47,7 +47,7 @@ jobs:
               raise SystemExit("FAIL: browser acceptance")
           print("PASS: 5/5 Chromium synthetic acceptance", flush=True)
           PY
-      - name: Run offline Chromium twelve-case suite (no HTTP, exact HTML)
+      - name: Run offline Chromium thirteen-case suite (no HTTP, exact HTML)
         run: |
           mkdir -p reports/offline
           python3 -B - <<'PY'
@@ -58,12 +58,12 @@ jobs:
           sys.modules[spec.name] = module
           spec.loader.exec_module(module)
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.GammaOffline)
-          if suite.countTestCases() != 12:
+          if suite.countTestCases() != 13:
               raise SystemExit("FAIL: offline collection mismatch")
           result = xmlrunner.XMLTestRunner(output="reports/offline", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 12:
+          if not result.wasSuccessful() or result.testsRun != 13:
               raise SystemExit("FAIL: offline Chromium acceptance")
-          print("PASS: offline 12/12", flush=True)
+          print("PASS: offline 13/13", flush=True)
           PY
       - name: UTC receipt
         if: always()
@@ -89,7 +89,7 @@ jobs:
                   raise SystemExit("FAIL: duplicate source test identities")
               return set(names)
 
-          for folder, expected, source, class_name in ((Path("reports"), 5, "v3-spike/ux/test_gamma.py", "GammaAcceptance"), (Path("reports/offline"), 12, "v3-spike/ux/test_gamma_offline.py", "GammaOffline")):
+          for folder, expected, source, class_name in ((Path("reports"), 5, "v3-spike/ux/test_gamma.py", "GammaAcceptance"), (Path("reports/offline"), 13, "v3-spike/ux/test_gamma_offline.py", "GammaOffline")):
               expected_names = expected_test_names(source, class_name)
               if len(expected_names) != expected:
                   raise SystemExit(f"FAIL: source identities {len(expected_names)} != {expected}")
