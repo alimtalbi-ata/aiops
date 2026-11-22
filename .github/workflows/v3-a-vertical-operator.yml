@@ -55,6 +55,14 @@ jobs:
           import xml.etree.ElementTree as ET
           files=list(Path("reports/vertical").glob("*.xml"))
           if not files: raise SystemExit("FAIL: JUnit missing")
+          import ast
+          source=Path("v3-spike/ux/test_vertical_operator.py")
+          tree=ast.parse(source.read_text(encoding="utf-8"))
+          classes=[node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=="VerticalOperator"]
+          if len(classes)!=1: raise SystemExit("FAIL: missing or duplicate VerticalOperator class")
+          expected={"test_vertical_operator.VerticalOperator."+node.name for node in classes[0].body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name.startswith("test_")}
+          if len(expected)!=8: raise SystemExit("FAIL: expected eight distinct source test identities")
+          actual=[]
           total=0
           for file in files:
               root=ET.parse(file).getroot()
@@ -65,8 +73,15 @@ jobs:
                   if int(suite.attrib.get("tests","-1"))!=len(cases): raise SystemExit("FAIL: JUnit count")
                   if any(int(suite.attrib.get(k,"0")) for k in ("failures","errors","skipped")): raise SystemExit("FAIL: JUnit failures")
                   if any(c.find(tag) is not None for c in cases for tag in ("failure","error","skipped")): raise SystemExit("FAIL: JUnit case failure")
+                  for case in cases:
+                      classname=case.attrib.get("classname","")
+                      name=case.attrib.get("name","")
+                      if not classname or not name: raise SystemExit("FAIL: JUnit testcase missing identity")
+                      actual.append(classname+"."+name)
                   total+=len(cases)
           if total!=8: raise SystemExit("FAIL: JUnit expected eight")
+          if len(set(actual))!=len(actual): raise SystemExit("FAIL: duplicate JUnit testcase")
+          if set(actual)!=expected: raise SystemExit("FAIL: substituted or missing JUnit testcase identities")
           print("PASS: vertical JUnit 8/8")
           PY
       - name: UTC receipt
