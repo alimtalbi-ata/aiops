@@ -9,6 +9,9 @@ import hmac
 import json
 import sqlite3
 
+MAX_ENVELOPE_BYTES = 8192
+MAX_FIELD_CHARS = 256
+
 FIELDS = ("schema_version", "tenant_id", "principal_id", "event_id",
           "resource_id", "twin_revision", "evidence_digest", "policy_version",
           "decision", "approval_id", "issued_at", "expires_at", "nonce", "issuer_key_id")
@@ -16,7 +19,13 @@ FIELDS = ("schema_version", "tenant_id", "principal_id", "event_id",
 def canonical(envelope):
     if not isinstance(envelope, dict) or set(envelope) != set(FIELDS):
         raise ValueError("envelope_fields")
-    return json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    for name, value in envelope.items():
+        if isinstance(value, str) and (len(value) > MAX_FIELD_CHARS or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+            raise ValueError("field_bounds")
+    raw = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    if len(raw) > MAX_ENVELOPE_BYTES:
+        raise ValueError("envelope_bounds")
+    return raw
 
 def sign_fixture(envelope, key):
     """Test helper ONLY; not a production signing interface."""
