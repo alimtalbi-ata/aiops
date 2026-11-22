@@ -406,6 +406,25 @@ class AttestedSnapshotTests(unittest.TestCase):
         self.assertEqual(state.call_count, 3)
         backend.assert_called_once()
 
+    def test_final_observation_uncopyable_equal_impostor_denied(self):
+        # Adversarial equality can claim that a changed final state is unchanged.
+        # The last observation must be frozen just like the first two.
+        class EqualImpostor:
+            def __eq__(self, other):
+                return True
+
+            def __deepcopy__(self, memo):
+                raise RuntimeError("final observation cannot be frozen")
+
+        probe = Mock(side_effect=[("rev1",), ("rev1",), EqualImpostor()])
+        backend = Mock(return_value=self.response())
+        result = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, state_probe=probe)
+        self.assertEqual(result, "DENY")
+        self.assertEqual(probe.call_count, 3)
+        backend.assert_called_once()
+
     def test_final_state_observation_revokes_acl_denied(self):
         # Regression: previous final ACL check preceded the final state probe.
         access = {"granted": True}
