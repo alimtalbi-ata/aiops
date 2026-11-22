@@ -71,12 +71,39 @@ jobs:
           date -u +%FT%TZ
           echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID attempt=$GITHUB_RUN_ATTEMPT job=$GITHUB_JOB"
           echo "runtime=NOT_RUN production=DENIED"
-      - name: Assert both JUnit suites emitted XML
+      - name: Validate JUnit test counts and zero failures
         if: always()
         run: |
-          set -eu
-          test -n "$(find reports -maxdepth 1 -name '*.xml' -type f -print -quit)"
-          test -n "$(find reports/offline -maxdepth 1 -name '*.xml' -type f -print -quit)"
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          for folder, expected in ((Path("reports"), 5), (Path("reports/offline"), 9)):
+              files = sorted(folder.glob("*.xml"))
+              if not files:
+                  raise SystemExit(f"FAIL: missing JUnit XML in {folder}")
+              total = 0
+              for file in files:
+                  root = ET.parse(file).getroot()
+                  suites = [root] if root.tag == "testsuite" else list(root) if root.tag == "testsuites" else []
+                  if not suites or any(suite.tag != "testsuite" for suite in suites):
+                      raise SystemExit(f"FAIL: malformed JUnit suite in {file}")
+                  for suite in suites:
+                      cases = suite.findall("testcase")
+                      declared = int(suite.attrib.get("tests", "-1"))
+                      if declared != len(cases):
+                          raise SystemExit(f"FAIL: JUnit case count mismatch in {file}")
+                      if any(suite.findall(tag) for tag in ("failure", "error", "skipped")):
+                          raise SystemExit(f"FAIL: invalid JUnit suite in {file}")
+                      if any(case.find(tag) is not None for case in cases for tag in ("failure", "error", "skipped")):
+                          raise SystemExit(f"FAIL: failing/skipped JUnit case in {file}")
+                      if any(int(suite.attrib.get(k, "0")) != 0 for k in ("failures", "errors", "skipped")):
+                          raise SystemExit(f"FAIL: nonzero JUnit failure counters in {file}")
+                      total += len(cases)
+              if total != expected:
+                  raise SystemExit(f"FAIL: JUnit {folder} counted={total}, expected={expected}")
+              print(f"PASS: JUnit {folder} {total}/{expected} no failures/errors/skips")
+          PY
       - name: Upload JUnit reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
