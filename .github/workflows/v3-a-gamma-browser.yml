@@ -47,7 +47,7 @@ jobs:
               raise SystemExit("FAIL: browser acceptance")
           print("PASS: 5/5 Chromium synthetic acceptance", flush=True)
           PY
-      - name: Run offline Chromium eleven-case suite (no HTTP, exact HTML)
+      - name: Run offline Chromium twelve-case suite (no HTTP, exact HTML)
         run: |
           mkdir -p reports/offline
           python3 -B - <<'PY'
@@ -58,12 +58,12 @@ jobs:
           sys.modules[spec.name] = module
           spec.loader.exec_module(module)
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.GammaOffline)
-          if suite.countTestCases() != 11:
+          if suite.countTestCases() != 12:
               raise SystemExit("FAIL: offline collection mismatch")
           result = xmlrunner.XMLTestRunner(output="reports/offline", verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 11:
+          if not result.wasSuccessful() or result.testsRun != 12:
               raise SystemExit("FAIL: offline Chromium acceptance")
-          print("PASS: offline 11/11", flush=True)
+          print("PASS: offline 12/12", flush=True)
           PY
       - name: UTC receipt
         if: always()
@@ -78,7 +78,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
 
-          for folder, expected in ((Path("reports"), 5), (Path("reports/offline"), 11)):
+          for folder, expected in ((Path("reports"), 5), (Path("reports/offline"), 12)):
               files = sorted(folder.glob("*.xml"))
               if not files:
                   raise SystemExit(f"FAIL: missing JUnit XML in {folder}")
