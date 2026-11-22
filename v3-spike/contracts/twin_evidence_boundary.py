@@ -34,13 +34,16 @@ def correlate(conn, *, tenant, instance, principal, event, revision, evidence_sh
             return {"decision": "DENY", "reason": "invalid_state"}
         conn.execute("BEGIN IMMEDIATE")
         started = True
-        acl = conn.execute("SELECT allowed FROM acl WHERE tenant=? AND principal=?",
-                           (tenant, principal)).fetchone()
-        twin = conn.execute("SELECT revision,payload FROM twin WHERE tenant=? AND instance=?",
-                            (tenant, instance)).fetchone()
-        ev = conn.execute("SELECT revision,digest,payload FROM evidence "
-                          "WHERE tenant=? AND instance=? AND event=?",
-                          (tenant, instance, event)).fetchone()
+        acl_rows = conn.execute("SELECT allowed FROM acl WHERE tenant=? AND principal=?",
+                                (tenant, principal)).fetchall()
+        twin_rows = conn.execute("SELECT revision,payload FROM twin WHERE tenant=? AND instance=?",
+                                 (tenant, instance)).fetchall()
+        ev_rows = conn.execute("SELECT revision,digest,payload FROM evidence "
+                               "WHERE tenant=? AND instance=? AND event=?",
+                               (tenant, instance, event)).fetchall()
+        if len(acl_rows) != 1 or len(twin_rows) != 1 or len(ev_rows) != 1:
+            return {"decision": "DENY", "reason": "ambiguous_backend_rows"}
+        acl, twin, ev = acl_rows[0], twin_rows[0], ev_rows[0]
         if acl != (1,) or twin is None or ev is None or twin[0] != revision or ev[0] != revision:
             return {"decision": "DENY", "reason": "acl_or_revision"}
         computed = hashlib.sha256(ev[2].encode("utf-8")).hexdigest()
@@ -48,7 +51,7 @@ def correlate(conn, *, tenant, instance, principal, event, revision, evidence_sh
             return {"decision": "DENY", "reason": "digest"}
         view = TwinEvidenceView(tenant, instance, event, revision, twin[1], ev[2], computed)
         if conn.execute("SELECT allowed FROM acl WHERE tenant=? AND principal=?",
-                        (tenant, principal)).fetchone() != (1,):
+                        (tenant, principal)).fetchall() != [(1,)]:
             return {"decision": "DENY", "reason": "revoked"}
         identity = json.dumps([tenant, instance, event, revision], separators=(",", ":"))
         return {"decision": "SIMULATE_ONLY", "contract_version": "v3-twin-evidence-synthetic-1",
