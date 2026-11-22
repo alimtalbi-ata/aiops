@@ -219,5 +219,62 @@ class AttestedSnapshotTests(unittest.TestCase):
                 self.assertEqual(result, "DENY")
                 backend.assert_called_once()
 
+
+    def test_authorization_revoked_during_fetch_denied(self):
+        access = {"granted": True}
+        backend = Mock()
+        def revoke(**kwargs):
+            access["granted"] = False
+            return self.response()
+        backend.side_effect = revoke
+        decision = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            authorization_probe=lambda: access["granted"])
+        self.assertEqual(decision, "DENY")
+        backend.assert_called_once()
+        self.assertFalse(access["granted"])
+
+    def test_authorization_revoked_before_fetch_no_backend_read(self):
+        backend = Mock(return_value=self.response())
+        decision = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness,
+            authorization_probe=lambda: False)
+        self.assertEqual(decision, "DENY")
+        backend.assert_not_called()
+
+    def test_authorization_probe_must_return_exact_true(self):
+        for verdict in ("yes", 1, ["granted"], None):
+            with self.subTest(verdict=verdict):
+                backend = Mock(return_value=self.response())
+                decision = attested_snapshot_decision(
+                    event=self.event, assertion=self.token(), verifier=self.verifier,
+                    fetch_pair=backend, witness=self.witness,
+                    authorization_probe=lambda: verdict)
+                self.assertEqual(decision, "DENY")
+                backend.assert_not_called()
+
+    def test_authorization_probe_errors_fail_closed(self):
+        for calls in ((RuntimeError("before"),), (True, RuntimeError("after"))):
+            with self.subTest(calls=repr(calls)):
+                backend = Mock(return_value=self.response())
+                probe = Mock(side_effect=list(calls))
+                decision = attested_snapshot_decision(
+                    event=self.event, assertion=self.token(), verifier=self.verifier,
+                    fetch_pair=backend, witness=self.witness, authorization_probe=probe)
+                self.assertEqual(decision, "DENY")
+                self.assertEqual(backend.call_count, 0 if len(calls) == 1 else 1)
+
+    def test_authorization_probe_stable_true_synthetic_only(self):
+        backend = Mock(return_value=self.response())
+        probe = Mock(return_value=True)
+        decision = attested_snapshot_decision(
+            event=self.event, assertion=self.token(), verifier=self.verifier,
+            fetch_pair=backend, witness=self.witness, authorization_probe=probe)
+        self.assertEqual(decision, "ALLOW_SYNTHETIC")
+        self.assertEqual(probe.call_count, 2)
+        backend.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
