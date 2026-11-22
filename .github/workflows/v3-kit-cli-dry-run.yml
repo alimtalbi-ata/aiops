@@ -23,7 +23,7 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
-      - name: Execute thirteen synthetic CLI tests with strict JUnit
+      - name: Execute sixteen synthetic CLI tests with strict JUnit
         env:
           GAMMA_IMAGE: 'registry.example.invalid/fixture@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
           CORE_IMAGE: 'registry.example.invalid/fixture@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -42,12 +42,12 @@ jobs:
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.KitCliTests)
-          if suite.countTestCases() != 13:
-              raise SystemExit("FAIL expected exactly thirteen CLI tests")
+          if suite.countTestCases() != 16:
+              raise SystemExit("FAIL expected exactly sixteen CLI tests")
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != 13:
               raise SystemExit("FAIL CLI dry-run tests")
-          print("PASS synthetic CLI dry-run 13/13")
+          print("PASS synthetic CLI dry-run 16/16")
           PY
       - name: Publish JUnit
         if: always()
