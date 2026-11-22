@@ -189,5 +189,35 @@ class AttestedSnapshotTests(unittest.TestCase):
                 self.assertEqual(result, "DENY")
                 backend.assert_called_once()
 
+
+    def test_backend_cannot_rewrite_event_after_acl(self):
+        backend = Mock()
+        original = dict(self.event)
+        def rewrite(**kwargs):
+            self.event["digest"] = "a" * 64
+            return self.response()
+        backend.side_effect = rewrite
+        try:
+            result = attested_snapshot_decision(
+                event=self.event, assertion=self.token(), verifier=self.verifier,
+                fetch_pair=backend, witness=self.witness)
+            self.assertEqual(result, "DENY")
+            backend.assert_called_once()
+        finally:
+            self.event.clear()
+            self.event.update(original)
+
+    def test_truthy_nonboolean_witness_verdict_denied(self):
+        for verdict in ("verified", 1, ["ok"]):
+            with self.subTest(verdict=verdict):
+                witness = Mock()
+                witness.verify.return_value = verdict
+                backend = Mock(return_value=self.response())
+                result = attested_snapshot_decision(
+                    event=self.event, assertion=self.token(), verifier=self.verifier,
+                    fetch_pair=backend, witness=witness)
+                self.assertEqual(result, "DENY")
+                backend.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
