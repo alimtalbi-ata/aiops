@@ -87,6 +87,12 @@ class IsolationTests(unittest.TestCase):
                 c["networks"]["edge"][field] = bad
                 with self.assertRaisesRegex(ValueError, "unsafe network IP families"):
                     validate(c)
+        for ipam in ({"driver": "host"}, {"config": [{"subnet": "10.0.0.0/8"}]}, {"driver": "default", "config": [{"gateway": "10.0.0.1"}]}):
+            with self.subTest(ipam=ipam):
+                c = fixture()
+                c["networks"]["edge"]["ipam"] = ipam
+                with self.assertRaisesRegex(ValueError, "unsafe network IPAM"):
+                    validate(c)
         c = fixture()
         c["networks"]["edge"]["driver_opts"] = {"com.docker.network.bridge.host_binding_ipv4": "0.0.0.0"}
         with self.assertRaises(ValueError):
