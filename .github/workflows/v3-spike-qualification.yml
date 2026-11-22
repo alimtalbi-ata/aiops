@@ -109,7 +109,7 @@ jobs:
               raise SystemExit(f"FAIL UX tests: executed={result.testsRun} expected={expected}")
           print(f"PASS UX tests: executed={result.testsRun}", flush=True)
           PY
-      - name: Offline GAMMA Chromium (strict 7 synthetic tests; no HTTP)
+      - name: Offline GAMMA Chromium (strict 8 synthetic tests; no HTTP)
         run: |
           mkdir -p reports/offline
           python3 -B - <<'PY'
@@ -120,7 +120,7 @@ jobs:
           sys.modules[spec.name] = module
           spec.loader.exec_module(module)
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.GammaOffline)
-          expected = 7
+          expected = 8
           actual = suite.countTestCases()
           print(f"offline collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
@@ -128,7 +128,7 @@ jobs:
           result = xmlrunner.XMLTestRunner(output="reports/offline", verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit("FAIL offline Chromium suite")
-          print("PASS offline Chromium7; production NOT_ATTESTED", flush=True)
+          print("PASS offline Chromium8; production NOT_ATTESTED", flush=True)
           PY
       - name: Publish gamma JUnit
         if: always()
@@ -455,7 +455,7 @@ jobs:
           import xmlrunner
           import test_attested_snapshot
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_attested_snapshot.AttestedSnapshotTests)
-          expected = 20
+          expected = 32
           actual = suite.countTestCases()
           print(f"attested-snapshot collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
@@ -463,7 +463,7 @@ jobs:
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL attested snapshot: executed={result.testsRun} expected={expected}")
-          print("PASS synthetic witnessed snapshot18; real backend transaction/ACL NOT_ATTESTED", flush=True)
+          print("PASS synthetic witnessed snapshot32; real backend transaction/ACL NOT_ATTESTED", flush=True)
           PY
       - name: Receipt
         if: always()
