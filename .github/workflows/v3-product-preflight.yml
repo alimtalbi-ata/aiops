@@ -1,0 +1,59 @@
+name: V3 product BOM static preflight
+on:
+  push:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/product_preflight.py'
+      - 'v3-spike/kit/test_product_preflight.py'
+      - '.github/workflows/v3-product-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  product-bom-static:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify exact SHA
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          date -u +%FT%TZ
+      - name: Run eight isolated BOM tests and write JUnit
+        run: |
+          set -eu
+          mkdir -p reports
+          python3 -B - <<'PY'
+          import sys, unittest
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          sys.path.insert(0, 'v3-spike/kit')
+          suite = unittest.defaultTestLoader.discover('v3-spike/kit', pattern='test_product_preflight.py')
+          count = suite.countTestCases()
+          assert count == 8, f'FAIL collection {count} != 8'
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          root = ET.Element('testsuite', name='product-bom-static', tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)), skipped=str(len(result.skipped)))
+          for i in range(result.testsRun):
+              ET.SubElement(root, 'testcase', classname='ProductPreflightTests', name=f'case_{i+1}')
+          ET.ElementTree(root).write('reports/product-bom.xml', encoding='utf-8', xml_declaration=True)
+          assert result.wasSuccessful() and result.testsRun == 8, 'FAIL product BOM tests'
+          print('PASS product BOM static 8/8; runtime NOT_RUN')
+          PY
+      - name: Upload JUnit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-product-bom-junit
+          path: reports/*.xml
+          if-no-files-found: error
+          retention-days: 14
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "runtime=NOT_RUN deploy_authorized=false"
