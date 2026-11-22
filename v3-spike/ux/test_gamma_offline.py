@@ -120,6 +120,7 @@ class GammaOffline(unittest.TestCase):
             p.locator("#policy").click()
             self.assertIn("DENIED", p.locator("#decision").inner_text())
             # Switching receipts must not retain a prior policy decision.
+            p.locator("#binding-case").select_option("matched")
             p.locator("#binding-case").select_option("revision-mismatch")
             self.assertIn("DENY", p.locator("#binding-result").inner_text())
             self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
