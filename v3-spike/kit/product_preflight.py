@@ -1,4 +1,4 @@
-"""Static product BOM preflight, separate from synthetic fixture. No Docker calls."""
+"""Static product BOM preflight. No Docker calls or runtime claims."""
 import json
 import re
 import sys
@@ -7,9 +7,13 @@ from pathlib import Path
 REQUIRED = {"gamma", "core", "temporal", "worker", "policy", "hitl", "evidence"}
 DIGEST = re.compile(r"^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$")
 PROFILES = {"default", "demo", "enterprise"}
+# V3 preliminary contract: core is the sole schema migration owner.
+# Other services must not claim migration ownership until a versioned
+# per-schema migration contract is approved and tested.
+MIGRATION_OWNER = "core"
 
 def validate(bom):
-    if not isinstance(bom, dict) or set(bom) != {"schema", "services"} or bom["schema"] != 1:
+    if not isinstance(bom, dict) or set(bom) != {"schema", "services"} or type(bom["schema"]) is not int or bom["schema"] != 1:
         raise ValueError("invalid BOM schema")
     services = bom["services"]
     if not isinstance(services, dict) or not REQUIRED <= set(services):
@@ -26,8 +30,8 @@ def validate(bom):
             raise ValueError("invalid external secret references")
         if not isinstance(item["migration"], bool):
             raise ValueError("invalid migration flag")
-    if not any(item["migration"] for item in services.values()):
-        raise ValueError("no migration ownership")
+        if item["migration"] != (name == MIGRATION_OWNER):
+            raise ValueError("invalid migration owner: core must be sole owner")
     return {"status": "STATIC_PASS", "services": len(services), "runtime_attested": False}
 
 def main(argv=None):
