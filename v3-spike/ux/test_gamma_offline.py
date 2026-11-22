@@ -136,6 +136,25 @@ class GammaOffline(unittest.TestCase):
             self.assertEqual(p.locator('nav[aria-label="Incident sections"] a').count(), 4)
             for href in ("#incident", "#run", "#evidence", "#itsm"):
                 self.assertTrue(p.locator(href).is_visible())
+    def test_run_change_invalidates_prior_binding_and_policy(self):
+        p = self.page
+        p.locator("#binding-case").select_option("matched")
+        self.assertIn("ALLOW_SYNTHETIC", p.locator("#binding-result").inner_text())
+        p.locator("#admission").select_option("accept")
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
+        p.locator("#run-choice").select_option("network")
+        self.assertEqual(p.locator("#binding-case").input_value(), "unknown")
+        self.assertIn("DENY", p.locator("#binding-result").inner_text())
+        self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
+        self.assertEqual(p.locator("#admission").input_value(), "unknown")
+        self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
+        p.locator("#run-choice").select_option("storage")
+        self.assertEqual(p.locator("#binding-case").input_value(), "unknown")
+        self.assertNotIn("ALLOW_SYNTHETIC", p.locator("#binding-result").inner_text())
+
     def test_run_admission_reset(self):
         p = self.page
         p.locator("#admission").select_option("accept")
