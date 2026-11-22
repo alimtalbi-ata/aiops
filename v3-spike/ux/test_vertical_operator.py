@@ -52,6 +52,25 @@ class VerticalOperator(unittest.TestCase):
         self.assertIn("UNKNOWN / DENY",self.page.locator("#state").inner_text())
         self.assertIn("UNKNOWN",self.page.locator("#incident-value").inner_text())
         self.page.locator("#clear").click();self.assertEqual(self.page.locator("#payload").input_value(),"")
+    def test_local_json_file_import_and_rejection(self):
+        payload=json.dumps(fixture(True)).encode("utf-8")
+        self.page.locator("#projection-file").set_input_files(
+            {"name":"synthetic.json","mimeType":"application/json","buffer":payload})
+        self.assertIn("No upload",self.page.locator("#file-status").inner_text())
+        self.assertIn("synthetic-001",self.page.locator("#payload").input_value())
+        self.assertIn("UNKNOWN",self.page.locator("#state").inner_text())
+        self.page.locator("#load").click()
+        self.assertIn("SIMULATE_ONLY",self.page.locator("#policy-value").inner_text())
+        self.page.locator("#projection-file").set_input_files(
+            {"name":"oversized.json","mimeType":"application/json","buffer":b"x"*1048577})
+        self.assertIn("REJECTED",self.page.locator("#file-status").inner_text())
+        self.assertEqual("",self.page.locator("#payload").input_value())
+        self.assertIn("UNKNOWN",self.page.locator("#incident-value").inner_text())
+        self.page.locator("#eligibility").click()
+        self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+        self.page.locator("#clear").click()
+        self.assertEqual("",self.page.locator("#projection-file").input_value())
+
     def test_keyboard_and_viewports(self):
         for width in (320,1280,1920):
             self.page.set_viewport_size({"width":width,"height":900})
