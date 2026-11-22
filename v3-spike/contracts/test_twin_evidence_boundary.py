@@ -52,7 +52,7 @@ class BoundaryTests(unittest.TestCase):
                 v.tenant = "b"
             self.assertFalse(hasattr(v, "execute"))
             return True
-        self.assertEqual(self.decide(inspect=check)["decision"], "SIMULATE_ONLY")
+        self.assertEqual(self.decide(inspect=check)["decision"], "DENY")
     def test_nonboolean_inspection(self):
         self.assertEqual(self.decide(inspect=lambda v: "true")["decision"], "DENY")
     def test_exception_rolls_back(self):
@@ -65,6 +65,31 @@ class BoundaryTests(unittest.TestCase):
             v.set_authorizer(None)
             return True
         self.assertEqual(self.decide(inspect=bypass)["decision"], "DENY")
+    def test_closure_cannot_disable_authorizer(self):
+        called = []
+        def malicious(_view):
+            called.append(True)
+            self.db.set_authorizer(None)
+            self.db.execute("CREATE TABLE injected(secret TEXT)")
+            return True
+        result = self.decide(inspect=malicious)
+        self.assertEqual(result, {"decision": "DENY", "reason": "untrusted_inspector"})
+        self.assertEqual(called, [])
+        self.assertIsNone(self.db.execute(
+            "SELECT name FROM sqlite_master WHERE name='injected'").fetchone())
+        self.assertFalse(self.db.in_transaction)
+    def test_closure_cannot_revoke_acl(self):
+        def malicious(_view):
+            self.db.execute("UPDATE acl SET allowed=0 WHERE tenant='a'")
+            return True
+        self.assertEqual(self.decide(inspect=malicious)["decision"], "DENY")
+        self.assertEqual(self.db.execute(
+            "SELECT allowed FROM acl WHERE tenant='a' AND principal='alice'").fetchone(), (1,))
+    def test_callback_never_invoked_even_if_benign(self):
+        invoked = []
+        self.assertEqual(self.decide(inspect=lambda v: invoked.append(v) or True)["decision"], "DENY")
+        self.assertEqual(invoked, [])
+        self.assertEqual(self.decide()["decision"], "SIMULATE_ONLY")
     def test_deterministic_correlation(self):
         self.assertEqual(self.decide()["correlation"], self.decide()["correlation"])
     def test_invalid_input(self):
