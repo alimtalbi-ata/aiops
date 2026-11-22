@@ -106,6 +106,27 @@ class VerticalOperator(unittest.TestCase):
         self.page.locator("#eligibility").click()
         self.assertIn("DENIED", self.page.locator("#decision").inner_text())
 
+    def test_pending_file_read_cannot_overwrite_explicit_inspection(self):
+        self.page.evaluate("""() => {
+          window.pendingFileText = {};
+          File.prototype.text = function() {
+            return new Promise(resolve => { window.pendingFileText.resolve = resolve; });
+          };
+        }""")
+        self.page.locator("#projection-file").set_input_files(
+            {"name":"delayed.json","mimeType":"application/json","buffer":b"{}"})
+        self.page.wait_for_function("typeof window.pendingFileText.resolve === 'function'")
+        self.page.locator("#payload").fill(json.dumps(fixture()))
+        self.page.locator("#load").click()
+        self.assertIn("DEMO", self.page.locator("#state").inner_text())
+        self.assertIn("blocked", self.page.locator("#run-value").inner_text())
+        self.page.evaluate("(text) => window.pendingFileText.resolve(text)", json.dumps(fixture(True)))
+        self.page.wait_for_timeout(100)
+        self.assertEqual(json.loads(self.page.locator("#payload").input_value())["policy"]["decision"], "DENY")
+        self.assertIn("blocked", self.page.locator("#run-value").inner_text())
+        self.page.locator("#eligibility").click()
+        self.assertIn("DENIED", self.page.locator("#decision").inner_text())
+
     def test_keyboard_and_viewports(self):
         for width in (320,1280,1920):
             self.page.set_viewport_size({"width":width,"height":900})
