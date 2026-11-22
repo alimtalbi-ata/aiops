@@ -31,7 +31,8 @@ def validate(config):
     require(set(config["networks"]) == {"edge", "backend"}, "unexpected networks")
     require(config["networks"]["backend"].get("internal") is True, "backend not internal")
     for net in config["networks"].values():
-        require(type(net) is dict and set(net) <= {"name", "driver", "internal", "external"}, "unexpected network field")
+        require(type(net) is dict and set(net) <= {"name", "driver", "internal", "external", "enable_ipv4", "enable_ipv6"}, "unexpected network field")
+        require(net.get("enable_ipv4", True) is True and net.get("enable_ipv6", False) is False, "unsafe network IP families")
         require(net.get("external", False) is False and net.get("driver", "bridge") == "bridge", "unsafe network")
     allowed = {"image","user","read_only","cap_drop","security_opt","ports","networks","volumes","environment","command","healthcheck","depends_on","profiles"}
     for name, s in services.items():
