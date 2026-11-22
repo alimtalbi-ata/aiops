@@ -1,0 +1,58 @@
+name: V3 isolated functional CLI-to-GAMMA E2E
+on:
+  push:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/vertical/**'
+      - '.github/workflows/v3-vertical-operator-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  vertical-operator-e2e:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify exact integration SHA
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          date -u +%FT%TZ
+      - name: Install pinned Chromium test dependencies
+        run: |
+          set -eu
+          python3 -m venv .venv-e2e
+          .venv-e2e/bin/python -m pip install --disable-pip-version-check 'playwright==1.56.0' 'unittest-xml-reporting==3.2.0'
+          .venv-e2e/bin/python -m playwright install --with-deps chromium
+      - name: Execute exact CLI-to-GAMMA Chromium E2E
+        run: |
+          set -eu
+          mkdir -p vertical-e2e-junit
+          .venv-e2e/bin/python - <<'PY'
+          import sys, unittest, xmlrunner
+          sys.path.insert(0, 'v3-spike/vertical')
+          suite = unittest.defaultTestLoader.loadTestsFromName('test_operator_e2e')
+          assert suite.countTestCases() == 4, 'FAIL E2E test collection != 4'
+          result = xmlrunner.XMLTestRunner(output='vertical-e2e-junit', verbosity=2).run(suite)
+          assert result.wasSuccessful() and result.testsRun == 4, 'FAIL CLI-GAMMA E2E'
+          print('PASS four exact-source CLI->Chromium E2E tests; synthetic only')
+          PY
+          python3 -B v3-spike/kit/verify_junit.py vertical-e2e-junit --expected 4 --source v3-spike/vertical/test_operator_e2e.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest vertical-e2e-junit/manifest.json
+      - name: Upload E2E JUnit and source-bound manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-cli-gamma-e2e-junit
+          path: vertical-e2e-junit/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Synthetic-only receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
+          echo "synthetic_only=true production_authorized=false host_actions=false"
