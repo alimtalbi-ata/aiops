@@ -24,7 +24,7 @@ jobs:
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           date -u +%FT%TZ
-      - name: Run twelve isolated BOM tests and write JUnit
+      - name: Run fifteen isolated BOM and CLI tests and write JUnit
         run: |
           set -eu
           mkdir -p reports
@@ -35,10 +35,10 @@ jobs:
           sys.path.insert(0, 'v3-spike/kit')
           suite = unittest.defaultTestLoader.discover('v3-spike/kit', pattern='test_product_preflight.py')
           count = suite.countTestCases()
-          assert count == 12, f'FAIL collection {count} != 12'
+          assert count == 15, f'FAIL collection {count} != 15'
           result = xmlrunner.XMLTestRunner(output='reports', verbosity=2).run(suite)
           assert result.wasSuccessful() and result.testsRun == count, 'FAIL product BOM tests'
-          print('PASS product BOM static 12/12; runtime NOT_RUN')
+          print('PASS product BOM static and CLI 15/15; runtime NOT_RUN')
           PY
       - name: Upload JUnit
         if: always()
