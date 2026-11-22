@@ -109,12 +109,33 @@ jobs:
               raise SystemExit(f"FAIL UX tests: executed={result.testsRun} expected={expected}")
           print(f"PASS UX tests: executed={result.testsRun}", flush=True)
           PY
+      - name: Offline GAMMA Chromium (strict 7 synthetic tests; no HTTP)
+        run: |
+          mkdir -p reports/offline
+          python3 -B - <<'PY'
+          import importlib.util, pathlib, sys, unittest, xmlrunner
+          path = pathlib.Path("v3-spike/ux/test_gamma_offline.py").resolve()
+          spec = importlib.util.spec_from_file_location("v3_gamma_offline", path)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+          suite = unittest.defaultTestLoader.loadTestsFromTestCase(module.GammaOffline)
+          expected = 7
+          actual = suite.countTestCases()
+          print(f"offline collection: actual={actual} expected={expected}", flush=True)
+          if actual != expected:
+              raise SystemExit("FAIL offline collection")
+          result = xmlrunner.XMLTestRunner(output="reports/offline", verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != expected:
+              raise SystemExit("FAIL offline Chromium suite")
+          print("PASS offline Chromium7; production NOT_ATTESTED", flush=True)
+          PY
       - name: Publish gamma JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: v3-gamma-junit
-          path: reports/*.xml
+          path: reports/**/*.xml
           if-no-files-found: error
           retention-days: 14
       - name: Receipt
@@ -425,7 +446,7 @@ jobs:
               raise SystemExit("FAIL synthetic SnapshotPair/adversarial gate")
           print("PASS synthetic SnapshotPair5/adversarial7; backend atomicity NOT_ATTESTED")
           PY
-      - name: Independently witnessed snapshot (strict 12 synthetic methods)
+      - name: Independently witnessed snapshot (strict 18 synthetic methods)
         run: |
           set -eu
           mkdir -p reports
@@ -434,7 +455,7 @@ jobs:
           import xmlrunner
           import test_attested_snapshot
           suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_attested_snapshot.AttestedSnapshotTests)
-          expected = 12
+          expected = 18
           actual = suite.countTestCases()
           print(f"attested-snapshot collection: actual={actual} expected={expected}", flush=True)
           if actual != expected:
@@ -442,7 +463,7 @@ jobs:
           result = xmlrunner.XMLTestRunner(output="reports", verbosity=2).run(suite)
           if not result.wasSuccessful() or result.testsRun != expected:
               raise SystemExit(f"FAIL attested snapshot: executed={result.testsRun} expected={expected}")
-          print("PASS synthetic witnessed snapshot12; real backend transaction/ACL NOT_ATTESTED", flush=True)
+          print("PASS synthetic witnessed snapshot18; real backend transaction/ACL NOT_ATTESTED", flush=True)
           PY
       - name: Receipt
         if: always()
