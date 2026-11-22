@@ -77,8 +77,23 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
+          import ast
 
-          for folder, expected in ((Path("reports"), 5), (Path("reports/offline"), 12)):
+          def expected_test_names(source, class_name):
+              tree = ast.parse(Path(source).read_text(encoding="utf-8"))
+              matches = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name]
+              if len(matches) != 1:
+                  raise SystemExit(f"FAIL: missing/duplicate test class {class_name}")
+              names = [node.name for node in matches[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_")]
+              if len(names) != len(set(names)):
+                  raise SystemExit("FAIL: duplicate source test identities")
+              return set(names)
+
+          for folder, expected, source, class_name in ((Path("reports"), 5, "v3-spike/ux/test_gamma.py", "GammaAcceptance"), (Path("reports/offline"), 12, "v3-spike/ux/test_gamma_offline.py", "GammaOffline")):
+              expected_names = expected_test_names(source, class_name)
+              if len(expected_names) != expected:
+                  raise SystemExit(f"FAIL: source identities {len(expected_names)} != {expected}")
+              observed_names = []
               files = sorted(folder.glob("*.xml"))
               if not files:
                   raise SystemExit(f"FAIL: missing JUnit XML in {folder}")
@@ -105,7 +120,15 @@ jobs:
                           raise SystemExit(f"FAIL: failing/skipped JUnit case in {file}")
                       if any(int(suite.attrib.get(k, "0")) != 0 for k in ("failures", "errors", "skipped")):
                           raise SystemExit(f"FAIL: nonzero JUnit failure counters in {file}")
+                      for case in cases:
+                          name = case.attrib.get("name", "")
+                          classname = case.attrib.get("classname", "")
+                          if not name or not classname.endswith("." + class_name) and classname != class_name:
+                              raise SystemExit(f"FAIL: invalid JUnit testcase identity {name}/{classname}")
+                          observed_names.append(name)
                       total += len(cases)
+              if len(observed_names) != len(set(observed_names)) or set(observed_names) != expected_names:
+                  raise SystemExit(f"FAIL: duplicated/substituted JUnit test identities in {folder}")
               if total != expected:
                   raise SystemExit(f"FAIL: JUnit {folder} counted={total}, expected={expected}")
               print(f"PASS: JUnit {folder} {total}/{expected} no failures/errors/skips")
