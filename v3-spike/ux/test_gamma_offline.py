@@ -87,6 +87,28 @@ class GammaOffline(unittest.TestCase):
         self.assertIn("UNKNOWN", p.locator("#snapshot-status").inner_text())
         p.locator("#policy").click()
         self.assertIn("DENIED", p.locator("#decision").inner_text())
+    def test_accessibility_semantics_and_adversarial_run(self):
+        p = self.page
+        self.assertEqual(p.locator('html').get_attribute('lang'), 'en')
+        self.assertEqual(p.locator('nav[aria-label="Incident sections"] a').count(), 4)
+        for control in ("run-choice", "admission", "binding-case"):
+            self.assertEqual(p.locator(f'label[for="{control}"]').count(), 1)
+            self.assertEqual(p.locator(f'#{control}').count(), 1)
+        for status in ("run-result", "admission-result", "binding-result", "snapshot-status", "decision"):
+            self.assertEqual(p.locator(f'#{status}').get_attribute("role"), "status")
+        # Synthetic DOM tampering must not turn an unknown Run into a valid action.
+        p.locator("#run-choice").evaluate(
+            "(el) => { el.add(new Option('Injected', 'unexpected-run')); el.value = 'unexpected-run'; el.dispatchEvent(new Event('change', {bubbles:true})); }"
+        )
+        self.assertIn("UNKNOWN", p.locator("#run-result").inner_text())
+        self.assertIn("NOT_RUN", p.locator("#run-result").inner_text())
+        self.assertEqual(p.locator("#admission").input_value(), "unknown")
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
+        p.locator("#run-choice").select_option("storage")
+        self.assertEqual(p.locator("#decision").inner_text(), "No action requested.")
+        p.locator("#policy").click()
+        self.assertIn("DENIED", p.locator("#decision").inner_text())
     def test_viewports(self):
         p = self.page
         for width in (320, 1280, 1920):
