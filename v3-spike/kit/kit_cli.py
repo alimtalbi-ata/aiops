@@ -53,13 +53,22 @@ def validate_compose(compose, environ=None):
     services = doc.get("services")
     if not isinstance(services, dict) or not {"gamma", "core"} <= set(services) or not set(services) <= set(IMAGE_VARIABLES):
         raise ValueError("missing or unexpected services")
-    if not isinstance(doc.get("networks"), dict) or set(doc["networks"]) != {"edge", "backend"} or doc["networks"]["backend"].get("internal") is not True:
+    if (not isinstance(doc.get("networks"), dict) or set(doc["networks"]) != {"edge", "backend"}
+            or not isinstance(doc["networks"].get("backend"), dict)
+            or doc["networks"]["backend"].get("internal") is not True
+            or doc["networks"].get("edge") != {}
+            or doc["networks"]["backend"] != {"internal": True}):
         raise ValueError("unsafe networks")
     if "demo" not in services:
         raise ValueError("missing demo profile service")
     for name, svc in services.items():
         if not isinstance(svc, dict):
             raise ValueError("invalid service")
+        allowed = {"user", "environment", "command", "volumes", "image", "ports", "networks", "depends_on", "healthcheck", "read_only", "cap_drop", "security_opt", "profiles"}
+        if not set(svc) <= allowed:
+            raise ValueError("unexpected service fields: " + name)
+        if svc.get("volumes") != ["./fixture.py:/fixture.py:ro"] or svc.get("command") != ["python", "/fixture.py"] or svc.get("environment") != {"FIXTURE_ROLE": name}:
+            raise ValueError("unsafe fixture service: " + name)
         if svc.get("profiles", []) != (["demo"] if name == "demo" else []):
             raise ValueError("unsafe service profiles")
         image = svc.get("image")
