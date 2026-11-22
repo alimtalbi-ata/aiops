@@ -33,7 +33,7 @@ class VerticalOperatorE2E(unittest.TestCase):
     def setUp(self):
         self.page = self.browser.new_page()
         self.requests = []
-        self.page.on("request", lambda req: self.requests.append(req.url))
+        self.page.on("request", lambda req: self.requests.append(req.url) if req.url.startswith(("http://", "https://")) else None)
         self.page.goto(HTML.as_uri())
 
     def tearDown(self):
