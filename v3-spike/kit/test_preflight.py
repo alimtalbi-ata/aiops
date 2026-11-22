@@ -74,6 +74,9 @@ class IsolationTests(unittest.TestCase):
                 lambda h: h.update(interval=True),
                 lambda h: h.update(start_period=121_000_000_000),
                 lambda h: h.update(start_interval=0),
+                lambda h: h.update(interval="1h"),
+                lambda h: h.update(interval="invalid"),
+                lambda h: h.update(timeout="6s"),
             ):
                 with self.subTest(service=service, mutation=mutation):
                     c = fixture()
