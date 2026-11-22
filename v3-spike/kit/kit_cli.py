@@ -92,8 +92,13 @@ def validate_compose(compose, environ=None):
             raise ValueError("unsafe gamma port")
         if name == "gamma" and svc.get("depends_on") != {"core": {"condition": "service_healthy"}}:
             raise ValueError("unsafe dependency")
-        if not isinstance(svc.get("healthcheck"), dict) or not svc["healthcheck"].get("test"):
-            raise ValueError("missing healthcheck")
+        expected_healthcheck = {
+            "test": ["CMD", "python", "-c",
+                     "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"],
+            "interval": "5s", "timeout": "3s", "retries": 12,
+        }
+        if svc.get("healthcheck") != expected_healthcheck:
+            raise ValueError("unsafe fixture healthcheck: " + name)
     return {"validated_services": sorted(services), "source_gate": "restricted_synthetic_only"}
 
 def plan(action, kit_dir, environ=None):
