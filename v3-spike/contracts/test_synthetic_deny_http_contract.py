@@ -107,6 +107,27 @@ class SyntheticDenyHTTPContract(unittest.TestCase):
         _, replay = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
         self.assertFalse(replay["accepted"])
 
+    def test_huge_content_length_fails_closed_and_recovers(self):
+        import http.client
+        import uuid
+        # Beyond Python's integer-string conversion limit; must return 413,
+        # not crash the request handler or mutate the nonce database.
+        conn = http.client.HTTPConnection("127.0.0.1", 8088, timeout=3)
+        try:
+            conn.request("POST", "/v1/synthetic/deny", body=b"",
+                         headers={"Content-Type": "application/json",
+                                  "Content-Length": "9" * 5000})
+            response = conn.getresponse()
+            self.assertEqual(response.status, 413)
+            response.read()
+        finally:
+            conn.close()
+        nonce = "length-" + uuid.uuid4().hex
+        _, accepted = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
+        self.assertTrue(accepted["accepted"])
+        _, replay = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
+        self.assertFalse(replay["accepted"])
+
     def test_bad_nonce_refused(self):
         for nonce in ("", "bad/nonce", "bad\\nnonce", "x" * 129):
             with self.subTest(nonce=nonce):
