@@ -38,10 +38,14 @@ class VerticalOperator(unittest.TestCase):
         self.load(fixture());self.assertIn("DEMO",self.page.locator("#state").inner_text())
         self.assertIn("blocked",self.page.locator("#run-value").inner_text())
         self.page.locator("#eligibility").click();self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+        Path("reports/vertical/screenshots").mkdir(parents=True,exist_ok=True)
+        self.page.screenshot(path="reports/vertical/screenshots/R1-deny-1280.png",full_page=True)
     def test_simulated_projection_never_allows(self):
         self.load(fixture(True));self.assertIn("SIMULATE_ONLY",self.page.locator("#policy-value").inner_text())
         self.assertIn("simulated",self.page.locator("#run-value").inner_text())
         self.page.locator("#eligibility").click();self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+        Path("reports/vertical/screenshots").mkdir(parents=True,exist_ok=True)
+        self.page.screenshot(path="reports/vertical/screenshots/R2-simulate-only-1280.png",full_page=True)
     def test_tamper_fails_closed(self):
         for key,value in [("production_authorized",True),("receipt",{"sha256":"bad"}),("gamma",{"view":"incident"}),("run",{"executed_on_host":True})]:
             f=fixture();f[key]=value;self.load(f)
@@ -204,6 +208,8 @@ class VerticalOperator(unittest.TestCase):
             self.page.set_viewport_size({"width":width,"height":900})
             self.assertTrue(self.page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
             self.page.set_content(HTML.read_text(encoding="utf-8"),wait_until="load")
+            Path("reports/vertical/screenshots").mkdir(parents=True,exist_ok=True)
+            self.page.screenshot(path=f"reports/vertical/screenshots/viewport-{width}.png",full_page=True)
             self.page.keyboard.press("Tab")
             for target in links:
                 self.assertEqual(self.page.evaluate('document.activeElement.getAttribute("href")'),target)
