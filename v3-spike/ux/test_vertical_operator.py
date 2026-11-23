@@ -184,4 +184,24 @@ class VerticalOperator(unittest.TestCase):
             self.assertEqual(self.page.evaluate("document.activeElement.id"),"load")
             self.assertTrue(self.page.evaluate('document.activeElement.matches(":focus-visible")'))
 
+    def test_stale_file_read_rejection_cannot_erase_manual_projection(self):
+        self.page.evaluate("""() => {
+          window.pendingReject = {};
+          File.prototype.text = function() {
+            return new Promise((resolve, reject) => { window.pendingReject.reject = reject; });
+          };
+        }""")
+        self.page.locator("#projection-file").set_input_files(
+            {"name":"delayed.json","mimeType":"application/json","buffer":b"{}"})
+        self.page.wait_for_function("typeof window.pendingReject.reject === 'function'")
+        self.page.locator("#payload").fill(json.dumps(fixture()))
+        self.page.locator("#load").click()
+        self.assertIn("DEMO", self.page.locator("#state").inner_text())
+        self.page.evaluate("() => window.pendingReject.reject(new Error('synthetic read failure'))")
+        self.page.wait_for_timeout(100)
+        self.assertEqual(json.loads(self.page.locator("#payload").input_value())["policy"]["decision"], "DENY")
+        self.assertIn("DEMO", self.page.locator("#state").inner_text())
+        self.assertIn("blocked", self.page.locator("#run-value").inner_text())
+        self.assertIn("DENIED", self.page.locator("#decision").inner_text())
+
 if __name__=="__main__": unittest.main(verbosity=2)
