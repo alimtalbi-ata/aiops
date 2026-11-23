@@ -80,7 +80,16 @@ class DecisionEvidenceTrustMutations(unittest.TestCase):
 
     def test_issuer_swap_with_original_mac_is_denied(self):
         env = dict(self.env, issuer_key_id="fixture-key-rotated")
-        self.assert_denied_unchanged(env, mac=sign_fixture(self.env, KEY))
+        before = self.db.total_changes
+        result = verify_and_consume(
+            self.db, envelope=env, backend=self.backend,
+            mac=sign_fixture(self.env, KEY),
+            trusted_keys={"fixture-key": KEY, "fixture-key-rotated": KEY},
+            now=1001)
+        self.assertEqual(result, {"decision": "DENY", "reason": "signature"})
+        self.assertEqual(self.db.total_changes, before)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+        self.assertFalse(self.db.in_transaction)
 
     def test_rotated_key_requires_matching_signature(self):
         rotated = b"independent-synthetic-rotated-key-1234567890"
