@@ -141,6 +141,20 @@ class VerticalOperator(unittest.TestCase):
         self.page.locator("#eligibility").click()
         self.assertIn("DENIED", self.page.locator("#decision").inner_text())
 
+    def test_multibyte_pasted_projection_uses_utf8_byte_limit(self):
+        # Character count is below 1 MiB, but UTF-8 bytes exceed the limit.
+        f=fixture()
+        f["synthetic_padding"]="é"*524288
+        payload=json.dumps(f,ensure_ascii=False)
+        self.assertLess(len(payload),1048576)
+        self.assertGreater(len(payload.encode("utf-8")),1048576)
+        self.page.locator("#payload").fill(payload)
+        self.page.locator("#load").click()
+        self.assertIn("UNKNOWN / DENY",self.page.locator("#state").inner_text())
+        self.assertIn("NOT_RUN",self.page.locator("#run-value").inner_text())
+        self.page.locator("#eligibility").click()
+        self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+
     def test_untrusted_identifiers_render_as_text_not_markup(self):
         f=fixture()
         f["event"]["id"]="<img src=x onerror=alert(1)>"
