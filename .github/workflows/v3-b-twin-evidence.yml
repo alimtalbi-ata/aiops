@@ -143,11 +143,11 @@ jobs:
           assert files, 'Missing SQLite fault JUnit'
           cases = [c for f in files for c in ET.parse(f).iter('testcase')]
           names = [c.get('name') for c in cases]
-          assert len(expected) == len(cases) == len(set(names)) == 8
+          assert len(expected) == len(cases) == len(set(names)) == 11
           assert set(names) == expected
           assert all(c.get('classname', '').endswith('DecisionEvidenceSQLiteFaults') for c in cases)
           assert all(not any(c.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for c in cases)
-          print('PASS SQLite fault semantic JUnit 8/8')
+          print('PASS SQLite fault semantic JUnit 11/11')
           PY
       - name: Upload SQLite fault JUnit
         if: always()
