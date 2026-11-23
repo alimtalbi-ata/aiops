@@ -17,7 +17,7 @@ def encode_claims(claims):
     if any(not isinstance(v, str) or not v or len(v) > 256 or
            any(ord(c) < 32 or 0x7f <= ord(c) <= 0x9f or
                0xd800 <= ord(c) <= 0xdfff or
-               c in "\\u200b\\u200c\\u200d\\u2060\\ufeff" or
+               c in "\u200b\u200c\u200d\u2060\ufeff" or
                0x202a <= ord(c) <= 0x202e or 0x2066 <= ord(c) <= 0x2069
                for c in v)
            for v in claims.values()):
@@ -124,19 +124,19 @@ class BackendAttestationBoundaryTests(unittest.TestCase):
 
 
     def test_c1_and_bidi_claims_rejected(self):
-        for bad in ("\\u0085", "\\u009b", "\\u202e", "\\u2066", "\\u2069"):
+        for bad in ("\u0085", "\u009b", "\u202e", "\u2066", "\u2069"):
             with self.subTest(codepoint=hex(ord(bad))):
                 self.assertIsNone(self.check(claims=dict(self.claims, resource_id="opaque:" + bad + "001")))
         self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
 
     def test_invisible_and_surrogate_claims_rejected(self):
-        for bad in ("\\u200b", "\\u200d", "\\u2060", "\\ufeff", "\\ud800"):
+        for bad in ("\u200b", "\u200d", "\u2060", "\ufeff", "\ud800"):
             with self.subTest(codepoint=hex(ord(bad))):
                 self.assertIsNone(self.check(claims=dict(self.claims, principal_id="p" + bad + "1")))
         self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
 
     def test_rejected_unicode_does_not_poison_valid_attestation(self):
-        altered = dict(self.claims, tenant_id="tenant-\\u202eA")
+        altered = dict(self.claims, tenant_id="tenant-\u202eA")
         self.assertIsNone(self.check(claims=altered))
         self.assertEqual(self.check(), self.claims)
         self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
