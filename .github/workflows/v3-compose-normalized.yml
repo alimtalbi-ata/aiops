@@ -37,9 +37,8 @@ jobs:
           unset DEMO_IMAGE || true
           docker compose -f v3-spike/product/docker-compose.yml config --format json > reports/default.json
           DEMO_IMAGE='example.invalid/demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' docker compose -f v3-spike/product/docker-compose.yml --profile demo config --format json > reports/demo.json
-          if docker compose -f v3-spike/product/docker-compose.yml config --no-interpolate --format json >/dev/null 2>&1; then
-            echo "non-interpolated syntax check PASS"
-          fi
+          # Only the two required interpolated configurations are validated here.
+          # No non-interpolated syntax validation is claimed.
       - name: Execute semantic normalized graph assertions and JUnit
         run: |
           set -eu
@@ -89,6 +88,27 @@ jobs:
                           self.assertFalse(svc.get('privileged',False))
                           self.assertNotEqual(svc.get('network_mode'),'host')
                           self.assertTrue(svc.get('read_only',False))
+                          self.assertIn('ALL',svc.get('cap_drop',[]))
+                          self.assertIn('no-new-privileges:true',svc.get('security_opt',[]))
+              def test_security_negative_mutations(self):
+                  import copy
+                  for graph in (default,demo):
+                      for name,svc in graph['services'].items():
+                          self.assertIn('ALL',svc.get('cap_drop',[]),name)
+                          self.assertIn('no-new-privileges:true',svc.get('security_opt',[]),name)
+                          for field,expected in (('cap_drop','ALL'),('security_opt','no-new-privileges:true')):
+                              altered=copy.deepcopy(svc)
+                              altered[field]=[]
+                              self.assertNotIn(expected,altered[field])
+              def test_mount_negative_mutations(self):
+                  for graph in (default,demo):
+                      names=set(graph.get('volumes',{}))
+                      self.assertNotIn('/etc',names)
+                      for invalid in (
+                          {'type':'bind','source':'/etc','target':'/tmp/host'},
+                          {'type':'volume','source':'undeclared_external','target':'/tmp/host'},
+                      ):
+                          self.assertFalse(invalid['type']=='volume' and invalid['source'] in names)
               def test_declared_mount_sources(self):
                   for graph in (default,demo):
                       names=set(graph.get('volumes',{}))
@@ -102,7 +122,7 @@ jobs:
                   self.assertTrue(all(v['condition']=='service_started' for v in deps.values()))
           suite=unittest.defaultTestLoader.loadTestsFromTestCase(Normalized)
           result=xmlrunner.XMLTestRunner(output=str(root),verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun!=9:
+          if not result.wasSuccessful() or result.testsRun!=11:
               raise SystemExit('FAIL normalized Compose semantic tests')
           PY
       - name: Publish JUnit and normalized fixtures
