@@ -239,6 +239,38 @@ class ProductAlignmentTests(unittest.TestCase):
         n.write_text(json.dumps(effective))
         with self.assertRaisesRegex(ValueError, "normalized Compose service set mismatch"):
             verify_compose(b, c, n)
+    def _effective_volume_fixture(self, effective_name="aiops-v3_data"):
+        self.compose["volumes"] = {"data": {}}
+        self.compose["services"]["core"]["volumes"] = ["data:/data"]
+        b, c, _ = self.files()
+        effective = {"services": json.loads(json.dumps(self.compose["services"])),
+                     "volumes": {"data": {"name": effective_name}}}
+        effective["services"]["core"]["volumes"] = [
+            {"type": "volume", "source": effective_name, "target": "/data"}]
+        n = self.root / "normalized.json"
+        n.write_text(json.dumps(effective))
+        return b, c, n, effective
+
+    def test_normalized_accepts_effective_project_volume_name(self):
+        b, c, n, _ = self._effective_volume_fixture()
+        self.assertTrue(verify_compose(b, c, n))
+
+    def test_normalized_rejects_undeclared_effective_volume_source(self):
+        b, c, n, effective = self._effective_volume_fixture()
+        effective["services"]["core"]["volumes"][0]["source"] = "external_secret"
+        n.write_text(json.dumps(effective))
+        with self.assertRaisesRegex(ValueError, "undeclared long-form volume source"):
+            verify_compose(b, c, n)
+
+    def test_normalized_rejects_duplicate_effective_volume_alias(self):
+        b, c, n, effective = self._effective_volume_fixture()
+        self.compose["volumes"]["other"] = {}
+        c.write_text(yaml.safe_dump(self.compose))
+        effective["volumes"]["other"] = {"name": "aiops-v3_data"}
+        n.write_text(json.dumps(effective))
+        with self.assertRaisesRegex(ValueError, "duplicate effective volume names"):
+            verify_compose(b, c, n)
+
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
