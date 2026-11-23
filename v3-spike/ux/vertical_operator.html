@@ -29,7 +29,7 @@ $("projection-file").addEventListener("change",async event=>{
    $("file-status").textContent="Local file loaded into editor; inspect explicitly to validate. No upload.";
  }catch(_err){if(generation!==importGeneration)return;reset("UNKNOWN / DENY — local file unreadable.");$("file-status").textContent="REJECTED — local file unreadable.";}
 });
-function validString(v){return typeof v==="string"&&v.length<=256&&v.trim().length>0&&!/[\u0000-\u001f\u007f-\u009f\u034f\u2028\u2029\ud800-\udfff]/.test(v)&&!/[\p{Cf}]/u.test(v);}
+function validString(v){return typeof v==="string"&&v.length<=256&&v.trim().length>0&&!/[\u0000-\u001f\u007f-\u009f\u034f\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ud800-\udfff]/.test(v)&&!/[\p{Cf}]/u.test(v);}
 function validate(x){
  if(!x||typeof x!=="object"||Array.isArray(x)||x.production_authorized!==false)throw Error("production_authorized must be false");
  const {event:e,incident:i,twin:t,policy:p,run:r,receipt:c,gamma:g}=x;
