@@ -74,6 +74,37 @@ class DecisionEvidenceTrustMutations(unittest.TestCase):
         self.assertEqual(self.db.total_changes, before)
         self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
 
+    def test_unknown_issuer_does_not_consume_nonce(self):
+        env = dict(self.env, issuer_key_id="unknown-issuer")
+        self.assert_denied_unchanged(env)
+
+    def test_issuer_swap_with_original_mac_is_denied(self):
+        env = dict(self.env, issuer_key_id="fixture-key-rotated")
+        self.assert_denied_unchanged(env, mac=sign_fixture(self.env, KEY))
+
+    def test_rotated_key_requires_matching_signature(self):
+        rotated = b"independent-synthetic-rotated-key-1234567890"
+        env = dict(self.env, issuer_key_id="fixture-key-rotated")
+        before = self.db.total_changes
+        denied = verify_and_consume(
+            self.db, envelope=env, backend=self.backend,
+            mac=sign_fixture(env, KEY),
+            trusted_keys={"fixture-key-rotated": rotated}, now=1001)
+        self.assertEqual(denied["decision"], "DENY")
+        self.assertEqual(self.db.total_changes, before)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+        accepted = verify_and_consume(
+            self.db, envelope=env, backend=self.backend,
+            mac=sign_fixture(env, rotated),
+            trusted_keys={"fixture-key-rotated": rotated}, now=1001)
+        self.assertEqual(accepted["decision"], "SIMULATE_ONLY")
+        self.assertIs(accepted["production_authorized"], False)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
+
+    def test_backend_nonstring_identity_denied_without_mutation(self):
+        backend = dict(self.backend, resource_id=123)
+        self.assert_denied_unchanged(self.env, backend=backend)
+
     def test_backend_omits_principal(self):
         backend = dict(self.backend)
         del backend["principal_id"]
