@@ -120,5 +120,50 @@ class DecisionEvidenceTrustMutations(unittest.TestCase):
         self.assert_denied_unchanged(self.env, backend=backend)
 
 
+    def test_revoked_issuer_key_denied_without_nonce_mutation(self):
+        before = self.db.total_changes
+        result = verify_and_consume(
+            self.db, envelope=self.env, backend=self.backend,
+            mac=sign_fixture(self.env, KEY), trusted_keys={}, now=1001)
+        self.assertEqual(result, {"decision": "DENY", "reason": "key"})
+        self.assertEqual(self.db.total_changes, before)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+        self.assertFalse(self.db.in_transaction)
+
+    def test_malformed_mac_denied_then_valid_signature_accepted(self):
+        self.assert_denied_unchanged(self.env, mac="not-a-hex-signature")
+        accepted = self.verify(self.env)
+        self.assertEqual(accepted["decision"], "SIMULATE_ONLY")
+        self.assertIs(accepted["production_authorized"], False)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
+
+    def test_nonce_scoped_to_issuer_and_tenant(self):
+        first = self.verify(self.env)
+        self.assertEqual(first["decision"], "SIMULATE_ONLY")
+        other = dict(self.env, tenant_id="tenant-B")
+        other_backend = dict(self.backend, tenant_id="tenant-B")
+        second = self.verify(other, backend=other_backend)
+        self.assertEqual(second["decision"], "SIMULATE_ONLY")
+        self.assertIs(second["production_authorized"], False)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 2)
+        self.assertEqual(self.verify(self.env)["decision"], "DENY")
+        self.assertEqual(self.verify(other, backend=other_backend)["decision"], "DENY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 2)
+
+    def test_failed_transaction_does_not_consume_nonce(self):
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            before = self.db.total_changes
+            result = self.verify(self.env)
+            self.assertEqual(result, {"decision": "DENY", "reason": "transaction"})
+            self.assertEqual(self.db.total_changes, before)
+            self.assertTrue(self.db.in_transaction)
+            self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
+        finally:
+            self.db.rollback()
+        self.assertEqual(self.verify(self.env)["decision"], "SIMULATE_ONLY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
