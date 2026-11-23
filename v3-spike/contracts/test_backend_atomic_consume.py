@@ -163,5 +163,41 @@ class BackendAtomicConsumeTests(unittest.TestCase):
                 first.close()
                 second.close()
 
+    def test_sqlite_query_only_denies_without_nonce_and_recovers(self):
+        self.db.execute("PRAGMA query_only=ON")
+        self.assertFalse(self.run_gate(nonce="readonly"))
+        self.assertFalse(self.db.in_transaction)
+        self.db.execute("PRAGMA query_only=OFF")
+        self.assertEqual(self.rows(), [])
+        self.assertTrue(self.run_gate(nonce="readonly"))
+
+    def test_sqlite_authorizer_denies_insert_then_recovers(self):
+        def deny_insert(action, arg1, arg2, dbname, source):
+            return sqlite3.SQLITE_DENY if action == sqlite3.SQLITE_INSERT and arg1 == "consumed_nonce" else sqlite3.SQLITE_OK
+        self.db.set_authorizer(deny_insert)
+        try:
+            self.assertFalse(self.run_gate(nonce="authorizer"))
+            self.assertFalse(self.db.in_transaction)
+        finally:
+            self.db.set_authorizer(None)
+        self.assertEqual(self.rows(), [])
+        self.assertTrue(self.run_gate(nonce="authorizer"))
+
+    def test_untrusted_expected_context_cannot_redirect_nonce(self):
+        foreign = dict(self.claims, tenant_id="tenant-B", resource_id="opaque:foreign")
+        self.assertFalse(self.run_gate(expected=foreign, nonce="redirect"))
+        self.assertEqual(self.rows(), [])
+        self.assertTrue(self.run_gate(nonce="redirect"))
+        self.assertEqual(self.rows(), [("tenant-A", "redirect")])
+
+    def test_malformed_mac_and_opaque_resource_fail_without_nonce(self):
+        for mac in ("0" * 64, "not-a-mac", None, 17):
+            with self.subTest(mac=mac):
+                self.assertFalse(self.run_gate(mac=mac, nonce="opaque"))
+        changed = dict(self.claims, resource_id="opaque:001' OR 1=1 --")
+        self.assertFalse(self.run_gate(claims=changed, nonce="opaque"))
+        self.assertEqual(self.rows(), [])
+        self.assertTrue(self.run_gate(nonce="opaque"))
+
 if __name__ == "__main__":
     unittest.main()
