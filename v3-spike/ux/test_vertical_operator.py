@@ -162,11 +162,27 @@ class VerticalOperator(unittest.TestCase):
         self.assertIn("DENIED",self.page.locator("#decision").inner_text())
 
     def test_keyboard_and_viewports(self):
+        links=["#input","#incident","#twin","#policy","#receipt"]
+        self.assertEqual(self.page.locator('nav[aria-label="Vertical sections"] a').count(),len(links))
         for width in (320,1280,1920):
             self.page.set_viewport_size({"width":width,"height":900})
             self.assertTrue(self.page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
-        self.page.keyboard.press("Tab")
-        self.assertEqual(self.page.evaluate('document.activeElement.getAttribute("href")'),"#input")
-        self.assertTrue(self.page.evaluate('document.activeElement.matches(":focus-visible")'))
+            self.page.locator("#clear").click()
+            self.page.locator("body").focus()
+            self.page.keyboard.press("Tab")
+            for target in links:
+                self.assertEqual(self.page.evaluate('document.activeElement.getAttribute("href")'),target)
+                self.assertTrue(self.page.evaluate('document.activeElement.matches(":focus-visible")'))
+                self.page.keyboard.press("Enter")
+                self.assertEqual(self.page.evaluate("location.hash"),target)
+                self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+                self.page.keyboard.press("Tab")
+            self.assertEqual(self.page.evaluate("document.activeElement.id"),"projection-file")
+            self.assertTrue(self.page.evaluate('document.activeElement.matches(":focus-visible")'))
+            self.page.keyboard.press("Tab")
+            self.assertEqual(self.page.evaluate("document.activeElement.id"),"payload")
+            self.page.keyboard.press("Tab")
+            self.assertEqual(self.page.evaluate("document.activeElement.id"),"load")
+            self.assertTrue(self.page.evaluate('document.activeElement.matches(":focus-visible")'))
 
 if __name__=="__main__": unittest.main(verbosity=2)
