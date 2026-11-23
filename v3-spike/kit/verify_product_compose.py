@@ -64,6 +64,8 @@ def verify(bom_path, compose_path):
                     source = volume.split(":", 1)[0]
                     if not source or source.startswith(("/", ".", "~")) or "/" in source or "\\" in source:
                         raise ValueError("host bind mount forbidden: " + name)
+                    if source not in definitions:
+                        raise ValueError("undeclared short-form volume source: " + name)
                 elif isinstance(volume, dict):
                     if volume.get("type") != "volume":
                         raise ValueError("host bind mount forbidden: " + name)
