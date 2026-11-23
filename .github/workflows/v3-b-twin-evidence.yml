@@ -263,11 +263,11 @@ jobs:
           assert files, 'Missing JUnit'
           cases = [c for f in files for c in ET.parse(f).iter('testcase')]
           names = [c.get('name') for c in cases]
-          assert len(expected) == len(cases) == len(set(names)) == 18
+          assert len(expected) == len(cases) == len(set(names)) == 20
           assert set(names) == expected
           assert all(c.get('classname', '').endswith('BackendAtomicConsumeTests') for c in cases)
           assert all(not any(c.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for c in cases)
-          print('PASS atomic backend JUnit 18/18')
+          print('PASS atomic backend JUnit 20/20')
           PY
       - name: Upload atomic nonce JUnit
         if: always()
