@@ -2,7 +2,7 @@
 import pathlib
 import tempfile
 import unittest
-from kit_cli_dry_run import ACTIONS, IMAGE_KEYS, plan
+from kit_cli_dry_run import ACTIONS, IMAGE_KEYS, COMPOSE, plan
 
 IMAGES = {k + "_IMAGE": "example.invalid/" + k.lower() + "@sha256:" + "a" * 64
           for k in IMAGE_KEYS}
@@ -12,8 +12,7 @@ class KitCliDryRunTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.compose = pathlib.Path(self.temp.name) / "docker-compose.yml"
-        self.compose.write_text("services: {}\n")
+        self.compose = COMPOSE
 
     def test_every_action_is_nonexecuting(self):
         for action in ACTIONS:
@@ -51,6 +50,12 @@ class KitCliDryRunTests(unittest.TestCase):
         wrong.write_text("services: {}\n")
         with self.assertRaises(ValueError):
             plan("install", "default", IMAGES, wrong)
+
+    def test_same_basename_outside_canonical_path_rejected(self):
+        alternate = pathlib.Path(self.temp.name) / "docker-compose.yml"
+        alternate.write_text("services: {}\n")
+        with self.assertRaisesRegex(ValueError, "canonical"):
+            plan("install", "default", IMAGES, alternate)
 
     def test_unknown_action_and_profile_rejected(self):
         for action, profile in [("deploy", "default"), ("install", "production")]:
