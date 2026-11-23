@@ -17,7 +17,13 @@ def verify(bom_path, compose_path):
     document = yaml.safe_load(raw_compose)
     if not isinstance(document, dict) or not isinstance(document.get("services"), dict):
         raise ValueError("invalid Compose services")
+    # No transitive Compose imports are allowed in the single-file kit.
+    # Validate before comparing service names: extends can inject host capabilities.
+    if "include" in document:
+        raise ValueError("Compose include forbidden")
     actual = document["services"]
+    if any(not isinstance(spec, dict) or "extends" in spec for spec in actual.values()):
+        raise ValueError("Compose extends forbidden")
     expected = bom["services"]
     if set(actual) != set(expected):
         raise ValueError("BOM/Compose service set mismatch")
