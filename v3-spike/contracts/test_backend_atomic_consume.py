@@ -114,5 +114,54 @@ class BackendAtomicConsumeTests(unittest.TestCase):
         self.db.rollback()
         self.assertTrue(self.run_gate())
 
+
+    def test_two_connections_writer_lock_denies_without_partial_nonce(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory(prefix="v3-b-lock-") as temp:
+            path = str(Path(temp) / "nonces.sqlite")
+            with sqlite3.connect(path, timeout=0, isolation_level=None) as setup:
+                setup.execute("CREATE TABLE consumed_nonce(tenant TEXT NOT NULL, nonce TEXT NOT NULL, PRIMARY KEY(tenant,nonce))")
+            writer = sqlite3.connect(path, timeout=0, isolation_level=None)
+            contender = sqlite3.connect(path, timeout=0, isolation_level=None)
+            try:
+                writer.execute("BEGIN IMMEDIATE")
+                writer.execute("INSERT INTO consumed_nonce VALUES (?,?)", ("tenant-A", "held"))
+                self.assertFalse(verify_bind_and_consume(
+                    contender, self.claims, sign_claims(self.claims),
+                    "backend-issuer", self.keys, self.claims, "retry"))
+                self.assertFalse(contender.in_transaction)
+                self.assertEqual(writer.execute("SELECT nonce FROM consumed_nonce").fetchall(), [("held",)])
+                writer.commit()
+                self.assertEqual(contender.execute("SELECT nonce FROM consumed_nonce ORDER BY nonce").fetchall(), [("held",)])
+                self.assertTrue(verify_bind_and_consume(
+                    contender, self.claims, sign_claims(self.claims),
+                    "backend-issuer", self.keys, self.claims, "retry"))
+                self.assertEqual(contender.execute("SELECT nonce FROM consumed_nonce ORDER BY nonce").fetchall(),
+                                 [("held",), ("retry",)])
+            finally:
+                writer.close()
+                contender.close()
+
+    def test_cross_connection_replay_denied_after_commit(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory(prefix="v3-b-replay-") as temp:
+            path = str(Path(temp) / "nonces.sqlite")
+            first = sqlite3.connect(path, timeout=0, isolation_level=None)
+            second = sqlite3.connect(path, timeout=0, isolation_level=None)
+            try:
+                first.execute("CREATE TABLE consumed_nonce(tenant TEXT NOT NULL, nonce TEXT NOT NULL, PRIMARY KEY(tenant,nonce))")
+                args = (self.claims, sign_claims(self.claims), "backend-issuer",
+                        self.keys, self.claims, "shared")
+                self.assertTrue(verify_bind_and_consume(first, *args))
+                self.assertFalse(verify_bind_and_consume(second, *args))
+                self.assertFalse(second.in_transaction)
+                self.assertEqual(second.execute("SELECT tenant,nonce FROM consumed_nonce").fetchall(),
+                                 [("tenant-A", "shared")])
+            finally:
+                first.close()
+                second.close()
+
 if __name__ == "__main__":
     unittest.main()
