@@ -191,6 +191,24 @@ class ProductAlignmentTests(unittest.TestCase):
         self.compose["services"]["core"]["volumes"] = ["data:/data"]
         b,c,_ = self.files()
         self.assertTrue(verify_compose(b,c))
+    def test_allow_no_new_privileges_hardening(self):
+        self.compose["services"]["core"]["security_opt"] = ["no-new-privileges:true"]
+        b,c,_ = self.files()
+        self.assertTrue(verify_compose(b,c))
+    def test_reject_unapproved_security_opt(self):
+        self.compose["services"]["core"]["security_opt"] = ["seccomp:unconfined"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "host capability"):
+            verify_compose(b,c)
+    def test_allow_container_only_protected_port(self):
+        self.compose["services"]["core"]["ports"] = [7770, "7777"]
+        b,c,_ = self.files()
+        self.assertTrue(verify_compose(b,c))
+    def test_reject_explicit_published_7790(self):
+        self.compose["services"]["core"]["ports"] = ["7790:8080"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "protected port"):
+            verify_compose(b,c)
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
