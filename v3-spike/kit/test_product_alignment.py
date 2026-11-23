@@ -85,6 +85,34 @@ class ProductAlignmentTests(unittest.TestCase):
         b,c,_ = self.files()
         with self.assertRaisesRegex(ValueError, "protected port"):
             verify_compose(b,c)
+    def test_reject_interpolated_host_root(self):
+        self.compose["services"]["core"]["volumes"] = ["${HOST_ROOT}:/host:rw"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "interpolation"):
+            verify_compose(b,c)
+    def test_reject_interpolated_protected_port(self):
+        self.compose["services"]["core"]["ports"] = ["${HOST_PORT}:8080"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "interpolation"):
+            verify_compose(b,c)
+    def test_reject_container_network_namespace(self):
+        self.compose["services"]["core"]["network_mode"] = "container:other"
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "host namespace"):
+            verify_compose(b,c)
+    def test_reject_service_pid_namespace(self):
+        self.compose["services"]["core"]["pid"] = "service:other"
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "host namespace"):
+            verify_compose(b,c)
+    def test_reject_relative_bind(self):
+        self.compose["services"]["core"]["volumes"] = ["subdir:/host:rw"]
+        b,c,_ = self.files()
+        self.assertTrue(verify_compose(b,c))  # named volume, not bind
+        self.compose["services"]["core"]["volumes"] = ["../secret:/host:rw"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "bind mount"):
+            verify_compose(b,c)
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
