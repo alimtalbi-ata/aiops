@@ -17,6 +17,7 @@ def encode_claims(claims):
         raise ValueError("claims")
     if any(not isinstance(v, str) or not v or len(v) > 256 or
            unicodedata.normalize("NFC", v) != v or
+           any(unicodedata.category(ch) == "Zs" and ch != " " for ch in v) or
            any(unicodedata.category(c) == "Cf" or ord(c) < 32 or 0x7f <= ord(c) <= 0x9f or
                0xd800 <= ord(c) <= 0xdfff or
                c in "\u200b\u200c\u200d\u2060\ufeff" or
@@ -154,6 +155,21 @@ class BackendAttestationBoundaryTests(unittest.TestCase):
         decomposed = "cafe\u0301"
         self.assertNotEqual(unicodedata.normalize("NFC", decomposed), decomposed)
         self.assertIsNone(self.check(claims=dict(self.claims, resource_id=decomposed)))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+    def test_unicode_separator_spoofing_rejected_without_nonce_mutation(self):
+        for cp in (0x00a0, 0x1680, 0x2007, 0x202f, 0x3000):
+            with self.subTest(codepoint=hex(cp)):
+                changed = dict(self.claims, resource_id="opaque:" + chr(cp) + "001")
+                self.assertIsNone(self.check(claims=changed))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+    def test_ascii_space_allowed_but_unicode_separator_rejected_then_recovers(self):
+        good = dict(self.claims, resource_id="opaque: valid")
+        self.assertEqual(self.check(claims=good, mac=sign_claims(good)), good)
+        bad = dict(self.claims, resource_id="opaque:\\u202fvalid")
+        self.assertIsNone(self.check(claims=bad))
+        self.assertEqual(self.check(claims=good, mac=sign_claims(good)), good)
         self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
 
     def test_valid_nfc_claim_after_format_rejection(self):
