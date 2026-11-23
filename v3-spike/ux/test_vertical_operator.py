@@ -141,6 +141,17 @@ class VerticalOperator(unittest.TestCase):
         self.page.locator("#eligibility").click()
         self.assertIn("DENIED", self.page.locator("#decision").inner_text())
 
+    def test_non_object_json_roots_fail_closed_after_valid_inspection(self):
+        self.load(fixture())
+        self.assertIn("DEMO", self.page.locator("#state").inner_text())
+        for raw in ("null", "[]", "42", "true", '"synthetic"'):
+            self.page.locator("#payload").fill(raw)
+            self.page.locator("#load").click()
+            self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
+            self.assertIn("NOT_RUN", self.page.locator("#run-value").inner_text())
+            self.page.locator("#eligibility").click()
+            self.assertIn("DENIED", self.page.locator("#decision").inner_text())
+
     def test_multibyte_pasted_projection_uses_utf8_byte_limit(self):
         # Character count is below 1 MiB, but UTF-8 bytes exceed the limit.
         f=fixture()
