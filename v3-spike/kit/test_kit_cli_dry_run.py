@@ -69,7 +69,8 @@ class KitCliDryRunTests(unittest.TestCase):
     def test_product_compose_exact_image_keys(self):
         source = COMPOSE.read_text(encoding="utf-8")
         found = set(re.findall(r"\$\{([A-Z]+_IMAGE):\?", source))
-        self.assertEqual(found, {key + "_IMAGE" for key in IMAGE_KEYS})
+        self.assertEqual(found, {key + "_IMAGE" for key in IMAGE_KEYS if key != "DEMO"})
+        self.assertRegex(source, r"\$\{DEMO_IMAGE:-registry\.invalid/disabled-demo@sha256:0{64}\}")
         self.assertEqual(source.count("    image: ${"), len(IMAGE_KEYS))
 
     def test_product_compose_single_file_and_no_unsafe_host_ports(self):
@@ -78,6 +79,15 @@ class KitCliDryRunTests(unittest.TestCase):
         self.assertIn("127.0.0.1:18080:8080", source)
         self.assertNotRegex(source, r"(?m)^\s*-?\s*(?:0\.0\.0\.0:)?(?:7770|7777|7790):")
         self.assertIn("    internal: true", source)
+
+    def test_optional_demo_interpolation_requires_explicit_demo_planner_image(self):
+        source = COMPOSE.read_text(encoding="utf-8")
+        self.assertNotIn("${DEMO_IMAGE:?", source)
+        self.assertIn("${DEMO_IMAGE:-registry.invalid/disabled-demo@sha256:", source)
+        without_demo = {k: v for k, v in IMAGES.items() if k != "DEMO_IMAGE"}
+        self.assertEqual(plan("preflight", "default", without_demo)["profile"], "default")
+        with self.assertRaisesRegex(ValueError, "DEMO_IMAGE"):
+            plan("preflight", "demo", without_demo)
 
     def test_unknown_action_and_profile_rejected(self):
         for action, profile in [("deploy", "default"), ("install", "production")]:
