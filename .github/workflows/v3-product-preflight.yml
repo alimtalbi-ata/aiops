@@ -274,7 +274,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Execute thirty-nine BOM Compose provenance mutation tests
+      - name: Execute forty-two BOM Compose provenance mutation tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -283,11 +283,11 @@ jobs:
           PYTHONPATH=v3-spike/kit python3 -B - <<'PY'
           import unittest, xmlrunner
           suite = unittest.defaultTestLoader.loadTestsFromName('test_product_alignment')
-          assert suite.countTestCases() == 39, f'FAIL expected 39, got {suite.countTestCases()}'
+          assert suite.countTestCases() == 42, f'FAIL expected 42, got {suite.countTestCases()}'
           result = xmlrunner.XMLTestRunner(output='alignment-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 39, 'FAIL alignment tests'
+          assert result.wasSuccessful() and result.testsRun == 42, 'FAIL alignment tests'
           PY
-          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 39 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
+          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 42 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
       - name: Upload alignment JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -326,10 +326,18 @@ jobs:
           set -eu
           echo 'STRUCTURAL_ONLY: normalized effective Compose required for interpolated image inputs'
           test -f v3-spike/product/docker-compose.yml
-          # Product qualification is fail-closed until real OCI evidence and
-          # normalized image inputs are available; never claim static PASS here.
-          echo 'NOT_ATTESTED: verified image environment and normalized Compose JSON unavailable'
-          exit 1
+          # Fail closed on absent registry-verified image inputs, without making
+          # downstream Compose validation permanently unreachable.
+          for image in CORE TEMPORAL WORKER POLICY HITL EVIDENCE GAMMA DEMO; do
+            key="${image}_IMAGE"
+            eval 'value=${'"${key}"'-}'
+            test -n "$value" || { echo "NOT_ATTESTED: missing verified $key"; exit 1; }
+          done
+          docker compose -f v3-spike/product/docker-compose.yml config --format json > /tmp/product-default.json
+          docker compose --profile demo -f v3-spike/product/docker-compose.yml config --format json > /tmp/product-demo.json
+          python3 -B v3-spike/kit/verify_product_compose.py v3-spike/kit/product-bom.json v3-spike/product/docker-compose.yml /tmp/product-default.json
+          python3 -B v3-spike/kit/verify_product_compose.py v3-spike/kit/product-bom.json v3-spike/product/docker-compose.yml /tmp/product-demo.json
+          echo 'STRUCTURAL_ONLY: normalized Compose checked; independent OCI promotion still NO-GO'
       - name: Product Compose gate
         run: |
           set -eu
