@@ -27,6 +27,14 @@ def decide(db, request):
         "tenant_id": "synthetic-acme", "resource_id": "opaque:synthetic-host-1",
         "event_id": "synthetic-event-1", "digest": DIGEST}}
 
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate_json_key")
+        result[key] = value
+    return result
+
 def handler(db_path):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -54,7 +62,7 @@ def handler(db_path):
             if not length.isdecimal() or int(length) > 2048:
                 return self.reply(413, {"error": "invalid_size"})
             try:
-                request = json.loads(self.rfile.read(int(length)))
+                request = json.loads(self.rfile.read(int(length)), object_pairs_hook=reject_duplicate_keys)
             except (ValueError, UnicodeError):
                 return self.reply(400, {"error": "invalid_json"})
             with sqlite3.connect(db_path, timeout=0.2, isolation_level=None) as db:
