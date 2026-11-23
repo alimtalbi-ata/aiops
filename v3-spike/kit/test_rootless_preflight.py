@@ -1,6 +1,7 @@
 """Synthetic rootless preflight regressions; no Docker invocation."""
 import importlib.util
 import json
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -15,6 +16,26 @@ class RootlessPreflightTests(unittest.TestCase):
         self.info = {"SecurityOptions": ["name=seccomp", "name=rootless"],
                      "DockerRootDir": "/srv/aiops-v3/docker-data"}
         self.graph = {"services": {k.lower(): {"volumes": []} for k in module.IMAGE_KEYS}, "volumes": {}}
+
+    def test_rootless_spoof_rejected(self):
+        for spoof in ("name=not-rootless", "name=rootless-disabled", "notrootless", "name=ROOTLESS-extra"):
+            with self.subTest(spoof=spoof):
+                self.info["SecurityOptions"] = [spoof]
+                with self.assertRaisesRegex(ValueError, "not attested rootless"):
+                    module.validate_daemon(self.info, f"unix:///run/user/{module.os.getuid()}/docker.sock", module.os.getuid(), self.root)
+
+    def test_root_symlink_ancestor_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            (base / "real").mkdir()
+            (base / "alias").symlink_to(base / "real", target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "symlinks"):
+                module.validate_root(base / "alias" / "install")
+
+    def test_real_root_ancestor_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "install"
+            self.assertEqual(module.validate_root(root), root.resolve())
 
     def test_rootless_valid(self):
         module.validate_daemon(self.info, f"unix:///run/user/{module.os.getuid()}/docker.sock", module.os.getuid(), self.root)
