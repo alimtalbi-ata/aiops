@@ -88,8 +88,39 @@ jobs:
         if: always()
         run: |
           python3 - <<'PY'
-          import hashlib, json, os
+          import hashlib, json, os, struct, zlib
           from pathlib import Path
+          def verify_png(data, path):
+              if len(data) < 45 or data[:8] != bytes.fromhex("89504e470d0a1a0a"):
+                  raise SystemExit(f"FAIL: invalid PNG signature {path}")
+              pos, width, height, idat, ended = 8, None, None, False, False
+              while pos < len(data):
+                  if pos + 12 > len(data):
+                      raise SystemExit(f"FAIL: truncated PNG chunk {path}")
+                  length = struct.unpack(">I", data[pos:pos+4])[0]
+                  end = pos + 12 + length
+                  if end > len(data):
+                      raise SystemExit(f"FAIL: truncated PNG data {path}")
+                  kind = data[pos+4:pos+8]
+                  chunk = data[pos+8:pos+8+length]
+                  crc = struct.unpack(">I", data[pos+8+length:end])[0]
+                  if zlib.crc32(kind + chunk) & 0xffffffff != crc:
+                      raise SystemExit(f"FAIL: PNG CRC mismatch {path}")
+                  if pos == 8:
+                      if kind != b"IHDR" or length != 13:
+                          raise SystemExit(f"FAIL: PNG IHDR missing {path}")
+                      width, height = struct.unpack(">II", chunk[:8])
+                  if kind == b"IDAT":
+                      idat = True
+                  if kind == b"IEND":
+                      if length or end != len(data) or not idat:
+                          raise SystemExit(f"FAIL: PNG IEND/IDAT invalid {path}")
+                      ended = True
+                      break
+                  pos = end
+              if not ended or not width or not height:
+                  raise SystemExit(f"FAIL: incomplete PNG {path}")
+              return width, height
           root = Path("reports/vertical")
           names = ["R1-deny-1280", "R2-simulate-only-1280",
                    "viewport-320", "viewport-1280", "viewport-1920"]
@@ -102,10 +133,7 @@ jobs:
               if not path.is_file():
                   raise SystemExit(f"FAIL: missing screenshot {path}")
               data = path.read_bytes()
-              if len(data) < 24 or data[:8] != bytes.fromhex("89504e470d0a1a0a"):
-                  raise SystemExit(f"FAIL: invalid PNG {path}")
-              width = int.from_bytes(data[16:20], "big")
-              height = int.from_bytes(data[20:24], "big")
+              width, height = verify_png(data, path)
               expected_width = 320 if name == "viewport-320" else 1920 if name == "viewport-1920" else 1280
               if width != expected_width or height < 1:
                   raise SystemExit(f"FAIL: screenshot dimensions {path}: {width}x{height}")
