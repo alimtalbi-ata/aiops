@@ -178,7 +178,11 @@ jobs:
                   assert spec.get('network_mode') != 'host', name
                   for mount in spec.get('volumes', []):
                       assert mount.get('type') == 'volume', (name,mount)
-                      assert mount.get('source') in {'core_data','temporal_data','evidence_data'}, (name,mount)
+                      assert mount.get('source') in {
+                          doc['volumes'][key]['name']
+                          for key in ('core_data','temporal_data','evidence_data')
+                          if key in doc.get('volumes', {})
+                      }, (name,mount)
                   for port in spec.get('ports', []):
                       assert name == 'gamma' and port.get('host_ip') == '127.0.0.1', (name,port)
                       assert int(port.get('published')) not in {7770,7777,7790}, port
@@ -315,13 +319,17 @@ jobs:
           python3 -B v3-spike/kit/product_preflight.py v3-spike/kit/product-bom.json
           test -f v3-spike/product/oci-provenance.json || { echo 'FAIL: OCI provenance manifest absent'; exit 1; }
           python3 -B v3-spike/kit/verify_product_provenance.py v3-spike/kit/product-bom.json v3-spike/product/oci-provenance.json
-          echo 'FAIL_CLOSED: independent registry digest, signed provenance, SBOM and license verification not implemented; structural manifest cannot qualify release'
-          exit 1
+          echo 'STRUCTURAL_ONLY: independent OCI provenance gate remains pending; release still blocked'
       - name: Product BOM to Compose consistency
         run: |
           python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
           set -eu
-          python3 -B v3-spike/kit/verify_product_compose.py v3-spike/kit/product-bom.json v3-spike/product/docker-compose.yml
+          echo 'STRUCTURAL_ONLY: normalized effective Compose required for interpolated image inputs'
+          test -f v3-spike/product/docker-compose.yml
+          # Product qualification is fail-closed until real OCI evidence and
+          # normalized image inputs are available; never claim static PASS here.
+          echo 'NOT_ATTESTED: verified image environment and normalized Compose JSON unavailable'
+          exit 1
       - name: Product Compose gate
         run: |
           set -eu
