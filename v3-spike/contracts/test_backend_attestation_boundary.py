@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import sqlite3
+import unicodedata
 import unittest
 
 FIELDS = ("tenant_id", "principal_id", "event_id", "resource_id",
@@ -15,7 +16,8 @@ def encode_claims(claims):
     if not isinstance(claims, dict) or set(claims) != set(FIELDS):
         raise ValueError("claims")
     if any(not isinstance(v, str) or not v or len(v) > 256 or
-           any(ord(c) < 32 or 0x7f <= ord(c) <= 0x9f or
+           unicodedata.normalize("NFC", v) != v or
+           any(unicodedata.category(c) == "Cf" or ord(c) < 32 or 0x7f <= ord(c) <= 0x9f or
                0xd800 <= ord(c) <= 0xdfff or
                c in "\u200b\u200c\u200d\u2060\ufeff" or
                0x202a <= ord(c) <= 0x202e or 0x2066 <= ord(c) <= 0x2069
@@ -139,6 +141,27 @@ class BackendAttestationBoundaryTests(unittest.TestCase):
         altered = dict(self.claims, tenant_id="tenant-\u202eA")
         self.assertIsNone(self.check(claims=altered))
         self.assertEqual(self.check(), self.claims)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+
+    def test_all_unicode_format_controls_fail_closed(self):
+        for bad in ("\u00ad", "\u180e", "\u200e", "\u2063"):
+            with self.subTest(codepoint=hex(ord(bad))):
+                self.assertIsNone(self.check(claims=dict(self.claims, resource_id="opaque:" + bad + "001")))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+    def test_non_nfc_identifier_rejected(self):
+        decomposed = "cafe\u0301"
+        self.assertNotEqual(unicodedata.normalize("NFC", decomposed), decomposed)
+        self.assertIsNone(self.check(claims=dict(self.claims, resource_id=decomposed)))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+    def test_valid_nfc_claim_after_format_rejection(self):
+        invalid = dict(self.claims, tenant_id="tenant-\u00adA")
+        self.assertIsNone(self.check(claims=invalid))
+        valid = dict(self.claims, resource_id="caf\u00e9")
+        mac = sign_claims(valid)
+        self.assertEqual(self.check(claims=valid, mac=mac), valid)
         self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
 
 if __name__ == "__main__":
