@@ -67,8 +67,17 @@ def verify(bom_path, compose_path, normalized_path=None):
     # Validate before comparing service names: extends can inject host capabilities.
     if "include" in document:
         raise ValueError("Compose include forbidden")
-    # Reject transitive host binds through named-volume driver options.
-    definitions = document.get("volumes", {})
+    # Validate original definitions before normalized name translation. A normalized
+    # service set must never erase raw driver_opts/external provenance.
+    raw_definitions = document.get("volumes", {})
+    if not isinstance(raw_definitions, dict):
+        raise ValueError("invalid raw top-level volumes")
+    for volume_name, definition in raw_definitions.items():
+        if not isinstance(volume_name, str) or not volume_name:
+            raise ValueError("invalid named volume")
+        if definition is not None and (not isinstance(definition, dict) or definition):
+            raise ValueError("untrusted named volume driver/opts/external forbidden: " + volume_name)
+    definitions = raw_definitions
     # Normalized Compose mounts use effective project-prefixed volume names.
     # Retain the raw topology policy, but compare effective mounts to effective
     # declarations; never allow arbitrary external or bind sources.
@@ -82,6 +91,11 @@ def verify(bom_path, compose_path, normalized_path=None):
         for key, spec in effective_volumes.items():
             if not isinstance(spec, dict) or not isinstance(spec.get("name"), str) or not spec["name"]:
                 raise ValueError("invalid effective volume name: " + key)
+        for key, spec in effective_volumes.items():
+            # Compose may add its default driver: local. Any options, external
+            # provenance or alternate driver must fail closed.
+            if set(spec) - {"name", "driver"} or spec.get("driver", "local") != "local":
+                raise ValueError("untrusted normalized named volume driver/opts/external forbidden: " + key)
         definitions = {spec["name"]: {} for spec in effective_volumes.values()}
         if len(definitions) != len(effective_volumes):
             raise ValueError("duplicate effective volume names")
