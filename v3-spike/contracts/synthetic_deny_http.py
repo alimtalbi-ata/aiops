@@ -59,7 +59,7 @@ def handler(db_path):
             if self.path != "/v1/synthetic/deny":
                 return self.reply(404, {"error": "not_found"})
             length = self.headers.get("Content-Length", "")
-            if not length.isdecimal() or int(length) > 2048:
+            if not length.isascii() or not length.isdecimal() or len(length) > 4 or int(length) > 2048:
                 return self.reply(413, {"error": "invalid_size"})
             try:
                 request = json.loads(self.rfile.read(int(length)), object_pairs_hook=reject_duplicate_keys)
