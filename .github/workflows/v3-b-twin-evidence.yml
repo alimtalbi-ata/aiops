@@ -86,7 +86,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Execute 12 independent adversarial trust mutations
+      - name: Execute 16 independent adversarial trust mutations
         run: |
           python -m pip install --disable-pip-version-check unittest-xml-reporting==3.2.0
           cd v3-spike/contracts
@@ -103,11 +103,11 @@ jobs:
           assert files, 'Missing trust-mutation JUnit'
           cases = [case for path in files for case in ET.parse(path).iter('testcase')]
           names = [case.get('name') for case in cases]
-          assert len(expected) == len(cases) == len(set(names)) == 12
+          assert len(expected) == len(cases) == len(set(names)) == 16
           assert set(names) == expected
           assert all(case.get('classname', '').endswith('DecisionEvidenceTrustMutations') for case in cases)
           assert all(not any(case.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for case in cases)
-          print('PASS trust mutation semantic JUnit 12/12')
+          print('PASS trust mutation semantic JUnit 16/16')
           PY
       - name: Upload trust mutation JUnit
         if: always()
