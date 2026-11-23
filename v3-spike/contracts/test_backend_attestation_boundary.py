@@ -29,7 +29,7 @@ def attestation_message(claims, key_id):
             not key_id.isascii() or
             any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for c in key_id)):
         raise ValueError("issuer_id")
-    return b"AIOPS-V3/backend-attestation/v1\\x00" + key_id.encode("ascii") + b"\\x00" + encode_claims(claims)
+    return b"AIOPS-V3/backend-attestation/v1\x00" + key_id.encode("ascii") + b"\x00" + encode_claims(claims)
 
 def sign_claims(claims, key=KEY, key_id="backend-issuer"):
     return hmac.new(key, attestation_message(claims, key_id), hashlib.sha256).hexdigest()
