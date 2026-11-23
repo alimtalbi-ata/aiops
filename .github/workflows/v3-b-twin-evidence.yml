@@ -183,11 +183,11 @@ jobs:
           assert files, 'Missing backend attestation JUnit'
           cases = [c for f in files for c in ET.parse(f).iter('testcase')]
           names = [c.get('name') for c in cases]
-          assert len(expected) == len(cases) == len(set(names)) == 13
+          assert len(expected) == len(cases) == len(set(names)) == 16
           assert set(names) == expected
           assert all(c.get('classname', '').endswith('BackendAttestationBoundaryTests') for c in cases)
           assert all(not any(c.find(t) is not None for t in ('failure', 'error', 'skipped')) for c in cases)
-          print('PASS backend attestation semantic JUnit 13/13')
+          print('PASS backend attestation semantic JUnit 16/16')
           PY
       - name: Upload backend attestation JUnit
         if: always()
