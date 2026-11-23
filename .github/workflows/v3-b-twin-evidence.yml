@@ -12,6 +12,7 @@ on:
       - 'v3-spike/contracts/test_decision_evidence_sqlite_faults.py'
       - 'v3-spike/contracts/test_backend_attestation_boundary.py'
       - 'v3-spike/contracts/test_backend_binding_adversarial.py'
+      - 'v3-spike/contracts/test_backend_atomic_consume.py'
       - '.github/workflows/v3-b-twin-evidence.yml'
   workflow_dispatch:
 permissions:
@@ -235,4 +236,43 @@ jobs:
         with:
           name: backend-binding-junit
           path: reports/backend-binding/
+          if-no-files-found: error
+
+  backend-atomic-consume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Execute atomic nonce replay and verify semantic JUnit
+        run: |
+          python -m pip install --disable-pip-version-check unittest-xml-reporting==3.2.0
+          cd v3-spike/contracts
+          python -m xmlrunner discover -s . -p 'test_backend_atomic_consume.py' -o ../../reports/backend-atomic
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          tree = ast.parse(Path('test_backend_atomic_consume.py').read_text())
+          expected = {m.name for cls in tree.body if isinstance(cls, ast.ClassDef)
+                      and cls.name == 'BackendAtomicConsumeTests'
+                      for m in cls.body if isinstance(m, ast.FunctionDef) and m.name.startswith('test_')}
+          files = list(Path('../../reports/backend-atomic').glob('*.xml'))
+          assert files, 'Missing JUnit'
+          cases = [c for f in files for c in ET.parse(f).iter('testcase')]
+          names = [c.get('name') for c in cases]
+          assert len(expected) == len(cases) == len(set(names)) == 8
+          assert set(names) == expected
+          assert all(c.get('classname', '').endswith('BackendAtomicConsumeTests') for c in cases)
+          assert all(not any(c.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for c in cases)
+          print('PASS atomic backend JUnit 8/8')
+          PY
+      - name: Upload atomic nonce JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-atomic-consume-junit
+          path: reports/backend-atomic/
           if-no-files-found: error
