@@ -113,7 +113,7 @@ jobs:
                   "sha256": hashlib.sha256(data).hexdigest(),
                   "bytes": len(data), "width": width, "height": height}
           manifest = root / "screenshot-manifest.json"
-          manifest.write_text(json.dumps(output, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          manifest.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           print("PASS: five source-exact Chromium PNG screenshots verified")
           PY
       - name: UTC receipt
