@@ -33,7 +33,7 @@ jobs:
           spec.loader.exec_module(m)
           suite=unittest.defaultTestLoader.loadTestsFromTestCase(m.RootlessPreflightTests)
           result=xmlrunner.XMLTestRunner(output="reports",verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun != 23:
+          if not result.wasSuccessful() or result.testsRun != 25:
               raise SystemExit("FAIL rootless preflight regressions")
           PY
       - name: JUnit artifact
