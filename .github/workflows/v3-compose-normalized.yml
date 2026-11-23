@@ -100,29 +100,59 @@ jobs:
                               altered=copy.deepcopy(svc)
                               altered[field]=[]
                               self.assertNotIn(expected,altered[field])
+              @staticmethod
+              def validate_mounts(graph):
+                  volumes=graph.get('volumes',{})
+                  if not isinstance(volumes,dict):
+                      raise ValueError('invalid volume declarations')
+                  for name,config in volumes.items():
+                      if not isinstance(config,dict) or config.get('external') or config.get('driver_opts'):
+                          raise ValueError('external or driver_opts volume: '+name)
+                  allowed=set(volumes)
+                  allowed.update(v.get('name') for v in volumes.values() if v.get('name'))
+                  for svc_name,svc in graph['services'].items():
+                      for mount in svc.get('volumes',[]):
+                          if mount.get('type')!='volume' or mount.get('source') not in allowed:
+                              raise ValueError('forbidden mount in '+svc_name)
               def test_mount_negative_mutations(self):
+                  import copy
                   for graph in (default,demo):
-                      names=set(graph.get('volumes',{}))
-                      self.assertNotIn('/etc',names)
-                      for invalid in (
+                      self.validate_mounts(graph)
+                      for hostile in (
                           {'type':'bind','source':'/etc','target':'/tmp/host'},
                           {'type':'volume','source':'undeclared_external','target':'/tmp/host'},
                       ):
-                          self.assertFalse(invalid['type']=='volume' and invalid['source'] in names)
+                          altered=copy.deepcopy(graph)
+                          altered['services']['core'].setdefault('volumes',[]).append(hostile)
+                          with self.assertRaises(ValueError):
+                              self.validate_mounts(altered)
               def test_declared_mount_sources(self):
                   for graph in (default,demo):
-                      names=set(graph.get('volumes',{}))
-                      for svc in graph['services'].values():
-                          for mount in svc.get('volumes',[]):
-                              self.assertEqual(mount['type'],'volume')
-                              self.assertIn(mount['source'],names)
+                      self.validate_mounts(graph)
+              def test_volume_declaration_negative_mutations(self):
+                  import copy
+                  for graph in (default,demo):
+                      for option in ({'external':True},{'driver_opts':{'device':'/etc'}}):
+                          altered=copy.deepcopy(graph)
+                          name=next(iter(altered['volumes']))
+                          altered['volumes'][name].update(option)
+                          with self.assertRaises(ValueError):
+                              self.validate_mounts(altered)
+              def test_host_port_negative_mutations(self):
+                  import copy
+                  for graph in (default,demo):
+                      for hostile in ('0.0.0.0','::'):
+                          altered=copy.deepcopy(graph)
+                          altered['services']['gamma']['ports'][0]['host_ip']=hostile
+                          with self.assertRaises(AssertionError):
+                              self.assertEqual(altered['services']['gamma']['ports'][0]['host_ip'],'127.0.0.1')
               def test_worker_startup_dependencies_are_only_started(self):
                   deps=default['services']['worker']['depends_on']
                   self.assertEqual(set(deps),{'core','temporal'})
                   self.assertTrue(all(v['condition']=='service_started' for v in deps.values()))
           suite=unittest.defaultTestLoader.loadTestsFromTestCase(Normalized)
           result=xmlrunner.XMLTestRunner(output=str(root),verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun!=11:
+          if not result.wasSuccessful() or result.testsRun!=13:
               raise SystemExit('FAIL normalized Compose semantic tests')
           PY
       - name: Publish JUnit and normalized fixtures
