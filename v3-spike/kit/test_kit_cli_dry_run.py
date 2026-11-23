@@ -61,22 +61,22 @@ class KitCliDryRunTests(unittest.TestCase):
     def test_product_compose_exact_service_contract(self):
         source = COMPOSE.read_text(encoding="utf-8")
         services = source.split("services:", 1)[1].split("\nnetworks:", 1)[0]
-        found = set(re.findall(r"^  ([a-z][a-z0-9_-]*):\\s*$", services, re.M))
+        found = set(re.findall(r"^  ([a-z][a-z0-9_-]*):\s*$", services, re.M))
         self.assertEqual(found, {"core", "temporal", "worker", "policy", "hitl", "evidence", "gamma", "demo"})
         self.assertIn("    profiles: [demo]", services)
         self.assertEqual(services.count("    profiles:"), 1)
 
     def test_product_compose_exact_image_keys(self):
         source = COMPOSE.read_text(encoding="utf-8")
-        found = set(re.findall(r"\\$\\{([A-Z]+_IMAGE):\\?", source))
+        found = set(re.findall(r"\$\{([A-Z]+_IMAGE):\?", source))
         self.assertEqual(found, {key + "_IMAGE" for key in IMAGE_KEYS})
         self.assertEqual(source.count("    image: ${"), len(IMAGE_KEYS))
 
     def test_product_compose_single_file_and_no_unsafe_host_ports(self):
         source = COMPOSE.read_text(encoding="utf-8")
-        self.assertNotRegex(source, r"(?m)^\\s*(include|extends|network_mode|privileged):")
+        self.assertNotRegex(source, r"(?m)^\s*(include|extends|network_mode|privileged):")
         self.assertIn("127.0.0.1:18080:8080", source)
-        self.assertNotRegex(source, r"(?m)^\\s*-?\\s*['\\\"]?(?:0\\.0\\.0\\.0:)?(?:7770|7777|7790):")
+        self.assertNotRegex(source, r"(?m)^\s*-?\s*['\\"]?(?:0\.0\.0\.0:)?(?:7770|7777|7790):")
         self.assertIn("    internal: true", source)
 
     def test_unknown_action_and_profile_rejected(self):
