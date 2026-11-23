@@ -133,6 +133,33 @@ class ProductAlignmentTests(unittest.TestCase):
         b,c,_ = self.files()
         with self.assertRaisesRegex(ValueError, "include"):
             verify_compose(b,c)
+    def test_reject_host_userns(self):
+        self.compose["services"]["core"]["userns_mode"] = "host"
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "host namespace"):
+            verify_compose(b,c)
+    def test_reject_host_cgroup(self):
+        self.compose["services"]["core"]["cgroup"] = "host"
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "host namespace"):
+            verify_compose(b,c)
+    def test_reject_host_uts(self):
+        self.compose["services"]["core"]["uts"] = "host"
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "host namespace"):
+            verify_compose(b,c)
+    def test_reject_named_volume_host_root_driver(self):
+        self.compose["services"]["core"]["volumes"] = ["data:/data"]
+        self.compose["volumes"] = {"data": {"driver": "local", "driver_opts": {"type": "none", "o": "bind", "device": "/"}}}
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "named volume"):
+            verify_compose(b,c)
+    def test_reject_named_volume_external(self):
+        self.compose["services"]["core"]["volumes"] = ["data:/data"]
+        self.compose["volumes"] = {"data": {"external": True}}
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "named volume"):
+            verify_compose(b,c)
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
