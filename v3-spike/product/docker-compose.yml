@@ -1,0 +1,115 @@
+# V3 product topology CONTRACT DRAFT, not an installable/released product.
+# Every image is externally supplied as an immutable OCI digest; no fallback or invented digest.
+# Exactly one canonical Compose file; no include, extends, or override required.
+name: aiops-v3
+services:
+  core:
+    image: ${CORE_IMAGE:?set verified CORE_IMAGE registry/name@sha256:digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+    volumes: [core_data:/var/lib/aiops]
+    healthcheck:
+      test: [CMD, /usr/local/bin/aiops-healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  temporal:
+    image: ${TEMPORAL_IMAGE:?set verified TEMPORAL_IMAGE registry/name@sha256:digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+    volumes: [temporal_data:/var/lib/temporal]
+    healthcheck:
+      test: [CMD, /usr/local/bin/aiops-healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  worker:
+    image: ${WORKER_IMAGE:?set verified WORKER_IMAGE registry/name@sha256:digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+    depends_on:
+      core: {condition: service_started}
+      temporal: {condition: service_started}
+    healthcheck:
+      test: [CMD, /usr/local/bin/aiops-healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  policy:
+    image: ${POLICY_IMAGE:?set verified POLICY_IMAGE registry/name@sha256:digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+    healthcheck:
+      test: [CMD, /usr/local/bin/aiops-healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  hitl:
+    image: ${HITL_IMAGE:?set verified HITL_IMAGE registry/name@sha256:digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+    healthcheck:
+      test: [CMD, /usr/local/bin/aiops-healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  evidence:
+    image: ${EVIDENCE_IMAGE:?set verified EVIDENCE_IMAGE registry/name@sha256:digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+    volumes: [evidence_data:/var/lib/evidence]
+    healthcheck:
+      test: [CMD, /usr/local/bin/aiops-healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  gamma:
+    image: ${GAMMA_IMAGE:?set verified GAMMA_IMAGE registry/name@sha256:digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [frontend, backend]
+    ports: ['127.0.0.1:18080:8080']
+    depends_on:
+      core: {condition: service_started}
+    healthcheck:
+      test: [CMD, /usr/local/bin/aiops-healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  demo:
+    profiles: [demo]
+    image: ${DEMO_IMAGE:?set verified DEMO_IMAGE registry/name@sha256:digest}
+    networks: [backend]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      core: {condition: service_started}
+networks:
+  frontend: {}
+  backend:
+    internal: true
+volumes:
+  core_data: {}
+  temporal_data: {}
+  evidence_data: {}
