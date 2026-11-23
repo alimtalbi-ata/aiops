@@ -9,7 +9,12 @@ def verify(bom_path, compose_path):
     import yaml
     bom = json.loads(pathlib.Path(bom_path).read_text(encoding="utf-8"))
     validate(bom)
-    document = yaml.safe_load(pathlib.Path(compose_path).read_text(encoding="utf-8"))
+    raw_compose = pathlib.Path(compose_path).read_text(encoding="utf-8")
+    # Fail closed until a trusted, normalized Compose config is available.
+    # Raw YAML must never be treated as resolved Compose configuration.
+    if "${" in raw_compose or "$" in raw_compose:
+        raise ValueError("unresolved Compose interpolation forbidden")
+    document = yaml.safe_load(raw_compose)
     if not isinstance(document, dict) or not isinstance(document.get("services"), dict):
         raise ValueError("invalid Compose services")
     actual = document["services"]
@@ -28,7 +33,7 @@ def verify(bom_path, compose_path):
             raise ValueError("profile mismatch: " + name)
         if spec.get("privileged") is not None and spec["privileged"] is not False:
             raise ValueError("privileged forbidden: " + name)
-        if spec.get("network_mode") in ("host", "service:host") or spec.get("pid") == "host" or spec.get("ipc") == "host":
+        if any(isinstance(spec.get(k), str) and (spec[k] == "host" or spec[k].startswith(("container:", "service:"))) for k in ("network_mode", "pid", "ipc")):
             raise ValueError("host namespace forbidden: " + name)
         if spec.get("devices") or spec.get("cap_add") or spec.get("security_opt"):
             raise ValueError("host capability forbidden: " + name)
@@ -37,7 +42,7 @@ def verify(bom_path, compose_path):
             for volume in spec["volumes"]:
                 if isinstance(volume, str):
                     source = volume.split(":", 1)[0]
-                    if source.startswith(("/", ".", "~")):
+                    if not source or source.startswith(("/", ".", "~")) or "/" in source or "\\" in source:
                         raise ValueError("host bind mount forbidden: " + name)
                 elif isinstance(volume, dict):
                     if volume.get("type") != "volume":
@@ -49,6 +54,8 @@ def verify(bom_path, compose_path):
                 published = port
             elif isinstance(port, str):
                 value = port.split("/") [0].rsplit(":", 1)[0]
+                if not value.isdigit() and ":" in port:
+                    raise ValueError("unresolved published port forbidden: " + name)
                 published = int(value) if value.isdigit() else None
             elif isinstance(port, dict):
                 published = port.get("published")
