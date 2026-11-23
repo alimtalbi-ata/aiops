@@ -160,6 +160,26 @@ class ProductAlignmentTests(unittest.TestCase):
         b,c,_ = self.files()
         with self.assertRaisesRegex(ValueError, "named volume"):
             verify_compose(b,c)
+    def test_reject_long_form_host_root_volume(self):
+        for source in ("/", "/etc", "../secret", "./data"):
+            with self.subTest(source=source):
+                self.compose["services"]["core"]["volumes"] = [
+                    {"type": "volume", "source": source, "target": "/host"}]
+                b,c,_ = self.files()
+                with self.assertRaisesRegex(ValueError, "long-form volume source"):
+                    verify_compose(b,c)
+    def test_reject_long_form_undeclared_volume(self):
+        self.compose["services"]["core"]["volumes"] = [
+            {"type": "volume", "source": "undeclared", "target": "/data"}]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "undeclared long-form volume source"):
+            verify_compose(b,c)
+    def test_allow_declared_long_form_volume(self):
+        self.compose["volumes"] = {"data": {}}
+        self.compose["services"]["core"]["volumes"] = [
+            {"type": "volume", "source": "data", "target": "/data"}]
+        b,c,_ = self.files()
+        self.assertTrue(verify_compose(b,c))
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
