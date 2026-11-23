@@ -22,7 +22,7 @@ def plan(action, profile, images, compose=COMPOSE):
     if profile not in ("default", "demo"):
         raise ValueError("unsupported profile")
     compose = pathlib.Path(compose)
-    if compose.name != "docker-compose.yml" or not compose.is_file():
+    if compose.resolve() != COMPOSE.resolve() or not compose.is_file():
         raise ValueError("canonical docker-compose.yml missing")
     required = IMAGE_KEYS if profile == "demo" else IMAGE_KEYS[:-1]
     missing = [key + "_IMAGE" for key in required if not DIGEST.fullmatch(images.get(key + "_IMAGE", ""))]
