@@ -47,13 +47,21 @@ def validate_images(env, profile):
         raise ValueError("digest-shaped references missing: " + ", ".join(missing))
 
 
-def validate_compose(graph, root, profile):
+def validate_compose(graph, root, profile, env):
     if not isinstance(graph, dict) or not isinstance(graph.get("services"), dict):
         raise ValueError("invalid normalized Compose graph")
     required = set(k.lower() for k in IMAGE_KEYS)
     expected = required | ({"demo"} if profile == "demo" else set())
     if set(graph["services"]) != expected:
         raise ValueError("unexpected service set")
+    # Bind every active normalized service image to its expected immutable OCI digest.
+    validate_images(env, profile)
+    for name, service in graph["services"].items():
+        expected_image = env[name.upper() + "_IMAGE"]
+        if not isinstance(service, dict) or not isinstance(service.get("image"), str):
+            raise ValueError("missing normalized image for " + name)
+        if not DIGEST.fullmatch(service["image"]) or service["image"] != expected_image:
+            raise ValueError("normalized image digest mismatch for " + name)
     # Fail closed on the normalized graph, not on hand-picked YAML fragments.
     declared = graph.get("volumes", {})
     if not isinstance(declared, dict):
@@ -130,7 +138,7 @@ def run(root, profile, env=None, command=None):
     if profile == "demo":
         cmd += ["--profile", "demo"]
     config_result = command(cmd + ["config", "--format", "json"], capture_output=True, text=True, check=True, env=env)
-    validate_compose(json.loads(config_result.stdout), root, profile)
+    validate_compose(json.loads(config_result.stdout), root, profile, env)
     return {"status": "PASS", "mode": "preflight-only", "root": str(root), "profile": profile,
             "runtime_installed": False, "oci_provenance_verified": False}
 
