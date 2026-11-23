@@ -4,6 +4,8 @@ on:
     branches: [v3-spike/central-integration]
     paths:
       - 'v3-spike/kit/kit_cli.py'
+      - 'v3-spike/kit/kit_cli_dry_run.py'
+      - 'v3-spike/kit/test_kit_cli_dry_run.py'
       - 'v3-spike/kit/test_kit_cli.py'
       - 'v3-spike/kit/docker-compose.yml'
       - '.github/workflows/v3-kit-cli-dry-run.yml'
@@ -64,3 +66,39 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "synthetic=true runtime=NOT_RUN host_mutated=false"
+
+  kit-cli-planner-synthetic:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Execute seven fail-closed planner tests
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -m venv .venv-kit-planner
+          .venv-kit-planner/bin/python -m pip install 'unittest-xml-reporting==3.2.0'
+          mkdir -p kit-planner-junit
+          PYTHONPATH=v3-spike/kit .venv-kit-planner/bin/python - <<'PY'
+          import unittest, xmlrunner
+          suite = unittest.defaultTestLoader.loadTestsFromName('test_kit_cli_dry_run')
+          assert suite.countTestCases() == 7, suite.countTestCases()
+          result = xmlrunner.XMLTestRunner(output='kit-planner-junit', verbosity=2).run(suite)
+          assert result.wasSuccessful() and result.testsRun == 7
+          PY
+          python3 v3-spike/kit/verify_junit.py kit-planner-junit --expected 7 --source v3-spike/kit/test_kit_cli_dry_run.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest kit-planner-junit/manifest.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: v3-kit-planner-junit
+          path: kit-planner-junit/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA runtime=NOT_RUN"
