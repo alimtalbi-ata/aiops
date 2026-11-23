@@ -21,8 +21,8 @@ def validate_root(root):
     root = Path(root)
     if not root.is_absolute() or str(root) == "/" or ".." in root.parts:
         raise ValueError("installation root must be absolute, non-root and normalized")
-    if root.is_symlink():
-        raise ValueError("installation root must not be a symlink")
+    if any(part.is_symlink() for part in (root, *root.parents)):
+        raise ValueError("installation root and its ancestors must not be symlinks")
     return root.resolve(strict=False)
 
 
@@ -30,7 +30,7 @@ def validate_daemon(info, docker_host, uid, root):
     if not isinstance(info, dict):
         raise ValueError("docker info must be JSON object")
     opts = info.get("SecurityOptions", [])
-    if not isinstance(opts, list) or not any("rootless" in str(x).lower() for x in opts):
+    if not isinstance(opts, list) or not any(isinstance(x, str) and x.strip().lower() in ("rootless", "name=rootless") for x in opts):
         raise ValueError("Docker daemon is not attested rootless")
     expected = f"unix:///run/user/{uid}/docker.sock"
     if docker_host != expected:
