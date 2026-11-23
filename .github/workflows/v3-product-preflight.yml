@@ -148,13 +148,52 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Compose default and demo independent of BOM provenance
+      - name: Validate canonical normalized Compose default and demo with synthetic digest inputs
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -f v3-spike/product/docker-compose.yml || { echo 'FAIL: canonical product Compose absent'; exit 1; }
-          docker compose -f v3-spike/product/docker-compose.yml config --quiet
-          docker compose --profile demo -f v3-spike/product/docker-compose.yml config --quiet
+          test -f v3-spike/product/docker-compose.yml
+          export CORE_IMAGE="example.invalid/core@sha256:$(printf 'a%.0s' {1..64})"
+          export TEMPORAL_IMAGE="example.invalid/temporal@sha256:$(printf 'b%.0s' {1..64})"
+          export WORKER_IMAGE="example.invalid/worker@sha256:$(printf 'c%.0s' {1..64})"
+          export POLICY_IMAGE="example.invalid/policy@sha256:$(printf 'd%.0s' {1..64})"
+          export HITL_IMAGE="example.invalid/hitl@sha256:$(printf 'e%.0s' {1..64})"
+          export EVIDENCE_IMAGE="example.invalid/evidence@sha256:$(printf 'f%.0s' {1..64})"
+          export GAMMA_IMAGE="example.invalid/gamma@sha256:$(printf '1%.0s' {1..64})"
+          export DEMO_IMAGE="example.invalid/demo@sha256:$(printf '2%.0s' {1..64})"
+          mkdir -p compose-reports
+          docker compose -f v3-spike/product/docker-compose.yml config --format json > compose-reports/default.json
+          docker compose --profile demo -f v3-spike/product/docker-compose.yml config --format json > compose-reports/demo.json
+          python3 - <<'PY'
+          import json, pathlib, re
+          base = pathlib.Path('compose-reports')
+          required = {'gamma','core','temporal','worker','policy','hitl','evidence'}
+          for profile, expected in [('default', required), ('demo', required | {'demo'})]:
+              doc = json.loads((base / (profile+'.json')).read_text())
+              services = doc['services']
+              assert set(services) == expected, (profile, sorted(services))
+              for name, spec in services.items():
+                  assert re.fullmatch(r'example[.]invalid/[a-z]+@sha256:[0-9a-f]{64}', spec['image']), name
+                  assert not spec.get('privileged'), name
+                  assert spec.get('network_mode') != 'host', name
+                  for mount in spec.get('volumes', []):
+                      assert mount.get('type') == 'volume', (name,mount)
+                      assert mount.get('source') in {'core_data','temporal_data','evidence_data'}, (name,mount)
+                  for port in spec.get('ports', []):
+                      assert name == 'gamma' and port.get('host_ip') == '127.0.0.1', (name,port)
+                      assert int(port.get('published')) not in {7770,7777,7790}, port
+              print('PASS normalized synthetic Compose', profile, len(services))
+          PY
+          date -u +%FT%TZ
+          echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID job=$GITHUB_JOB synthetic_digests_only=true runtime=NOT_RUN"
+      - name: Upload normalized Compose JSON evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-compose-normalized-synthetic
+          path: compose-reports/*.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Receipt
         if: always()
         run: |
@@ -231,7 +270,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Execute thirty BOM Compose provenance mutation tests
+      - name: Execute thirty-two BOM Compose provenance mutation tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -240,11 +279,11 @@ jobs:
           PYTHONPATH=v3-spike/kit python3 -B - <<'PY'
           import unittest, xmlrunner
           suite = unittest.defaultTestLoader.loadTestsFromName('test_product_alignment')
-          assert suite.countTestCases() == 30, f'FAIL expected 30, got {suite.countTestCases()}'
+          assert suite.countTestCases() == 32, f'FAIL expected 32, got {suite.countTestCases()}'
           result = xmlrunner.XMLTestRunner(output='alignment-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 30, 'FAIL alignment tests'
+          assert result.wasSuccessful() and result.testsRun == 32, 'FAIL alignment tests'
           PY
-          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 30 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
+          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 32 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
       - name: Upload alignment JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
