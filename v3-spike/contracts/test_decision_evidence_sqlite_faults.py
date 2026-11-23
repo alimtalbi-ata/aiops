@@ -58,5 +58,28 @@ class DecisionEvidenceSQLiteFaults(unittest.TestCase):
         self.assertEqual(self.db.total_changes, before)
         self.assertFalse(self.db.in_transaction)
 
+    def test_after_insert_abort_rolls_back_nonce(self):
+        self.db.execute("CREATE TRIGGER abort_after AFTER INSERT ON consumed_nonces BEGIN SELECT RAISE(ABORT, 'synthetic after-insert fault'); END")
+        self.assert_clean_deny()
+        self.db.execute("DROP TRIGGER abort_after")
+        self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
+    def test_missing_nonce_table_fails_closed_then_recovers(self):
+        self.db.execute("DROP TABLE consumed_nonces")
+        before = self.db.total_changes
+        result = self.verify()
+        self.assertEqual(result["decision"], "DENY")
+        self.assertEqual(self.db.total_changes, before)
+        self.assertFalse(self.db.in_transaction)
+        self.db.execute("CREATE TABLE consumed_nonces (issuer_key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, nonce TEXT NOT NULL, PRIMARY KEY(issuer_key_id,tenant_id,nonce))")
+        self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
+    def test_null_nonce_constraint_fails_closed_then_recovers(self):
+        self.db.execute("DROP TABLE consumed_nonces")
+        self.db.execute("CREATE TABLE consumed_nonces (issuer_key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, nonce TEXT NOT NULL CHECK(nonce != 'nonce-1'), PRIMARY KEY(issuer_key_id,tenant_id,nonce))")
+        self.assert_clean_deny()
+        self.db.execute("DROP TABLE consumed_nonces")
+        self.db.execute("CREATE TABLE consumed_nonces (issuer_key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, nonce TEXT NOT NULL, PRIMARY KEY(issuer_key_id,tenant_id,nonce))")
+        self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
+
 if __name__ == "__main__":
     unittest.main()
