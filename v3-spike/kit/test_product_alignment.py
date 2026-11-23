@@ -209,6 +209,36 @@ class ProductAlignmentTests(unittest.TestCase):
         b,c,_ = self.files()
         with self.assertRaisesRegex(ValueError, "protected port"):
             verify_compose(b,c)
+    def _profile_fixture(self):
+        self.bom["services"]["demo"] = {
+            "image": "example.org/v3/demo@sha256:" + "b" * 64,
+            "profile": "demo", "secrets": [], "migration": False}
+        self.compose["services"]["demo"] = {
+            "image": self.bom["services"]["demo"]["image"], "profiles": ["demo"]}
+        return self.files()
+
+    def test_normalized_default_excludes_demo(self):
+        b, c, _ = self._profile_fixture()
+        effective = {"services": {k: v for k, v in self.compose["services"].items()
+                                   if k != "demo"}}
+        n = self.root / "normalized.json"
+        n.write_text(json.dumps(effective))
+        self.assertTrue(verify_compose(b, c, n))
+
+    def test_normalized_demo_includes_demo(self):
+        b, c, _ = self._profile_fixture()
+        n = self.root / "normalized.json"
+        n.write_text(json.dumps({"services": self.compose["services"]}))
+        self.assertTrue(verify_compose(b, c, n))
+
+    def test_normalized_rejects_missing_required_service(self):
+        b, c, _ = self._profile_fixture()
+        effective = {"services": {k: v for k, v in self.compose["services"].items()
+                                   if k not in ("demo", "core")}}
+        n = self.root / "normalized.json"
+        n.write_text(json.dumps(effective))
+        with self.assertRaisesRegex(ValueError, "normalized Compose service set mismatch"):
+            verify_compose(b, c, n)
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
