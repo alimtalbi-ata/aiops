@@ -138,14 +138,30 @@ jobs:
                           altered['volumes'][name].update(option)
                           with self.assertRaises(ValueError):
                               self.validate_mounts(altered)
+              @staticmethod
+              def validate_ports(graph):
+                  for name,svc in graph['services'].items():
+                      ports=svc.get('ports',[])
+                      if name!='gamma' and ports:
+                          raise ValueError('unexpected published port: '+name)
+                      if name=='gamma' and (
+                          len(ports)!=1 or ports[0].get('host_ip')!='127.0.0.1'
+                          or int(ports[0].get('published',-1))!=18080
+                      ):
+                          raise ValueError('gamma host exposure')
               def test_host_port_negative_mutations(self):
                   import copy
                   for graph in (default,demo):
+                      self.validate_ports(graph)
                       for hostile in ('0.0.0.0','::'):
                           altered=copy.deepcopy(graph)
                           altered['services']['gamma']['ports'][0]['host_ip']=hostile
-                          with self.assertRaises(AssertionError):
-                              self.assertEqual(altered['services']['gamma']['ports'][0]['host_ip'],'127.0.0.1')
+                          with self.assertRaises(ValueError):
+                              self.validate_ports(altered)
+                      altered=copy.deepcopy(graph)
+                      altered['services']['core']['ports']=[{'host_ip':'127.0.0.1','published':9999,'target':9999}]
+                      with self.assertRaises(ValueError):
+                          self.validate_ports(altered)
               def test_worker_startup_dependencies_are_only_started(self):
                   deps=default['services']['worker']['depends_on']
                   self.assertEqual(set(deps),{'core','temporal'})
