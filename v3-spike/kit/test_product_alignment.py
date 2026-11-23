@@ -106,6 +106,7 @@ class ProductAlignmentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "host namespace"):
             verify_compose(b,c)
     def test_reject_relative_bind(self):
+        self.compose["volumes"] = {"subdir": {}}
         self.compose["services"]["core"]["volumes"] = ["subdir:/host:rw"]
         b,c,_ = self.files()
         self.assertTrue(verify_compose(b,c))  # named volume, not bind
@@ -178,6 +179,16 @@ class ProductAlignmentTests(unittest.TestCase):
         self.compose["volumes"] = {"data": {}}
         self.compose["services"]["core"]["volumes"] = [
             {"type": "volume", "source": "data", "target": "/data"}]
+        b,c,_ = self.files()
+        self.assertTrue(verify_compose(b,c))
+    def test_reject_undeclared_short_form_volume(self):
+        self.compose["services"]["core"]["volumes"] = ["unknown:/data"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "undeclared short-form volume"):
+            verify_compose(b,c)
+    def test_allow_declared_short_form_volume(self):
+        self.compose["volumes"] = {"data": {}}
+        self.compose["services"]["core"]["volumes"] = ["data:/data"]
         b,c,_ = self.files()
         self.assertTrue(verify_compose(b,c))
     def test_reject_old_images_only_bom_schema(self):
