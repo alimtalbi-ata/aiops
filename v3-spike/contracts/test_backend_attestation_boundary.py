@@ -23,8 +23,16 @@ def encode_claims(claims):
         raise ValueError("digest")
     return json.dumps(claims, sort_keys=True, separators=(",", ":")).encode()
 
-def sign_claims(claims, key=KEY):
-    return hmac.new(key, encode_claims(claims), hashlib.sha256).hexdigest()
+def attestation_message(claims, key_id):
+    """Bind the issuer identity and protocol domain to the signed claims."""
+    if (not isinstance(key_id, str) or not key_id or len(key_id) > 128 or
+            not key_id.isascii() or
+            any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for c in key_id)):
+        raise ValueError("issuer_id")
+    return b"AIOPS-V3/backend-attestation/v1\\x00" + key_id.encode("ascii") + b"\\x00" + encode_claims(claims)
+
+def sign_claims(claims, key=KEY, key_id="backend-issuer"):
+    return hmac.new(key, attestation_message(claims, key_id), hashlib.sha256).hexdigest()
 
 def attest_backend(claims, mac, key_id, trusted_backend_keys):
     """Fail closed; return an authenticated COPY, never an envelope-derived context."""
@@ -34,7 +42,7 @@ def attest_backend(claims, mac, key_id, trusted_backend_keys):
         key = trusted_backend_keys.get(key_id)
         if not isinstance(key, bytes) or len(key) < 32 or not isinstance(mac, str):
             return None
-        expected = hmac.new(key, encode_claims(claims), hashlib.sha256).hexdigest()
+        expected = hmac.new(key, attestation_message(claims, key_id), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, mac):
             return None
         return dict(claims)
@@ -85,6 +93,29 @@ class BackendAttestationBoundaryTests(unittest.TestCase):
             with self.subTest(changed=changed):
                 self.assertIsNone(self.check(claims=changed))
         self.assertIsNone(self.check(keys={"backend-issuer": "not-bytes"}))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+
+    def test_issuer_alias_same_key_cannot_substitute(self):
+        keys = {"backend-issuer": KEY, "backend-alias": KEY}
+        self.assertIsNone(attest_backend(self.claims, self.mac, "backend-alias", keys))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+    def test_cross_protocol_legacy_mac_rejected(self):
+        legacy_mac = hmac.new(KEY, encode_claims(self.claims), hashlib.sha256).hexdigest()
+        self.assertIsNone(self.check(mac=legacy_mac))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+    def test_invalid_issuer_id_rejected_without_nonce_write(self):
+        for issuer in ("", "backend-issuer\\nspoof", "backend/issuer", "x" * 129, 42):
+            with self.subTest(issuer=issuer):
+                self.assertIsNone(attest_backend(self.claims, self.mac, issuer, self.keys))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
+
+    def test_attestation_recovery_after_rejected_alias(self):
+        keys = {"backend-issuer": KEY, "backend-alias": KEY}
+        self.assertIsNone(attest_backend(self.claims, self.mac, "backend-alias", keys))
+        self.assertEqual(attest_backend(self.claims, self.mac, "backend-issuer", keys), self.claims)
         self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
 
 if __name__ == "__main__":
