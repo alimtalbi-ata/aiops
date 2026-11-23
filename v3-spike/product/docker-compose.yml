@@ -98,7 +98,7 @@ services:
       retries: 3
   demo:
     profiles: [demo]
-    image: ${DEMO_IMAGE:?set verified DEMO_IMAGE registry/name@sha256:digest}
+    image: ${DEMO_IMAGE:-registry.invalid/disabled-demo@sha256:0000000000000000000000000000000000000000000000000000000000000000}
     networks: [backend]
     read_only: true
     cap_drop: [ALL]
