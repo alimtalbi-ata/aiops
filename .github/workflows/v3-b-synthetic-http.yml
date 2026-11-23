@@ -42,9 +42,9 @@ jobs:
           files=list(Path('../../reports/synthetic-http').glob('*.xml'))
           cases=[c for f in files for c in ET.parse(f).iter('testcase')]
           names=[c.attrib.get('name') for c in cases]
-          assert len(cases)==8 and len(set(names))==8, names
+          assert len(cases)==9 and len(set(names))==9, names
           assert not any(c.find('error') is not None or c.find('failure') is not None or c.find('skipped') is not None for c in cases)
-          print('PASS exact-source 8 HTTP contract tests')
+          print('PASS exact-source 9 HTTP contract tests')
           PY
           echo "UTC=$(date -u +%FT%TZ) SHA=$GITHUB_SHA RUN=$GITHUB_RUN_ID ATTEMPT=$GITHUB_RUN_ATTEMPT"
       - uses: actions/upload-artifact@v4
