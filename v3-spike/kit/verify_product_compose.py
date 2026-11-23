@@ -67,6 +67,13 @@ def verify(bom_path, compose_path):
                 elif isinstance(volume, dict):
                     if volume.get("type") != "volume":
                         raise ValueError("host bind mount forbidden: " + name)
+                    source = volume.get("source")
+                    # Long-form volume mounts must use a simple, declared local volume name.
+                    # Reject absolute/relative host paths and unknown named volumes.
+                    if not isinstance(source, str) or not source or not source.replace("_", "a").replace("-", "a").replace(".", "a").isalnum() or source.startswith("."):
+                        raise ValueError("untrusted long-form volume source: " + name)
+                    if source not in definitions:
+                        raise ValueError("undeclared long-form volume source: " + name)
                 else:
                     raise ValueError("invalid volume: " + name)
         for port in spec.get("ports", []):
