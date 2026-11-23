@@ -69,6 +69,22 @@ def verify(bom_path, compose_path, normalized_path=None):
         raise ValueError("Compose include forbidden")
     # Reject transitive host binds through named-volume driver options.
     definitions = document.get("volumes", {})
+    # Normalized Compose mounts use effective project-prefixed volume names.
+    # Retain the raw topology policy, but compare effective mounts to effective
+    # declarations; never allow arbitrary external or bind sources.
+    if normalized_path is not None:
+        effective_volumes = effective.get("volumes", {})
+        if not isinstance(effective_volumes, dict):
+            raise ValueError("invalid normalized volumes")
+        raw_volumes = yaml.safe_load(raw_compose).get("volumes", {})
+        if not isinstance(raw_volumes, dict) or set(effective_volumes) != set(raw_volumes):
+            raise ValueError("normalized volume declarations mismatch")
+        for key, spec in effective_volumes.items():
+            if not isinstance(spec, dict) or not isinstance(spec.get("name"), str) or not spec["name"]:
+                raise ValueError("invalid effective volume name: " + key)
+        definitions = {spec["name"]: {} for spec in effective_volumes.values()}
+        if len(definitions) != len(effective_volumes):
+            raise ValueError("duplicate effective volume names")
     if not isinstance(definitions, dict):
         raise ValueError("invalid top-level volumes")
     for volume_name, definition in definitions.items():
