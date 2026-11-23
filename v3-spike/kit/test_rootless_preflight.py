@@ -132,5 +132,38 @@ class RootlessPreflightTests(unittest.TestCase):
         module.validate_compose(graph, self.root, "demo")
 
 
+    def test_namespace_and_privilege_mutations_rejected(self):
+        mutations = {
+            "network_mode": ("service:core", "container:other", "host"),
+            "pid": ("host", "service:core"),
+            "ipc": ("host", "shareable"),
+            "devices": (["/dev/kvm:/dev/kvm"],),
+            "volumes_from": (["core"],),
+            "cap_add": (["SYS_ADMIN"],),
+            "device_cgroup_rules": (["c 1:3 rwm"],),
+            "userns_mode": ("host",),
+        }
+        for key, values in mutations.items():
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    graph = copy.deepcopy(self.graph)
+                    graph["services"]["core"][key] = value
+                    with self.assertRaisesRegex(ValueError, "forbidden isolation"):
+                        module.validate_compose(graph, self.root, "default")
+
+    def test_root_user_mutations_rejected(self):
+        for value in ("root", "0", "0:0", "root:root", "0:root", "root:0", "1000:0", "1000:root"):
+            with self.subTest(user=value):
+                graph = copy.deepcopy(self.graph)
+                graph["services"]["core"]["user"] = value
+                with self.assertRaisesRegex(ValueError, "user"):
+                    module.validate_compose(graph, self.root, "default")
+
+    def test_nonroot_numeric_user_accepted(self):
+        graph = copy.deepcopy(self.graph)
+        graph["services"]["core"]["user"] = "10001:10001"
+        module.validate_compose(graph, self.root, "default")
+
+
 if __name__ == "__main__":
     unittest.main()
