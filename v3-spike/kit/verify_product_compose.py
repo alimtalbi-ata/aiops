@@ -21,6 +21,17 @@ def verify(bom_path, compose_path):
     # Validate before comparing service names: extends can inject host capabilities.
     if "include" in document:
         raise ValueError("Compose include forbidden")
+    # Reject transitive host binds through named-volume driver options.
+    definitions = document.get("volumes", {})
+    if not isinstance(definitions, dict):
+        raise ValueError("invalid top-level volumes")
+    for volume_name, definition in definitions.items():
+        if not isinstance(volume_name, str) or not volume_name:
+            raise ValueError("invalid named volume")
+        if definition is None:
+            continue
+        if not isinstance(definition, dict) or definition:
+            raise ValueError("untrusted named volume driver/opts/external forbidden: " + volume_name)
     actual = document["services"]
     if any(not isinstance(spec, dict) or "extends" in spec for spec in actual.values()):
         raise ValueError("Compose extends forbidden")
@@ -39,7 +50,7 @@ def verify(bom_path, compose_path):
             raise ValueError("profile mismatch: " + name)
         if spec.get("privileged") is not None and spec["privileged"] is not False:
             raise ValueError("privileged forbidden: " + name)
-        if any(isinstance(spec.get(k), str) and (spec[k] == "host" or spec[k].startswith(("container:", "service:"))) for k in ("network_mode", "pid", "ipc")):
+        if any(isinstance(spec.get(k), str) and (spec[k] == "host" or spec[k].startswith(("container:", "service:"))) for k in ("network_mode", "pid", "ipc", "userns_mode", "cgroup", "uts")):
             raise ValueError("host namespace forbidden: " + name)
         # volumes_from inherits mounts from services or external containers; no transitive mounts.
         if "volumes_from" in spec:
