@@ -142,8 +142,8 @@ class VerticalOperator(unittest.TestCase):
         self.assertIn("DENIED", self.page.locator("#decision").inner_text())
 
     def test_bidi_and_c1_identifiers_fail_closed(self):
-        for bad_id in ("visual\u202eexe", "direction\u2066isolate", "hidden\u0085control", "mark\u200frtl"):
-            self.assertTrue(any(ord(ch) in (0x202e, 0x2066, 0x0085, 0x200f) for ch in bad_id))
+        for bad_id in ("visual\u202eexe", "direction\u2066isolate", "hidden\u0085control", "mark\u200frtl", "zero\u200bwidth", "join\u2060word", "bom\ufeffhidden", "surrogate\ud800bad"):
+            self.assertTrue(any(ord(ch) in (0x202e, 0x2066, 0x0085, 0x200f, 0x200b, 0x2060, 0xfeff, 0xd800) for ch in bad_id))
             f=fixture()
             f["event"]["id"]=bad_id
             self.load(f)
