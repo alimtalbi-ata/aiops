@@ -94,7 +94,7 @@ jobs:
               if len(data) < 45 or data[:8] != bytes.fromhex("89504e470d0a1a0a"):
                   raise SystemExit(f"FAIL: invalid PNG signature {path}")
               pos, width, height, ended = 8, None, None, False
-              idat_chunks, color_type = [], None
+              idat_chunks, color_type, idat_closed = [], None, False
               while pos < len(data):
                   if pos + 12 > len(data):
                       raise SystemExit(f"FAIL: truncated PNG chunk {path}")
@@ -117,7 +117,13 @@ jobs:
                   elif kind == b"IHDR":
                       raise SystemExit(f"FAIL: duplicate PNG IHDR {path}")
                   if kind == b"IDAT":
+                      if idat_closed:
+                          raise SystemExit(f"FAIL: noncontiguous PNG IDAT {path}")
                       idat_chunks.append(chunk)
+                  elif idat_chunks:
+                      idat_closed = True
+                  if kind not in (b"IHDR", b"IDAT", b"IEND") and not (kind[0] & 0x20):
+                      raise SystemExit(f"FAIL: unsupported critical PNG chunk {path}")
                   if kind == b"IEND":
                       if length or end != len(data) or not idat_chunks:
                           raise SystemExit(f"FAIL: PNG IEND/IDAT invalid {path}")
