@@ -199,5 +199,27 @@ class BackendAtomicConsumeTests(unittest.TestCase):
         self.assertEqual(self.rows(), [])
         self.assertTrue(self.run_gate(nonce="opaque"))
 
+    def test_rollback_trigger_ends_transaction_and_recovers(self):
+        self.db.execute("CREATE TRIGGER rollback_nonce BEFORE INSERT ON consumed_nonce BEGIN SELECT RAISE(ROLLBACK,'synthetic rollback'); END")
+        self.assertFalse(self.run_gate(nonce="rolled"))
+        self.assertFalse(self.db.in_transaction)
+        self.assertEqual(self.rows(), [])
+        self.db.execute("DROP TRIGGER rollback_nonce")
+        self.assertTrue(self.run_gate(nonce="rolled"))
+        self.assertEqual(self.rows(), [("tenant-A", "rolled")])
+
+    def test_commit_authorizer_denial_rolls_back_and_recovers(self):
+        def deny_commit(action, arg1, arg2, dbname, source):
+            return sqlite3.SQLITE_DENY if action == sqlite3.SQLITE_TRANSACTION and arg1 == "COMMIT" else sqlite3.SQLITE_OK
+        self.db.set_authorizer(deny_commit)
+        try:
+            self.assertFalse(self.run_gate(nonce="commit-denied"))
+            self.assertFalse(self.db.in_transaction)
+        finally:
+            self.db.set_authorizer(None)
+        self.assertEqual(self.rows(), [])
+        self.assertTrue(self.run_gate(nonce="commit-denied"))
+        self.assertEqual(self.rows(), [("tenant-A", "commit-denied")])
+
 if __name__ == "__main__":
     unittest.main()
