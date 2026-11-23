@@ -75,7 +75,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Execute eleven product-contract planner tests
+      - name: Execute twelve product-contract planner tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -85,11 +85,11 @@ jobs:
           PYTHONPATH=v3-spike/kit .venv-kit-planner/bin/python - <<'PY'
           import unittest, xmlrunner
           suite = unittest.defaultTestLoader.loadTestsFromName('test_kit_cli_dry_run')
-          assert suite.countTestCases() == 11, suite.countTestCases()
+          assert suite.countTestCases() == 12, suite.countTestCases()
           result = xmlrunner.XMLTestRunner(output='kit-planner-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 11
+          assert result.wasSuccessful() and result.testsRun == 12
           PY
-          python3 v3-spike/kit/verify_junit.py kit-planner-junit --expected 11 --source v3-spike/kit/test_kit_cli_dry_run.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest kit-planner-junit/manifest.json
+          python3 v3-spike/kit/verify_junit.py kit-planner-junit --expected 12 --source v3-spike/kit/test_kit_cli_dry_run.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest kit-planner-junit/manifest.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
