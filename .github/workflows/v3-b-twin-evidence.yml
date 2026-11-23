@@ -107,7 +107,7 @@ jobs:
           assert files, 'Missing trust-mutation JUnit'
           cases = [case for path in files for case in ET.parse(path).iter('testcase')]
           names = [case.get('name') for case in cases]
-          assert len(expected) == len(cases) == len(set(names)) == 16
+          assert len(expected) == len(cases) == len(set(names)) == 18
           assert set(names) == expected
           assert all(case.get('classname', '').endswith('DecisionEvidenceTrustMutations') for case in cases)
           assert all(not any(case.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for case in cases)
@@ -189,7 +189,7 @@ jobs:
           assert set(names) == expected
           assert all(c.get('classname', '').endswith('BackendAttestationBoundaryTests') for c in cases)
           assert all(not any(c.find(t) is not None for t in ('failure', 'error', 'skipped')) for c in cases)
-          print('PASS backend attestation semantic JUnit 16/16')
+          print('PASS backend attestation semantic JUnit 18/18')
           PY
       - name: Upload backend attestation JUnit
         if: always()
