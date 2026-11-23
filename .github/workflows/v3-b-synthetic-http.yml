@@ -1,0 +1,55 @@
+name: V3 B Synthetic HTTP DENY Smoke
+on:
+  push:
+    branches:
+      - 'v3-spike/b-attested-snapshot-20261121'
+    paths:
+      - 'v3-spike/contracts/synthetic_deny_http.py'
+      - 'v3-spike/contracts/test_synthetic_deny_http_contract.py'
+      - '.github/workflows/v3-b-synthetic-http.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-http-deny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Start isolated localhost synthetic server and execute exact-source tests
+        env:
+          AIOPS_V3_SYNTHETIC_HTTP_TEST: '1'
+          AIOPS_V3_SYNTHETIC_URL: 'http://127.0.0.1:8088'
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check unittest-xml-reporting==3.2.0
+          export AIOPS_V3_SYNTHETIC_DATA_ROOT="$(mktemp -d)"
+          cd v3-spike/contracts
+          python synthetic_deny_http.py > /tmp/v3-b-synthetic-http.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; rm -rf "$AIOPS_V3_SYNTHETIC_DATA_ROOT"' EXIT
+          for i in $(seq 1 30); do
+            if python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8088/health", timeout=1)' 2>/dev/null; then break; fi
+            sleep 1
+          done
+          python -m xmlrunner discover -s . -p 'test_synthetic_deny_http_contract.py' -o ../../reports/synthetic-http
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          files=list(Path('../../reports/synthetic-http').glob('*.xml'))
+          cases=[c for f in files for c in ET.parse(f).iter('testcase')]
+          names=[c.attrib.get('name') for c in cases]
+          assert len(cases)==4 and len(set(names))==4, names
+          assert not any(c.find('error') is not None or c.find('failure') is not None or c.find('skipped') is not None for c in cases)
+          print('PASS exact-source 4 HTTP contract tests')
+          PY
+          echo "UTC=$(date -u +%FT%TZ) SHA=$GITHUB_SHA RUN=$GITHUB_RUN_ID ATTEMPT=$GITHUB_RUN_ATTEMPT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-b-synthetic-http-junit
+          path: reports/synthetic-http/
+          if-no-files-found: warn
