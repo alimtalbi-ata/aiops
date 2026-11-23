@@ -5,16 +5,35 @@ import sys
 from product_preflight import validate
 
 PROTECTED_PORTS = {7770, 7777, 7790}
-def verify(bom_path, compose_path):
+def verify(bom_path, compose_path, normalized_path=None):
     import yaml
     bom = json.loads(pathlib.Path(bom_path).read_text(encoding="utf-8"))
     validate(bom)
     raw_compose = pathlib.Path(compose_path).read_text(encoding="utf-8")
-    # Fail closed until a trusted, normalized Compose config is available.
-    # Raw YAML must never be treated as resolved Compose configuration.
-    if "${" in raw_compose or "$" in raw_compose:
-        raise ValueError("unresolved Compose interpolation forbidden")
+    # Raw interpolation is allowed ONLY for image inputs when a separately
+    # normalized Compose JSON is supplied; never trust raw YAML as effective config.
     document = yaml.safe_load(raw_compose)
+    if normalized_path is None and "$" in raw_compose:
+        raise ValueError("unresolved Compose interpolation forbidden")
+    if normalized_path is not None:
+        def check_interpolation(value, key=""):
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    check_interpolation(v, k)
+            elif isinstance(value, list):
+                for v in value:
+                    check_interpolation(v, key)
+            elif isinstance(value, str) and "$" in value:
+                if key != "image" or not __import__("re").fullmatch(
+                    r"\$\{[A-Z][A-Z0-9_]*_IMAGE:\?[^}]+\}", value):
+                    raise ValueError("unsafe Compose interpolation forbidden")
+        check_interpolation(document)
+        effective = json.loads(pathlib.Path(normalized_path).read_text(encoding="utf-8"))
+        if not isinstance(effective, dict) or not isinstance(effective.get("services"), dict):
+            raise ValueError("invalid normalized Compose services")
+        if set(effective["services"]) != set(document["services"]):
+            raise ValueError("normalized Compose service set mismatch")
+        document = {**document, "services": effective["services"]}
     if not isinstance(document, dict) or not isinstance(document.get("services"), dict):
         raise ValueError("invalid Compose services")
     # No transitive Compose imports are allowed in the single-file kit.
@@ -55,7 +74,10 @@ def verify(bom_path, compose_path):
         # volumes_from inherits mounts from services or external containers; no transitive mounts.
         if "volumes_from" in spec:
             raise ValueError("volumes_from forbidden: " + name)
-        if spec.get("devices") or spec.get("cap_add") or spec.get("security_opt"):
+        if spec.get("devices") or spec.get("cap_add"):
+            raise ValueError("host capability forbidden: " + name)
+        security = spec.get("security_opt", [])
+        if security not in ([], ["no-new-privileges:true"], ["no-new-privileges=true"]):
             raise ValueError("host capability forbidden: " + name)
         if spec.get("volumes"):
             # Named volumes only; bind mounts require separate security review.
@@ -80,9 +102,9 @@ def verify(bom_path, compose_path):
                     raise ValueError("invalid volume: " + name)
         for port in spec.get("ports", []):
             if isinstance(port, int):
-                published = port
+                published = None
             elif isinstance(port, str):
-                value = port.split("/") [0].rsplit(":", 1)[0]
+                value = port.split("/")[0].rsplit(":", 1)[0] if ":" in port else ""
                 if not value.isdigit() and ":" in port:
                     raise ValueError("unresolved published port forbidden: " + name)
                 published = int(value) if value.isdigit() else None
@@ -96,8 +118,8 @@ def verify(bom_path, compose_path):
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) != 3:
-            raise ValueError("expected BOM and canonical Compose paths")
+        if len(sys.argv) not in (3, 4):
+            raise ValueError("expected BOM, canonical Compose, optional normalized JSON")
         verify(*sys.argv[1:])
     except (ValueError, OSError, TypeError, KeyError, json.JSONDecodeError) as exc:
         print("STATIC_FAIL:", exc, file=sys.stderr)
