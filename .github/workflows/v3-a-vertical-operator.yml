@@ -135,7 +135,8 @@ jobs:
               try:
                   decoder = zlib.decompressobj()
                   raw = decoder.decompress(b"".join(idat_chunks), height * (row_bytes + 1) + 1)
-                  raw += decoder.flush()
+                  # decompress(max_length) is the sole bounded output operation.
+                  # Never call flush(): it can allocate unbounded output after the cap.
               except zlib.error:
                   raise SystemExit(f"FAIL: PNG IDAT decompression {path}")
               if (not decoder.eof or decoder.unused_data or decoder.unconsumed_tail
