@@ -113,6 +113,16 @@ class ProductAlignmentTests(unittest.TestCase):
         b,c,_ = self.files()
         with self.assertRaisesRegex(ValueError, "bind mount"):
             verify_compose(b,c)
+    def test_reject_volumes_from_service(self):
+        self.compose["services"]["core"]["volumes_from"] = ["other:rw"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "volumes_from"):
+            verify_compose(b,c)
+    def test_reject_volumes_from_external_container(self):
+        self.compose["services"]["core"]["volumes_from"] = ["container:external:rw"]
+        b,c,_ = self.files()
+        with self.assertRaisesRegex(ValueError, "volumes_from"):
+            verify_compose(b,c)
     def test_reject_transitive_extends(self):
         self.compose["services"]["core"]["extends"] = {"file": "../external.yml", "service": "host"}
         b,c,_ = self.files()
