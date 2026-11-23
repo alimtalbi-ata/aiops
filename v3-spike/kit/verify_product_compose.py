@@ -25,7 +25,7 @@ def verify(bom_path, compose_path, normalized_path=None):
                     check_interpolation(v, key)
             elif isinstance(value, str) and "$" in value:
                 if key != "image" or not __import__("re").fullmatch(
-                    r"\$\{[A-Z][A-Z0-9_]*_IMAGE:\?[^}]+\}", value):
+                    r"\$\{[A-Z][A-Z0-9_]*_IMAGE:(?:\?[^}]+|-[^}]+)\}", value):
                     raise ValueError("unsafe Compose interpolation forbidden")
         check_interpolation(document)
         effective = json.loads(pathlib.Path(normalized_path).read_text(encoding="utf-8"))
