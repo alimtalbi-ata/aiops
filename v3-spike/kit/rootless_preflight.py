@@ -64,6 +64,18 @@ def validate_compose(graph, root, profile):
     for name, service in graph["services"].items():
         if not isinstance(service, dict) or service.get("privileged") or service.get("network_mode") == "host":
             raise ValueError("unsafe container privileges")
+        # Deny namespace sharing, device injection and privilege additions even
+        # when Compose normalizes them into explicit service keys.
+        forbidden = ("network_mode", "pid", "ipc", "devices", "volumes_from",
+                     "cap_add", "device_cgroup_rules", "device_requests",
+                     "security_opt_extra", "cgroup_parent", "uts", "userns_mode")
+        for key in forbidden:
+            if key in service and service[key] not in (None, [], ""):
+                raise ValueError("forbidden isolation setting: " + key)
+        if str(service.get("user", "")).strip().lower() in ("root", "0", "0:0", "root:root", "0:root", "root:0"):
+            raise ValueError("root container user forbidden")
+        if service.get("user") is not None and not re.fullmatch(r"[1-9][0-9]*(?::[1-9][0-9]*)?", str(service["user"])):
+            raise ValueError("container user must be numeric non-root")
         if service.get("read_only") is not True:
             raise ValueError("read_only required for " + name)
         if not isinstance(service.get("cap_drop"), list) or "ALL" not in [str(v).upper() for v in service["cap_drop"]]:
