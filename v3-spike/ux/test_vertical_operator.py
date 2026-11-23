@@ -167,8 +167,7 @@ class VerticalOperator(unittest.TestCase):
         for width in (320,1280,1920):
             self.page.set_viewport_size({"width":width,"height":900})
             self.assertTrue(self.page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
-            self.page.locator("#clear").click()
-            self.page.locator("body").focus()
+            self.page.set_content(HTML.read_text(encoding="utf-8"),wait_until="load")
             self.page.keyboard.press("Tab")
             for target in links:
                 self.assertEqual(self.page.evaluate('document.activeElement.getAttribute("href")'),target)
