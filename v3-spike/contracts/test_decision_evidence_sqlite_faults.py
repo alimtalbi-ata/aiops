@@ -109,7 +109,12 @@ class DecisionEvidenceSQLiteFaults(unittest.TestCase):
         self.db.execute("CREATE TABLE synthetic_parent (id INTEGER PRIMARY KEY)")
         self.db.execute("DROP TABLE consumed_nonces")
         self.db.execute("CREATE TABLE consumed_nonces (issuer_key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, nonce TEXT NOT NULL, parent_id INTEGER NOT NULL DEFAULT 999 REFERENCES synthetic_parent(id) DEFERRABLE INITIALLY DEFERRED, PRIMARY KEY(issuer_key_id,tenant_id,nonce))")
-        self.assert_clean_deny()
+        # SQLite total_changes counts attempted writes even after rollback.
+        # Assert durable state instead of total_changes for deferred commit failure.
+        result = self.verify()
+        self.assertEqual(result["decision"], "DENY")
+        self.assertFalse(self.db.in_transaction)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 0)
         self.db.execute("INSERT INTO synthetic_parent(id) VALUES (999)")
         self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
         self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
