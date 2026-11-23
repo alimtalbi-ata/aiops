@@ -31,9 +31,36 @@ def verify(bom_path, compose_path, normalized_path=None):
         effective = json.loads(pathlib.Path(normalized_path).read_text(encoding="utf-8"))
         if not isinstance(effective, dict) or not isinstance(effective.get("services"), dict):
             raise ValueError("invalid normalized Compose services")
-        if set(effective["services"]) != set(document["services"]):
+        # Compose omits inactive profiles from normalized default config.
+        # Validate the raw topology against the full BOM before selecting a profile.
+        raw_services = document.get("services")
+        if not isinstance(raw_services, dict) or set(raw_services) != set(bom["services"]):
+            raise ValueError("raw BOM/Compose service set mismatch")
+        for name, entry in bom["services"].items():
+            spec = raw_services[name]
+            if not isinstance(spec, dict):
+                raise ValueError("invalid raw service: " + name)
+            declared = spec.get("profiles", [])
+            if entry["profile"] == "default":
+                if declared:
+                    raise ValueError("required service hidden behind profile: " + name)
+            elif declared != [entry["profile"]]:
+                raise ValueError("raw profile mismatch: " + name)
+        selected = set(effective["services"])
+        required = {name for name, entry in bom["services"].items()
+                    if entry["profile"] == "default"}
+        if not required.issubset(selected) or not selected.issubset(set(raw_services)):
             raise ValueError("normalized Compose service set mismatch")
+        active_profiles = {bom["services"][name]["profile"] for name in selected
+                           if bom["services"][name]["profile"] != "default"}
+        expected_selected = required | {name for name, entry in bom["services"].items()
+                                         if entry["profile"] in active_profiles}
+        if selected != expected_selected:
+            raise ValueError("normalized Compose partial profile service set mismatch")
+        # The raw full topology remains authoritative for inactive services; normalized
+        # effective services are checked for selected profiles only.
         document = {**document, "services": effective["services"]}
+        bom = {**bom, "services": {name: bom["services"][name] for name in selected}}
     if not isinstance(document, dict) or not isinstance(document.get("services"), dict):
         raise ValueError("invalid Compose services")
     # No transitive Compose imports are allowed in the single-file kit.
