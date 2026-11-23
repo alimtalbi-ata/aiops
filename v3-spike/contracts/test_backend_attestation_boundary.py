@@ -167,7 +167,7 @@ class BackendAttestationBoundaryTests(unittest.TestCase):
     def test_ascii_space_allowed_but_unicode_separator_rejected_then_recovers(self):
         good = dict(self.claims, resource_id="opaque: valid")
         self.assertEqual(self.check(claims=good, mac=sign_claims(good)), good)
-        bad = dict(self.claims, resource_id="opaque:\\u202fvalid")
+        bad = dict(self.claims, resource_id="opaque:" + chr(0x202f) + "valid")
         self.assertIsNone(self.check(claims=bad))
         self.assertEqual(self.check(claims=good, mac=sign_claims(good)), good)
         self.assertEqual(self.db.execute("SELECT count(*) FROM nonce").fetchone()[0], 0)
