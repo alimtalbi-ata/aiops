@@ -46,6 +46,21 @@ class SyntheticDenyHTTPContract(unittest.TestCase):
                 self.assertFalse(body["accepted"])
                 self.assertIsNone(body["evidence"])
 
+    def test_duplicate_json_keys_rejected_without_nonce_consumption(self):
+        import uuid
+        nonce = "dup-" + uuid.uuid4().hex
+        payload = ('{"nonce":"' + nonce + '","nonce":"' + nonce + '"}').encode()
+        request = Request(BASE + "/v1/synthetic/deny", data=payload,
+                          headers={"Content-Type": "application/json"}, method="POST")
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(request, timeout=3)
+        self.assertEqual(caught.exception.code, 400)
+        caught.exception.close()
+        _, first = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
+        self.assertTrue(first["accepted"])
+        _, replay = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
+        self.assertFalse(replay["accepted"])
+
     def test_bad_nonce_refused(self):
         for nonce in ("", "bad/nonce", "bad\\nnonce", "x" * 129):
             with self.subTest(nonce=nonce):
