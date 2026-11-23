@@ -141,6 +141,16 @@ class VerticalOperator(unittest.TestCase):
         self.page.locator("#eligibility").click()
         self.assertIn("DENIED", self.page.locator("#decision").inner_text())
 
+    def test_bidi_and_c1_identifiers_fail_closed(self):
+        for bad_id in ("visual\\u202eexe", "direction\\u2066isolate", "hidden\\u0085control", "mark\\u200frtl"):
+            f=fixture()
+            f["event"]["id"]=bad_id
+            self.load(f)
+            self.assertIn("UNKNOWN / DENY",self.page.locator("#state").inner_text())
+            self.assertIn("NOT_RUN",self.page.locator("#run-value").inner_text())
+            self.page.locator("#eligibility").click()
+            self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+
     def test_non_object_json_roots_fail_closed_after_valid_inspection(self):
         self.load(fixture())
         self.assertIn("DEMO", self.page.locator("#state").inner_text())
