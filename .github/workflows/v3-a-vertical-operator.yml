@@ -29,7 +29,7 @@ jobs:
         run: |
           python3 -m pip install --disable-pip-version-check 'playwright==1.56.0' 'unittest-xml-reporting==3.2.0'
           python3 -m playwright install --with-deps chromium
-      - name: Run twelve synthetic Chromium vertical tests
+      - name: Run thirteen synthetic Chromium vertical tests
         run: |
           mkdir -p reports/vertical
           python3 -B - <<'PY'
@@ -40,14 +40,14 @@ jobs:
           sys.modules[spec.name]=module
           spec.loader.exec_module(module)
           suite=unittest.defaultTestLoader.loadTestsFromTestCase(module.VerticalOperator)
-          if suite.countTestCases()!=12:
-              raise SystemExit("FAIL: expected twelve vertical tests")
+          if suite.countTestCases()!=13:
+              raise SystemExit("FAIL: expected thirteen vertical tests")
           result=xmlrunner.XMLTestRunner(output="reports/vertical",verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.testsRun!=12:
+          if not result.wasSuccessful() or result.testsRun!=13:
               raise SystemExit("FAIL: vertical Chromium")
-          print("PASS: vertical Chromium 12/12 synthetic",flush=True)
+          print("PASS: vertical Chromium 13/13 synthetic",flush=True)
           PY
-      - name: Validate JUnit exact twelve and no failures
+      - name: Validate JUnit exact thirteen and no failures
         if: always()
         run: |
           python3 - <<'PY'
@@ -61,7 +61,7 @@ jobs:
           classes=[node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=="VerticalOperator"]
           if len(classes)!=1: raise SystemExit("FAIL: missing or duplicate VerticalOperator class")
           expected={"gamma_vertical.VerticalOperator."+node.name for node in classes[0].body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name.startswith("test_")}
-          if len(expected)!=12: raise SystemExit("FAIL: expected twelve distinct source test identities")
+          if len(expected)!=13: raise SystemExit("FAIL: expected thirteen distinct source test identities")
           actual=[]
           total=0
           for file in files:
@@ -79,10 +79,10 @@ jobs:
                       if not classname or not name: raise SystemExit("FAIL: JUnit testcase missing identity")
                       actual.append(classname+"."+name)
                   total+=len(cases)
-          if total!=12: raise SystemExit("FAIL: JUnit expected twelve")
+          if total!=13: raise SystemExit("FAIL: JUnit expected thirteen")
           if len(set(actual))!=len(actual): raise SystemExit("FAIL: duplicate JUnit testcase")
           if set(actual)!=expected: raise SystemExit("FAIL: substituted or missing JUnit testcase identities")
-          print("PASS: vertical JUnit 12/12")
+          print("PASS: vertical JUnit 13/13")
           PY
       - name: UTC receipt
         if: always()
