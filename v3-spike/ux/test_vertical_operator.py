@@ -184,6 +184,29 @@ class VerticalOperator(unittest.TestCase):
             self.assertEqual(self.page.evaluate("document.activeElement.id"),"load")
             self.assertTrue(self.page.evaluate('document.activeElement.matches(":focus-visible")'))
 
+    def test_second_file_selection_supersedes_first_pending_read(self):
+        self.page.evaluate("""() => {
+          window.pendingFiles = [];
+          File.prototype.text = function() {
+            return new Promise(resolve => window.pendingFiles.push(resolve));
+          };
+        }""")
+        picker=self.page.locator("#projection-file")
+        picker.set_input_files({"name":"first.json","mimeType":"application/json","buffer":b"{}"})
+        self.page.wait_for_function("window.pendingFiles.length === 1")
+        picker.set_input_files({"name":"second.json","mimeType":"application/json","buffer":b"{ }"})
+        self.page.wait_for_function("window.pendingFiles.length === 2")
+        self.page.evaluate("(text) => window.pendingFiles[1](text)", json.dumps(fixture()))
+        expect(self.page.locator("#payload")).to_have_value(json.dumps(fixture()))
+        self.page.evaluate("(text) => window.pendingFiles[0](text)", json.dumps(fixture(True)))
+        self.page.wait_for_timeout(100)
+        self.assertEqual(json.loads(self.page.locator("#payload").input_value())["policy"]["decision"],"DENY")
+        self.assertIn("UNKNOWN",self.page.locator("#state").inner_text())
+        self.page.locator("#load").click()
+        self.assertIn("blocked",self.page.locator("#run-value").inner_text())
+        self.page.locator("#eligibility").click()
+        self.assertIn("DENIED",self.page.locator("#decision").inner_text())
+
     def test_stale_file_read_rejection_cannot_erase_manual_projection(self):
         self.page.evaluate("""() => {
           window.pendingReject = {};
