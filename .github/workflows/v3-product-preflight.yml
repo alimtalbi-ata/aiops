@@ -231,7 +231,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Execute thirteen BOM Compose provenance mutation tests
+      - name: Execute twenty BOM Compose provenance mutation tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -240,11 +240,11 @@ jobs:
           PYTHONPATH=v3-spike/kit python3 -B - <<'PY'
           import unittest, xmlrunner
           suite = unittest.defaultTestLoader.loadTestsFromName('test_product_alignment')
-          assert suite.countTestCases() == 18, f'FAIL expected 18, got {suite.countTestCases()}'
+          assert suite.countTestCases() == 20, f'FAIL expected 20, got {suite.countTestCases()}'
           result = xmlrunner.XMLTestRunner(output='alignment-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 18, 'FAIL alignment tests'
+          assert result.wasSuccessful() and result.testsRun == 20, 'FAIL alignment tests'
           PY
-          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 18 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
+          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 20 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
       - name: Upload alignment JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
