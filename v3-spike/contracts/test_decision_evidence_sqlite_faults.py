@@ -81,5 +81,38 @@ class DecisionEvidenceSQLiteFaults(unittest.TestCase):
         self.db.execute("CREATE TABLE consumed_nonces (issuer_key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, nonce TEXT NOT NULL, PRIMARY KEY(issuer_key_id,tenant_id,nonce))")
         self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
 
+
+    def test_query_only_connection_denies_then_recovers(self):
+        self.db.execute("PRAGMA query_only=ON")
+        try:
+            self.assert_clean_deny()
+        finally:
+            self.db.execute("PRAGMA query_only=OFF")
+        self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
+
+    def test_sqlite_authorizer_denies_insert_then_recovers(self):
+        def authorizer(action, arg1, arg2, database, trigger):
+            if action == sqlite3.SQLITE_INSERT and arg1 == "consumed_nonces":
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+        self.db.set_authorizer(authorizer)
+        try:
+            self.assert_clean_deny()
+        finally:
+            self.db.set_authorizer(None)
+        self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
+
+    def test_deferred_foreign_key_commit_failure_rolls_back(self):
+        self.db.execute("PRAGMA foreign_keys=ON")
+        self.db.execute("CREATE TABLE synthetic_parent (id INTEGER PRIMARY KEY)")
+        self.db.execute("DROP TABLE consumed_nonces")
+        self.db.execute("CREATE TABLE consumed_nonces (issuer_key_id TEXT NOT NULL, tenant_id TEXT NOT NULL, nonce TEXT NOT NULL, parent_id INTEGER NOT NULL DEFAULT 999 REFERENCES synthetic_parent(id) DEFERRABLE INITIALLY DEFERRED, PRIMARY KEY(issuer_key_id,tenant_id,nonce))")
+        self.assert_clean_deny()
+        self.db.execute("INSERT INTO synthetic_parent(id) VALUES (999)")
+        self.assertEqual(self.verify()["decision"], "SIMULATE_ONLY")
+        self.assertEqual(self.db.execute("SELECT count(*) FROM consumed_nonces").fetchone()[0], 1)
+
 if __name__ == "__main__":
     unittest.main()
