@@ -271,6 +271,40 @@ class ProductAlignmentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate effective volume names"):
             verify_compose(b, c, n)
 
+    def test_normalized_rejects_raw_root_bind_driver_options(self):
+        b, c, n, _ = self._effective_volume_fixture()
+        self.compose["volumes"]["data"] = {"driver_opts": {"type": "none", "o": "bind", "device": "/"}}
+        c.write_text(yaml.safe_dump(self.compose))
+        with self.assertRaisesRegex(ValueError, "untrusted named volume"):
+            verify_compose(b, c, n)
+
+    def test_normalized_rejects_raw_external_volume(self):
+        b, c, n, _ = self._effective_volume_fixture()
+        self.compose["volumes"]["data"] = {"external": True}
+        c.write_text(yaml.safe_dump(self.compose))
+        with self.assertRaisesRegex(ValueError, "untrusted named volume"):
+            verify_compose(b, c, n)
+
+    def test_normalized_rejects_effective_bind_driver_options(self):
+        b, c, n, effective = self._effective_volume_fixture()
+        effective["volumes"]["data"]["driver_opts"] = {"type": "none", "o": "bind", "device": "/etc"}
+        n.write_text(json.dumps(effective))
+        with self.assertRaisesRegex(ValueError, "untrusted normalized named volume"):
+            verify_compose(b, c, n)
+
+    def test_normalized_rejects_effective_external_volume(self):
+        b, c, n, effective = self._effective_volume_fixture()
+        effective["volumes"]["data"]["external"] = True
+        n.write_text(json.dumps(effective))
+        with self.assertRaisesRegex(ValueError, "untrusted normalized named volume"):
+            verify_compose(b, c, n)
+
+    def test_normalized_allows_effective_local_driver(self):
+        b, c, n, effective = self._effective_volume_fixture()
+        effective["volumes"]["data"]["driver"] = "local"
+        n.write_text(json.dumps(effective))
+        self.assertTrue(verify_compose(b, c, n))
+
     def test_reject_old_images_only_bom_schema(self):
         self.bom = {"images": {"core": "example.org/core@sha256:" + "a"*64}}
         b,c,p = self.files()
