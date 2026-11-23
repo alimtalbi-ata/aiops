@@ -84,6 +84,38 @@ jobs:
           if set(actual)!=expected: raise SystemExit("FAIL: substituted or missing JUnit testcase identities")
           print("PASS: vertical JUnit 16/16")
           PY
+      - name: Verify five Chromium screenshots and emit SHA256 manifest
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path("reports/vertical")
+          names = ["R1-deny-1280", "R2-simulate-only-1280",
+                   "viewport-320", "viewport-1280", "viewport-1920"]
+          output = {"commit_sha": os.environ["GITHUB_SHA"],
+                    "run_id": os.environ["GITHUB_RUN_ID"],
+                    "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                    "screenshots": {}}
+          for name in names:
+              path = root / "screenshots" / (name + ".png")
+              if not path.is_file():
+                  raise SystemExit(f"FAIL: missing screenshot {path}")
+              data = path.read_bytes()
+              if len(data) < 24 or data[:8] != bytes.fromhex("89504e470d0a1a0a"):
+                  raise SystemExit(f"FAIL: invalid PNG {path}")
+              width = int.from_bytes(data[16:20], "big")
+              height = int.from_bytes(data[20:24], "big")
+              expected_width = 320 if name == "viewport-320" else 1920 if name == "viewport-1920" else 1280
+              if width != expected_width or height < 1:
+                  raise SystemExit(f"FAIL: screenshot dimensions {path}: {width}x{height}")
+              output["screenshots"][name] = {
+                  "sha256": hashlib.sha256(data).hexdigest(),
+                  "bytes": len(data), "width": width, "height": height}
+          manifest = root / "screenshot-manifest.json"
+          manifest.write_text(json.dumps(output, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+          print("PASS: five source-exact Chromium PNG screenshots verified")
+          PY
       - name: UTC receipt
         if: always()
         run: |
