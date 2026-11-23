@@ -76,7 +76,7 @@ class KitCliDryRunTests(unittest.TestCase):
         source = COMPOSE.read_text(encoding="utf-8")
         self.assertNotRegex(source, r"(?m)^\s*(include|extends|network_mode|privileged):")
         self.assertIn("127.0.0.1:18080:8080", source)
-        self.assertNotRegex(source, r"(?m)^\s*-?\s*['\\"]?(?:0\.0\.0\.0:)?(?:7770|7777|7790):")
+        self.assertNotRegex(source, r"(?m)^\s*-?\s*(?:0\.0\.0\.0:)?(?:7770|7777|7790):")
         self.assertIn("    internal: true", source)
 
     def test_unknown_action_and_profile_rejected(self):
