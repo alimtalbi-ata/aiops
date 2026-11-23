@@ -54,21 +54,51 @@ def validate_compose(graph, root, profile):
     expected = required | ({"demo"} if profile == "demo" else set())
     if set(graph["services"]) != expected:
         raise ValueError("unexpected service set")
-    # Named volumes are accepted only when the rootless Docker data root is
-    # attested inside root. Bind mounts must independently stay within root.
-    for service in graph["services"].values():
-        if service.get("privileged") or service.get("network_mode") == "host":
+    # Fail closed on the normalized graph, not on hand-picked YAML fragments.
+    declared = graph.get("volumes", {})
+    if not isinstance(declared, dict):
+        raise ValueError("invalid declared volumes")
+    for name, config in declared.items():
+        if not isinstance(config, dict) or config.get("external") or config.get("driver_opts"):
+            raise ValueError("external/driver-configured volume forbidden")
+    for name, service in graph["services"].items():
+        if not isinstance(service, dict) or service.get("privileged") or service.get("network_mode") == "host":
             raise ValueError("unsafe container privileges")
-        for mount in service.get("volumes", []):
+        if service.get("read_only") is not True:
+            raise ValueError("read_only required for " + name)
+        if not isinstance(service.get("cap_drop"), list) or "ALL" not in [str(v).upper() for v in service["cap_drop"]]:
+            raise ValueError("cap_drop ALL required for " + name)
+        opts = service.get("security_opt")
+        if not isinstance(opts, list) or "no-new-privileges:true" not in [str(v).lower() for v in opts]:
+            raise ValueError("no-new-privileges required for " + name)
+        ports = service.get("ports", [])
+        if not isinstance(ports, list):
+            raise ValueError("invalid ports")
+        if name != "gamma" and ports:
+            raise ValueError("only GAMMA may publish a port")
+        if name == "gamma":
+            if len(ports) != 1 or not isinstance(ports[0], dict):
+                raise ValueError("GAMMA loopback port required")
+            port = ports[0]
+            if str(port.get("host_ip")) != "127.0.0.1" or str(port.get("published")) != "18080" or int(port.get("target", -1)) != 8080:
+                raise ValueError("GAMMA port must be loopback-only")
+        mounts = service.get("volumes", [])
+        if not isinstance(mounts, list):
+            raise ValueError("invalid mounts")
+        for mount in mounts:
+            if not isinstance(mount, dict):
+                raise ValueError("invalid mount")
             if mount.get("type") == "bind":
                 source = Path(mount.get("source", ""))
                 if not source.is_absolute() or not source.resolve(strict=False).is_relative_to(root):
                     raise ValueError("bind mount escapes installation root")
-            elif mount.get("type") != "volume":
+                if mount.get("read_only") is not True:
+                    raise ValueError("bind mount must be read-only")
+            elif mount.get("type") == "volume":
+                if mount.get("source") not in declared:
+                    raise ValueError("undeclared named volume")
+            else:
                 raise ValueError("unsupported mount type")
-    for config in graph.get("volumes", {}).values():
-        if not isinstance(config, dict) or config.get("external") or config.get("driver_opts"):
-            raise ValueError("external/driver-configured volume forbidden")
 
 
 def run(root, profile, env=None, command=None):
