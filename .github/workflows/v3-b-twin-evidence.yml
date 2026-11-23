@@ -8,6 +8,7 @@ on:
       - 'v3-spike/contracts/test_twin_evidence_boundary.py'
       - 'v3-spike/contracts/decision_evidence_synthetic.py'
       - 'v3-spike/contracts/test_decision_evidence_synthetic.py'
+      - 'v3-spike/contracts/test_decision_evidence_trust_mutations.py'
       - '.github/workflows/v3-b-twin-evidence.yml'
   workflow_dispatch:
 permissions:
@@ -75,4 +76,43 @@ jobs:
         with:
           name: decision-evidence-junit
           path: reports/decision-evidence/
+          if-no-files-found: error
+
+  decision-evidence-trust-mutations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Execute 8 independent adversarial trust mutations
+        run: |
+          python -m pip install --disable-pip-version-check unittest-xml-reporting==3.2.0
+          cd v3-spike/contracts
+          python -m xmlrunner discover -s . -p 'test_decision_evidence_trust_mutations.py' -o ../../reports/trust-mutations
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          tree = ast.parse(Path('test_decision_evidence_trust_mutations.py').read_text())
+          expected = {m.name for cls in tree.body if isinstance(cls, ast.ClassDef)
+                      and cls.name == 'DecisionEvidenceTrustMutations'
+                      for m in cls.body if isinstance(m, ast.FunctionDef) and m.name.startswith('test_')}
+          files = list(Path('../../reports/trust-mutations').glob('*.xml'))
+          assert files, 'Missing trust-mutation JUnit'
+          cases = [case for path in files for case in ET.parse(path).iter('testcase')]
+          names = [case.get('name') for case in cases]
+          assert len(expected) == len(cases) == len(set(names)) == 8
+          assert set(names) == expected
+          assert all(case.get('classname', '').endswith('DecisionEvidenceTrustMutations') for case in cases)
+          assert all(not any(case.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for case in cases)
+          print('PASS trust mutation semantic JUnit 8/8')
+          PY
+      - name: Upload trust mutation JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decision-evidence-trust-mutations-junit
+          path: reports/trust-mutations/
           if-no-files-found: error
