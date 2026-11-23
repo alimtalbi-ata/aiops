@@ -1,0 +1,52 @@
+name: V3 rootless preflight synthetic CI
+on:
+  push:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/rootless_preflight.py'
+      - 'v3-spike/kit/test_rootless_preflight.py'
+      - '.github/workflows/v3-rootless-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rootless-preflight-unit:
+    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact SHA and ten isolated regressions
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p reports
+          python3 -m venv /tmp/v3-rootless-venv
+          /tmp/v3-rootless-venv/bin/python -m pip install 'unittest-xml-reporting==3.2.0'
+          /tmp/v3-rootless-venv/bin/python - <<'PY'
+          import importlib.util, pathlib, unittest, xmlrunner
+          p=pathlib.Path("v3-spike/kit/test_rootless_preflight.py")
+          spec=importlib.util.spec_from_file_location("test_rootless_preflight",p)
+          m=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          suite=unittest.defaultTestLoader.loadTestsFromTestCase(m.RootlessPreflightTests)
+          result=xmlrunner.XMLTestRunner(output="reports",verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.testsRun != 10:
+              raise SystemExit("FAIL rootless preflight regressions")
+          PY
+      - name: JUnit artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-rootless-preflight-junit
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: UTC receipt
+        if: always()
+        run: |
+          date -u +%FT%TZ
+          echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID job=$GITHUB_JOB"
+          echo "synthetic_only=true docker_install=NOT_RUN debian=NOT_RUN"
