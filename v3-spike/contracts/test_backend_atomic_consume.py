@@ -16,15 +16,19 @@ def verify_bind_and_consume(db, claims, mac, key_id, trusted_keys, expected, non
     bound = verify_bound_context(claims, mac, key_id, trusted_keys, expected)
     if bound is None:
         return False
-    if db.in_transaction:
-        return False
     try:
+        if db.in_transaction:
+            return False
         db.execute("BEGIN IMMEDIATE")
         db.execute("INSERT INTO consumed_nonce(tenant,nonce) VALUES (?,?)", (bound["tenant_id"], nonce))
         db.commit()
         return True
     except sqlite3.Error:
-        db.rollback()
+        try:
+            if db.in_transaction:
+                db.rollback()
+        except sqlite3.Error:
+            pass
         return False
 
 class BackendAtomicConsumeTests(unittest.TestCase):
@@ -74,6 +78,34 @@ class BackendAtomicConsumeTests(unittest.TestCase):
         self.assertFalse(self.db.in_transaction)
         self.db.execute("DROP TRIGGER abort_nonce")
         self.assertTrue(self.run_gate())
+    def test_closed_connection_fails_closed_without_crash(self):
+        self.db.close()
+        self.assertFalse(self.run_gate())
+
+    def test_missing_nonce_table_fails_closed_then_recovers(self):
+        self.db.execute("DROP TABLE consumed_nonce")
+        self.assertFalse(self.run_gate())
+        self.assertFalse(self.db.in_transaction)
+        self.db.execute("CREATE TABLE consumed_nonce(tenant TEXT NOT NULL, nonce TEXT NOT NULL, PRIMARY KEY(tenant,nonce))")
+        self.assertTrue(self.run_gate())
+
+    def test_commit_failure_rolls_back_and_recovers(self):
+        self.db.execute("CREATE TABLE parent(id INTEGER PRIMARY KEY)")
+        self.db.execute("CREATE TABLE child(parent_id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)")
+        self.db.execute("PRAGMA foreign_keys=ON")
+        self.db.execute("CREATE TRIGGER defer_fault AFTER INSERT ON consumed_nonce BEGIN INSERT INTO child(parent_id) VALUES (999); END")
+        self.assertFalse(self.run_gate())
+        self.assertEqual(self.rows(), [])
+        self.assertFalse(self.db.in_transaction)
+        self.db.execute("DROP TRIGGER defer_fault")
+        self.assertTrue(self.run_gate())
+
+    def test_same_nonce_different_tenant_isolated(self):
+        self.assertTrue(self.run_gate())
+        foreign = dict(self.claims, tenant_id="tenant-B")
+        self.assertTrue(self.run_gate(claims=foreign, expected=foreign))
+        self.assertEqual(self.rows(), [("tenant-A", "nonce-1"), ("tenant-B", "nonce-1")])
+
     def test_existing_transaction_is_not_mutated(self):
         self.db.execute("BEGIN")
         self.assertFalse(self.run_gate())
