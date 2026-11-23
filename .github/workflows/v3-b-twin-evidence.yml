@@ -9,6 +9,7 @@ on:
       - 'v3-spike/contracts/decision_evidence_synthetic.py'
       - 'v3-spike/contracts/test_decision_evidence_synthetic.py'
       - 'v3-spike/contracts/test_decision_evidence_trust_mutations.py'
+      - 'v3-spike/contracts/test_decision_evidence_sqlite_faults.py'
       - '.github/workflows/v3-b-twin-evidence.yml'
   workflow_dispatch:
 permissions:
@@ -115,4 +116,43 @@ jobs:
         with:
           name: decision-evidence-trust-mutations-junit
           path: reports/trust-mutations/
+          if-no-files-found: error
+
+  decision-evidence-sqlite-faults:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Run SQLite fault-injection suite with semantic JUnit gate
+        run: |
+          python -m pip install --disable-pip-version-check unittest-xml-reporting==3.2.0
+          cd v3-spike/contracts
+          python -m xmlrunner discover -s . -p 'test_decision_evidence_sqlite_faults.py' -o ../../reports/sqlite-faults
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          tree = ast.parse(Path('test_decision_evidence_sqlite_faults.py').read_text())
+          expected = {m.name for cls in tree.body if isinstance(cls, ast.ClassDef)
+                      and cls.name == 'DecisionEvidenceSQLiteFaults'
+                      for m in cls.body if isinstance(m, ast.FunctionDef) and m.name.startswith('test_')}
+          files = list(Path('../../reports/sqlite-faults').glob('*.xml'))
+          assert files, 'Missing SQLite fault JUnit'
+          cases = [c for f in files for c in ET.parse(f).iter('testcase')]
+          names = [c.get('name') for c in cases]
+          assert len(expected) == len(cases) == len(set(names)) == 5
+          assert set(names) == expected
+          assert all(c.get('classname', '').endswith('DecisionEvidenceSQLiteFaults') for c in cases)
+          assert all(not any(c.find(tag) is not None for tag in ('failure', 'error', 'skipped')) for c in cases)
+          print('PASS SQLite fault semantic JUnit 5/5')
+          PY
+      - name: Upload SQLite fault JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decision-evidence-sqlite-faults-junit
+          path: reports/sqlite-faults/
           if-no-files-found: error
