@@ -16,8 +16,10 @@ class RootlessPreflightTests(unittest.TestCase):
         self.root = Path("/srv/aiops-v3")
         self.info = {"SecurityOptions": ["name=seccomp", "name=rootless"],
                      "DockerRootDir": "/srv/aiops-v3/docker-data"}
+        self.env = {k + "_IMAGE": "registry.example/" + k.lower() + "@sha256:" + ("%064x" % (i + 1)) for i, k in enumerate(module.IMAGE_KEYS)}
+        self.env["DEMO_IMAGE"] = "registry.example/demo@sha256:" + ("f" * 64)
         self.graph = {"services": {k.lower(): {"volumes": [], "read_only": True, "cap_drop": ["ALL"],
-                          "security_opt": ["no-new-privileges:true"], "ports": []} for k in module.IMAGE_KEYS}, "volumes": {}}
+                          "security_opt": ["no-new-privileges:true"], "ports": [], "image": self.env[k + "_IMAGE"]} for k in module.IMAGE_KEYS}, "volumes": {}}
         self.graph["services"]["gamma"]["ports"] = [{"host_ip": "127.0.0.1", "published": "18080", "target": 8080}]
 
     def test_rootless_spoof_rejected(self):
@@ -60,7 +62,7 @@ class RootlessPreflightTests(unittest.TestCase):
     def test_bind_escape_rejected(self):
         self.graph["services"]["core"]["volumes"] = [{"type": "bind", "source": "/etc", "target": "/etc"}]
         with self.assertRaisesRegex(ValueError, "escapes"):
-            module.validate_compose(self.graph, self.root, "default")
+            module.validate_compose(self.graph, self.root, "default", self.env)
 
     def test_external_volume_rejected(self):
         self.graph["volumes"] = {"data": {"external": True}}
@@ -72,7 +74,7 @@ class RootlessPreflightTests(unittest.TestCase):
 
     def test_demo_requires_demo_service(self):
         with self.assertRaisesRegex(ValueError, "service set"):
-            module.validate_compose(self.graph, self.root, "demo")
+            module.validate_compose(self.graph, self.root, "demo", self.env)
 
     def test_digest_missing_rejected(self):
         with self.assertRaisesRegex(ValueError, "references missing"):
@@ -93,7 +95,7 @@ class RootlessPreflightTests(unittest.TestCase):
                 graph = copy.deepcopy(self.graph)
                 graph["services"]["core"][field] = value
                 with self.assertRaisesRegex(ValueError, message):
-                    module.validate_compose(graph, self.root, "default")
+                    module.validate_compose(graph, self.root, "default", self.env)
 
     def test_undeclared_named_volume_rejected(self):
         graph = copy.deepcopy(self.graph)
@@ -128,9 +130,34 @@ class RootlessPreflightTests(unittest.TestCase):
     def test_demo_hardened_service_accepted(self):
         graph = copy.deepcopy(self.graph)
         graph["services"]["demo"] = {"volumes": [], "read_only": True, "cap_drop": ["ALL"],
-                                      "security_opt": ["no-new-privileges:true"], "ports": []}
-        module.validate_compose(graph, self.root, "demo")
+                                      "security_opt": ["no-new-privileges:true"], "ports": [], "image": self.env["DEMO_IMAGE"]}
+        module.validate_compose(graph, self.root, "demo", self.env)
 
+
+    def test_normalized_image_mutations_rejected(self):
+        for mutation in ("tag", "different_digest", "missing", "empty"):
+            with self.subTest(mutation=mutation):
+                graph = copy.deepcopy(self.graph)
+                if mutation == "tag":
+                    graph["services"]["core"]["image"] = "registry.example/core:latest"
+                elif mutation == "different_digest":
+                    graph["services"]["core"]["image"] = self.env["WORKER_IMAGE"]
+                elif mutation == "missing":
+                    del graph["services"]["core"]["image"]
+                else:
+                    graph["services"]["core"]["image"] = ""
+                with self.assertRaisesRegex(ValueError, "image"):
+                    module.validate_compose(graph, self.root, "default", self.env)
+
+    def test_demo_placeholder_and_binding_rejected(self):
+        graph = copy.deepcopy(self.graph)
+        graph["services"]["demo"] = {"volumes": [], "read_only": True, "cap_drop": ["ALL"],
+                                     "security_opt": ["no-new-privileges:true"], "ports": [],
+                                     "image": self.env["DEMO_IMAGE"]}
+        module.validate_compose(graph, self.root, "demo", self.env)
+        graph["services"]["demo"]["image"] = "registry.invalid/disabled-demo@sha256:" + ("0" * 64)
+        with self.assertRaisesRegex(ValueError, "image"):
+            module.validate_compose(graph, self.root, "demo", self.env)
 
     def test_namespace_and_privilege_mutations_rejected(self):
         mutations = {
