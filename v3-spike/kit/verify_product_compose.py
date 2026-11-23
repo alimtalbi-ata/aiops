@@ -41,6 +41,9 @@ def verify(bom_path, compose_path):
             raise ValueError("privileged forbidden: " + name)
         if any(isinstance(spec.get(k), str) and (spec[k] == "host" or spec[k].startswith(("container:", "service:"))) for k in ("network_mode", "pid", "ipc")):
             raise ValueError("host namespace forbidden: " + name)
+        # volumes_from inherits mounts from services or external containers; no transitive mounts.
+        if "volumes_from" in spec:
+            raise ValueError("volumes_from forbidden: " + name)
         if spec.get("devices") or spec.get("cap_add") or spec.get("security_opt"):
             raise ValueError("host capability forbidden: " + name)
         if spec.get("volumes"):
