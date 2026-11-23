@@ -54,9 +54,18 @@ jobs:
           assert files, 'Missing JUnit files'
           cases = [c for file in files for c in ET.parse(file).iter('testcase')]
           names = [c.attrib.get('name', '') for c in cases]
-          assert len(cases) == 24, f'Expected 24 cases, got {len(cases)}'
+          import ast
+          source = Path('test_decision_evidence_synthetic.py')
+          tree = ast.parse(source.read_text(encoding='utf-8'))
+          expected = {n.name for cls in tree.body if isinstance(cls, ast.ClassDef)
+                      and cls.name == 'DecisionEvidenceTests'
+                      for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                      and n.name.startswith('test_')}
+          assert len(expected) == 24, f'Expected 24 source test methods, got {len(expected)}'
+          assert len(cases) == 24, f'Expected 24 executed cases, got {len(cases)}'
           assert len(set(names)) == 24, 'Duplicate test identities'
-          assert all(name.startswith('test_') for name in names), 'Unexpected test identity'
+          assert set(names) == expected, f'JUnit/source mismatch: missing={sorted(expected-set(names))}, extra={sorted(set(names)-expected)}'
+          assert all(c.attrib.get('classname', '').endswith('DecisionEvidenceTests') for c in cases), 'Unexpected JUnit test class'
           assert not any(c.find('failure') is not None or c.find('error') is not None or c.find('skipped') is not None for c in cases), 'JUnit has failures/errors/skips'
           print(f'PASS semantic DecisionEvidence JUnit: {len(cases)} unique testcases')
           PY
