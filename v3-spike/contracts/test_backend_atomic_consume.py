@@ -191,7 +191,7 @@ class BackendAtomicConsumeTests(unittest.TestCase):
         self.assertEqual(self.rows(), [("tenant-A", "redirect")])
 
     def test_malformed_mac_and_opaque_resource_fail_without_nonce(self):
-        for mac in ("0" * 64, "not-a-mac", None, 17):
+        for mac in ("0" * 64, "not-a-mac", b"bad", 17):
             with self.subTest(mac=mac):
                 self.assertFalse(self.run_gate(mac=mac, nonce="opaque"))
         changed = dict(self.claims, resource_id="opaque:001' OR 1=1 --")
