@@ -58,7 +58,11 @@ def handler(db_path):
         def do_POST(self):
             if self.path != "/v1/synthetic/deny":
                 return self.reply(404, {"error": "not_found"})
-            length = self.headers.get("Content-Length", "")
+            # Reject ambiguous framing before reading or mutating SQLite.
+            lengths = self.headers.get_all("Content-Length", [])
+            if len(lengths) != 1 or self.headers.get_all("Transfer-Encoding", []):
+                return self.reply(400, {"error": "ambiguous_framing"})
+            length = lengths[0]
             if not length.isascii() or not length.isdecimal() or len(length) > 4 or int(length) > 2048:
                 return self.reply(413, {"error": "invalid_size"})
             try:
