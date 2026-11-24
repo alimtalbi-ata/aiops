@@ -175,7 +175,8 @@ class RootlessPreflightTests(unittest.TestCase):
                 with self.subTest(key=key, value=value):
                     graph = copy.deepcopy(self.graph)
                     graph["services"]["core"][key] = value
-                    with self.assertRaisesRegex(ValueError, "forbidden isolation"):
+                    expected = "unsafe container privileges" if key == "network_mode" and value == "host" else "forbidden isolation setting: " + key
+                    with self.assertRaisesRegex(ValueError, expected):
                         module.validate_compose(graph, self.root, "default", self.env)
 
     def test_root_user_mutations_rejected(self):
