@@ -42,7 +42,9 @@ def validate_daemon(info, docker_host, uid, root):
 
 def validate_images(env, profile):
     keys = IMAGE_KEYS + (("DEMO",) if profile == "demo" else ())
-    missing = [k for k in keys if not DIGEST.fullmatch(env.get(k + "_IMAGE", ""))]
+    missing = [k for k in keys if not DIGEST.fullmatch(env.get(k + "_IMAGE", ""))
+               or env[k + "_IMAGE"].startswith("registry.invalid/")
+               or env[k + "_IMAGE"].endswith("@sha256:" + "0" * 64)]
     if missing:
         raise ValueError("digest-shaped references missing: " + ", ".join(missing))
 
@@ -91,6 +93,8 @@ def validate_compose(graph, root, profile, env):
         opts = service.get("security_opt")
         if not isinstance(opts, list) or "no-new-privileges:true" not in [str(v).lower() for v in opts]:
             raise ValueError("no-new-privileges required for " + name)
+        if any(str(v).lower() != "no-new-privileges:true" for v in opts):
+            raise ValueError("unsupported security_opt for " + name)
         ports = service.get("ports", [])
         if not isinstance(ports, list):
             raise ValueError("invalid ports")
