@@ -67,10 +67,10 @@ class RootlessPreflightTests(unittest.TestCase):
     def test_external_volume_rejected(self):
         self.graph["volumes"] = {"data": {"external": True}}
         with self.assertRaisesRegex(ValueError, "external"):
-            module.validate_compose(self.graph, self.root, "default")
+            module.validate_compose(self.graph, self.root, "default", self.env)
 
     def test_default_service_graph_accepted(self):
-        module.validate_compose(self.graph, self.root, "default")
+        module.validate_compose(self.graph, self.root, "default", self.env)
 
     def test_demo_requires_demo_service(self):
         with self.assertRaisesRegex(ValueError, "service set"):
@@ -101,31 +101,31 @@ class RootlessPreflightTests(unittest.TestCase):
         graph = copy.deepcopy(self.graph)
         graph["services"]["core"]["volumes"] = [{"type": "volume", "source": "missing", "target": "/data"}]
         with self.assertRaisesRegex(ValueError, "undeclared"):
-            module.validate_compose(graph, self.root, "default")
+            module.validate_compose(graph, self.root, "default", self.env)
 
     def test_read_write_bind_rejected(self):
         graph = copy.deepcopy(self.graph)
         graph["services"]["core"]["volumes"] = [{"type": "bind", "source": "/srv/aiops-v3/data", "target": "/data"}]
         with self.assertRaisesRegex(ValueError, "read-only"):
-            module.validate_compose(graph, self.root, "default")
+            module.validate_compose(graph, self.root, "default", self.env)
 
     def test_non_gamma_published_port_rejected(self):
         graph = copy.deepcopy(self.graph)
         graph["services"]["core"]["ports"] = [{"host_ip": "127.0.0.1", "published": "19000", "target": 9000}]
         with self.assertRaisesRegex(ValueError, "only GAMMA"):
-            module.validate_compose(graph, self.root, "default")
+            module.validate_compose(graph, self.root, "default", self.env)
 
     def test_gamma_public_port_rejected(self):
         graph = copy.deepcopy(self.graph)
         graph["services"]["gamma"]["ports"][0]["host_ip"] = "0.0.0.0"
         with self.assertRaisesRegex(ValueError, "loopback-only"):
-            module.validate_compose(graph, self.root, "default")
+            module.validate_compose(graph, self.root, "default", self.env)
 
     def test_declared_named_volume_accepted(self):
         graph = copy.deepcopy(self.graph)
         graph["volumes"]["core_data"] = {}
         graph["services"]["core"]["volumes"] = [{"type": "volume", "source": "core_data", "target": "/data"}]
-        module.validate_compose(graph, self.root, "default")
+        module.validate_compose(graph, self.root, "default", self.env)
 
     def test_demo_hardened_service_accepted(self):
         graph = copy.deepcopy(self.graph)
@@ -176,7 +176,7 @@ class RootlessPreflightTests(unittest.TestCase):
                     graph = copy.deepcopy(self.graph)
                     graph["services"]["core"][key] = value
                     with self.assertRaisesRegex(ValueError, "forbidden isolation"):
-                        module.validate_compose(graph, self.root, "default")
+                        module.validate_compose(graph, self.root, "default", self.env)
 
     def test_root_user_mutations_rejected(self):
         for value in ("root", "0", "0:0", "root:root", "0:root", "root:0", "1000:0", "1000:root"):
@@ -184,12 +184,12 @@ class RootlessPreflightTests(unittest.TestCase):
                 graph = copy.deepcopy(self.graph)
                 graph["services"]["core"]["user"] = value
                 with self.assertRaisesRegex(ValueError, "user"):
-                    module.validate_compose(graph, self.root, "default")
+                    module.validate_compose(graph, self.root, "default", self.env)
 
     def test_nonroot_numeric_user_accepted(self):
         graph = copy.deepcopy(self.graph)
         graph["services"]["core"]["user"] = "10001:10001"
-        module.validate_compose(graph, self.root, "default")
+        module.validate_compose(graph, self.root, "default", self.env)
 
 
 if __name__ == "__main__":
