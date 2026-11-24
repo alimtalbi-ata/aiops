@@ -128,6 +128,35 @@ class SyntheticDenyHTTPContract(unittest.TestCase):
         _, replay = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
         self.assertFalse(replay["accepted"])
 
+    def test_ambiguous_http_framing_rejected_without_nonce_consumption(self):
+        import http.client
+        import uuid
+        from urllib.parse import urlsplit
+        target = urlsplit(BASE)
+        nonce = "framing-" + uuid.uuid4().hex
+        payload = json.dumps({"nonce": nonce}).encode()
+        for framing in ("duplicate-length", "transfer-encoding"):
+            with self.subTest(framing=framing):
+                conn = http.client.HTTPConnection(target.hostname, target.port or 80, timeout=3)
+                try:
+                    conn.putrequest("POST", "/v1/synthetic/deny")
+                    conn.putheader("Content-Type", "application/json")
+                    conn.putheader("Content-Length", str(len(payload)))
+                    if framing == "duplicate-length":
+                        conn.putheader("Content-Length", str(len(payload)))
+                    else:
+                        conn.putheader("Transfer-Encoding", "chunked")
+                    conn.endheaders(payload)
+                    response = conn.getresponse()
+                    self.assertEqual(response.status, 400)
+                    response.read()
+                finally:
+                    conn.close()
+        _, accepted = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
+        self.assertTrue(accepted["accepted"])
+        _, replay = call("POST", "/v1/synthetic/deny", {"nonce": nonce})
+        self.assertFalse(replay["accepted"])
+
     def test_bad_nonce_refused(self):
         for nonce in ("", "bad/nonce", "bad\\nnonce", "x" * 129):
             with self.subTest(nonce=nonce):
