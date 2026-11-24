@@ -159,6 +159,25 @@ class RootlessPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "image"):
             module.validate_compose(graph, self.root, "demo", self.env)
 
+    def test_active_placeholder_rejected_even_when_bound(self):
+        for image in ("registry.invalid/disabled-demo@sha256:" + "f" * 64,
+                      "registry.example/demo@sha256:" + "0" * 64):
+            with self.subTest(image=image):
+                env = dict(self.env, DEMO_IMAGE=image)
+                graph = copy.deepcopy(self.graph)
+                graph["services"]["demo"] = dict(graph["services"]["core"], image=image)
+                with self.assertRaisesRegex(ValueError, "references missing"):
+                    module.validate_compose(graph, self.root, "demo", env)
+                module.validate_compose(self.graph, self.root, "default", env)
+
+    def test_security_option_overrides_rejected(self):
+        for option in ("seccomp=unconfined", "apparmor:unconfined", "label=disable", "no-new-privileges:false"):
+            with self.subTest(option=option):
+                graph = copy.deepcopy(self.graph)
+                graph["services"]["core"]["security_opt"].append(option)
+                with self.assertRaisesRegex(ValueError, "unsupported security_opt"):
+                    module.validate_compose(graph, self.root, "default", self.env)
+
     def test_namespace_and_privilege_mutations_rejected(self):
         mutations = {
             "network_mode": ("service:core", "container:other", "host"),
