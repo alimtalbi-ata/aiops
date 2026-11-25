@@ -85,12 +85,17 @@ class LabContextReal(unittest.TestCase):
                             browser.close()
                     http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-WRONG")
                     self.assertEqual(requests.get(url,timeout=20).status_code,503)
-                    from ingestion_store import persist
+                    http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT")
+                    origin="http://127.0.0.1:%d" % http.server_port
                     a=dict(id="m1",kind="metric",source="monitor",resource="demo-node",severity="critical",tenant="synthetic-demo",synthetic=True)
                     batch=[a,dict(a,id="l1",kind="log")]
-                    stored=persist(batch,1815,"RUN-CI-CONTEXT")
+                    def persist_http():
+                        response=requests.post(origin+"/api/v1/ingest/persist",json=batch,headers={"Origin":origin},timeout=20)
+                        response.raise_for_status()
+                        return response.json()
+                    stored=persist_http()
                     self.assertEqual(len(stored["stored_evidence"]),2)
-                    self.assertEqual(persist(batch,1815,"RUN-CI-CONTEXT")["stored_evidence"],stored["stored_evidence"])
+                    self.assertEqual(persist_http()["stored_evidence"],stored["stored_evidence"])
                     with psycopg.connect(os.environ["DATABASE_URL"]) as db:
                         self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'").fetchone()[0],5)
                 finally:
