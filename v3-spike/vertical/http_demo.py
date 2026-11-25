@@ -13,7 +13,7 @@ from hitl_demo import ApprovalGate
 from ingestion_demo import ingest
 from ingestion_store import persist
 from core_ingest import create_and_persist
-from mattermost_demo import command
+from mattermost_demo import command, authenticate
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -39,6 +39,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('invalid length')
                 token,channel=self.server.mattermost_config
                 body=self.rfile.read(length)
+                authenticate(body,token,channel)
                 core=read_run(*self.server.core_config)
                 twin,evidence,node,expected=self.server.context_config
                 run=core['run']
