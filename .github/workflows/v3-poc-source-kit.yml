@@ -128,6 +128,8 @@ jobs:
           bash v3-spike/kit/poc-start.sh
       - name: Verify actual GAMMA launcher
         run: |
+          umask 077
+          printf "TOKEN=%s\nCHANNEL_ID=%s\n" "$(python3 -c 'import secrets; print(secrets.token_hex(32))')" "abcdefghijklmnopqrstuvwxyz" > "$V3_ROOT/mattermost.env"
           python3 v3-spike/kit/poc-gamma.py > "$RUNNER_TEMP/gamma.log" 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
@@ -140,7 +142,17 @@ jobs:
           [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
           curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"; assert d["copilot"]["sources"]==d["context"]["evidence"]; assert d["copilot"]["confidence"] is None'
           python3 - "$url" <<'PY'
-          import json,sys,urllib.request
+          import json,sys,urllib.request,urllib.parse,urllib.error,os,pathlib
+          config=dict(line.split("=",1) for line in (pathlib.Path(os.environ["V3_ROOT"])/"mattermost.env").read_text().splitlines())
+          form={"token":config["TOKEN"],"channel_id":config["CHANNEL_ID"],"command":"/aiops","text":"incident"}
+          def chat(fields):
+              req=urllib.request.Request(sys.argv[1]+"/api/v1/mattermost/command",data=urllib.parse.urlencode(fields).encode())
+              with urllib.request.urlopen(req,timeout=20) as response: return json.load(response)
+          result=chat(form)
+          assert result["response_type"]=="ephemeral" and "INC-CI-CONTEXT" in result["text"] and "DENY" in result["text"]
+          try: chat(dict(form,token="wrong"))
+          except urllib.error.HTTPError as exc: assert exc.code==403
+          else: raise AssertionError("invalid token accepted")
           origin=sys.argv[1]
           def post(path,body):
               req=urllib.request.Request(origin+"/api/v1/hitl/"+path,data=json.dumps(body).encode(),headers={"Origin":origin,"Content-Type":"application/json"})
