@@ -15,13 +15,13 @@ jobs:
         env:
           V3_ROOT: /tmp/aiops-v3-ci
           V3_DB_PASSWORD: synthetic-ci-only
-          V3_LAB_TOKEN: synthetic-ci-only-not-real-credential
+          V3_LAB_TOKEN: synthetic-ci-only-not-real-credential-0000
   real-services:
     runs-on: ubuntu-24.04
     env:
       V3_ROOT: /tmp/aiops-v3-ci
       V3_DB_PASSWORD: synthetic-ci-only
-      V3_LAB_TOKEN: synthetic-ci-only-not-real-credential
+      V3_LAB_TOKEN: synthetic-ci-only-not-real-credential-0000
     steps:
       - uses: actions/checkout@v4
       - run: mkdir -p "$V3_ROOT/data/postgres"
@@ -45,6 +45,29 @@ jobs:
           "${compose[@]}" up --wait --wait-timeout 300
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+      - name: Verify GAMMA context against actual containers
+        run: |
+          python3 - <<'PY'
+          import sys, subprocess, threading, urllib.request, json, os
+          sys.path.insert(0,"v3-spike/vertical")
+          from http_demo import server
+          def port(name,n):
+              return int(subprocess.check_output(["docker","compose","-f","v3-spike/kit/compose.poc-source.yml","port",name,str(n)],text=True).strip().rsplit(":",1)[1])
+          with server(core_config=(port("core",810),os.environ["V3_LAB_TOKEN"],"RUN-CI-CONTEXT"),context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),policy_port=port("policy",813)) as http:
+              thread=threading.Thread(target=http.serve_forever,daemon=True)
+              thread.start()
+              try:
+                  with urllib.request.urlopen(f"http://127.0.0.1:{http.server_port}/api/v1/incident-context?decision=simulate",timeout=20) as response:
+                      body=json.load(response)
+                  assert body["core"]["run"]["incident_id"]=="INC-CI-CONTEXT"
+                  assert body["context"]["diagnosis"]["preview"]["conditional_reduction_ms"]==120
+                  assert body["context"]["rca"]=="UNKNOWN"
+                  assert body["simulation"]["policy_decision"]=="SIMULATE"
+                  assert body["simulation"]["executed_on_host"] is False
+              finally:
+                  http.shutdown()
+                  thread.join(5)
+          PY
       - name: Backup and restore into separate synthetic database
         run: |
           set -euo pipefail
