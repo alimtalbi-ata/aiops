@@ -91,6 +91,30 @@ class CoreNocRealIntegration(unittest.TestCase):
                 http.shutdown()
                 thread.join(5)
 
+    def test_v3_gamma_browser_real_core_postgres(self):
+        from playwright.sync_api import sync_playwright, expect
+        with vertical_server(core_config=(1810, TOKEN, "RUN-CI-NOC-DEMO")) as http:
+            thread = threading.Thread(target=http.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with sync_playwright() as pw:
+                    browser = pw.chromium.launch(headless=True)
+                    try:
+                        page = browser.new_page()
+                        page.goto("http://127.0.0.1:%d/" % http.server_port)
+                        page.locator("#load-core").click()
+                        expect(page.locator("#core-result")).to_contain_text("INC-CI-NOC-DEMO")
+                        expect(page.locator("#core-result")).to_contain_text("RUN-CI-NOC-DEMO")
+                        expect(page.locator("#core-result")).to_contain_text("Policy: DENY")
+                        http.core_config = (1810, TOKEN, "RUN-CI-NOC-LIVE")
+                        page.locator("#load-core").click()
+                        expect(page.locator("#core-result")).to_contain_text("UNKNOWN / DENY")
+                    finally:
+                        browser.close()
+            finally:
+                http.shutdown()
+                thread.join(5)
+
     def test_actual_postgres_and_core_health(self):
         r = requests.get(BASE + "/health", timeout=3)
         self.assertEqual(r.status_code, 200)
