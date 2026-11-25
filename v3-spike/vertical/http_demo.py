@@ -14,6 +14,7 @@ from ingestion_demo import ingest
 from ingestion_store import persist
 from core_ingest import create_and_persist
 from mattermost_demo import command, authenticate
+from glpi_demo import preview as glpi_preview
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -50,7 +51,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create"):
+        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -81,6 +82,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200,json.dumps(persist(data,evidence,run["run_id"])).encode())
                 return
             details=context(twin,evidence,run["run_id"],node)
+            if self.path=="/api/v1/glpi/preview":
+                if run["mode"]!="DEMO":
+                    raise ValueError("DEMO required")
+                self.reply(200,json.dumps(glpi_preview(data["ticket"],data["followup"],core,details)).encode())
+                return
             args=(expected,run["run_id"],details["evidence"])
             if self.path.endswith("/request"):
                 result=self.server.approval_gate.request(*args)
