@@ -117,6 +117,16 @@ async function loadContext(simulate=false){
    if(!s||s.production_authorized!==false||s.executed_on_host!==false||s.operational_decision!=="DENY"||!["SIMULATE","HUMAN_APPROVAL"].includes(s.policy_decision))throw Error("unverified Policy decision");
    lines.push("Policy decision: "+s.policy_decision,"Host execution: NONE");
   }
+  const d=c.diagnosis;
+  if(d){
+   if(d.classification!=="SYNTHETIC_MODEL_ONLY"||d.root_cause!=="UNKNOWN"||d.operational_decision!=="DENY"||d.executed_on_host!==false)throw Error("unverified diagnosis");
+   lines.push("Hypothesis: "+d.hypothesis);
+   if(d.preview){
+    const p=d.preview;
+    if(![p.observed_ms,p.target_ms,p.conditional_reduction_ms].every(Number.isFinite))throw Error("invalid preview");
+    lines.push("Conditional preview: "+p.observed_ms+" ms → "+p.target_ms+" ms","Conditional reduction: "+p.conditional_reduction_ms+" ms","Model only — not causal proof");
+   }
+  }
   if(generation===contextGeneration)target.textContent=lines.join("\n");
  }catch(_err){if(generation===contextGeneration)target.textContent="UNKNOWN / DENY — context unavailable or unverified";}
 }

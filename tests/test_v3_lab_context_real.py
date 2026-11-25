@@ -20,9 +20,16 @@ class LabContextReal(unittest.TestCase):
         try:
             response=requests.post("http://127.0.0.1:1815/api/evidence",json={"source":"ci-lab","claim":"synthetic observation","confidence":0.5,"provenance":{"run_id":"RUN-CI-CONTEXT","synthetic":True},"payload":{"metric":"latency","value":42}},timeout=5)
             response.raise_for_status()
+            ids=[]
+            for phase,value in (("baseline",40),("incident",160)):
+                sample=requests.post("http://127.0.0.1:1815/api/evidence",json={"source":"ci-lab-"+phase,"claim":"synthetic latency sample","confidence":0.5,"provenance":{"run_id":"RUN-CI-CONTEXT","synthetic":True},"payload":{"metric":"latency_ms","phase":phase,"value":value}},timeout=5)
+                sample.raise_for_status()
+                ids.append(sample.json()["evidence_id"])
             result=context(1814,1815,"RUN-CI-CONTEXT","NODE-CI-ROOT")
+            self.assertEqual(result["diagnosis"]["evidence_ids"],ids)
+            self.assertEqual(result["diagnosis"]["preview"]["conditional_reduction_ms"],120)
             self.assertEqual({x["node_id"] for x in result["affected"]},{"NODE-CI-ROOT","NODE-CI-CHILD"})
-            self.assertEqual(result["evidence"][0]["evidence_id"],response.json()["evidence_id"])
+            self.assertIn(response.json()["evidence_id"],[e["evidence_id"] for e in result["evidence"]])
             self.assertEqual(result["rca"],"UNKNOWN")
             self.assertEqual(result["policy"],"DENY")
             with server(core_config=(1810,os.environ["AIOPS_INTERNAL_TOKEN"],"RUN-CI-CONTEXT"),
@@ -43,14 +50,14 @@ class LabContextReal(unittest.TestCase):
                             page=browser.new_page()
                             page.goto("http://127.0.0.1:%d/" % http.server_port)
                             page.locator("#load-context").click()
-                            for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","NODE-CI-CHILD",result["evidence"][0]["evidence_id"],"RCA: UNKNOWN","Policy: DENY"):
+                            for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","NODE-CI-CHILD",result["evidence"][0]["evidence_id"],"RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms"):
                                 expect(page.locator("#context-result")).to_contain_text(value)
                             page.locator("#context-sim").click()
                             expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
                             expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
                             with psycopg.connect(os.environ["DATABASE_URL"]) as db:
                                 self.assertEqual(db.execute("select status from aiops.runs where run_id='RUN-CI-CONTEXT'").fetchone()[0],"CREATED")
-                                self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'").fetchone()[0],1)
+                                self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'").fetchone()[0],3)
                             http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-WRONG")
                             page.locator("#load-context").click()
                             expect(page.locator("#context-result")).to_contain_text("UNKNOWN / DENY")
