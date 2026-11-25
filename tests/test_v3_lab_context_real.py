@@ -33,7 +33,7 @@ class LabContextReal(unittest.TestCase):
             self.assertEqual(result["rca"],"UNKNOWN")
             self.assertEqual(result["policy"],"DENY")
             with server(core_config=(1810,os.environ["AIOPS_INTERNAL_TOKEN"],"RUN-CI-CONTEXT"),
-                        context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT")) as http:
+                        context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT"),policy_port=1813) as http:
                 thread=threading.Thread(target=http.serve_forever,daemon=True)
                 thread.start()
                 try:
@@ -52,6 +52,12 @@ class LabContextReal(unittest.TestCase):
                             page.locator("#load-context").click()
                             for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","NODE-CI-CHILD",result["evidence"][0]["evidence_id"],"RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms"):
                                 expect(page.locator("#context-result")).to_contain_text(value)
+                            page.locator("#context-sim").click()
+                            expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
+                            expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
+                            with psycopg.connect(os.environ["DATABASE_URL"]) as db:
+                                self.assertEqual(db.execute("select status from aiops.runs where run_id='RUN-CI-CONTEXT'").fetchone()[0],"CREATED")
+                                self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'").fetchone()[0],3)
                             http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-WRONG")
                             page.locator("#load-context").click()
                             expect(page.locator("#context-result")).to_contain_text("UNKNOWN / DENY")
