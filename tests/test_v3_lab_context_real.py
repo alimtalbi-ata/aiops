@@ -115,6 +115,19 @@ class LabContextReal(unittest.TestCase):
                         dynamic=first.json()["core"]["run"]
                         self.assertEqual(dynamic["mode"],"DEMO")
                         self.assertEqual(len(first.json()["stored_evidence"]),2)
+                        with sync_playwright() as pw:
+                            browser=pw.chromium.launch(headless=True)
+                            try:
+                                page=browser.new_page()
+                                page.goto(origin+"/")
+                                page.locator("#create-dynamic").click()
+                                for value in ("Incident: INC-","Run: RUN-","Mode: DEMO","RCA: UNKNOWN","Policy: DENY","Evidence: "):
+                                    expect(page.locator("#dynamic-result")).to_contain_text(value,timeout=20000)
+                                previous=page.locator("#dynamic-result").inner_text()
+                                page.locator("#create-dynamic").click()
+                                expect(page.locator("#dynamic-result")).to_have_text(previous,timeout=20000)
+                            finally:
+                                browser.close()
                         with psycopg.connect(os.environ["DATABASE_URL"]) as db:
                             self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'=%s",(dynamic["run_id"],)).fetchone()[0],2)
                     finally:
