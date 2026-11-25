@@ -13,6 +13,7 @@ from hitl_demo import ApprovalGate
 from ingestion_demo import ingest
 from ingestion_store import persist
 from core_ingest import create_and_persist
+from mattermost_demo import command
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -29,6 +30,25 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
+        if self.path == '/api/v1/mattermost/command':
+            try:
+                if self.headers.get('Content-Type','').split(';')[0] != 'application/x-www-form-urlencoded':
+                    raise ValueError('form required')
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0 < length <= 4096:
+                    raise ValueError('invalid length')
+                token,channel=self.server.mattermost_config
+                body=self.rfile.read(length)
+                core=read_run(*self.server.core_config)
+                twin,evidence,node,expected=self.server.context_config
+                run=core['run']
+                if run['incident_id']!=expected or run['mode']!='DEMO':
+                    raise ValueError('binding mismatch')
+                details=context(twin,evidence,run['run_id'],node)
+                self.reply(200,json.dumps(command(body,token,channel,core,details)).encode())
+            except Exception:
+                self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
+            return
         if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
@@ -109,11 +129,12 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0, core_config=None, context_config=None, policy_port=None):
+def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None):
     http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     http.core_config = core_config
     http.context_config = context_config
     http.policy_port = policy_port
+    http.mattermost_config = mattermost_config
     http.approval_gate = ApprovalGate()
     return http
 
