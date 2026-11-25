@@ -7,6 +7,7 @@ from correlation_demo import correlate
 from core_read import read_run
 from lab_context import context
 from policy_demo import simulation_decision
+from copilot_context import answer
 import os
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
@@ -54,6 +55,7 @@ class Handler(BaseHTTPRequestHandler):
                 details = context(twin_port, evidence_port, run["run_id"], node_id)
                 result={"core":core,"context":details,
                     "binding":"EXPLICIT_SYNTHETIC_LAB_CONFIG","production_authorized":False}
+                result["copilot"]=answer(core,details)
                 if self.path.endswith("?decision=simulate"):
                     result["simulation"]=simulation_decision(self.server.policy_port,len(details["evidence"]))
                 self.reply(200,json.dumps(result).encode())

@@ -43,6 +43,8 @@ class LabContextReal(unittest.TestCase):
                     body=response.json()
                     self.assertEqual(body["core"]["run"]["incident_id"],"INC-CI-CONTEXT")
                     self.assertEqual(body["context"],result)
+                    self.assertEqual(body["copilot"]["sources"],result["evidence"])
+                    self.assertIsNone(body["copilot"]["confidence"])
                     from playwright.sync_api import sync_playwright, expect
                     with sync_playwright() as pw:
                         browser=pw.chromium.launch(headless=True)
@@ -50,7 +52,7 @@ class LabContextReal(unittest.TestCase):
                             page=browser.new_page()
                             page.goto("http://127.0.0.1:%d/" % http.server_port)
                             page.locator("#load-context").click()
-                            for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","NODE-CI-CHILD",result["evidence"][0]["evidence_id"],"RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms"):
+                            for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","NODE-CI-CHILD",result["evidence"][0]["evidence_id"],"RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms","Copilot: Incident INC-CI-CONTEXT","Source: "):
                                 expect(page.locator("#context-result")).to_contain_text(value)
                             page.locator("#context-sim").click()
                             expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")

@@ -112,6 +112,9 @@ async function loadContext(simulate=false){
   const data=await response.json(),c=data.context,r=data.core?.run;
   if(data.production_authorized!==false||data.binding!=="EXPLICIT_SYNTHETIC_LAB_CONFIG"||data.core?.classification!=="SYNTHETIC_CANONICAL_RUN"||data.core?.production_authorized!==false||!r||!validString(r.incident_id)||c?.classification!=="SYNTHETIC_LAB_CONTEXT"||c.run_id!==r.run_id||c.production_authorized!==false||c.tenant_acl_qualified!==false||c.policy!=="DENY"||c.rca!=="UNKNOWN"||!Array.isArray(c.affected)||!Array.isArray(c.evidence))throw Error("unverified context");
   const lines=[r.incident_id,r.run_id,"Explicit lab binding","Affected nodes:",...c.affected.map(n=>n.node_id+" | depth "+n.depth),"Evidence:",...c.evidence.map(e=>e.evidence_id+" | "+e.payload_hash),"RCA: UNKNOWN","Policy: DENY"];
+  const cp=data.copilot;
+  if(!cp||cp.classification!=="SYNTHETIC_COPILOT_CONTEXT"||cp.run_id!==r.run_id||cp.incident_id!==r.incident_id||cp.confidence!==null||cp.operational_decision!=="DENY"||cp.production_authorized!==false||!Array.isArray(cp.sources))throw Error("unverified Copilot");
+  lines.push("Copilot: "+cp.answer,...cp.sources.map(e=>"Source: "+e.evidence_id+" | "+e.payload_hash));
   if(simulate){
    const s=data.simulation;
    if(!s||s.production_authorized!==false||s.executed_on_host!==false||s.operational_decision!=="DENY"||!["SIMULATE","HUMAN_APPROVAL"].includes(s.policy_decision))throw Error("unverified Policy decision");
