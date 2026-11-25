@@ -1,0 +1,145 @@
+name: V3 source POC kit static
+on:
+  pull_request:
+    paths:
+      - 'v3-spike/kit/**'
+      - '.github/workflows/v3-poc-source-kit.yml'
+jobs:
+  config:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n v3-spike/kit/poc-start.sh
+      - run: python3 -m py_compile v3-spike/kit/poc-gamma.py
+      - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
+        env:
+          V3_ROOT: /tmp/aiops-v3-ci
+          V3_DB_PASSWORD: synthetic-ci-only
+          V3_LAB_TOKEN: synthetic-ci-only-not-real-credential-0000
+  real-services:
+    runs-on: ubuntu-24.04
+    env:
+      V3_ROOT: /tmp/aiops-v3-ci
+      V3_DB_PASSWORD: synthetic-ci-only
+      V3_LAB_TOKEN: synthetic-ci-only-not-real-credential-0000
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p "$V3_ROOT/data/postgres"
+      - run: docker compose -f v3-spike/kit/compose.poc-source.yml up --build --wait --wait-timeout 300
+      - name: Verify actual HTTP health
+        run: |
+          for pair in core:810 twin:811 evidence:812 policy:813; do
+            endpoint=$(docker compose -f v3-spike/kit/compose.poc-source.yml port "${pair%:*}" "${pair#*:}")
+            curl --fail --silent --show-error "http://$endpoint/health"
+          done
+      - name: Seed and verify persistent synthetic scenario
+        run: |
+          compose=(docker compose -f v3-spike/kit/compose.poc-source.yml)
+          "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops < v3-spike/kit/poc-seed.sql
+          endpoint=$("${compose[@]}" port evidence 812)
+          for sample in baseline:40 incident:160; do
+            phase="${sample%:*}"; value="${sample#*:}"
+            curl --fail --silent --show-error -H 'Content-Type: application/json' -d "{\"source\":\"poc-kit-$phase\",\"claim\":\"synthetic latency sample\",\"confidence\":0.5,\"provenance\":{\"run_id\":\"RUN-CI-CONTEXT\",\"synthetic\":true},\"payload\":{\"metric\":\"latency_ms\",\"phase\":\"$phase\",\"value\":$value}}" "http://$endpoint/api/evidence"
+          done
+          "${compose[@]}" down
+          "${compose[@]}" up --wait --wait-timeout 300
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+      - run: python3 -m pip install playwright==1.51.0
+      - run: python3 -m playwright install --with-deps chromium
+      - name: Verify GAMMA context against actual containers
+        run: |
+          python3 - <<'PY'
+          import sys, subprocess, threading, urllib.request, json, os
+          sys.path.insert(0,"v3-spike/vertical")
+          from http_demo import server
+          def port(name,n):
+              return int(subprocess.check_output(["docker","compose","-f","v3-spike/kit/compose.poc-source.yml","port",name,str(n)],text=True).strip().rsplit(":",1)[1])
+          with server(core_config=(port("core",810),os.environ["V3_LAB_TOKEN"],"RUN-CI-CONTEXT"),context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),policy_port=port("policy",813)) as http:
+              thread=threading.Thread(target=http.serve_forever,daemon=True)
+              thread.start()
+              try:
+                  with urllib.request.urlopen(f"http://127.0.0.1:{http.server_port}/api/v1/incident-context?decision=simulate",timeout=20) as response:
+                      body=json.load(response)
+                  assert body["core"]["run"]["incident_id"]=="INC-CI-CONTEXT"
+                  assert body["context"]["diagnosis"]["preview"]["conditional_reduction_ms"]==120
+                  assert body["context"]["rca"]=="UNKNOWN"
+                  assert body["simulation"]["policy_decision"]=="SIMULATE"
+                  assert body["simulation"]["executed_on_host"] is False
+                  from playwright.sync_api import sync_playwright, expect
+                  with sync_playwright() as pw:
+                      browser=pw.chromium.launch(headless=True)
+                      try:
+                          page=browser.new_page()
+                          page.goto(f"http://127.0.0.1:{http.server_port}/")
+                          page.locator("#load-context").click()
+                          for value in ("INC-CI-CONTEXT","NODE-CI-CHILD","RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms"):
+                              expect(page.locator("#context-result")).to_contain_text(value)
+                          page.locator("#context-sim").click()
+                          expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
+                          expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
+                      finally:
+                          browser.close()
+              finally:
+                  http.shutdown()
+                  thread.join(5)
+          PY
+      - name: Backup and restore into separate synthetic database
+        run: |
+          set -euo pipefail
+          umask 077
+          compose=(docker compose -f v3-spike/kit/compose.poc-source.yml)
+          mkdir -p "$V3_ROOT/backup"
+          "${compose[@]}" exec -T postgres pg_dump -U aiops -Fc aiops > "$V3_ROOT/backup/poc.dump"
+          test -s "$V3_ROOT/backup/poc.dump"
+          "${compose[@]}" exec -T postgres createdb -U aiops aiops_restore_ci
+          "${compose[@]}" exec -T postgres pg_restore --exit-on-error -U aiops -d aiops_restore_ci < "$V3_ROOT/backup/poc.dump"
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+          "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci
+      - if: always()
+        run: docker compose -f v3-spike/kit/compose.poc-source.yml down
+  rootless:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      V3_ROOT: /tmp/aiops-v3-rootless-ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated rootless daemon
+        run: |
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
+          sudo apt-get update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Start and seed using actual rootless launcher
+        run: |
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          bash v3-spike/kit/poc-start.sh
+      - name: Verify actual GAMMA launcher
+        run: |
+          python3 v3-spike/kit/poc-gamma.py > "$RUNNER_TEMP/gamma.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            url=$(sed -n 's/^POC GAMMA: //p' "$RUNNER_TEMP/gamma.log")
+            if [[ -n "$url" ]]; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
+          curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"'
+      - if: always()
+        run: |
+          if [[ -f "$V3_ROOT/poc.env" ]]; then
+            project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+            docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml down
+          fi

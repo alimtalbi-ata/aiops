@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+export V3_ROOT="${V3_ROOT:-/srv/aiops-v3}"
+[[ "$V3_ROOT" = /* && "$V3_ROOT" != / ]] || { echo "Absolute dedicated root required" >&2; exit 1; }
+[[ "$(id -u)" != 0 ]] || { echo "Rootless user required" >&2; exit 1; }
+docker info --format '{{json .SecurityOptions}}' | grep -q 'name=rootless' || { echo "Rootless daemon required" >&2; exit 1; }
+mkdir -p "$V3_ROOT"
+[[ "$(realpath "$V3_ROOT")" = "$V3_ROOT" && -O "$V3_ROOT" ]] || exit 1
+[[ ! -L "$V3_ROOT/data" && ! -L "$V3_ROOT/data/postgres" ]] || exit 1
+mkdir -p "$V3_ROOT/data/postgres"
+[[ "$(realpath "$V3_ROOT/data/postgres")" = "$V3_ROOT/data/postgres" ]] || exit 1
+envfile="$V3_ROOT/poc.env"
+if [[ ! -e "$envfile" ]]; then
+  (set -o noclobber; printf 'V3_DB_PASSWORD=%s\nV3_LAB_TOKEN=%s\n' "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "$envfile")
+fi
+[[ -f "$envfile" && ! -L "$envfile" && -O "$envfile" ]] || exit 1
+chmod 600 "$envfile"
+unset V3_DB_PASSWORD V3_LAB_TOKEN
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+compose=(docker compose --project-name "aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)" --env-file "$envfile" -f "$here/compose.poc-source.yml")
+"${compose[@]}" config --quiet
+"${compose[@]}" up --build --wait --wait-timeout 300
+"${compose[@]}" ps
+"${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops < "$here/poc-seed.sql"
+endpoint=$("${compose[@]}" port evidence 812)
+[[ "$endpoint" =~ ^127\.0\.0\.1:[0-9]+$ ]] || exit 1
+[[ "${endpoint##*:}" != 7770 && "${endpoint##*:}" != 7777 && "${endpoint##*:}" != 7790 ]] || exit 1
+for sample in baseline:40 incident:160; do
+  phase="${sample%:*}"; value="${sample#*:}"
+  curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' \
+    -d "{\"source\":\"poc-kit-$phase\",\"claim\":\"synthetic latency sample\",\"confidence\":0.5,\"provenance\":{\"run_id\":\"RUN-CI-CONTEXT\",\"synthetic\":true},\"payload\":{\"metric\":\"latency_ms\",\"phase\":\"$phase\",\"value\":$value}}" \
+    "http://$endpoint/api/evidence"
+  printf '\n'
+done
