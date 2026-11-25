@@ -33,7 +33,7 @@ class LabContextReal(unittest.TestCase):
             self.assertEqual(result["rca"],"UNKNOWN")
             self.assertEqual(result["policy"],"DENY")
             with server(core_config=(1810,os.environ["AIOPS_INTERNAL_TOKEN"],"RUN-CI-CONTEXT"),
-                        context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT"),policy_port=1813) as http:
+                        context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT"),policy_port=1813,mattermost_config=('ci-chatops-token-'+'x'*32,'ci-lab')) as http:
                 thread=threading.Thread(target=http.serve_forever,daemon=True)
                 thread.start()
                 try:
@@ -45,6 +45,18 @@ class LabContextReal(unittest.TestCase):
                     self.assertEqual(body["context"],result)
                     self.assertEqual(body["copilot"]["sources"],result["evidence"])
                     self.assertIsNone(body["copilot"]["confidence"])
+                    chat_url="http://127.0.0.1:%d/api/v1/mattermost/command" % http.server_port
+                    form={"token":"ci-chatops-token-"+"x"*32,"channel_id":"ci-lab","command":"/aiops","text":"incident"}
+                    chat=requests.post(chat_url,data=form,timeout=20)
+                    chat.raise_for_status()
+                    self.assertEqual(chat.json()["response_type"],"ephemeral")
+                    for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","Root cause UNKNOWN","DENY",result["evidence"][0]["payload_hash"]):
+                        self.assertIn(value,chat.json()["text"])
+                    self.assertEqual(requests.post(chat_url,data=dict(form,token="wrong"),timeout=20).status_code,403)
+                    self.assertEqual(requests.post(chat_url,data=dict(form,channel_id="wrong"),timeout=20).status_code,403)
+                    blocked=requests.post(chat_url,data=dict(form,text="execute"),timeout=20)
+                    blocked.raise_for_status()
+                    self.assertIn("DENY",blocked.json()["text"])
                     from playwright.sync_api import sync_playwright, expect
                     with sync_playwright() as pw:
                         browser=pw.chromium.launch(headless=True)
