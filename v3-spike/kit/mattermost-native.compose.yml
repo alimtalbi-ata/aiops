@@ -21,10 +21,20 @@ services:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://mm:${MM_DB_PASSWORD:?required}@db:5432/mattermost?sslmode=disable
       MM_SERVICESETTINGS_ENABLECOMMANDS: "true"
+      MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS: callback
+      MM_TEAMSETTINGS_ENABLEUSERCREATION: "true"
       MM_SERVICESETTINGS_SITEURL: http://127.0.0.1:${MM_LAB_PORT:?required}
     ports:
       - "127.0.0.1:${MM_LAB_PORT:?required}:8065"
     networks: [backend, edge]
+  callback:
+    image: python:3.12-alpine
+    command: ["python", "/lab/mattermost-native-callback.py"]
+    volumes:
+      - ./mattermost-native-callback.py:/lab/mattermost-native-callback.py:ro
+      - ${MM_LAB_BINDING_DIR:?required}:/binding:ro
+      - ../vertical:/vertical:ro
+    networks: [edge]
 networks:
   backend:
     internal: true
