@@ -32,5 +32,18 @@ jobs:
             endpoint=$(docker compose -f v3-spike/kit/compose.poc-source.yml port "${pair%:*}" "${pair#*:}")
             curl --fail --silent --show-error "http://$endpoint/health"
           done
+      - name: Seed and verify persistent synthetic scenario
+        run: |
+          compose=(docker compose -f v3-spike/kit/compose.poc-source.yml)
+          "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops < v3-spike/kit/poc-seed.sql
+          endpoint=$("${compose[@]}" port evidence 812)
+          for sample in baseline:40 incident:160; do
+            phase="${sample%:*}"; value="${sample#*:}"
+            curl --fail --silent --show-error -H 'Content-Type: application/json' -d "{\"source\":\"poc-kit-$phase\",\"claim\":\"synthetic latency sample\",\"confidence\":0.5,\"provenance\":{\"run_id\":\"RUN-CI-CONTEXT\",\"synthetic\":true},\"payload\":{\"metric\":\"latency_ms\",\"phase\":\"$phase\",\"value\":$value}}" "http://$endpoint/api/evidence"
+          done
+          "${compose[@]}" down
+          "${compose[@]}" up --wait --wait-timeout 300
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
       - if: always()
         run: docker compose -f v3-spike/kit/compose.poc-source.yml down
