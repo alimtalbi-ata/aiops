@@ -34,4 +34,8 @@ jobs:
           done
           curl -fsS "http://127.0.0.1:$MM_LAB_PORT/api/v4/system/ping"
           python3 v3-spike/kit/mattermost-native-smoke.py
-          MM_LAB_EXECUTE=1 python3 v3-spike/kit/mattermost-native-smoke.py
+          if ! MM_LAB_EXECUTE=1 python3 v3-spike/kit/mattermost-native-smoke.py; then
+            compose logs --tail=80 callback
+            compose logs --tail=80 mattermost | python3 -c 'import sys,re; print(re.sub(r"(?i)(token|password|authorization)([^, ]*)",r"\1[redacted]",sys.stdin.read()))'
+            exit 1
+          fi
