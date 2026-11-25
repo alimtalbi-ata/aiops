@@ -1,7 +1,7 @@
 name: V3 tenant convergence contract (synthetic)
 on:
   push:
-    branches: [v3-spike/p0-tenant-convergence-20261125]
+    branches: [v3-spike/p0-tenant-convergence-20261125, 'v3-spike/central-integration']
   pull_request:
     branches: [v3-spike/central-integration]
 permissions:
