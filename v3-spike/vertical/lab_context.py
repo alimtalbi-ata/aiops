@@ -3,6 +3,7 @@ import hashlib
 import http.client
 import json
 import re
+from rca_preview import preview
 
 def get(port, path):
     if type(port) is not int or not 1024 <= port <= 65535 or port in (7770,7777,7790):
@@ -35,6 +36,7 @@ def context(twin_port, evidence_port, run_id, node_id):
     if not any(x["node_id"]==node_id and x["depth"]==0 for x in affected):
         raise ValueError("missing root")
     verified=[]
+    observations=[]
     for item in evidence["items"]:
         provenance=item["provenance"]
         if provenance.get("run_id")!=run_id or provenance.get("synthetic") is not True:
@@ -43,6 +45,11 @@ def context(twin_port, evidence_port, run_id, node_id):
         if digest!=item["payload_hash"]:
             raise ValueError("evidence hash mismatch")
         verified.append({"evidence_id":item["evidence_id"],"payload_hash":digest})
+        payload=item["payload"]
+        if isinstance(payload,dict) and payload.get("metric")=="latency_ms":
+            observations.append({"synthetic":True,"metric":"latency_ms",
+                                 "phase":payload.get("phase"),"value":payload.get("value"),
+                                 "evidence_id":item["evidence_id"]})
     return {"classification":"SYNTHETIC_LAB_CONTEXT","run_id":run_id,"root":node_id,
-            "affected":affected,"evidence":verified,"rca":"UNKNOWN","policy":"DENY",
+            "affected":affected,"evidence":verified,"diagnosis":preview(observations),"rca":"UNKNOWN","policy":"DENY",
             "tenant_acl_qualified":False,"production_authorized":False}
