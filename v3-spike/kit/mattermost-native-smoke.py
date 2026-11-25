@@ -22,7 +22,7 @@ if os.environ.get("MM_LAB_EXECUTE")=="1":
     token=binding["auth"]
     result,_=call("POST","/commands/execute",{"channel_id":binding["channel_id"],"team_id":binding["team_id"],"command":"/aiops incident"})
     assert result["response_type"]=="ephemeral",result
-    assert "UNKNOWN" in result["text"] and "DENY" in result["text"],result
+    assert all(x in result["text"] for x in ("UNKNOWN","DENY","MOCK BACKEND")),result
     print("Native slash command response verified")
     raise SystemExit(0)
 password=secrets.token_urlsafe(24)+"Aa1!"
