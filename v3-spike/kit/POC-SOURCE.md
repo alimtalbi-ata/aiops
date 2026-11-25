@@ -17,3 +17,7 @@ PostgreSQL data is under V3_ROOT/data/postgres. Generated credentials are stored
 CI evidence: rootless startup, restart, database backup/restore into a separate synthetic database, and HITL approval/refusal/replay passed in workflow 45690970042 (rootless job 139475994884). These are CI tests, not a complete backup/restore CLI or new-host recovery qualification.
 
 Limitations: source builds use mutable base tags; no immutable product BOM, release provenance, production ACL, real human authentication, or live remediation qualification is claimed. Existing database schema upgrades require separate validation. Do not use this kit against existing hosts or production systems.
+
+### Optional Mattermost lab configuration
+
+Create `$V3_ROOT/mattermost.env` with mode 0600, owned by the POC user, containing `TOKEN=<dedicated slash command token>` and `CHANNEL_ID=<26-character lab channel ID>` on separate lines. Restart the foreground GAMMA launcher. The endpoint is `/api/v1/mattermost/command` on its printed loopback address. Without this file ChatOps is disabled. Never reuse production tokens. Native Mattermost server transport still requires an isolated network design; no public bind is enabled.
