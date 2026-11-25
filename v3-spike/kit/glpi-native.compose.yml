@@ -1,0 +1,33 @@
+# Disposable synthetic CI lab; never mount existing GLPI data.
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: glpi
+      MARIADB_USER: glpi
+      MARIADB_PASSWORD: ${GLPI_LAB_DB_PASSWORD:?required}
+      MARIADB_ROOT_PASSWORD: ${GLPI_LAB_ROOT_PASSWORD:?required}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [backend]
+  glpi:
+    image: ${GLPI_LAB_IMAGE:?explicit tested image required}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GLPI_DB_HOST: db
+      GLPI_DB_PORT: "3306"
+      GLPI_DB_NAME: glpi
+      GLPI_DB_USER: glpi
+      GLPI_DB_PASSWORD: ${GLPI_LAB_DB_PASSWORD:?required}
+    ports:
+      - "127.0.0.1:${GLPI_LAB_PORT:?required}:80"
+    networks: [backend, edge]
+networks:
+  backend:
+    internal: true
+  edge: {}
