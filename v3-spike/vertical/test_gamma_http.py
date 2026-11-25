@@ -1,5 +1,6 @@
 import threading
 import unittest
+from unittest.mock import patch
 from http_demo import server
 
 class GammaHttpTests(unittest.TestCase):
@@ -14,6 +15,18 @@ class GammaHttpTests(unittest.TestCase):
                     try:
                         page = browser.new_page()
                         page.goto("http://127.0.0.1:%d/" % http.server_port)
+                        page.locator("#load-core").click()
+                        expect(page.locator("#core-result")).to_contain_text("UNKNOWN / DENY")
+                        http.core_config=(1810,"x"*32,"RUN-01")
+                        projection={"classification":"SYNTHETIC_CANONICAL_RUN","production_authorized":False,
+                                    "tenant_acl_qualified":False,"policy":"DENY","rca":"UNKNOWN",
+                                    "run":{"run_id":"RUN-01","incident_id":"INC-01","mode":"DEMO","status":"CREATED"}}
+                        with patch("http_demo.read_run",return_value=projection):
+                            page.locator("#load-core").click()
+                            expect(page.locator("#core-result")).to_contain_text("INC-01")
+                            expect(page.locator("#core-result")).to_contain_text("Policy: DENY")
+                        page.locator("#clear").click()
+                        expect(page.locator("#core-result")).to_contain_text("not loaded")
                         page.locator("#load-incidents").click()
                         expect(page.locator("#correlated-result")).to_contain_text("2 alerts")
                         expect(page.locator("#correlated-result")).to_contain_text("synthetic-002")
