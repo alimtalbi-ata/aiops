@@ -45,6 +45,8 @@ jobs:
           "${compose[@]}" up --wait --wait-timeout 300
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+      - run: python3 -m pip install playwright==1.51.0
+      - run: python3 -m playwright install --with-deps chromium
       - name: Verify GAMMA context against actual containers
         run: |
           python3 - <<'PY'
@@ -64,6 +66,20 @@ jobs:
                   assert body["context"]["rca"]=="UNKNOWN"
                   assert body["simulation"]["policy_decision"]=="SIMULATE"
                   assert body["simulation"]["executed_on_host"] is False
+                  from playwright.sync_api import sync_playwright, expect
+                  with sync_playwright() as pw:
+                      browser=pw.chromium.launch(headless=True)
+                      try:
+                          page=browser.new_page()
+                          page.goto(f"http://127.0.0.1:{http.server_port}/")
+                          page.locator("#load-context").click()
+                          for value in ("INC-CI-CONTEXT","NODE-CI-CHILD","RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms"):
+                              expect(page.locator("#context-result")).to_contain_text(value)
+                          page.locator("#context-sim").click()
+                          expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
+                          expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
+                      finally:
+                          browser.close()
               finally:
                   http.shutdown()
                   thread.join(5)
