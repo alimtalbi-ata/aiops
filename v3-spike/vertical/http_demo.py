@@ -9,6 +9,7 @@ from lab_context import context
 from policy_demo import simulation_decision
 from copilot_context import answer
 import os
+from hitl_demo import ApprovalGate
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -23,6 +24,34 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(data)
+
+    def do_POST(self):
+        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide"):
+            self.reply(404,b'{"error":"NOT_FOUND"}')
+            return
+        try:
+            if self.headers.get("Origin") != "http://127.0.0.1:%d" % self.server.server_port:
+                raise ValueError("Origin mismatch")
+            if self.headers.get("Content-Type") != "application/json":
+                raise ValueError("JSON required")
+            length=int(self.headers.get("Content-Length","0"))
+            if not 0 < length <= 4096:
+                raise ValueError("Invalid length")
+            data=json.loads(self.rfile.read(length))
+            core=read_run(*self.server.core_config)
+            twin,evidence,node,expected=self.server.context_config
+            run=core["run"]
+            if run["incident_id"]!=expected:
+                raise ValueError("Incident mismatch")
+            details=context(twin,evidence,run["run_id"],node)
+            args=(expected,run["run_id"],details["evidence"])
+            if self.path.endswith("/request"):
+                result=self.server.approval_gate.request(*args)
+            else:
+                result=self.server.approval_gate.decide(data["request_id"],*args,data.get("approved"))
+            self.reply(200,json.dumps(result).encode())
+        except Exception:
+            self.reply(503,b'{"error":"HITL_UNVERIFIED","policy":"DENY"}')
 
     def do_GET(self):
         if self.path == "/":
@@ -69,6 +98,7 @@ def server(port=0, core_config=None, context_config=None, policy_port=None):
     http.core_config = core_config
     http.context_config = context_config
     http.policy_port = policy_port
+    http.approval_gate = ApprovalGate()
     return http
 
 if __name__ == "__main__":
