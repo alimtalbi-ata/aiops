@@ -1,0 +1,3 @@
+# Source-built POC kit (unqualified)
+
+Requires a dedicated rootless Docker daemon, Compose v2, an operator-owned absolute V3_ROOT (default target /srv/aiops-v3), and locally generated URL-safe V3_DB_PASSWORD and V3_LAB_TOKEN. Never reuse production credentials. PostgreSQL data lives under V3_ROOT/data/postgres. Docker image/cache storage follows the dedicated daemon configuration and must be documented separately. Services publish ephemeral loopback ports only. Run `docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet` before any launch. This draft does not install Docker, seed a scenario, start GAMMA, or qualify backup/restore. Base images use mutable tags; no product BOM or release provenance is claimed.
