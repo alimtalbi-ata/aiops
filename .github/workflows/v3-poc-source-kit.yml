@@ -99,3 +99,43 @@ jobs:
           "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci
       - if: always()
         run: docker compose -f v3-spike/kit/compose.poc-source.yml down
+  rootless:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      V3_ROOT: /tmp/aiops-v3-rootless-ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated rootless daemon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Start and seed using actual rootless launcher
+        run: |
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          bash v3-spike/kit/poc-start.sh
+      - name: Verify actual GAMMA launcher
+        run: |
+          python3 v3-spike/kit/poc-gamma.py > "$RUNNER_TEMP/gamma.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            url=$(sed -n 's/^POC GAMMA: //p' "$RUNNER_TEMP/gamma.log")
+            if [[ -n "$url" ]]; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
+          curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"'
+      - if: always()
+        run: |
+          if [[ -f "$V3_ROOT/poc.env" ]]; then
+            project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+            docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml down
+          fi
