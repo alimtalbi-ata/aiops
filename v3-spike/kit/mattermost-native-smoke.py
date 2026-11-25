@@ -16,6 +16,15 @@ def call(method,path,data=None):
     req=urllib.request.Request(base+path,data=None if data is None else json.dumps(data).encode(),headers=headers,method=method)
     with urllib.request.urlopen(req,timeout=30) as response:
         return json.loads(response.read()),response.headers
+if os.environ.get("MM_LAB_EXECUTE")=="1":
+    with open(os.environ["MM_LAB_BINDING_FILE"]) as f:
+        binding=json.load(f)
+    token=binding["auth"]
+    result,_=call("POST","/commands/execute",{"channel_id":binding["channel_id"],"team_id":binding["team_id"],"command":"/aiops incident"})
+    assert result["response_type"]=="ephemeral",result
+    assert "UNKNOWN" in result["text"] and "DENY" in result["text"],result
+    print("Native slash command response verified")
+    raise SystemExit(0)
 password=secrets.token_urlsafe(24)+"Aa1!"
 user={"email":"operator@example.invalid","username":"laboperator","password":password}
 call("POST","/users",user)
