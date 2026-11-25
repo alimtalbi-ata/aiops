@@ -5,7 +5,7 @@
 <header><h1>GAMMA / V3 synthetic operator</h1><p>Synthetic demonstration only · UNBOUND tenant · no production authorization or host actions</p><nav aria-label="Vertical sections"><a href="#input">Input</a><a href="#incident">Incident</a><a href="#twin">Twin & Evidence</a><a href="#policy">Policy & HITL</a><a href="#receipt">Run & Receipt</a></nav></header>
 <main><section id="input"><h2>Import C vertical CLI JSON</h2><p>Paste the output of <code>python v3-spike/vertical/vertical_demo.py</code> or its <code>--approved-synthetic</code> variant. When served by the loopback demo, load a synthetic projection directly.</p><label for="projection-file">Import CLI JSON file (local only, max 1 MiB)</label><input id="projection-file" type="file" accept=".json,application/json"><p id="file-status" role="status" aria-live="polite">No file selected.</p><label for="payload">Synthetic JSON projection</label><textarea id="payload" spellcheck="false" placeholder="Paste complete JSON output from C's vertical_demo.py"></textarea><div><button id="http-deny" type="button">Load HTTP demo (DENY)</button><button id="http-sim" type="button">Load HTTP demo (SIMULATE_ONLY)</button><button id="load" type="button">Inspect synthetic projection</button><button id="clear" type="button">Clear / reset</button></div><p id="state" role="status" aria-live="polite" aria-atomic="true">UNKNOWN — no projection loaded; DENY.</p></section>
 <div class="grid"><section id="incident"><h2>Incident</h2><p id="incident-value">UNKNOWN — no event</p></section><section id="twin"><h2>Twin / Evidence</h2><p id="twin-value">UNKNOWN — correlation unverified</p></section><section id="policy"><h2>Policy / HITL</h2><p id="policy-value">DENY — no verified decision</p><p class="warning">SIMULATE_ONLY is a synthetic label, never a production ALLOW.</p></section><section id="receipt"><h2>Simulated Run / Receipt</h2><p id="run-value">NOT_RUN — no receipt</p><p id="receipt-value">UNKNOWN — no receipt</p></section></div>
-<section><h2>Operational eligibility</h2><button id="eligibility" type="button">Check action eligibility</button><p id="decision" role="status" aria-live="polite" aria-atomic="true">DENIED — no operational action permitted.</p><small>Receipt hashes are untrusted labels until independently verified. This projection cannot attest provenance, tenant isolation, or a real HITL decision.</small></section></main>
+<section id="correlated"><h2>Correlated incidents (synthetic)</h2><button id="load-incidents" type="button">Load correlated incidents</button><pre id="correlated-result" role="status">UNKNOWN — not loaded</pre></section><section><h2>Operational eligibility</h2><button id="eligibility" type="button">Check action eligibility</button><p id="decision" role="status" aria-live="polite" aria-atomic="true">DENIED — no operational action permitted.</p><small>Receipt hashes are untrusted labels until independently verified. This projection cannot attest provenance, tenant isolation, or a real HITL decision.</small></section></main>
 <script>
 "use strict";
 const ids=["incident-value","twin-value","policy-value","run-value","receipt-value"];
@@ -69,5 +69,21 @@ async function loadHttp(simulate){
 }
 $("http-deny").addEventListener("click",()=>loadHttp(false));
 $("http-sim").addEventListener("click",()=>loadHttp(true));
+$("load-incidents").addEventListener("click",async()=>{
+ const target=$("correlated-result");
+ target.textContent="Loading synthetic incidents";
+ try{
+  if(location.protocol!=="http:"||location.hostname!=="127.0.0.1")throw Error("loopback required");
+  const response=await fetch("/api/v1/incidents",{cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  const data=await response.json();
+  if(data.classification!=="EXPERIMENTAL_SYNTHETIC"||!Array.isArray(data.incidents))throw Error("invalid classification");
+  const lines=data.incidents.map(i=>{
+   if(i.production_authorized!==false||i.policy!=="DENY"||i.rca?.status!=="UNKNOWN"||!Array.isArray(i.evidence)||i.alert_count!==i.evidence.length)throw Error("invalid incident");
+   return [i.id+" | "+i.resource+" | "+i.severity,i.alert_count+" alerts", "Twin impact: "+i.twin.impact,"RCA: "+i.rca.status,"Policy: DENY",...i.evidence.map(e=>e.event_id+" | "+e.source+" | "+e.sha256)].join("\n");
+  });
+  target.textContent=lines.join("\n\n")||"No incidents";
+ }catch(err){target.textContent="UNKNOWN / DENY — "+String(err.message);}
+});
 reset();
 </script></html>
