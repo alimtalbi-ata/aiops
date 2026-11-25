@@ -17,7 +17,8 @@ class Handler(BaseHTTPRequestHandler):
             result=command(self.rfile.read(size),binding["token"],binding["channel_id"],core,context)
             result["text"]+="\nMOCK BACKEND — transport test only"
             status=200
-        except Exception:
+        except Exception as exc:
+            print("Callback rejected:",type(exc).__name__,flush=True)
             result={"error":"UNVERIFIED","policy":"DENY"}
             status=403
         body=json.dumps(result).encode()
