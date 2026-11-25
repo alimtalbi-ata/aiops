@@ -35,3 +35,11 @@ def create_run(records,port,token):
     if verified["run"]["incident_id"]!=created["incident_id"] or verified["run"]["mode"]!="DEMO":
         raise ValueError("Unverified run binding")
     return {"core":verified,"correlation":result,"production_authorized":False}
+
+def create_and_persist(records,core_port,token,evidence_port):
+    from ingestion_store import persist
+    result=create_run(records,core_port,token)
+    run=result["core"]["run"]
+    stored=persist(records,evidence_port,run["run_id"],core_config=(core_port,token))
+    result["stored_evidence"]=stored["stored_evidence"]
+    return result
