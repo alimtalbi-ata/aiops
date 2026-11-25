@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import urllib.request
+import urllib.error
 
 port=int(os.environ["MM_LAB_PORT"])
 if not 1024<=port<=65535 or port in (7770,7777,7790):
@@ -14,8 +15,13 @@ def call(method,path,data=None):
     headers={"Content-Type":"application/json"}
     if token: headers["Authorization"]="Bearer "+token
     req=urllib.request.Request(base+path,data=None if data is None else json.dumps(data).encode(),headers=headers,method=method)
-    with urllib.request.urlopen(req,timeout=30) as response:
-        return json.loads(response.read()),response.headers
+    try:
+        with urllib.request.urlopen(req,timeout=30) as response:
+            return json.loads(response.read()),response.headers
+    except urllib.error.HTTPError as exc:
+        error=json.loads(exc.read(8192))
+        print("Mattermost API error:",exc.code,error.get("id","unknown"))
+        raise
 if os.environ.get("MM_LAB_EXECUTE")=="1":
     with open(os.environ["MM_LAB_BINDING_FILE"]) as f:
         binding=json.load(f)
