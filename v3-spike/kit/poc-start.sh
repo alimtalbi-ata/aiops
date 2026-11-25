@@ -22,3 +22,14 @@ compose=(docker compose --project-name "aiops-v3-poc-$(printf %s "$V3_ROOT" | sh
 "${compose[@]}" config --quiet
 "${compose[@]}" up --build --wait --wait-timeout 300
 "${compose[@]}" ps
+"${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops < "$here/poc-seed.sql"
+endpoint=$("${compose[@]}" port evidence 812)
+[[ "$endpoint" =~ ^127\.0\.0\.1:[0-9]+$ ]] || exit 1
+[[ "${endpoint##*:}" != 7770 && "${endpoint##*:}" != 7777 && "${endpoint##*:}" != 7790 ]] || exit 1
+for sample in baseline:40 incident:160; do
+  phase="${sample%:*}"; value="${sample#*:}"
+  curl --fail --silent --show-error --max-time 10 -H 'Content-Type: application/json' \
+    -d "{\"source\":\"poc-kit-$phase\",\"claim\":\"synthetic latency sample\",\"confidence\":0.5,\"provenance\":{\"run_id\":\"RUN-CI-CONTEXT\",\"synthetic\":true},\"payload\":{\"metric\":\"latency_ms\",\"phase\":\"$phase\",\"value\":$value}}" \
+    "http://$endpoint/api/evidence"
+  printf '\n'
+done
