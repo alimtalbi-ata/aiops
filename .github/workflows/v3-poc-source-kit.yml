@@ -139,6 +139,21 @@ jobs:
           done
           [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
           curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"; assert d["copilot"]["sources"]==d["context"]["evidence"]; assert d["copilot"]["confidence"] is None'
+          python3 - "$url" <<'PY'
+          import json,sys,urllib.request
+          origin=sys.argv[1]
+          def post(path,body):
+              req=urllib.request.Request(origin+"/api/v1/hitl/"+path,data=json.dumps(body).encode(),headers={"Origin":origin,"Content-Type":"application/json"})
+              with urllib.request.urlopen(req,timeout=20) as response:
+                  return json.load(response)
+          for approved,expected in ((True,"SIMULATE_ONLY"),(False,"DENY")):
+              pending=post("request",{})
+              payload={"request_id":pending["request_id"],"approved":approved}
+              receipt=post("decide",payload)
+              assert receipt["decision"]==expected
+              assert receipt["executed_on_host"] is False
+              assert post("decide",payload)["decision"]=="DENY"
+          PY
       - name: Backup and restore into separate synthetic database
         run: |
           set -euo pipefail
