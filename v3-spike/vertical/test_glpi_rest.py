@@ -19,7 +19,7 @@ class RestTest(unittest.TestCase):
                     return
                 data={"initSession":{"session_token":"s"*32},"Ticket/1":{"id":1},"Ticket/1/ITILFollowup?range=0-19":[{"id":2}],"killSession":{}}[path]
                 body=json.dumps(data).encode()
-                self.send_response(200)
+                self.send_response(206 if 'ITILFollowup' in path else 200)
                 self.send_header("Content-Length",str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
