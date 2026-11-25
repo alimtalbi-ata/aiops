@@ -5,9 +5,9 @@ from urllib.parse import parse_qs
 from copilot_context import answer
 
 def authenticate(body, token, channel):
-    if not isinstance(body, bytes) or len(body)>4096 or not isinstance(token,str) or len(token)<32:
+    if not isinstance(body, bytes) or len(body)>4096 or not isinstance(token,str) or len(token)<26:
         raise ValueError("invalid request")
-    fields=parse_qs(body.decode("utf-8"), strict_parsing=True, max_num_fields=20)
+    fields=parse_qs(body.decode("utf-8"), strict_parsing=True, keep_blank_values=True, max_num_fields=32)
     def one(key):
         values=fields.get(key,[])
         if len(values)!=1:

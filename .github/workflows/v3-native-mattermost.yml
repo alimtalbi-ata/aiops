@@ -1,0 +1,41 @@
+name: V3 native Mattermost transport lab
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths: ['v3-spike/kit/mattermost-native*', '.github/workflows/v3-native-mattermost.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      MM_LAB_IMAGE: mattermost/mattermost-team-edition:12.1.0
+      MM_LAB_PORT: "18065"
+      MM_LAB_COMMAND_URL: http://callback:8080/api/v1/mattermost/command
+      COMPOSE_PROJECT_NAME: v3-mm-ci
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Native transport smoke (mock backend explicitly identified)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MM_DB_PASSWORD="$(openssl rand -hex 24)"
+          export MM_LAB_BINDING_DIR="$(mktemp -d)"
+          export MM_LAB_BINDING_FILE="$MM_LAB_BINDING_DIR/binding.json"
+          compose() { docker compose -f v3-spike/kit/mattermost-native.compose.yml "$@"; }
+          trap 'compose down -v --remove-orphans; rm -rf "$MM_LAB_BINDING_DIR"' EXIT
+          compose config --quiet
+          compose pull
+          compose up -d
+          for i in $(seq 1 120); do
+            if curl -fsS "http://127.0.0.1:$MM_LAB_PORT/api/v4/system/ping" >/dev/null; then break; fi
+            sleep 3
+          done
+          curl -fsS "http://127.0.0.1:$MM_LAB_PORT/api/v4/system/ping"
+          python3 v3-spike/kit/mattermost-native-smoke.py
+          if ! MM_LAB_EXECUTE=1 python3 v3-spike/kit/mattermost-native-smoke.py; then
+            compose logs --tail=80 callback
+            compose logs --tail=80 mattermost | python3 -c 'import sys,re; print(re.sub(r"(?i)(token|password|authorization)([^, ]*)",r"\1[redacted]",sys.stdin.read()))'
+            exit 1
+          fi
