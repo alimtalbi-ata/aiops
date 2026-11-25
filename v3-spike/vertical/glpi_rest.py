@@ -23,7 +23,7 @@ class LabGLPI:
         req=urllib.request.Request(self.base+path,headers={"App-Token":self.app_token,**headers})
         with self.opener.open(req,timeout=5) as response:
             raw=response.read(65537)
-            if len(raw)>65536 or response.status!=200:
+            if len(raw)>65536 or response.status not in (200,206):
                 raise ValueError("invalid GLPI response")
             return json.loads(raw)
     def __enter__(self):
@@ -41,7 +41,7 @@ class LabGLPI:
             raise ValueError("invalid ticket or session")
         headers={"Session-Token":self.session}
         ticket=self._get(f"Ticket/{tid}",headers)
-        if ticket.get("id")!=tid: raise ValueError("ticket mismatch")
+        if type(ticket.get("id")) is not int or ticket["id"]!=tid: raise ValueError("ticket mismatch")
         followups=self._get(f"Ticket/{tid}/ITILFollowup?range=0-19",headers)
         if not isinstance(followups,list) or len(followups)>20: raise ValueError("invalid followups")
         return ticket,followups
