@@ -64,6 +64,8 @@ jobs:
                   assert body["core"]["run"]["incident_id"]=="INC-CI-CONTEXT"
                   assert body["context"]["diagnosis"]["preview"]["conditional_reduction_ms"]==120
                   assert body["context"]["rca"]=="UNKNOWN"
+                  assert body["copilot"]["sources"]==body["context"]["evidence"]
+                  assert body["copilot"]["confidence"] is None
                   assert body["simulation"]["policy_decision"]=="SIMULATE"
                   assert body["simulation"]["executed_on_host"] is False
                   from playwright.sync_api import sync_playwright, expect
@@ -73,7 +75,7 @@ jobs:
                           page=browser.new_page()
                           page.goto(f"http://127.0.0.1:{http.server_port}/")
                           page.locator("#load-context").click()
-                          for value in ("INC-CI-CONTEXT","NODE-CI-CHILD","RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms"):
+                          for value in ("INC-CI-CONTEXT","NODE-CI-CHILD","RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms","Copilot: Incident INC-CI-CONTEXT","Source: "):
                               expect(page.locator("#context-result")).to_contain_text(value)
                           page.locator("#context-sim").click()
                           expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
@@ -136,7 +138,23 @@ jobs:
             sleep 1
           done
           [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
-          curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"'
+          curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"; assert d["copilot"]["sources"]==d["context"]["evidence"]; assert d["copilot"]["confidence"] is None'
+      - name: Backup and restore into separate synthetic database
+        run: |
+          set -euo pipefail
+          umask 077
+          project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+          compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml)
+          "${compose[@]}" down
+          bash v3-spike/kit/poc-start.sh
+          mkdir -p "$V3_ROOT/backup"
+          "${compose[@]}" exec -T postgres pg_dump -U aiops -Fc aiops > "$V3_ROOT/backup/poc.dump"
+          test -s "$V3_ROOT/backup/poc.dump"
+          "${compose[@]}" exec -T postgres createdb -U aiops aiops_restore_ci
+          "${compose[@]}" exec -T postgres pg_restore --exit-on-error -U aiops -d aiops_restore_ci < "$V3_ROOT/backup/poc.dump"
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+          "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci
       - if: always()
         run: |
           if [[ -f "$V3_ROOT/poc.env" ]]; then
