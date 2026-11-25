@@ -4,6 +4,10 @@ CI starts the existing Policy FastAPI service on 127.0.0.1:1813. This
 checks HTTP decisions, NOT Temporal/HITL/Evidence integration or deployment.
 """
 import unittest
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'v3-spike'/'vertical'))
+from policy_demo import simulation_decision
 
 import requests
 
@@ -32,6 +36,16 @@ class RealPolicyHTTPIntegration(unittest.TestCase):
     def check(self, **changes):
         return requests.post(BASE + "/api/policy/check", json=request_body(**changes),
                              timeout=3, allow_redirects=False)
+
+    def test_v3_decision_only_adapter(self):
+        result=simulation_decision(1813,2)
+        self.assertEqual(result["policy_decision"],"SIMULATE")
+        self.assertIs(result["simulation_only"],True)
+        self.assertIs(result["executed_on_host"],False)
+        self.assertEqual(result["operational_decision"],"DENY")
+        self.assertEqual(simulation_decision(1813,0)["policy_decision"],"HUMAN_APPROVAL")
+        with self.assertRaises(ValueError):
+            simulation_decision(7770,2)
 
     def test_health_is_actual_policy_service(self):
         response = requests.get(BASE + "/health", timeout=3, allow_redirects=False)
