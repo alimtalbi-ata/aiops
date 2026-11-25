@@ -1,0 +1,15 @@
+name: V3 tenant convergence contract (synthetic)
+on:
+  push:
+    branches: [v3-spike/p0-tenant-convergence-20261125]
+  pull_request:
+    branches: [v3-spike/central-integration]
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s v3-spike/contracts -p test_tenant_convergence.py -v
+      - run: echo 'synthetic_only=true runtime=NOT_RUN'
