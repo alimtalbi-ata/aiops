@@ -36,6 +36,20 @@ class LabContextReal(unittest.TestCase):
                     body=response.json()
                     self.assertEqual(body["core"]["run"]["incident_id"],"INC-CI-CONTEXT")
                     self.assertEqual(body["context"],result)
+                    from playwright.sync_api import sync_playwright, expect
+                    with sync_playwright() as pw:
+                        browser=pw.chromium.launch(headless=True)
+                        try:
+                            page=browser.new_page()
+                            page.goto("http://127.0.0.1:%d/" % http.server_port)
+                            page.locator("#load-context").click()
+                            for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","NODE-CI-CHILD",result["evidence"][0]["evidence_id"],"RCA: UNKNOWN","Policy: DENY"):
+                                expect(page.locator("#context-result")).to_contain_text(value)
+                            http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-WRONG")
+                            page.locator("#load-context").click()
+                            expect(page.locator("#context-result")).to_contain_text("UNKNOWN / DENY")
+                        finally:
+                            browser.close()
                     http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-WRONG")
                     self.assertEqual(requests.get(url,timeout=20).status_code,503)
                 finally:
