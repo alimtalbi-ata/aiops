@@ -1,0 +1,17 @@
+name: V3 source POC kit static
+on:
+  pull_request:
+    paths:
+      - 'v3-spike/kit/**'
+      - '.github/workflows/v3-poc-source-kit.yml'
+jobs:
+  config:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n v3-spike/kit/poc-start.sh
+      - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
+        env:
+          V3_ROOT: /tmp/aiops-v3-ci
+          V3_DB_PASSWORD: synthetic-ci-only
+          V3_LAB_TOKEN: synthetic-ci-only-not-real-credential
