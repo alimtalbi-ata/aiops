@@ -4,6 +4,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from vertical_demo import execute
 from correlation_demo import correlate
+from core_read import read_run
+import os
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -30,13 +32,29 @@ class Handler(BaseHTTPRequestHandler):
             second = {**EVENT, "id": "synthetic-002", "source": "synthetic-log",
                       "severity": "warning"}
             self.reply(200, json.dumps(correlate([EVENT, second])).encode())
+        elif self.path == "/api/v1/core-run":
+            config = self.server.core_config
+            if config is None:
+                self.reply(503, b'{"error":"CORE_NOT_CONFIGURED","policy":"DENY"}')
+                return
+            try:
+                result = read_run(*config)
+                self.reply(200, json.dumps(result).encode())
+            except Exception:
+                self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0):
-    return ThreadingHTTPServer(("127.0.0.1", port), Handler)
+def server(port=0, core_config=None):
+    http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    http.core_config = core_config
+    return http
 
 if __name__ == "__main__":
-    with server() as http:
+    config = None
+    if os.environ.get("V3_LAB_CORE_PORT"):
+        config = (int(os.environ["V3_LAB_CORE_PORT"]),
+                  os.environ["V3_LAB_CORE_TOKEN"], os.environ["V3_LAB_RUN_ID"])
+    with server(core_config=config) as http:
         print("Synthetic demo: http://127.0.0.1:%d" % http.server_port, flush=True)
         http.serve_forever()
