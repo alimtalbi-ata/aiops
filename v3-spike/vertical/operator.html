@@ -112,6 +112,16 @@ $("load-context").addEventListener("click",async()=>{
   const data=await response.json(),c=data.context,r=data.core?.run;
   if(data.production_authorized!==false||data.binding!=="EXPLICIT_SYNTHETIC_LAB_CONFIG"||data.core?.classification!=="SYNTHETIC_CANONICAL_RUN"||data.core?.production_authorized!==false||!r||!validString(r.incident_id)||c?.classification!=="SYNTHETIC_LAB_CONTEXT"||c.run_id!==r.run_id||c.production_authorized!==false||c.tenant_acl_qualified!==false||c.policy!=="DENY"||c.rca!=="UNKNOWN"||!Array.isArray(c.affected)||!Array.isArray(c.evidence))throw Error("unverified context");
   const lines=[r.incident_id,r.run_id,"Explicit lab binding","Affected nodes:",...c.affected.map(n=>n.node_id+" | depth "+n.depth),"Evidence:",...c.evidence.map(e=>e.evidence_id+" | "+e.payload_hash),"RCA: UNKNOWN","Policy: DENY"];
+  const d=c.diagnosis;
+  if(d){
+   if(d.classification!=="SYNTHETIC_MODEL_ONLY"||d.root_cause!=="UNKNOWN"||d.operational_decision!=="DENY"||d.executed_on_host!==false)throw Error("unverified diagnosis");
+   lines.push("Hypothesis: "+d.hypothesis);
+   if(d.preview){
+    const p=d.preview;
+    if(![p.observed_ms,p.target_ms,p.conditional_reduction_ms].every(Number.isFinite))throw Error("invalid preview");
+    lines.push("Conditional preview: "+p.observed_ms+" ms → "+p.target_ms+" ms","Conditional reduction: "+p.conditional_reduction_ms+" ms","Model only — not causal proof");
+   }
+  }
   if(generation===contextGeneration)target.textContent=lines.join("\n");
  }catch(_err){if(generation===contextGeneration)target.textContent="UNKNOWN / DENY — context unavailable or unverified";}
 });
