@@ -5,6 +5,7 @@ from pathlib import Path
 from vertical_demo import execute
 from correlation_demo import correlate
 from core_read import read_run
+from lab_context import context
 import os
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
@@ -42,12 +43,25 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(result).encode())
             except Exception:
                 self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
+        elif self.path == "/api/v1/incident-context":
+            try:
+                core = read_run(*self.server.core_config)
+                twin_port, evidence_port, node_id, expected_incident = self.server.context_config
+                run = core["run"]
+                if run["incident_id"] != expected_incident:
+                    raise ValueError("incident binding mismatch")
+                details = context(twin_port, evidence_port, run["run_id"], node_id)
+                self.reply(200, json.dumps({"core":core,"context":details,
+                    "binding":"EXPLICIT_SYNTHETIC_LAB_CONFIG","production_authorized":False}).encode())
+            except Exception:
+                self.reply(503, b'{"error":"CONTEXT_UNVERIFIED","policy":"DENY"}')
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0, core_config=None):
+def server(port=0, core_config=None, context_config=None):
     http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     http.core_config = core_config
+    http.context_config = context_config
     return http
 
 if __name__ == "__main__":
