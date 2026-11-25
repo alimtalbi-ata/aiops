@@ -5,6 +5,11 @@ The internal credential is CI-only. This is NOT a tenant A/B authorization test.
 """
 import os
 import unittest
+import sys
+from pathlib import Path
+import threading
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'v3-spike' / 'vertical'))
+from http_demo import server as vertical_server
 
 import psycopg
 import requests
@@ -66,6 +71,25 @@ class CoreNocRealIntegration(unittest.TestCase):
         self.assertEqual(response.headers.get("cache-control"), "no-store")
         self.assertNotIn("PRIVATE-TENANT", response.text)
         self.assertNotIn("RUN-CI-NOC", response.text)
+
+    def test_v3_vertical_real_core_postgres(self):
+        with vertical_server(core_config=(1810, TOKEN, "RUN-CI-NOC-DEMO")) as http:
+            thread = threading.Thread(target=http.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = "http://127.0.0.1:%d/api/v1/core-run" % http.server_port
+                response = requests.get(url, timeout=8)
+                self.assertEqual(response.status_code, 200, response.text)
+                body = response.json()
+                self.assertEqual(body["run"]["incident_id"], "INC-CI-NOC-DEMO")
+                self.assertEqual(body["policy"], "DENY")
+                self.assertEqual(body["rca"], "UNKNOWN")
+                self.assertNotIn(TOKEN, response.text)
+                http.core_config = (1810, TOKEN, "RUN-CI-NOC-LIVE")
+                self.assertEqual(requests.get(url, timeout=8).status_code, 503)
+            finally:
+                http.shutdown()
+                thread.join(5)
 
     def test_actual_postgres_and_core_health(self):
         r = requests.get(BASE + "/health", timeout=3)
