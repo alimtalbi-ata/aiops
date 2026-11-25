@@ -10,6 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
+      - run: python3 -m py_compile v3-spike/kit/poc-gamma.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
           V3_ROOT: /tmp/aiops-v3-ci
