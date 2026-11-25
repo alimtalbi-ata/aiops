@@ -2,8 +2,8 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GAMMA V3 — synthetic vertical operator</title>
 <style>*{box-sizing:border-box}body{font:1rem system-ui,sans-serif;background:#f5f7fa;color:#182638;margin:0}header,main{max-width:82rem;margin:auto;padding:1rem}nav{display:flex;flex-wrap:wrap;gap:1rem}a{color:#164b85}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}section{background:white;border:1px solid #a5b2c1;border-radius:.5rem;padding:1rem;margin:.75rem 0;overflow-wrap:anywhere}textarea{width:100%;min-height:12rem;font:0.85rem ui-monospace,monospace}button{font:inherit;padding:.6rem;margin:.5rem .5rem .5rem 0}:focus-visible{outline:3px solid #164b85;outline-offset:3px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.warning{color:#8b2500}</style>
-<header><h1>GAMMA / V3 synthetic operator</h1><p>Offline demonstration only · UNBOUND tenant · no production authorization, API calls or host actions</p><nav aria-label="Vertical sections"><a href="#input">Input</a><a href="#incident">Incident</a><a href="#twin">Twin & Evidence</a><a href="#policy">Policy & HITL</a><a href="#receipt">Run & Receipt</a></nav></header>
-<main><section id="input"><h2>Import C vertical CLI JSON</h2><p>Paste the output of <code>python v3-spike/vertical/vertical_demo.py</code> or its <code>--approved-synthetic</code> variant. This interface does not call a backend.</p><label for="projection-file">Import CLI JSON file (local only, max 1 MiB)</label><input id="projection-file" type="file" accept=".json,application/json"><p id="file-status" role="status" aria-live="polite">No file selected.</p><label for="payload">Synthetic JSON projection</label><textarea id="payload" spellcheck="false" placeholder="Paste complete JSON output from C's vertical_demo.py"></textarea><div><button id="load" type="button">Inspect synthetic projection</button><button id="clear" type="button">Clear / reset</button></div><p id="state" role="status" aria-live="polite" aria-atomic="true">UNKNOWN — no projection loaded; DENY.</p></section>
+<header><h1>GAMMA / V3 synthetic operator</h1><p>Synthetic demonstration only · UNBOUND tenant · no production authorization or host actions</p><nav aria-label="Vertical sections"><a href="#input">Input</a><a href="#incident">Incident</a><a href="#twin">Twin & Evidence</a><a href="#policy">Policy & HITL</a><a href="#receipt">Run & Receipt</a></nav></header>
+<main><section id="input"><h2>Import C vertical CLI JSON</h2><p>Paste the output of <code>python v3-spike/vertical/vertical_demo.py</code> or its <code>--approved-synthetic</code> variant. When served by the loopback demo, load a synthetic projection directly.</p><label for="projection-file">Import CLI JSON file (local only, max 1 MiB)</label><input id="projection-file" type="file" accept=".json,application/json"><p id="file-status" role="status" aria-live="polite">No file selected.</p><label for="payload">Synthetic JSON projection</label><textarea id="payload" spellcheck="false" placeholder="Paste complete JSON output from C's vertical_demo.py"></textarea><div><button id="http-deny" type="button">Load HTTP demo (DENY)</button><button id="http-sim" type="button">Load HTTP demo (SIMULATE_ONLY)</button><button id="load" type="button">Inspect synthetic projection</button><button id="clear" type="button">Clear / reset</button></div><p id="state" role="status" aria-live="polite" aria-atomic="true">UNKNOWN — no projection loaded; DENY.</p></section>
 <div class="grid"><section id="incident"><h2>Incident</h2><p id="incident-value">UNKNOWN — no event</p></section><section id="twin"><h2>Twin / Evidence</h2><p id="twin-value">UNKNOWN — correlation unverified</p></section><section id="policy"><h2>Policy / HITL</h2><p id="policy-value">DENY — no verified decision</p><p class="warning">SIMULATE_ONLY is a synthetic label, never a production ALLOW.</p></section><section id="receipt"><h2>Simulated Run / Receipt</h2><p id="run-value">NOT_RUN — no receipt</p><p id="receipt-value">UNKNOWN — no receipt</p></section></div>
 <section><h2>Operational eligibility</h2><button id="eligibility" type="button">Check action eligibility</button><p id="decision" role="status" aria-live="polite" aria-atomic="true">DENIED — no operational action permitted.</p><small>Receipt hashes are untrusted labels until independently verified. This projection cannot attest provenance, tenant isolation, or a real HITL decision.</small></section></main>
 <script>
@@ -53,6 +53,21 @@ $("load").addEventListener("click",()=>{
  }catch(err){reset("UNKNOWN / DENY — invalid or incomplete synthetic projection: "+String(err.message));}
 });
 $("clear").addEventListener("click",()=>{++importGeneration;$("payload").value="";$("projection-file").value="";$("file-status").textContent="No file selected.";reset();});
-$("eligibility").addEventListener("click",()=>{$("decision").textContent="DENIED — synthetic-only UI; no network or host execution.";});
+$("eligibility").addEventListener("click",()=>{$("decision").textContent="DENIED — synthetic-only UI; no operational or host execution.";});
+async function loadHttp(simulate){
+ const generation=++importGeneration;
+ reset("Loading synthetic HTTP projection");
+ try{
+  if(location.protocol!=="http:"||location.hostname!=="127.0.0.1")throw Error("loopback HTTP demo required");
+  const response=await fetch("/api/v1/demo"+(simulate?"?simulate=1":""),{cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  const data=await response.json();
+  if(generation!==importGeneration)return;
+  $("payload").value=JSON.stringify(data);
+  $("load").click();
+ }catch(err){if(generation===importGeneration)reset("UNKNOWN / DENY — "+String(err.message));}
+}
+$("http-deny").addEventListener("click",()=>loadHttp(false));
+$("http-sim").addEventListener("click",()=>loadHttp(true));
 reset();
 </script></html>
