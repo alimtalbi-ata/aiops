@@ -45,5 +45,18 @@ jobs:
           "${compose[@]}" up --wait --wait-timeout 300
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+      - name: Backup and restore into separate synthetic database
+        run: |
+          set -euo pipefail
+          umask 077
+          compose=(docker compose -f v3-spike/kit/compose.poc-source.yml)
+          mkdir -p "$V3_ROOT/backup"
+          "${compose[@]}" exec -T postgres pg_dump -U aiops -Fc aiops > "$V3_ROOT/backup/poc.dump"
+          test -s "$V3_ROOT/backup/poc.dump"
+          "${compose[@]}" exec -T postgres createdb -U aiops aiops_restore_ci
+          "${compose[@]}" exec -T postgres pg_restore --exit-on-error -U aiops -d aiops_restore_ci < "$V3_ROOT/backup/poc.dump"
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+          "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci
       - if: always()
         run: docker compose -f v3-spike/kit/compose.poc-source.yml down
