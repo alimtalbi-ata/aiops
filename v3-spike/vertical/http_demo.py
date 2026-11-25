@@ -12,6 +12,7 @@ import os
 from hitl_demo import ApprovalGate
 from ingestion_demo import ingest
 from ingestion_store import persist
+from core_ingest import create_and_persist
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -28,7 +29,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist"):
+        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -42,6 +43,11 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if self.path=="/api/v1/ingest":
                 self.reply(200,json.dumps(ingest(data)).encode())
+                return
+            if self.path=="/api/v1/ingest/create":
+                port,token,_=self.server.core_config
+                _,evidence,_,_=self.server.context_config
+                self.reply(200,json.dumps(create_and_persist(data,port,token,evidence)).encode())
                 return
             core=read_run(*self.server.core_config)
             twin,evidence,node,expected=self.server.context_config

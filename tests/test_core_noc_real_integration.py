@@ -115,6 +115,29 @@ class CoreNocRealIntegration(unittest.TestCase):
                 http.shutdown()
                 thread.join(5)
 
+    def test_dynamic_ingestion_core(self):
+        from core_ingest import create_run
+        a=dict(id="m1",kind="metric",source="monitor",resource="demo-node",severity="critical",tenant="synthetic-demo",synthetic=True)
+        batch=[a,dict(a,id="l1",kind="log")]
+        try:
+            first=create_run(batch,1810,TOKEN)
+            second=create_run(batch,1810,TOKEN)
+            self.assertEqual(first,second)
+            run=first["core"]["run"]
+            self.assertEqual(run["mode"],"DEMO")
+            self.assertEqual(run["status"],"CREATED")
+            self.assertEqual(first["correlation"]["incidents"][0]["alert_count"],2)
+            with psycopg.connect(DATABASE_URL) as db:
+                self.assertEqual(db.execute("select count(*) from aiops.runs where incident_id=%s",(run["incident_id"],)).fetchone()[0],1)
+            with self.assertRaises(ValueError):
+                create_run([dict(a,synthetic=False)],1810,TOKEN)
+        finally:
+            with psycopg.connect(DATABASE_URL) as db:
+                db.execute("delete from aiops.run_events where run_id in (select run_id from aiops.runs where scenario_id='CI-INGEST')")
+                db.execute("delete from aiops.run_stage_state where run_id in (select run_id from aiops.runs where scenario_id='CI-INGEST')")
+                db.execute("delete from aiops.runs where scenario_id='CI-INGEST'")
+                db.execute("delete from aiops.incidents where external_id like 'CI-INGEST-%'")
+
     def test_actual_postgres_and_core_health(self):
         r = requests.get(BASE + "/health", timeout=3)
         self.assertEqual(r.status_code, 200)

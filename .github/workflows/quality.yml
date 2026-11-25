@@ -132,7 +132,7 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql"):
+              for name in ("001_schema.sql", "004_operational_model.sql", "008_event_idempotency.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Start actual Core HTTP service and verify readiness

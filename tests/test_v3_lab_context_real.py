@@ -93,6 +93,25 @@ class LabContextReal(unittest.TestCase):
                         response=requests.post(origin+"/api/v1/ingest/persist",json=batch,headers={"Origin":origin},timeout=20)
                         response.raise_for_status()
                         return response.json()
+                    dynamic_url=origin+"/api/v1/ingest/create"
+                    try:
+                        first=requests.post(dynamic_url,json=batch,headers={"Origin":origin},timeout=20)
+                        first.raise_for_status()
+                        second=requests.post(dynamic_url,json=batch,headers={"Origin":origin},timeout=20)
+                        second.raise_for_status()
+                        self.assertEqual(first.json(),second.json())
+                        dynamic=first.json()["core"]["run"]
+                        self.assertEqual(dynamic["mode"],"DEMO")
+                        self.assertEqual(len(first.json()["stored_evidence"]),2)
+                        with psycopg.connect(os.environ["DATABASE_URL"]) as db:
+                            self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'=%s",(dynamic["run_id"],)).fetchone()[0],2)
+                    finally:
+                        with psycopg.connect(os.environ["DATABASE_URL"]) as db:
+                            db.execute("delete from aiops.evidence where provenance->>'run_id' in (select run_id from aiops.runs where scenario_id='CI-INGEST')")
+                            db.execute("delete from aiops.run_events where run_id in (select run_id from aiops.runs where scenario_id='CI-INGEST')")
+                            db.execute("delete from aiops.run_stage_state where run_id in (select run_id from aiops.runs where scenario_id='CI-INGEST')")
+                            db.execute("delete from aiops.runs where scenario_id='CI-INGEST'")
+                            db.execute("delete from aiops.incidents where external_id like 'CI-INGEST-%'")
                     stored=persist_http()
                     self.assertEqual(len(stored["stored_evidence"]),2)
                     self.assertEqual(persist_http()["stored_evidence"],stored["stored_evidence"])
