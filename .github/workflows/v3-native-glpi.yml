@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      GLPI_LAB_IMAGE: glpi/glpi:10.0.20
+      GLPI_LAB_IMAGE: glpi/glpi:12.0.2
       GLPI_LAB_PORT: "18080"
       COMPOSE_PROJECT_NAME: v3-glpi-ci
     steps:
