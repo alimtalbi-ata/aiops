@@ -24,3 +24,5 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_ingestion_demo.py -v
 
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_mattermost_demo.py -v
+
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_glpi_demo.py -v

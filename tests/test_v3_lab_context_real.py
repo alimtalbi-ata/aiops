@@ -45,6 +45,19 @@ class LabContextReal(unittest.TestCase):
                     self.assertEqual(body["context"],result)
                     self.assertEqual(body["copilot"]["sources"],result["evidence"])
                     self.assertIsNone(body["copilot"]["confidence"])
+                    glpi_origin="http://127.0.0.1:%d" % http.server_port
+                    glpi_url=glpi_origin+"/api/v1/glpi/preview"
+                    ticket={"id":1,"synthetic":True,"run_id":"RUN-CI-CONTEXT"}
+                    followup={"id":2,"items_id":1,"itemtype":"Ticket","content":"@copilot incident"}
+                    def glpi(t):
+                        return requests.post(glpi_url,json={"ticket":t,"followup":followup},headers={"Origin":glpi_origin},timeout=20)
+                    receipt=glpi(ticket)
+                    receipt.raise_for_status()
+                    self.assertFalse(receipt.json()["posted"])
+                    self.assertEqual(receipt.json()["input"]["is_private"],1)
+                    self.assertIn(result["evidence"][0]["payload_hash"],receipt.json()["input"]["content"])
+                    self.assertEqual(glpi(dict(ticket,synthetic=False)).status_code,503)
+                    self.assertEqual(glpi(dict(ticket,run_id="wrong")).status_code,503)
                     chat_url="http://127.0.0.1:%d/api/v1/mattermost/command" % http.server_port
                     form={"token":"ci-chatops-token-"+"x"*32,"channel_id":"ci-lab","command":"/aiops","text":"incident"}
                     chat=requests.post(chat_url,data=form,timeout=20)
