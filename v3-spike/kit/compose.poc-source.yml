@@ -1,0 +1,106 @@
+# POC source-built services; not an immutable product BOM.
+name: aiops-v3-poc
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aiops
+      POSTGRES_USER: aiops
+      POSTGRES_PASSWORD: ${V3_DB_PASSWORD:?required}
+    volumes:
+      - ${V3_ROOT:?required}/data/postgres:/var/lib/postgresql/data
+      - ../../db/migrations/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+      - ../../db/migrations/004_operational_model.sql:/docker-entrypoint-initdb.d/004_operational_model.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiops -d aiops"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [backend]
+  core:
+    build:
+      context: ../../app
+      dockerfile: core/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://aiops:${V3_DB_PASSWORD:?required}@postgres:5432/aiops
+      AIOPS_ADMIN_TOKEN: ${V3_LAB_TOKEN:?required}
+      AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1::810"
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:810/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  twin:
+    build:
+      context: ../../app
+      dockerfile: twin/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://aiops:${V3_DB_PASSWORD:?required}@postgres:5432/aiops
+      AIOPS_ADMIN_TOKEN: ${V3_LAB_TOKEN:?required}
+      AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1::811"
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:811/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  evidence:
+    build:
+      context: ../../app
+      dockerfile: evidence/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://aiops:${V3_DB_PASSWORD:?required}@postgres:5432/aiops
+      AIOPS_ADMIN_TOKEN: ${V3_LAB_TOKEN:?required}
+      AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1::812"
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:812/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  policy:
+    build:
+      context: ../../app
+      dockerfile: policy/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://aiops:${V3_DB_PASSWORD:?required}@postgres:5432/aiops
+      AIOPS_ADMIN_TOKEN: ${V3_LAB_TOKEN:?required}
+      AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1::813"
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:813/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+networks:
+  backend:
+    internal: true
