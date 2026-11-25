@@ -10,6 +10,8 @@ from policy_demo import simulation_decision
 from copilot_context import answer
 import os
 from hitl_demo import ApprovalGate
+from ingestion_demo import ingest
+from ingestion_store import persist
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -26,7 +28,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide"):
+        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -38,11 +40,19 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 4096:
                 raise ValueError("Invalid length")
             data=json.loads(self.rfile.read(length))
+            if self.path=="/api/v1/ingest":
+                self.reply(200,json.dumps(ingest(data)).encode())
+                return
             core=read_run(*self.server.core_config)
             twin,evidence,node,expected=self.server.context_config
             run=core["run"]
             if run["incident_id"]!=expected:
                 raise ValueError("Incident mismatch")
+            if self.path=="/api/v1/ingest/persist":
+                if run["mode"]!="DEMO":
+                    raise ValueError("DEMO required")
+                self.reply(200,json.dumps(persist(data,evidence,run["run_id"])).encode())
+                return
             details=context(twin,evidence,run["run_id"],node)
             args=(expected,run["run_id"],details["evidence"])
             if self.path.endswith("/request"):
@@ -51,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
                 result=self.server.approval_gate.decide(data["request_id"],*args,data.get("approved"))
             self.reply(200,json.dumps(result).encode())
         except Exception:
-            self.reply(503,b'{"error":"HITL_UNVERIFIED","policy":"DENY"}')
+            self.reply(503,b'{"error":"REQUEST_UNVERIFIED","policy":"DENY"}')
 
     def do_GET(self):
         if self.path == "/":
