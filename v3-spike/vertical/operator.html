@@ -116,6 +116,9 @@ async function loadContext(simulate=false){
   const cp=data.copilot;
   if(!cp||cp.classification!=="SYNTHETIC_COPILOT_CONTEXT"||cp.run_id!==r.run_id||cp.incident_id!==r.incident_id||cp.confidence!==null||cp.operational_decision!=="DENY"||cp.production_authorized!==false||!Array.isArray(cp.sources))throw Error("unverified Copilot");
   lines.push("Copilot: "+cp.answer,...cp.sources.map(e=>"Source: "+e.evidence_id+" | "+e.payload_hash));
+  const a=cp.analysis, k=cp.criticism;
+  if(!a||!k||a.classification!=="SYNTHETIC_RULE_BASED_ANALYST"||k.classification!=="SYNTHETIC_RULE_BASED_CRITIC"||a.root_cause!=="UNKNOWN"||a.confidence!==null||k.causality_established!==false||k.operational_decision!=="DENY"||k.production_authorized!==false||typeof k.evidence_supported!=="boolean"||!Array.isArray(a.evidence_ids)||!a.evidence_ids.every(id=>cp.sources.some(s=>s.evidence_id===id)))throw Error("unverified Analyst/Critic");
+  lines.push("Analyst: "+a.hypothesis,"Critic evidence: "+(k.evidence_supported?"SUPPORTED":"UNSUPPORTED"),"Causality: NOT ESTABLISHED","Critic operational decision: DENY");
   if(simulate){
    const s=data.simulation;
    if(!s||s.production_authorized!==false||s.executed_on_host!==false||s.operational_decision!=="DENY"||!["SIMULATE","HUMAN_APPROVAL"].includes(s.policy_decision))throw Error("unverified Policy decision");
