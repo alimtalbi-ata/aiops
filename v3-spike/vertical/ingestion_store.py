@@ -4,11 +4,16 @@ import json
 from urllib.request import Request,urlopen
 from ingestion_demo import ingest
 
-def persist(records,port,run_id):
+def persist(records,port,run_id,*,core_config=None):
     result=ingest(records)
     if type(port) is not int or not 1024<=port<=65535 or port in (7770,7777,7790):
         raise ValueError("Invalid lab port")
-    if not isinstance(run_id,str) or not run_id.startswith("RUN-CI-"):
+    if core_config is not None:
+        from core_read import read_run
+        verified=read_run(*core_config,run_id)["run"]
+        if verified["mode"]!="DEMO" or not verified["incident_id"].startswith("INC-CI-INGEST-"):
+            raise ValueError("Verified ingestion run required")
+    elif not isinstance(run_id,str) or not run_id.startswith("RUN-CI-"):
         raise ValueError("Synthetic run required")
     receipts=[]
     for incident in result["incidents"]:
