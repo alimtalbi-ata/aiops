@@ -32,8 +32,17 @@ def port(service,internal):
     return int(match[1])
 sys.path.insert(0,str(here.parent/"vertical"))
 from http_demo import server
+chatops=None
+chatfile=root/'mattermost.env'
+if chatfile.exists() or chatfile.is_symlink():
+    if chatfile.is_symlink() or chatfile.stat().st_uid!=os.getuid() or chatfile.stat().st_mode & 0o077:
+        raise SystemExit('Unsafe Mattermost config')
+    chat=dict(line.split('=',1) for line in chatfile.read_text().splitlines())
+    if not re.fullmatch(r'[A-Za-z0-9_-]{32,128}',chat['TOKEN']) or not re.fullmatch(r'[a-z0-9]{26}',chat['CHANNEL_ID']):
+        raise SystemExit('Invalid Mattermost configuration')
+    chatops=(chat['TOKEN'],chat['CHANNEL_ID'])
 with server(core_config=(port("core",810),token,"RUN-CI-CONTEXT"),
             context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),
-            policy_port=port("policy",813)) as http:
+            policy_port=port("policy",813),mattermost_config=chatops) as http:
     print(f"POC GAMMA: http://127.0.0.1:{http.server_port}",flush=True)
     http.serve_forever()
