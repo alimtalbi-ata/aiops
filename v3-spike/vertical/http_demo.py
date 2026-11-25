@@ -3,6 +3,7 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from vertical_demo import execute
+from correlation_demo import correlate
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -25,6 +26,10 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path in ("/api/v1/demo", "/api/v1/demo?simulate=1"):
             result = execute(EVENT, approved=self.path.endswith("?simulate=1"))
             self.reply(200, json.dumps(result).encode())
+        elif self.path == "/api/v1/incidents":
+            second = {**EVENT, "id": "synthetic-002", "source": "synthetic-log",
+                      "severity": "warning"}
+            self.reply(200, json.dumps(correlate([EVENT, second])).encode())
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 

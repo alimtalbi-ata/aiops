@@ -82,7 +82,7 @@ class VerticalOperatorE2E(unittest.TestCase):
 
     def test_control_character_rejected(self):
         receipt = cli_receipt()
-        receipt["event"]["id"] = "bad\\nidentifier"
+        receipt["event"]["id"] = "bad" + chr(10) + "identifier"
         self.inspect(receipt)
         self.assertIn("UNKNOWN / DENY", self.page.locator("#state").inner_text())
         self.assert_safe()

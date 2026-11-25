@@ -3,10 +3,21 @@ import threading
 import unittest
 from urllib.request import urlopen
 from urllib.error import HTTPError
-from http_demo import server
+from http_demo import server, EVENT
+from correlation_demo import correlate
 from vertical_demo import verify_projection
 
 class HttpDemoTests(unittest.TestCase):
+    def test_correlation_boundaries(self):
+        second = {**EVENT, "id": "synthetic-002"}
+        result = correlate([EVENT, second, EVENT])
+        self.assertEqual(result, correlate([second, EVENT]))
+        self.assertEqual(result["incidents"][0]["alert_count"], 2)
+        self.assertEqual(len(correlate([EVENT, {**second, "tenant": "other"}])["incidents"]), 2)
+        self.assertEqual(len(correlate([EVENT, {**second, "resource": "other"}])["incidents"]), 2)
+        with self.assertRaises(ValueError):
+            correlate([EVENT, {**EVENT, "severity": "warning"}])
+
     def test_http_projection(self):
         with server() as http:
             worker = threading.Thread(target=http.serve_forever, daemon=True)
@@ -19,6 +30,12 @@ class HttpDemoTests(unittest.TestCase):
                     self.assertTrue(verify_projection(result))
                     self.assertEqual(result["policy"]["decision"], decision)
                     self.assertFalse(result["run"]["executed_on_host"])
+                with urlopen(base + "/api/v1/incidents", timeout=5) as response:
+                    incident, = json.load(response)["incidents"]
+                self.assertEqual(incident["alert_count"], 2)
+                self.assertEqual(len(incident["evidence"]), 2)
+                self.assertEqual(incident["rca"]["status"], "UNKNOWN")
+                self.assertEqual(incident["policy"], "DENY")
                 with urlopen(base + "/", timeout=5) as response:
                     self.assertIn(b"http-deny", response.read())
                 with self.assertRaises(HTTPError) as error:
