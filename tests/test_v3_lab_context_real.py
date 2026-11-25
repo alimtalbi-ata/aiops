@@ -57,6 +57,24 @@ class LabContextReal(unittest.TestCase):
                             page.locator("#context-sim").click()
                             expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
                             expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
+                            page.locator("#hitl-request").click()
+                            expect(page.locator("#hitl-result")).to_contain_text("HUMAN_APPROVAL")
+                            page.locator("#hitl-approve").click()
+                            expect(page.locator("#hitl-result")).to_contain_text("SIMULATE_ONLY")
+                            page.locator("#hitl-request").click()
+                            expect(page.locator("#hitl-result")).to_contain_text("HUMAN_APPROVAL")
+                            page.locator("#hitl-deny").click()
+                            expect(page.locator("#hitl-result")).to_contain_text("DENY")
+                            origin="http://127.0.0.1:%d" % http.server_port
+                            req=requests.post(origin+"/api/v1/hitl/request",json={},headers={"Origin":origin},timeout=10)
+                            req.raise_for_status()
+                            payload={"request_id":req.json()["request_id"],"approved":True}
+                            for decision in ("SIMULATE_ONLY","DENY"):
+                                receipt=requests.post(origin+"/api/v1/hitl/decide",json=payload,headers={"Origin":origin},timeout=10)
+                                receipt.raise_for_status()
+                                self.assertEqual(receipt.json()["decision"],decision)
+                                self.assertFalse(receipt.json()["executed_on_host"])
+                            self.assertEqual(requests.post(origin+"/api/v1/hitl/request",json={},headers={"Origin":"https://invalid.example"},timeout=10).status_code,503)
                             with psycopg.connect(os.environ["DATABASE_URL"]) as db:
                                 self.assertEqual(db.execute("select status from aiops.runs where run_id='RUN-CI-CONTEXT'").fetchone()[0],"CREATED")
                                 self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'").fetchone()[0],3)

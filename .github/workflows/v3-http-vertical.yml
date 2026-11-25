@@ -20,3 +20,4 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_core_http.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_rca_preview.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_copilot_context.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_hitl_demo.py -v
