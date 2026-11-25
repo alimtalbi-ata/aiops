@@ -1,7 +1,7 @@
 name: V3 E2E regression (synthetic)
 on:
   push:
-    branches: ['v3-spike/p0-e2e-fail-closed-20261124']
+    branches: ['v3-spike/p0-e2e-fail-closed-20261124', 'v3-spike/central-integration']
   pull_request:
     branches: ['v3-spike/central-integration']
 permissions:
