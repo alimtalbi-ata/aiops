@@ -20,7 +20,26 @@ unset V3_DB_PASSWORD V3_LAB_TOKEN
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 compose=(docker compose --project-name "aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)" --env-file "$envfile" -f "$here/compose.poc-source.yml")
 "${compose[@]}" config --quiet
-"${compose[@]}" up --build --wait --wait-timeout 300
+# Retry only a confirmed port binding collision, never delete persistent data.
+log=$(mktemp "$V3_ROOT/.compose-start.XXXXXX")
+trap 'rm -f "$log"' EXIT
+for attempt in 1 2 3; do
+  if "${compose[@]}" up --build --wait --wait-timeout 300 >"$log" 2>&1; then
+    cat "$log"
+    break
+  else
+    status=$?
+  fi
+  cat "$log" >&2
+  if [[ "$attempt" == 3 ]] || ! grep -Eqi 'address already in use|port is already allocated' "$log"; then
+    exit "$status"
+  fi
+  echo "Port collision; recreating only this POC project's service containers" >&2
+  "${compose[@]}" rm -sf core twin evidence policy
+  sleep "$attempt"
+done
+rm -f "$log"
+trap - EXIT
 "${compose[@]}" ps
 "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops < "$here/poc-seed.sql"
 endpoint=$("${compose[@]}" port evidence 812)

@@ -1,0 +1,54 @@
+name: V3 rootless retry contract
+on:
+  pull_request:
+    paths:
+      - 'v3-spike/kit/poc-start.sh'
+      - '.github/workflows/v3-rootless-retry.yml'
+  workflow_dispatch:
+jobs:
+  retry:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise exact launcher retry block with fault injection
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib, tempfile, subprocess
+          source = pathlib.Path('v3-spike/kit/poc-start.sh').read_text()
+          block = source.split('# Retry only a confirmed port binding collision', 1)[1]
+          block = block[block.index('\n'):block.index('"\x24{compose[@]}" ps')]
+          for mode, attempts, removals, status in [('ok',1,0,0),('transient',2,1,0),('permanent',3,2,42),('other',1,0,42)]:
+              with tempfile.TemporaryDirectory() as root:
+                  p = pathlib.Path(root)
+                  (p/'data').mkdir()
+                  (p/'data'/'sentinel').write_text('preserve')
+                  script = r'''
+          set -euo pipefail
+          compose=(fake)
+          sleep() { :; }
+          fake() {
+            case "$1" in
+              up)
+                echo up >> "$V3_ROOT/calls"
+                n=$(grep -c '^up$' "$V3_ROOT/calls")
+                if [[ "$MODE" == ok || ( "$MODE" == transient && "$n" == 2 ) ]]; then return 0; fi
+                if [[ "$MODE" == other ]]; then echo 'unrelated failure'; else echo 'RootlessKit PortManager.AddPort(): bind: address already in use'; fi
+                return 42 ;;
+              rm)
+                [[ "$*" == 'rm -sf core twin evidence policy' ]] || return 99
+                echo rm >> "$V3_ROOT/calls" ;;
+              *) return 98 ;;
+            esac
+          }
+          '''
+                  import os
+                  result = subprocess.run(['bash','-c',script+block], env={**os.environ,'V3_ROOT':root,'MODE':mode},capture_output=True,text=True)
+                  calls = (p/'calls').read_text().splitlines()
+                  assert result.returncode == status, (mode,result)
+                  assert calls.count('up') == attempts, (mode,calls)
+                  assert calls.count('rm') == removals, (mode,calls)
+                  assert (p/'data'/'sentinel').read_text() == 'preserve'
+                  assert not list(p.glob('.compose-start.*'))
+                  print(mode, 'PASS')
+          PY
