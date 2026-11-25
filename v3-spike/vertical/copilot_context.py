@@ -1,4 +1,6 @@
 """Bounded read-only Copilot projection from verified synthetic lab context."""
+from analyst_critic import analyze, critique
+
 def answer(core, context):
     run=core["run"]
     if (core.get("production_authorized") is not False
@@ -8,7 +10,9 @@ def answer(core, context):
         or context.get("policy")!="DENY"):
         raise ValueError("unverified context")
     sources=[{"evidence_id":e["evidence_id"],"payload_hash":e["payload_hash"]} for e in context["evidence"]]
-    return {"classification":"SYNTHETIC_COPILOT_CONTEXT",
+    analysis=analyze(context)
+    criticism=critique(analysis,context)
+    return {"analysis":analysis,"criticism":criticism,"classification":"SYNTHETIC_COPILOT_CONTEXT",
             "incident_id":run["incident_id"],"run_id":run["run_id"],
             "answer":f"Incident {run['incident_id']}: {len(context['affected'])} topology nodes in scope; {len(sources)} verified evidence records. Root cause UNKNOWN. Operational action DENY.",
             "sources":sources,"confidence":None,"root_cause":"UNKNOWN",
