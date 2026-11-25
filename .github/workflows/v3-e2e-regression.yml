@@ -1,0 +1,17 @@
+name: V3 E2E regression (synthetic)
+on:
+  push:
+    branches: ['v3-spike/p0-e2e-fail-closed-20261124']
+  pull_request:
+    branches: ['v3-spike/central-integration']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n tests/synthetic-e2e.sh
+      - run: python3 tests/test_synthetic_e2e_regression.py -v
+      - run: echo 'synthetic_only=true runtime=NOT_RUN debian=NOT_RUN'

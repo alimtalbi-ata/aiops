@@ -17,7 +17,7 @@ def test_installer_restores_original_crontab_after_partial_write_failure(tmp_pat
       "hostname":"#!/bin/sh\necho srv-deb-05\n",
       "flock":"#!/bin/sh\nexit 0\n",
       "gh":"#!/bin/sh\n# Return empty Python modules for the staged observer files.\nexit 0\n",
-      "python3":"#!/bin/sh\nif [ \"$1\" = \"-m\" ]; then exit 0; fi\nmkdir -p \"$HOME/.local/state/aiops2-proactive\"\nprintf '{\\"state\\":\\"CI_PENDING\\",\\"deploy_authorized\\":false}' > \"$HOME/.local/state/aiops2-proactive/candidate.json\"\n",
+      "python3":"#!/bin/sh\nif [ \"$1\" = \"-m\" ]; then exit 0; fi\nmkdir -p \"$HOME/.local/state/aiops2-proactive\"\nprintf '{\"state\":\"CI_PENDING\",\"deploy_authorized\":false}' > \"$HOME/.local/state/aiops2-proactive/candidate.json\"\n",
       "crontab":"#!/bin/bash\nif [[ \"$1\" == \"-l\" ]]; then cat \"$FAKE_CRONTAB\"; exit 0; fi\ncount=0; [[ -f \"$FAKE_COUNT\" ]] && count=$(cat \"$FAKE_COUNT\"); count=$((count+1)); echo \"$count\" > \"$FAKE_COUNT\"\ncp \"$1\" \"$FAKE_CRONTAB\"\nif [[ \"$count\" == 1 ]]; then exit 42; fi\n"
     }
     for name,body in commands.items():
