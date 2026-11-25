@@ -11,6 +11,7 @@ from copilot_context import answer
 import os
 from hitl_demo import ApprovalGate
 from ingestion_demo import ingest
+from ingestion_store import persist
 
 EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
@@ -27,7 +28,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest"):
+        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -47,6 +48,11 @@ class Handler(BaseHTTPRequestHandler):
             run=core["run"]
             if run["incident_id"]!=expected:
                 raise ValueError("Incident mismatch")
+            if self.path=="/api/v1/ingest/persist":
+                if run["mode"]!="DEMO":
+                    raise ValueError("DEMO required")
+                self.reply(200,json.dumps(persist(data,evidence,run["run_id"])).encode())
+                return
             details=context(twin,evidence,run["run_id"],node)
             args=(expected,run["run_id"],details["evidence"])
             if self.path.endswith("/request"):
