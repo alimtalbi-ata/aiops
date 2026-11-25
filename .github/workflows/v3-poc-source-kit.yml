@@ -15,3 +15,21 @@ jobs:
           V3_ROOT: /tmp/aiops-v3-ci
           V3_DB_PASSWORD: synthetic-ci-only
           V3_LAB_TOKEN: synthetic-ci-only-not-real-credential
+  real-services:
+    runs-on: ubuntu-24.04
+    env:
+      V3_ROOT: /tmp/aiops-v3-ci
+      V3_DB_PASSWORD: synthetic-ci-only
+      V3_LAB_TOKEN: synthetic-ci-only-not-real-credential
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p "$V3_ROOT/data/postgres"
+      - run: docker compose -f v3-spike/kit/compose.poc-source.yml up --build --wait --wait-timeout 300
+      - name: Verify actual HTTP health
+        run: |
+          for pair in core:810 twin:811 evidence:812 policy:813; do
+            endpoint=$(docker compose -f v3-spike/kit/compose.poc-source.yml port "${pair%:*}" "${pair#*:}")
+            curl --fail --silent --show-error "http://$endpoint/health"
+          done
+      - if: always()
+        run: docker compose -f v3-spike/kit/compose.poc-source.yml down
