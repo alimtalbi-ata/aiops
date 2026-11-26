@@ -232,6 +232,15 @@ def smoke(origin, restart):
         for r in cases[:8]:
             assert call("/api/v1/enterprise-context?run_id="+r["run_id"])["root"]==r["resource"]
     print(json.dumps({"classification":"E10_DIVERSE_CAMPAIGN","result":"PASS","ticks":end["current_tick"],"scenarios":len(cases),"evidence_count":len(cases)*4,"runs":cases,"production_authorized":False}),file=sys.stderr)
+    selected=[next(r for r in cases if r["scenario_id"]==name) for name in ("WAN_LOSS","CPU_SATURATION")]
+    run_ids=[r["run_id"] for r in selected]
+    historical=lambda ids:call("/api/v1/enterprise-correlation/historical",{"run_ids":ids,"window_seconds":240})
+    result=historical(run_ids)
+    assert result==historical(list(reversed(run_ids))) and result["verified_evidence_count"]==8
+    assert result["candidate_count"]>=1 and result["incidents_created"] is False and result["causality_established"] is False
+    actual={(r["run_id"],r["evidence_id"],r["payload_hash"]) for g in result["groups"] for signal in g["signals"] for r in signal["evidence_refs"]}
+    assert actual=={(r["run_id"],e["evidence_id"],e["payload_hash"]) for r in selected for e in r["evidence"]}
+    print(json.dumps({"classification":"E16_HISTORICAL_CORRELATION","result":"PASS","tick":end["current_tick"],"run_ids":sorted(run_ids),"verified_evidence_count":8,"candidate_count":result["candidate_count"],"production_authorized":False}),file=sys.stderr)
     assert end["current_tick"]==(8 if restart else 4)
     assert [x["phase"] for x in end["recent"]]==["NOMINAL","CHANGE","DEGRADED","MODEL_RECOVERY"]*(2 if restart else 1)
     if restart:

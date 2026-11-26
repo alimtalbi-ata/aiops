@@ -42,3 +42,4 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_analyst_critic.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_evidence_integrity.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_correlation.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_historical_correlation.py -v
