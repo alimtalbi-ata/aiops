@@ -7,6 +7,8 @@ import re
 P = "NODE-CI-ENT-"
 ROOT = "NODE-CI-ROOT"
 CHILD = "NODE-CI-CHILD"
+LYON = P+"ASSET-LYO"
+ENTERPRISE_ROOTS = frozenset((ROOT,LYON))
 TYPES = {"enterprise","site","infrastructure","asset","application","user_group","user"}
 REL = {
     "contains": {("enterprise","site"),("site","infrastructure"),("infrastructure","asset")},
@@ -73,10 +75,11 @@ class Graph:
     def reverse(self, ids, rel):
         return {a for a,b,r in self.edges if b in ids and r==rel}
     def scope(self, root):
-        if root!=ROOT:
-            raise ValueError("E1 supports canonical Paris service only")
-        assets=self.reverse({root},"hosts")
-        apps=self.reverse({root},"depends_on") | self.reverse(assets,"depends_on")
+        if root not in ENTERPRISE_ROOTS or root not in self.nodes:
+            raise ValueError("unsupported enterprise root")
+        assets=self.reverse({root},"hosts") if root==ROOT else {root}
+        services=self.forward(assets,"hosts")
+        apps=self.reverse(services|assets,"depends_on")
         groups={n for n in self.reverse(apps,"uses") if self.nodes[n]["type"]=="user_group"}
         users={n for n in self.reverse(apps,"uses") if self.nodes[n]["type"]=="user"} | self.reverse(groups,"member_of")
         infra=self.reverse(assets,"contains")
