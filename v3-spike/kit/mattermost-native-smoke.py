@@ -28,7 +28,15 @@ if os.environ.get("MM_LAB_EXECUTE")=="1":
     token=binding["auth"]
     result,_=call("POST","/commands/execute",{"channel_id":binding["channel_id"],"team_id":binding["team_id"],"command":"/aiops incident"})
     assert result["response_type"]=="ephemeral",result
-    assert all(x in result["text"] for x in ("UNKNOWN","DENY","MOCK BACKEND")),result
+    assert all(x in result["text"] for x in ("UNKNOWN","DENY"))
+    if os.environ.get("MM_LAB_BACKEND_MODE","mock")=="real":
+        with open(os.path.join(os.environ["MM_LAB_BINDING_DIR"],"expected.json")) as f:
+            expected=json.load(f)
+        assert "MOCK BACKEND" not in result["text"]
+        assert expected["incident_id"] in result["text"] and expected["run_id"] in result["text"]
+        assert expected["sources"] and all(e["evidence_id"] in result["text"] and e["payload_hash"] in result["text"] for e in expected["sources"])
+    else:
+        assert "MOCK BACKEND" in result["text"]
     print("Native slash command response verified")
     raise SystemExit(0)
 password=secrets.token_urlsafe(24)+"Aa1!"
