@@ -12,6 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_context.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_clock.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -168,6 +169,8 @@ jobs:
             sleep 1
           done
           [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
+          python3 v3-spike/kit/poc-enterprise-clock-smoke.py "$url" > "$V3_ROOT/clock-first.json"
+          cat "$V3_ROOT/clock-first.json"
           python3 v3-spike/kit/poc-dynamic-smoke.py "$url" > "$V3_ROOT/dynamic-smoke.json"
           cat "$V3_ROOT/dynamic-smoke.json"
           python3 v3-spike/kit/poc-dynamic-smoke.py "$url" --observed > "$V3_ROOT/observed-smoke.json"
@@ -311,6 +314,21 @@ jobs:
           print("Enterprise E1 graph and signal restore PASS")
           PY
           "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci
+      - name: Resume enterprise logical clock after service and launcher restart
+        run: |
+          set -euo pipefail
+          python3 v3-spike/kit/poc-gamma.py > "$RUNNER_TEMP/gamma-clock-restart.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            url=$(sed -n 's/^POC GAMMA: //p' "$RUNNER_TEMP/gamma-clock-restart.log")
+            if [[ -n "$url" ]]; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
+          python3 v3-spike/kit/poc-enterprise-clock-smoke.py "$url" --restart > "$V3_ROOT/clock-restart.json"
+          cat "$V3_ROOT/clock-restart.json"
       - if: always()
         run: |
           if [[ -f "$V3_ROOT/poc.env" ]]; then
