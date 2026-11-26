@@ -15,6 +15,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_clock.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_telemetry.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_activity.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_corpus.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -92,6 +93,10 @@ jobs:
                           for tick in (1,2):
                               page.locator("#clock-next").click()
                               expect(page.locator("#clock-result")).to_contain_text("Logical tick: "+str(tick))
+                          page.locator("#corpus-read").click()
+                          expect(page.locator("#corpus-result")).to_contain_text("ENT-DOC-001 v2")
+                          expect(page.locator("#corpus-result")).to_contain_text("Valid from tick 2")
+                          expect(page.locator("#corpus-result")).to_contain_text("not observed evidence")
                           page.locator("#activity-read").click()
                           expect(page.locator("#activity-result")).to_contain_text("ALERT_ONLY")
                           expect(page.locator("#activity-result")).not_to_contain_text("INCIDENT_LINKED")
