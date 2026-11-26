@@ -50,13 +50,19 @@ def _snapshot(read_context, run_id, refs, scope):
     for row in rows:
         sig = row["signal"]
         ent = sig["enterprise"]
-        if (sig["tenant"] != "synthetic-demo" or sig["resource"] != scope[0]
+        event_id = sig.get("event_id")
+        # The persisted correlation projection contains event_id/source/sha256,
+        # not raw tenant/resource/id. The trusted dynamic_context reader checks
+        # the enclosing synthetic provenance, run, incident, resource and hash.
+        if (set(sig) - {"event_id", "source", "sha256", "enterprise", "observation"}
+            or not isinstance(event_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", event_id)
+            or not isinstance(sig.get("source"), str)
+            or not re.fullmatch(r"(metric|log|event):[^:]+", sig["source"])
+            or not isinstance(sig.get("sha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", sig["sha256"])
             or [ent["asset_id"], ent.get("application_id")] != scope[1:]
-            or sig["id"] in signals):
-            raise ValueError("wrong or duplicate signal scope")
-        # lab_context already checks full payload hash; no assumption on extra
-        # payload fields here. The expected reference and trusted reader bind it.
-        signals[sig["id"]] = row
+            or event_id in signals):
+            raise ValueError("invalid normalized signal or duplicate scope")
+        signals[event_id] = row
         stamp(ent["occurred_at"])
     return run, signals
 
@@ -127,11 +133,11 @@ def verify_recovery(*, read_context, read_action_receipt, original_run_id,
                 or measurement["method"] != "HTTP_MONOTONIC_MEDIAN_5"
                 or len(samples) != 5 or obs["value"] != round(median(samples), 3)):
                 raise ValueError("invalid measured samples")
-            if (obs["phase"] == "recovery") != (signal["id"] not in old):
+            if (obs["phase"] == "recovery") != (signal["event_id"] not in old):
                 raise ValueError("recovery must be new evidence")
             observations.append(dict(obs, synthetic=True, evidence_id=row["evidence_id"],
                                      measurement_scope=scope, occurred_at=ent["occurred_at"]))
-        elif signal["id"] not in old:
+        elif signal["event_id"] not in old:
             action_events.append(signal)
     if len(observations) != 3 or len(action_events) != 1:
         raise ValueError("expected three measured phases and one new action event")
