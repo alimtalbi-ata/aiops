@@ -32,28 +32,36 @@ class Relay(BaseHTTPRequestHandler):
     def do_GET(self): self.forward("GET")
     def do_POST(self): self.forward("POST")
     def forward(self,method):
+        stage="route"
+        service="unknown"
         try:
             host,port,routes=PORTS[self.server.server_port]
+            service=host
             if not re.fullmatch(routes.get(method,r"(?!)"),self.path): raise ValueError("unsupported route")
+            stage="authentication"
             headers={"Accept":"application/json","Content-Type":"application/json"}
             if host=="core":
                 auth=self.headers.get("Authorization","")
                 if not hmac.compare_digest(auth,"Bearer "+TOKEN): raise ValueError("internal token required")
                 headers["Authorization"]=auth
+            stage="body"
             body=None
             if method=="POST":
                 n=int(self.headers.get("Content-Length","0"))
                 if not 0<n<=65536: raise ValueError("bounded body required")
                 body=self.rfile.read(n)
-            conn=http.client.HTTPConnection(host,port,timeout=10)
+            stage="upstream"
+            conn=http.client.HTTPConnection(host,port,timeout=5)
             try:
                 conn.request(method,self.path,body=body,headers=headers)
                 response=conn.getresponse()
                 raw=response.read(65537)
                 if len(raw)>65536 or 300<=response.status<400: raise ValueError("invalid upstream")
+                print("GAMMA_RELAY",service,method,"status",response.status,flush=True)
                 self.reply(response.status,raw)
             finally: conn.close()
-        except Exception:
+        except Exception as exc:
+            print("GAMMA_RELAY_FAILURE",service,method,stage,type(exc).__name__,flush=True)
             self.reply(503,b'{"policy":"DENY"}')
 
 @contextmanager
