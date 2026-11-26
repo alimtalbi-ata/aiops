@@ -63,32 +63,52 @@ class LabRecoveryTarget(HTTPServer):
             self.delay=CONFIGS[0][-1]
             self._state="DEGRADED"
 
-    def bind(self,gate,incident,run,evidence):
+    def bind(self,gate,incident,run,evidence,*,read_context,policy_port):
         from lab_target_fence import LabTargetFence
         from hitl_demo import DurableApprovalGate
-        if not isinstance(gate,DurableApprovalGate):
-            raise ValueError("server-owned durable gate required")
+        if (not isinstance(gate,DurableApprovalGate) or not callable(read_context)
+            or type(policy_port) is not int or not 1024<=policy_port<=65535
+            or policy_port in (7770,7777,7790)):
+            raise ValueError("server-owned durable gate, context reader and lab Policy required")
         with self._action_lock:
             if self._state!="DEGRADED" or self._fence is not None:
                 raise ValueError("target cannot be rebound")
+            self._check_context(read_context,gate,incident,run,evidence)
             self._fence=LabTargetFence(run_id=run,incident_id=incident,
                     resource=CONFIGS[0][0],context_sha256=gate.binding(incident,run,evidence))
+            self._read_context=read_context
+            self._policy_port=policy_port
             self._gate=gate
             self._incident=incident
             self._run=run
             self._evidence=json.loads(json.dumps(evidence))
             return self._fence.scope()
 
-    def simulate(self,receipt_id,receipt_sha256,policy_port):
-        """Revalidate and claim before the one fixed in-memory lab reset."""
+    @staticmethod
+    def _check_context(read_context,gate,incident,run,evidence):
+        core,details=read_context(run)
+        current=core["run"]
+        if (current.get("run_id")!=run or current.get("incident_id")!=incident
+            or current.get("mode")!="DEMO"
+            or core.get("production_authorized") is not False
+            or details.get("classification")!="SYNTHETIC_LAB_CONTEXT"
+            or details.get("run_id")!=run or details.get("root")!=CONFIGS[0][0]
+            or details.get("policy")!="DENY" or details.get("production_authorized") is not False
+            or gate.binding(incident,run,details["evidence"])!=gate.binding(incident,run,evidence)):
+            raise ValueError("target context changed or unverified")
+        return details["evidence"]
+
+    def simulate(self,receipt_id,receipt_sha256,*,workflow_id):
+        """Trusted local caller supplies actual Temporal workflow identity, not browser input."""
         with self._action_lock:
-            if self._fence is None:
-                raise ValueError("unbound target")
+            if self._fence is None or workflow_id!=self._run:
+                raise ValueError("unbound target or foreign workflow")
             if self._state!="DEGRADED":
                 return {"status":"UNKNOWN_BLOCKED","production_authorized":False}
+            fresh=self._check_context(self._read_context,self._gate,self._incident,self._run,self._evidence)
             reservation=self._gate.reserve_lab_action(
-                receipt_id,receipt_sha256,self._incident,self._run,self._evidence,
-                self._fence.scope(),self._run,policy_port)
+                receipt_id,receipt_sha256,self._incident,self._run,fresh,
+                self._fence.scope(),workflow_id,self._policy_port)
             claim=self._fence.claim(reservation)
             if claim["status"]!="CLAIMED_NO_EXECUTION":
                 self._state="UNKNOWN_BLOCKED"
