@@ -5,7 +5,8 @@ from pathlib import Path
 from vertical_demo import execute
 from correlation_demo import correlate
 from core_read import read_run
-from lab_context import context, dynamic_context
+from lab_context import context, dynamic_context, get
+from enterprise_context import Graph, normalize
 from policy_demo import simulation_decision
 from copilot_context import answer
 import os
@@ -68,7 +69,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if self.path=="/api/v1/ingest/create":
                 port,token,_=self.server.core_config
-                _,evidence,_,_=self.server.context_config
+                twin,evidence,node,_=self.server.context_config
+                if isinstance(data,list) and any(isinstance(row,dict) and "enterprise" in row for row in data):
+                    graph=Graph(get(twin,"/api/twin/graph"))
+                    for row in data:
+                        if row["resource"]!=node or "enterprise" not in row:
+                            raise ValueError("mixed or unbound enterprise signal")
+                        graph.validate_signal(node,normalize(row["enterprise"],row["kind"]))
                 self.reply(200,json.dumps(create_and_persist(data,port,token,evidence)).encode())
                 return
             if self.path in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide"):
@@ -133,6 +140,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(result).encode())
             except Exception:
                 self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
+        elif self.path.startswith("/api/v1/enterprise-context?run_id="):
+            try:
+                run_id=self.path.split("=",1)[1]
+                port,token,_=self.server.core_config
+                twin,evidence,node,_=self.server.context_config
+                core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True)
+                graph=Graph(get(twin,"/api/twin/graph"))
+                result=graph.project(details,core["run"])
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"ENTERPRISE_CONTEXT_UNVERIFIED","policy":"DENY"}')
         elif self.path.startswith("/api/v1/incident-context/dynamic?run_id="):
             try:
                 run_id=self.path.split("=",1)[1]
