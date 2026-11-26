@@ -155,3 +155,35 @@ class RecoveryVerifyTest(unittest.TestCase):
             row["signal"].update(changes)
             with self.subTest(changes=changes),self.assertRaises(ValueError):
                 verify_recovery(**kwargs)
+
+
+    def test_e17_gamma_projection_uses_trusted_worker_and_evidence(self):
+        from e17_readback import project_recovery
+        from copy import deepcopy
+        kwargs,_,receipt=self.fixture()
+        projection={"classification":"V3_E17_WORKER_RECEIPT_READBACK",
+                    "run_id":kwargs["original_run_id"],"action_receipt":receipt,
+                    "action_receipt_sha256":kwargs["action_receipt_sha256"],
+                    "operational_decision":"DENY","production_authorized":False,
+                    "core_business_stages_qualified":False,"activities_completed":1,
+                    "history_events":11}
+        request=dict(read_context=kwargs["read_context"],
+                     original_run_id=kwargs["original_run_id"],
+                     comparison_run_id=kwargs["comparison_run_id"])
+        calls=[]
+        def read(rid):
+            calls.append(rid)
+            return deepcopy(projection)
+        result=project_recovery(read_receipt=read,**request)
+        self.assertEqual(calls,[kwargs["original_run_id"]])
+        self.assertEqual(result["verification"]["status"],"RECOVERED")
+        self.assertEqual(result["worker"],projection)
+        self.assertFalse(result["production_authorized"])
+        self.assertFalse(result["tenant_acl_qualified"])
+        for bad in ({"action_receipt_sha256":"0"*64},{"run_id":kwargs["comparison_run_id"]},
+                    {"production_authorized":True},{"activities_completed":2},
+                    {"core_business_stages_qualified":True}):
+            with self.subTest(bad=bad),self.assertRaises(ValueError):
+                project_recovery(read_receipt=lambda rid:projection|bad,**request)
+        with self.assertRaises(ValueError):
+            project_recovery(read_receipt=read,**(request|{"comparison_run_id":kwargs["original_run_id"]}))
