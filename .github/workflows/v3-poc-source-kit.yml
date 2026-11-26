@@ -706,6 +706,8 @@ jobs:
             "$("${compose[@]}" port core 810)" "$("${compose[@]}" port twin 811)" \
             "$("${compose[@]}" port evidence 812)" "$("${compose[@]}" port policy 813)" > "$V3_ROOT/temporal-e17.json"
           cat "$V3_ROOT/temporal-e17.json"
+          "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17.json" > "$V3_ROOT/temporal-e17-worker.json"
+          cat "$V3_ROOT/temporal-e17-worker.json"
           temporal_before=$("${compose[@]}" ps -q temporal)
           temporal_db_before=$("${compose[@]}" ps -q temporal-postgres)
           test -n "$temporal_before" && test -n "$temporal_db_before"
@@ -732,6 +734,9 @@ jobs:
           "$V3_ROOT/temporal-e17-venv/bin/python" v3-spike/kit/poc-temporal-e17-smoke.py "$V3_ROOT" "$temporal_restarted" readback > "$V3_ROOT/temporal-e17-replay.json"
           cat "$V3_ROOT/temporal-e17-replay.json"
           echo "E17 action receipt history readback PASS"
+          "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17.json" > "$V3_ROOT/temporal-e17-worker-replay.json"
+          cmp "$V3_ROOT/temporal-e17-worker.json" "$V3_ROOT/temporal-e17-worker-replay.json"
+          echo "Worker E17 authenticated receipt readback PASS"
           "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
           cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json" || { echo "Boundary receipt changed" >&2; exit 1; }
           check_receipt || { echo "Core execution receipt count changed" >&2; exit 1; }
@@ -769,6 +774,8 @@ jobs:
             ${{ env.V3_ROOT }}/temporal-ui-digests.json
             ${{ env.V3_ROOT }}/temporal-e17.json
             ${{ env.V3_ROOT }}/temporal-e17-replay.json
+            ${{ env.V3_ROOT }}/temporal-e17-worker.json
+            ${{ env.V3_ROOT }}/temporal-e17-worker-replay.json
           if-no-files-found: warn
       - if: always()
         run: |
