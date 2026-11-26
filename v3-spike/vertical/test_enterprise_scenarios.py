@@ -30,6 +30,18 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(len({x["family"] for x in describe()}),7)
         self.assertEqual(batches(model(1))[0][0]["enterprise"]["scenario"]["value"],0)
         self.assertEqual(g.scope(P+"PC-HR-01")["users"],{P+"USER-HR-01"})
+        for tick in range(1,9):
+            original=batches(model(tick))
+            self.assertEqual(original,batches(model(tick)))
+            self.assertEqual(len({rows[0]["resource"] for rows in original}),2)
+            for rows in original:
+                self.assertEqual({r["enterprise"]["scenario"]["phase"] for r in rows},{"baseline","incident","log","event"})
+                for r in rows:
+                    self.assertTrue(r["synthetic"])
+                    self.assertEqual(r["tenant"],"synthetic-demo")
+                raw=rows[0]["enterprise"]
+                for bad in (dict(raw,scenario=dict(raw["scenario"],tick=tick+1)),dict(raw,scenario=dict(raw["scenario"],unit="invalid")),dict(raw,scenario=dict(raw["scenario"],classification="MEASURED"))):
+                    with self.assertRaises(ValueError): normalize(bad,"metric")
 
     def test_durable_campaign_and_retry(self):
         with tempfile.TemporaryDirectory() as root:
