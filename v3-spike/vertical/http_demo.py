@@ -242,7 +242,13 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 result=self.server.approval_gate.decide(data["request_id"],*args,data.get("approved"))
             self.reply(200,json.dumps(result).encode())
-        except Exception:
+        except Exception as exc:
+            if isinstance(self,ContainerLabHandler):
+                # The explicit disposable profile logs only the exception class
+                # and a code location, never the request, message, token or body.
+                import traceback
+                last=traceback.extract_tb(exc.__traceback__)[-1]
+                print("GAMMA_REQUEST_UNVERIFIED",type(exc).__name__,Path(last.filename).name,last.lineno,flush=True)
             self.reply(503,b'{"error":"REQUEST_UNVERIFIED","policy":"DENY"}')
 
     def do_GET(self):
