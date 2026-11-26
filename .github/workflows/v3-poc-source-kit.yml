@@ -82,6 +82,15 @@ jobs:
                           page.locator("#context-sim").click()
                           expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
                           expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
+
+                          page.locator("#create-enterprise").click()
+                          expect(page.locator("#load-enterprise")).to_be_enabled(timeout=30000)
+                          page.locator("#load-enterprise").click()
+                          for value in ("Potential exposure", "Payments", "Customer CRM", "NODE-CI-ENT-USER-FIN-01", "Synthetic user reports slow payment", "ENT-DOC-001", "ENT-DOC-003", "Policy DENY"):
+                              expect(page.locator("#enterprise-result")).to_contain_text(value,timeout=30000)
+                          expect(page.locator("#enterprise-result")).not_to_contain_text("Independent HR portal")
+                          page.locator("#load-dynamic-context").click()
+                          expect(page.locator("#context-result")).to_contain_text("Conditional reduction: 120 ms",timeout=30000)
                       finally:
                           browser.close()
               finally:
