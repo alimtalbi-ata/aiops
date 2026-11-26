@@ -34,7 +34,7 @@ def smoke(root):
             db.backup(dest)
         assert restored.status()==before and restored.activity()==activity_before and restored.document_catalog()==corpus_before and restored.knowledge_catalog()==knowledge_before
         with closing(source.connect()) as a, closing(restored.connect()) as b:
-            for table,count in (("journal",8),("measured",2),("technical",2),("activity",8),("corpus",12),("knowledge",6)):
+            for table,count in (("journal",8),("measured",2),("technical",2),("activity",8),("corpus",12),("knowledge",6),("scenarios",8)):
                 order={"corpus":"doc_id,version","knowledge":"doc_id"}.get(table,"tick")
                 rows=a.execute("SELECT * FROM "+table+" ORDER BY "+order).fetchall()
                 assert len(rows)==count and rows==b.execute("SELECT * FROM "+table+" ORDER BY "+order).fetchall()

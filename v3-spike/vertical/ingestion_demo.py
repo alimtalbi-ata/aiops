@@ -25,6 +25,8 @@ def ingest(records):
         if "enterprise" in row:
             from enterprise_context import normalize
             event["enterprise"]=normalize(row["enterprise"],kind)
+            if "scenario" in event["enterprise"] and "observation" in event:
+                raise ValueError("scenario metrics cannot masquerade as latency observations")
             if "telemetry" in event["enterprise"] and "observation" in event:
                 raise ValueError("technical telemetry cannot masquerade as latency observation")
             if "measurement" in event["enterprise"]:

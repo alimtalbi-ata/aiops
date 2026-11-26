@@ -73,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-search"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -100,7 +100,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=="/api/v1/ingest":
                 self.reply(200,json.dumps(ingest(data)).encode())
                 return
-            if self.path in ("/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical"):
+            if self.path in ("/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios"):
                 if not isinstance(data,dict) or set(data)!={"expected_tick"} or self.server.enterprise_clock is None:
                     raise ValueError("clock not configured or invalid command")
                 port,token,_=self.server.core_config
@@ -113,7 +113,9 @@ class Handler(BaseHTTPRequestHandler):
                     for row in rows:
                         graph.validate_signal(row["resource"],normalize(row["enterprise"],row["kind"]))
                     return create_and_persist(rows,port,token,evidence)
-                if self.path.endswith("/capture-technical"):
+                if self.path.endswith("/capture-scenarios"):
+                    result=self.server.enterprise_clock.capture_scenarios(data["expected_tick"],publish)
+                elif self.path.endswith("/capture-technical"):
                     if self.server.technical_collector is None:
                         raise ValueError("technical collector not configured")
                     result=self.server.enterprise_clock.capture_technical(data["expected_tick"],self.server.technical_collector,publish)
@@ -224,6 +226,16 @@ class Handler(BaseHTTPRequestHandler):
                     "observed_outage_established":False,"production_authorized":False,"operational_decision":"DENY"}).encode())
             except Exception:
                 self.reply(503,b'{"error":"IMPACT_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-scenarios":
+            try:
+                from enterprise_scenarios import describe,VERSION
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                rows=describe()
+                for row in rows: graph.scope(row["resource"])
+                self.reply(200,json.dumps({"classification":"SYNTHETIC_SCENARIO_CATALOG","campaign":VERSION,"scenarios":rows,"production_authorized":False,"operational_decision":"DENY"}).encode())
+            except Exception:
+                self.reply(503,b'{"error":"SCENARIOS_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-knowledge":
             try:
                 if self.server.enterprise_clock is None:

@@ -67,7 +67,7 @@ def validate_telemetry(item):
     return dict(item)
 
 def normalize(raw, kind):
-    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message","measurement","telemetry"}:
+    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message","measurement","telemetry","scenario"}:
         raise ValueError("invalid enterprise signal scope")
     timestamp=raw["occurred_at"]
     if not isinstance(timestamp,str) or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ",timestamp):
@@ -76,6 +76,11 @@ def normalize(raw, kind):
     for k,v in raw.items():
         if k.endswith("_id") and (not isinstance(v,str) or not re.fullmatch(r"NODE-CI-ENT-[A-Z0-9-]{1,80}",v)):
             raise ValueError("invalid enterprise identity")
+    if "scenario" in raw:
+        from enterprise_scenarios import validate_metadata
+        if "measurement" in raw or "telemetry" in raw:
+            raise ValueError("scenario is not measured telemetry")
+        validate_metadata(raw["scenario"],kind,raw)
     if "telemetry" in raw:
         if kind!="metric" or "measurement" in raw:
             raise ValueError("technical metric must be distinct from latency observation")
@@ -163,6 +168,10 @@ class Graph:
     def validate_signal(self, root, scope):
         allowed=self.scope(root)
         asset=scope["asset_id"]
+        if "scenario" in scope:
+            from enterprise_scenarios import BY_ID, root_of
+            if root!=root_of(BY_ID[scope["scenario"]["scenario_id"]]):
+                raise ValueError("scenario root mismatch")
         if "telemetry" in scope:
             item=validate_telemetry(scope["telemetry"])
             if root!=asset or self.nodes[root]["type"]!=TELEMETRY[item["metric"]][2]:

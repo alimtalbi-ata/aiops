@@ -23,6 +23,10 @@ def smoke(origin, restart):
     capture=lambda n:call("/api/v1/enterprise-clock/capture",{"expected_tick":n})
     technical=lambda n:call("/api/v1/enterprise-clock/capture-technical",{"expected_tick":n})
     activity=lambda:call("/api/v1/enterprise-activity")
+    campaign=lambda n:call("/api/v1/enterprise-clock/capture-scenarios",{"expected_tick":n})
+    catalog=call("/api/v1/enterprise-scenarios")
+    assert len(catalog["scenarios"])==16 and len({x["family"] for x in catalog["scenarios"]})==7
+    by_id={x["scenario_id"]:x for x in catalog["scenarios"]}
     initial=status()
     initial_activity=activity()
     assert initial["current_tick"]==(4 if restart else 0)
@@ -35,6 +39,22 @@ def smoke(origin, restart):
         assert step==advance(n) and step["tick"]==n
         assert step["measurement_kind"]=="MODEL_GENERATED"
         assert step["production_authorized"] is False and step["operational_decision"]=="DENY"
+        diverse=campaign(n)
+        assert diverse==campaign(n) and diverse["state"]=="PUBLISHED" and len(diverse["incidents"])==2
+        for item in diverse["incidents"]:
+            ctx_case=call("/api/v1/enterprise-context?run_id="+item["run_id"])
+            definition=by_id[item["scenario_id"]]
+            assert ctx_case["root"]==definition["resource"] and not ctx_case["observed_outage_established"]
+            assert ctx_case["document_history"]["logical_tick"]==n
+            assert ctx_case["document_references"]
+            assert {x["evidence_id"]:x["payload_hash"] for x in ctx_case["timeline"]}=={x["evidence_id"]:x["payload_hash"] for x in item["evidence"]}
+            meta=[x["scenario"] for x in ctx_case["timeline"]]
+            assert {m["scenario_id"] for m in meta}=={item["scenario_id"]}
+            assert all(m["classification"]=="MODEL_GENERATED" and m["metric"]==definition["metric"] and m["unit"]==definition["unit"] for m in meta)
+            assert {m["phase"]:m["value"] for m in meta if m["phase"] in ("baseline","incident")}=={"baseline":definition["baseline"],"incident":definition["incident"]}
+            if definition["family"]=="endpoint":
+                assert ctx_case["exposure_semantics"]=="INDIVIDUAL_ACCESS_ONLY"
+                assert len(ctx_case["reported_user_ids"])==1 and len(ctx_case["potential_exposure"]["users"])==1
         if n%4==3:
             pub=step["publication"]
             assert pub["state"]=="PUBLISHED" and len(pub["evidence"])==4
@@ -139,6 +159,14 @@ def smoke(origin, restart):
             assert ctx["incident_id"]==r["incident_id"] and ctx["root"]==r["resource"]
     print(json.dumps({"classification":"E6_ACTIVITY_JOURNAL","result":"PASS","ticks":recent["current_tick"],"activity_records":len(records),"signals":len(records)*3,"alerts_only":sum(r["disposition"]=="ALERT_ONLY" for r in records),"linked_incidents":sum(r["disposition"]=="INCIDENT_LINKED" for r in records),"production_authorized":False}),file=sys.stderr)
     end=status()
+    cases=[r for x in end["recent"] for r in x["scenario_capture"]["incidents"]]
+    assert len(cases)==(16 if restart else 8) and len({r["run_id"] for r in cases})==len(cases)
+    assert len({r["scenario_id"] for r in cases})==len(cases)
+    if restart:
+        assert cases[:8]==[r for x in initial["recent"] for r in x["scenario_capture"]["incidents"]]
+        for r in cases[:8]:
+            assert call("/api/v1/enterprise-context?run_id="+r["run_id"])["root"]==r["resource"]
+    print(json.dumps({"classification":"E10_DIVERSE_CAMPAIGN","result":"PASS","ticks":end["current_tick"],"scenarios":len(cases),"evidence_count":len(cases)*4,"runs":cases,"production_authorized":False}),file=sys.stderr)
     assert end["current_tick"]==(8 if restart else 4)
     assert [x["phase"] for x in end["recent"]]==["NOMINAL","CHANGE","DEGRADED","MODEL_RECOVERY"]*(2 if restart else 1)
     if restart:
@@ -166,7 +194,7 @@ def smoke(origin, restart):
     try: advance(end["current_tick"]+2)
     except HTTPError as exc: assert exc.code==503
     else: raise AssertionError("skipped tick accepted")
-    print(json.dumps({"classification":"E2_CLOCK_RESTART" if restart else "E2_CLOCK_FIRST_CYCLE","result":"PASS","current_tick":end["current_tick"],"published_run_ids":[x["publication"]["run_id"] for x in end["recent"] if x["publication"]["state"]=="PUBLISHED"],"measured_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("measured_capture",{}).get("incidents",[])],"technical_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("technical_capture",{}).get("incidents",[])],"production_authorized":False}))
+    print(json.dumps({"classification":"E2_CLOCK_RESTART" if restart else "E2_CLOCK_FIRST_CYCLE","result":"PASS","current_tick":end["current_tick"],"published_run_ids":[x["publication"]["run_id"] for x in end["recent"] if x["publication"]["state"]=="PUBLISHED"],"measured_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("measured_capture",{}).get("incidents",[])],"technical_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("technical_capture",{}).get("incidents",[])],"scenario_runs":cases,"production_authorized":False}))
 
 if __name__=="__main__":
     if len(sys.argv) not in (2,3) or (len(sys.argv)==3 and sys.argv[2]!="--restart"):

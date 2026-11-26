@@ -73,6 +73,7 @@ class EnterpriseClock:
             db.execute("CREATE TABLE IF NOT EXISTS journal(tick INTEGER PRIMARY KEY, step TEXT NOT NULL, step_hash TEXT NOT NULL, receipt TEXT, UNIQUE(step_hash))")
             db.execute("CREATE TABLE IF NOT EXISTS measured(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
             db.execute("CREATE TABLE IF NOT EXISTS technical(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
+            db.execute("CREATE TABLE IF NOT EXISTS scenarios(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
             db.execute("CREATE TABLE IF NOT EXISTS activity(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS corpus(doc_id TEXT NOT NULL, version INTEGER NOT NULL, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL, PRIMARY KEY(doc_id,version))")
             db.execute("CREATE TABLE IF NOT EXISTS knowledge(doc_id TEXT PRIMARY KEY, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
@@ -99,6 +100,9 @@ class EnterpriseClock:
                 technical=db.execute("SELECT batches,batch_hash,receipt FROM technical WHERE tick=?",(item["tick"],)).fetchone()
                 if technical is not None:
                     item["technical_capture"]=self.decode_capture(technical)
+                campaign=db.execute("SELECT batches,batch_hash,receipt FROM scenarios WHERE tick=?",(item["tick"],)).fetchone()
+                if campaign is not None:
+                    item["scenario_capture"]=self.decode_capture(campaign)
         latest=recent[-1] if recent else None
         return {"classification":"SYNTHETIC_ENTERPRISE_CLOCK_E2","world_id":WORLD,
                 "current_tick":latest["tick"] if latest else 0,"pending":bool(latest and latest["publication"] is None),
@@ -146,7 +150,7 @@ class EnterpriseClock:
             for tick,raw in db.execute("SELECT tick,receipt FROM journal WHERE receipt IS NOT NULL"):
                 receipt=json.loads(raw)
                 if receipt.get("run_id")==run_id: ticks.add(tick)
-            for table in ("measured","technical"):
+            for table in ("measured","technical","scenarios"):
                 for tick,raw in db.execute("SELECT tick,receipt FROM "+table+" WHERE receipt IS NOT NULL"):
                     if any(r["run_id"]==run_id for r in json.loads(raw)): ticks.add(tick)
             if not ticks:
@@ -170,7 +174,7 @@ class EnterpriseClock:
             db.execute("BEGIN IMMEDIATE")
             latest=db.execute("SELECT tick,receipt FROM journal ORDER BY tick DESC LIMIT 1").fetchone()
             last=latest[0] if latest else 0
-            if expected_tick==last+1 and (db.execute("SELECT 1 FROM measured WHERE receipt IS NULL LIMIT 1").fetchone() or db.execute("SELECT 1 FROM technical WHERE receipt IS NULL LIMIT 1").fetchone()):
+            if expected_tick==last+1 and (db.execute("SELECT 1 FROM measured WHERE receipt IS NULL LIMIT 1").fetchone() or db.execute("SELECT 1 FROM technical WHERE receipt IS NULL LIMIT 1").fetchone() or db.execute("SELECT 1 FROM scenarios WHERE receipt IS NULL LIMIT 1").fetchone()):
                 raise ValueError("pending measurement publication must be retried")
             if expected_tick==last+1 and (latest is None or latest[1] is not None):
                 step=model(expected_tick)
@@ -325,4 +329,47 @@ class EnterpriseClock:
             if len({r["run_id"] for r in receipts})!=4:
                 raise ValueError("distinct technical runs required")
             db.execute("UPDATE technical SET receipt=? WHERE tick=?",(json.dumps(receipts,sort_keys=True),expected_tick))
+            return {"batch_sha256":result["batch_sha256"],"state":"PUBLISHED","incidents":receipts}
+
+    def capture_scenarios(self, expected_tick, publish):
+        """Explicit campaign, orthogonal to nominal activity and actual measured workloads."""
+        from enterprise_scenarios import batches
+        if type(expected_tick) is not int or not 1<=expected_tick<=MAX_TICK:
+            raise ValueError("invalid campaign tick")
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            latest=db.execute("SELECT tick,step,step_hash,receipt FROM journal ORDER BY tick DESC LIMIT 1").fetchone()
+            if latest is None or latest[0]!=expected_tick or self.decode(latest)["publication"] is None:
+                raise ValueError("current committed tick required")
+            expected=batches(model(expected_tick))
+            row=db.execute("SELECT batches,batch_hash,receipt FROM scenarios WHERE tick=?",(expected_tick,)).fetchone()
+            if row is None:
+                db.execute("INSERT INTO scenarios(tick,batches,batch_hash) VALUES(?,?,?)",
+                           (expected_tick,json.dumps(expected,sort_keys=True),digest(expected)))
+            elif json.loads(row[0])!=expected or row[1]!=digest(expected):
+                raise ValueError("campaign snapshot mismatch")
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row=db.execute("SELECT batches,batch_hash,receipt FROM scenarios WHERE tick=?",(expected_tick,)).fetchone()
+            result=self.decode_capture(row)
+            if json.loads(row[0])!=expected:
+                raise ValueError("campaign snapshot mismatch")
+            if result["state"]=="PUBLISHED":
+                return result
+            receipts=[]
+            for rows in expected:
+                response=publish(rows)
+                run=response["core"]["run"]
+                refs=response["stored_evidence"]
+                if (response.get("production_authorized") is not False or run["mode"]!="DEMO"
+                    or not re.fullmatch(r"RUN-[A-F0-9]{16}",run["run_id"])
+                    or not re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}",run["incident_id"])
+                    or len(refs)!=4 or len({r["evidence_id"] for r in refs})!=4
+                    or any(not re.fullmatch(r"[a-f0-9]{64}",r["payload_hash"]) for r in refs)):
+                    raise ValueError("unverified scenario publication")
+                receipts.append({"resource":rows[0]["resource"],"scenario_id":rows[0]["enterprise"]["scenario"]["scenario_id"],
+                                 "run_id":run["run_id"],"incident_id":run["incident_id"],"evidence":refs})
+            if len({r["run_id"] for r in receipts})!=2:
+                raise ValueError("distinct scenario runs required")
+            db.execute("UPDATE scenarios SET receipt=? WHERE tick=?",(json.dumps(receipts,sort_keys=True),expected_tick))
             return {"batch_sha256":result["batch_sha256"],"state":"PUBLISHED","incidents":receipts}

@@ -11,6 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
+      - name: Validate Workbench JavaScript syntax before service tests
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | node --check
+          from pathlib import Path
+          html=Path("v3-spike/vertical/operator.html").read_text()
+          assert html.count("<script>")==1 and html.count("</script>")==1
+          print(html.split("<script>",1)[1].split("</script>",1)[0])
+          PY
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_context.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_clock.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_telemetry.py -v
@@ -18,6 +27,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_corpus.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_knowledge.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_hybrid.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_scenarios.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -106,6 +116,13 @@ jobs:
                           page.locator("#hybrid-query").fill("zzzzzzzz")
                           page.locator("#hybrid-search").click()
                           expect(page.locator("#hybrid-result")).to_contain_text("NO_MATCH")
+                          page.locator("#scenario-catalog").click()
+                          expect(page.locator("#scenario-result")).to_contain_text("WAN_LOSS")
+                          expect(page.locator("#scenario-result")).to_contain_text("HR_DEVICE_FAILURE")
+                          expect(page.locator("#scenario-result")).to_contain_text("Model")
+                          page.locator("#clock-scenarios").click()
+                          expect(page.locator("#clock-result")).to_contain_text("Scenario campaign: PUBLISHED")
+                          expect(page.locator("#clock-run")).to_contain_text("CPU_SATURATION")
                           page.locator("#knowledge-read").click()
                           expect(page.locator("#knowledge-result")).to_contain_text("ENT-KNOW-00002-CHANGE")
                           expect(page.locator("#knowledge-result")).not_to_contain_text("ENT-KNOW-00004-INCIDENT")
@@ -432,6 +449,18 @@ jobs:
                   def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"'")== "3"
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->'signal'->'enterprise'->'telemetry'->>'classification'='MEASURED_ISOLATED_WORKLOAD'")=="2"
+          cases=clock["scenario_runs"]
+          assert len(cases)==8 and len({r["run_id"] for r in cases})==8
+          for case in cases:
+              run=case["run_id"]; resource=case["resource"]; ident=case["scenario_id"]
+              assert re.fullmatch(r"RUN-[A-F0-9]{16}",run)
+              assert re.fullmatch(r"NODE-CI-[A-Z0-9-]{1,80}",resource)
+              assert re.fullmatch(r"[A-Z0-9_]{1,80}",ident)
+              for db in ("aiops","aiops_restore_ci"):
+                  def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
+                  assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->>'resource'='"+resource+"' and payload->'signal'->'enterprise'->'scenario'->>'scenario_id'='"+ident+"'")=="4"
+                  assert query("select count(*) from aiops.runs where run_id='"+run+"'")=="1"
+          print("E10 first-cycle campaign PostgreSQL restore PASS: 8 runs / 32 evidence")
           print("E5 technical evidence restore PASS")
           print("E4 technical inventory and incident restore PASS")
           print("E3 measured multiasset evidence restore PASS")
