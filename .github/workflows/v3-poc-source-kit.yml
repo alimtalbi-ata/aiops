@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
+      - run: python3 -m py_compile app/worker/v3_boundary.py app/worker/v3_boundary_workflow.py v3-spike/kit/poc-temporal-boundary-smoke.py
       - name: Validate Workbench JavaScript syntax before service tests
         run: |
           set -euo pipefail
@@ -511,9 +512,28 @@ jobs:
         run: |
           set -euo pipefail
           python3 v3-spike/kit/poc-clock-backup-smoke.py "$V3_ROOT"
+      - name: Execute isolated Core to Temporal boundary and verify restart
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+          compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration)
+          "${compose[@]}" up --build --wait --wait-timeout 300 worker
+          "${compose[@]}" exec -T worker python - < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary.json"
+          cat "$V3_ROOT/temporal-boundary.json"
+          run=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_id"])' "$V3_ROOT/temporal-boundary.json")
+          "${compose[@]}" stop temporal
+          "${compose[@]}" exec -T worker python - unavailable < v3-spike/kit/poc-temporal-boundary-smoke.py
+          "${compose[@]}" stop worker
+          "${compose[@]}" up --wait --wait-timeout 300 worker
+          "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
+          cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json"
+          echo "V3 Temporal persisted history and Core state restore PASS"
       - if: always()
         run: |
           if [[ -f "$V3_ROOT/poc.env" ]]; then
             project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
-            docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml down
+            docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration down
           fi

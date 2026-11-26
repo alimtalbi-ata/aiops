@@ -10,6 +10,9 @@ mkdir -p "$V3_ROOT"
 [[ ! -L "$V3_ROOT/data" && ! -L "$V3_ROOT/data/postgres" ]] || exit 1
 mkdir -p "$V3_ROOT/data/postgres"
 [[ "$(realpath "$V3_ROOT/data/postgres")" = "$V3_ROOT/data/postgres" ]] || exit 1
+[[ ! -L "$V3_ROOT/data/temporal-postgres" ]] || exit 1
+mkdir -p "$V3_ROOT/data/temporal-postgres"
+[[ "$(realpath "$V3_ROOT/data/temporal-postgres")" = "$V3_ROOT/data/temporal-postgres" ]] || exit 1
 envfile="$V3_ROOT/poc.env"
 if [[ ! -e "$envfile" ]]; then
   (set -o noclobber; printf 'V3_DB_PASSWORD=%s\nV3_LAB_TOKEN=%s\n' "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > "$envfile")

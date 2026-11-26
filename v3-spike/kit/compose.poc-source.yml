@@ -26,6 +26,7 @@ services:
       DATABASE_URL: postgresql://aiops:${V3_DB_PASSWORD:?required}@postgres:5432/aiops
       AIOPS_ADMIN_TOKEN: ${V3_LAB_TOKEN:?required}
       AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+      WORKER_URL: http://worker:815
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +101,61 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  # Explicitly opt-in; no host ports, no historical generic stage worker.
+  temporal-postgres:
+    profiles: [orchestration]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${V3_DB_PASSWORD:?required}
+    volumes:
+      - ${V3_ROOT:?required}/data/temporal-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [backend]
+  temporal:
+    profiles: [orchestration]
+    image: temporalio/auto-setup:1.32.1
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${V3_DB_PASSWORD:?required}
+      POSTGRES_SEEDS: temporal-postgres
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    networks: [backend]
+  worker:
+    profiles: [orchestration]
+    build:
+      context: ../../app
+      dockerfile: worker/Dockerfile
+    command: ["uvicorn", "worker.v3_boundary:app", "--host", "0.0.0.0", "--port", "815"]
+    environment:
+      CORE_URL: http://core:810
+      TEMPORAL_ADDRESS: temporal:7233
+      AIOPS_V3_BOUNDARY: "1"
+      AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+    depends_on:
+      core:
+        condition: service_healthy
+      evidence:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health', timeout=5)"]
+      interval: 5s
+      timeout: 6s
+      retries: 50
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 networks:
