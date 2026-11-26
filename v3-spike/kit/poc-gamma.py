@@ -46,6 +46,7 @@ if chatfile.exists() or chatfile.is_symlink():
 with server(core_config=(port("core",810),token,"RUN-CI-CONTEXT"),
             context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),
             policy_port=port("policy",813),mattermost_config=chatops,enterprise_clock=EnterpriseClock(root),
-            enterprise_collector=runpy.run_path(str(here/'poc-multiasset-observed.py'))['collect']) as http:
+            enterprise_collector=runpy.run_path(str(here/'poc-multiasset-observed.py'))['collect'],
+            technical_collector=lambda:runpy.run_path(str(here/'poc-technical-observed.py'))['collect'](root)) as http:
     print(f"POC GAMMA: http://127.0.0.1:{http.server_port}",flush=True)
     http.serve_forever()

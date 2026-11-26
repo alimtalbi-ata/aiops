@@ -52,7 +52,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -67,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=="/api/v1/ingest":
                 self.reply(200,json.dumps(ingest(data)).encode())
                 return
-            if self.path in ("/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture"):
+            if self.path in ("/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical"):
                 if not isinstance(data,dict) or set(data)!={"expected_tick"} or self.server.enterprise_clock is None:
                     raise ValueError("clock not configured or invalid command")
                 port,token,_=self.server.core_config
@@ -80,7 +80,11 @@ class Handler(BaseHTTPRequestHandler):
                     for row in rows:
                         graph.validate_signal(row["resource"],normalize(row["enterprise"],row["kind"]))
                     return create_and_persist(rows,port,token,evidence)
-                if self.path.endswith("/capture"):
+                if self.path.endswith("/capture-technical"):
+                    if self.server.technical_collector is None:
+                        raise ValueError("technical collector not configured")
+                    result=self.server.enterprise_clock.capture_technical(data["expected_tick"],self.server.technical_collector,publish)
+                elif self.path.endswith("/capture"):
                     if self.server.enterprise_collector is None:
                         raise ValueError("collector not configured")
                     result=self.server.enterprise_clock.capture(data["expected_tick"],self.server.enterprise_collector,publish)
@@ -262,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None):
+def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None):
     http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     http.core_config = core_config
     http.context_config = context_config
@@ -271,6 +275,7 @@ def server(port=0, core_config=None, context_config=None, policy_port=None, matt
     http.approval_gate = ApprovalGate()
     http.enterprise_clock = enterprise_clock
     http.enterprise_collector = enterprise_collector
+    http.technical_collector = technical_collector
     return http
 
 if __name__ == "__main__":

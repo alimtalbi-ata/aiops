@@ -39,8 +39,35 @@ DOCUMENTS = (
 def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(",",":")).encode()).hexdigest()
 
+# The measurements refer to isolated lab workloads mapped to fictional CI identities.
+# A validated shape is not authentication of a collector.
+TELEMETRY = {
+    "process_cpu_ms": ("ms","PROCESS_TIME_DELTA","compute",1e5),
+    "process_peak_rss_kib": ("KiB","LINUX_RUSAGE_MAXRSS","compute",1e9),
+    "fsync_write_ms": ("ms","MONOTONIC_WRITE_FSYNC","storage",1e5),
+    "fsync_write_bytes": ("bytes","EXACT_WRITE_COUNT","storage",1048576),
+    "sqlite_query_ms": ("ms","MONOTONIC_SQLITE_QUERY","database",1e5),
+    "sqlite_result_rows": ("rows","SQLITE_FETCH_COUNT","database",10000),
+    "loopback_rtt_ms": ("ms","MONOTONIC_TCP_ECHO","network",1e5),
+    "loopback_echo_bytes": ("bytes","TCP_ECHO_COUNT","network",1048576),
+}
+
+def validate_telemetry(item):
+    if not isinstance(item,dict) or set(item)!={"classification","metric","unit","method","value"}:
+        raise ValueError("invalid technical telemetry")
+    metric=item["metric"]
+    if not isinstance(metric,str) or metric not in TELEMETRY:
+        raise ValueError("unknown telemetry metric")
+    unit,method,_,maximum=TELEMETRY[metric]
+    value=item["value"]
+    if (item["classification"]!="MEASURED_ISOLATED_WORKLOAD" or item["unit"]!=unit or item["method"]!=method
+        or type(value) not in (int,float) or not math.isfinite(value) or not 0<value<=maximum
+        or (unit in ("bytes","rows","KiB") and type(value) is not int)):
+        raise ValueError("invalid technical measurement")
+    return dict(item)
+
 def normalize(raw, kind):
-    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message","measurement"}:
+    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message","measurement","telemetry"}:
         raise ValueError("invalid enterprise signal scope")
     timestamp=raw["occurred_at"]
     if not isinstance(timestamp,str) or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ",timestamp):
@@ -49,6 +76,10 @@ def normalize(raw, kind):
     for k,v in raw.items():
         if k.endswith("_id") and (not isinstance(v,str) or not re.fullmatch(r"NODE-CI-ENT-[A-Z0-9-]{1,80}",v)):
             raise ValueError("invalid enterprise identity")
+    if "telemetry" in raw:
+        if kind!="metric" or "measurement" in raw:
+            raise ValueError("technical metric must be distinct from latency observation")
+        validate_telemetry(raw["telemetry"])
     if "measurement" in raw:
         m=raw["measurement"]
         if (kind!="metric" or not isinstance(m,dict) or set(m)!={"classification","samples_ms","method"}
@@ -132,6 +163,10 @@ class Graph:
     def validate_signal(self, root, scope):
         allowed=self.scope(root)
         asset=scope["asset_id"]
+        if "telemetry" in scope:
+            item=validate_telemetry(scope["telemetry"])
+            if root!=asset or self.nodes[root]["type"]!=TELEMETRY[item["metric"]][2]:
+                raise ValueError("technical telemetry incompatible with asset type")
         app=scope.get("application_id")
         group=scope.get("group_id")
         user=scope.get("user_id")

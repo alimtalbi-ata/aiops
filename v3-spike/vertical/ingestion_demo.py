@@ -25,6 +25,8 @@ def ingest(records):
         if "enterprise" in row:
             from enterprise_context import normalize
             event["enterprise"]=normalize(row["enterprise"],kind)
+            if "telemetry" in event["enterprise"] and "observation" in event:
+                raise ValueError("technical telemetry cannot masquerade as latency observation")
             if "measurement" in event["enterprise"]:
                 from statistics import median
                 if "observation" not in event or event["observation"]["value"]!=round(median(event["enterprise"]["measurement"]["samples_ms"]),3):
