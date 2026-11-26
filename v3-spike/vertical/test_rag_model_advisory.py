@@ -64,6 +64,8 @@ class RagModelTest(unittest.TestCase):
         self.assertEqual(translate(cr[0]["analyst_selection"],reverse),out["analyst"])
         self.assertNotIn("REF-",json.dumps(ar[0]))
         self.assertNotIn("sha256",json.dumps(ar[0]))
+        refs=ar[0]["candidates"][0]["reference_context"]
+        self.assertTrue(all(r["resource"] in (ar[0]["candidates"][0]["dependent_resource"],ar[0]["candidates"][0]["dependency_resource"]) for r in refs))
         self.assertNotIn("excerpt",json.dumps(out))
         self.assertEqual(out["operational_decision"],"DENY")
     def test_reject_reference_fabrication_or_substitution(self):
@@ -76,6 +78,11 @@ class RagModelTest(unittest.TestCase):
             self.assertEqual(out["state"],"UNKNOWN")
             self.assertEqual(out["invocations"][0]["status"],"REJECTED")
             self.assertEqual(cr,[])
+    def test_reference_abstention_remains_possible(self):
+        out,_,_=self.run_review(am=lambda o:o.update(reference_ids=[]),cm=lambda o:o.update(reference_ids=[]))
+        self.assertEqual(out["state"],"CANDIDATE_ONLY")
+        self.assertEqual(out["analyst"]["reference_ids"],[])
+        self.assertEqual(out["critic"]["reference_ids"],[])
     def test_critic_rejects_foreign_reference(self):
         out,_,_=self.run_review(cm=lambda o:o.update(reference_ids=["invented"]))
         self.assertEqual(out["state"],"UNKNOWN")
