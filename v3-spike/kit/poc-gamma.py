@@ -38,7 +38,7 @@ if chatfile.exists() or chatfile.is_symlink():
     if chatfile.is_symlink() or chatfile.stat().st_uid!=os.getuid() or chatfile.stat().st_mode & 0o077:
         raise SystemExit('Unsafe Mattermost config')
     chat=dict(line.split('=',1) for line in chatfile.read_text().splitlines())
-    if not re.fullmatch(r'[A-Za-z0-9_-]{32,128}',chat['TOKEN']) or not re.fullmatch(r'[a-z0-9]{26}',chat['CHANNEL_ID']):
+    if not re.fullmatch(r'[A-Za-z0-9_-]{26,128}',chat['TOKEN']) or not re.fullmatch(r'[a-z0-9]{26}',chat['CHANNEL_ID']):
         raise SystemExit('Invalid Mattermost configuration')
     chatops=(chat['TOKEN'],chat['CHANNEL_ID'])
 with server(core_config=(port("core",810),token,"RUN-CI-CONTEXT"),
