@@ -9,6 +9,18 @@ class AnalystCriticTest(unittest.TestCase):
         self.assertFalse(critique(a,c)["causality_established"])
         a["evidence_ids"]=["invented"]
         self.assertFalse(critique(a,c)["evidence_supported"])
+    def test_unsupported_conclusions(self):
+        c={"classification":"SYNTHETIC_LAB_CONTEXT","production_authorized":False,"evidence":[{"evidence_id":"E1"}]}
+        for mutation in ({"root_cause":"invented","confidence":1}, {"hypothesis":"invented"}, {"confidence":0.9}, {"production_authorized":True}):
+            with self.subTest(mutation=mutation):
+                a=analyze(c)
+                a.update(mutation)
+                result=critique(a,c)
+                self.assertFalse(result["evidence_supported"])
+                self.assertEqual(result["root_cause"],"UNKNOWN")
+                self.assertIsNone(result["confidence"])
+                self.assertEqual(result["operational_decision"],"DENY")
+                self.assertIs(result["production_authorized"],False)
     def test_empty(self):
         c={"classification":"SYNTHETIC_LAB_CONTEXT","production_authorized":False,"evidence":[]}
         self.assertEqual(analyze(c)["hypothesis"],"UNKNOWN")
