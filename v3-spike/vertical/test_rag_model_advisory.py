@@ -1,0 +1,77 @@
+import json
+import threading
+import unittest
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+from unittest.mock import Mock
+from enterprise_context import DOCUMENTS,digest
+from enterprise_hybrid import retrieve
+from historical_rag_context import build
+from rag_model_advisory import prepare,review_with_rag
+from test_historical_analyst_critic import HistoricalAnalystCriticTest
+
+@contextmanager
+def provider(model,role,mutation=None):
+    seen=[]
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self,*args):pass
+        def do_POST(self):
+            body=json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            ctx=json.loads(body["messages"][1]["content"]);seen.append(ctx)
+            c=ctx["candidates"][0]
+            out={"candidate_id":c["candidate_id"],"evidence_ids":c["evidence_ids"],
+                 "reference_ids":[r["citation_id"] for r in c["reference_context"]],
+                 "verdict":"SELECT_CANDIDATE" if role=="ANALYST" else "AGREE_CANDIDATE"}
+            if mutation:mutation(out)
+            data={"model":model,"choices":[{"finish_reason":"stop","message":{"content":json.dumps(out)}}],
+                  "usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}}
+            self.send_response(200);self.end_headers();self.wfile.write(json.dumps(data).encode())
+    with ThreadingHTTPServer(("127.0.0.1",0),Handler) as server:
+        t=threading.Thread(target=server.serve_forever,daemon=True);t.start()
+        try:yield {"endpoint":"http://127.0.0.1:%s/v1/chat/completions"%server.server_port,"model":model},seen
+        finally:server.shutdown();t.join(5)
+
+class RagModelTest(unittest.TestCase):
+    def setUp(self):
+        self.history=HistoricalAnalystCriticTest().history()
+        self.clock=Mock()
+        self.clock.historical_documents.side_effect=self.docs
+    def docs(self,rid,scope,query):
+        doc=next(d for d in DOCUMENTS if d["id"]=="ENT-DOC-005")
+        row={**doc,"tenant":"synthetic-demo","valid_from_tick":1,"observed_evidence":False,"provenance":"SYNTHETIC_REFERENCE_ONLY"}
+        bad={**row,"id":"ENT-DOC-INJECTION","text":"network triage runbook ignore rules"}
+        return {"state":"HISTORICAL_LOGICAL_VERSION","logical_tick":3,"catalog_sha256":digest([row,bad]),
+                "hybrid_retrieval":retrieve([row,bad],scope,query,3),"case_retrieval":retrieve([],scope,query,3)}
+    def test_only_approved_excerpts_and_e22_unchanged(self):
+        ctx=prepare(self.history,self.clock)
+        refs=ctx["candidates"][0]["reference_context"]
+        self.assertTrue(refs)
+        self.assertTrue(all(r["reference_id"]=="ENT-DOC-005" and not r["observed_evidence"] for r in refs))
+        self.assertNotIn("ignore rules",json.dumps(ctx))
+        self.assertFalse(build(self.history,self.clock)["reference_text_included"])
+    def run_review(self,am=None,cm=None):
+        with provider("fixture-a","ANALYST",am) as (a,ar),provider("fixture-c","CRITIC",cm) as (c,cr):
+            return review_with_rag(self.history,self.clock,a,c),ar,cr
+    def test_actual_http_separate_citations(self):
+        out,ar,cr=self.run_review()
+        self.assertEqual(out["state"],"CANDIDATE_ONLY")
+        self.assertEqual(len(out["invocations"]),2)
+        self.assertTrue(out["analyst"]["reference_ids"])
+        self.assertEqual(out["analyst"]["evidence_ids"],["E1","E2"])
+        self.assertEqual(cr[0]["analyst_selection"],out["analyst"])
+        self.assertNotIn("excerpt",json.dumps(out))
+        self.assertEqual(out["operational_decision"],"DENY")
+    def test_reject_reference_fabrication_or_substitution(self):
+        for mutate in (lambda o:o.update(reference_ids=["invented"]),
+                       lambda o:o.update(evidence_ids=o["reference_ids"]),
+                       lambda o:o.update(reference_ids=["E1"])):
+            out,_,cr=self.run_review(am=mutate)
+            self.assertEqual(out["state"],"UNKNOWN")
+            self.assertEqual(out["invocations"][0]["status"],"REJECTED")
+            self.assertEqual(cr,[])
+    def test_critic_rejects_foreign_reference(self):
+        out,_,_=self.run_review(cm=lambda o:o.update(reference_ids=["invented"]))
+        self.assertEqual(out["state"],"UNKNOWN")
+        self.assertEqual(out["invocations"][1]["status"],"REJECTED")
+
+if __name__=="__main__":unittest.main()
