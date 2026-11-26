@@ -10,7 +10,7 @@ from urllib.request import build_opener, ProxyHandler
 from dual_model_advisory import review, config, NoRedirect
 from test_historical_analyst_critic import HistoricalAnalystCriticTest
 
-SPECS=(("qwen2.5:0.5b-instruct","a8b0c5157701"),("qwen2.5:1.5b-instruct","65ec06548149"))
+SPECS=(("qwen2.5:0.5b-instruct","a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67"),("qwen2.5:1.5b-instruct","65ec06548149b04c096a120e4a6da9d4017ea809c91734ea5631e89f96ddc57b"))
 IMAGE="ollama/ollama@sha256:1514372d3cef7387b6202b253e761d820e00e44b28f268aad5029389d0479e99"
 
 def get(port,path):
@@ -19,17 +19,17 @@ def get(port,path):
         if len(raw)>65536:raise ValueError("metadata exceeds bound")
         return json.loads(raw)
 
-def attest(port,model,prefix):
+def attest(port,model,expected_digest):
     entries=get(port,"/api/tags")["models"]
     rows=[row for row in entries if row.get("name")==model]
     if len(rows)!=1:raise ValueError("expected single model")
     sha=rows[0]["digest"].removeprefix("sha256:")
-    if not re.fullmatch("[a-f0-9]{64}",sha) or not sha.startswith(prefix):
-        raise ValueError("published model fingerprint mismatch")
+    if not re.fullmatch("[a-f0-9]{64}",sha) or sha!=expected_digest:
+        raise ValueError("pinned model fingerprint mismatch")
     version=get(port,"/api/version")["version"]
     if version!="0.11.4":raise ValueError("unexpected Ollama version")
-    return {"model":model,"manifest_sha256":sha,"expected_prefix":prefix,
-            "full_digest_preconfigured":False,"engine_version":version}
+    return {"model":model,"manifest_sha256":sha,"expected_digest":expected_digest,
+            "full_digest_preconfigured":True,"engine_version":version}
 
 def main():
     parser=argparse.ArgumentParser()

@@ -22,6 +22,7 @@ jobs:
           print(html.split("<script>",1)[1].split("</script>",1)[0])
           PY
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_context.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_dual_model_advisory.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_clock.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_telemetry.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_activity.py -v
