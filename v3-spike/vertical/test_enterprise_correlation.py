@@ -53,4 +53,33 @@ class TemporalCorrelationTest(unittest.TestCase):
         with self.assertRaises(ValueError):preview([a,dict(a,severity="warning")],self.graph)
         for window in (True,0,3601):
             with self.assertRaises(ValueError):preview([a],self.graph,window)
+    def test_http_preview_is_read_only_and_origin_bound(self):
+        import json
+        import threading
+        from urllib.request import Request,urlopen
+        from urllib.error import HTTPError
+        from unittest.mock import patch
+        from http_demo import server
+        raw={"nodes":list(self.graph.nodes.values()),"edges":[{"source_id":a,"target_id":b,"relation_type":r} for a,b,r in self.graph.edges]}
+        records=[row("wan",P+"WAN",T),row("lyon",P+"NET-LYO","2026-01-01T09:00:01Z")]
+        with server(context_config=(18101,18102,ROOT,"INC-CI-CONTEXT")) as http,patch("http_demo.get",return_value=raw) as get,patch("http_demo.create_and_persist") as persist:
+            thread=threading.Thread(target=http.serve_forever,daemon=True)
+            thread.start()
+            base="http://127.0.0.1:%d"%http.server_port
+            def post(payload,origin=base):
+                req=Request(base+"/api/v1/enterprise-correlation/preview",data=json.dumps(payload).encode(),
+                            headers={"Content-Type":"application/json","Origin":origin})
+                with urlopen(req,timeout=5) as response:return json.load(response)
+            try:
+                payload={"records":records,"window_seconds":120}
+                self.assertEqual(post(payload),preview(records,self.graph))
+                get.assert_called_once_with(18101,"/api/twin/graph")
+                for bad,origin in ((payload,"http://foreign.invalid"),({"records":[dict(records[0],tenant="foreign")],"window_seconds":120},base),({"records":records,"window_seconds":True},base)):
+                    with self.assertRaises(HTTPError) as err:post(bad,origin)
+                    self.assertEqual(err.exception.code,503)
+                    self.assertEqual(json.load(err.exception)["policy"],"DENY")
+                persist.assert_not_called()
+            finally:
+                http.shutdown()
+                thread.join(5)
 if __name__=="__main__":unittest.main()
