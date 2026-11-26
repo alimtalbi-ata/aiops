@@ -92,6 +92,15 @@ jobs:
                           expect(page.locator("#enterprise-result")).not_to_contain_text("Independent HR portal")
                           page.locator("#load-dynamic-context").click()
                           expect(page.locator("#context-result")).to_contain_text("Conditional reduction: 120 ms",timeout=30000)
+                          measured=json.loads(subprocess.check_output([sys.executable,"v3-spike/kit/poc-multiasset-observed.py",f"http://127.0.0.1:{http.server_port}"],text=True))
+                          for incident in measured["incidents"]:
+                              page.locator("#enterprise-run-id").fill(incident["run_id"])
+                              page.locator("#enterprise-open-run").click()
+                              expect(page.locator("#enterprise-result")).to_contain_text(incident["run_id"],timeout=30000)
+                              expect(page.locator("#enterprise-result")).to_contain_text("MEASURED_SYNTHETIC_LAB")
+                              if incident["resource"]=="NODE-CI-ENT-ASSET-LYO":
+                                  expect(page.locator("#enterprise-result")).to_contain_text("ENT-DOC-004")
+                                  expect(page.locator("#enterprise-result")).not_to_contain_text("ENT-DOC-001")
                       finally:
                           browser.close()
               finally:
@@ -175,6 +184,8 @@ jobs:
           cat "$V3_ROOT/dynamic-smoke.json"
           python3 v3-spike/kit/poc-dynamic-smoke.py "$url" --observed > "$V3_ROOT/observed-smoke.json"
           cat "$V3_ROOT/observed-smoke.json"
+          python3 v3-spike/kit/poc-multiasset-observed.py "$url" > "$V3_ROOT/multiasset-observed.json"
+          cat "$V3_ROOT/multiasset-observed.json"
           curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"; assert d["copilot"]["sources"]==d["context"]["evidence"]; assert d["copilot"]["confidence"] is None'
           python3 - "$url" <<'PY'
           import json,sys,urllib.request,urllib.parse,urllib.error,os,pathlib
@@ -311,6 +322,18 @@ jobs:
                   assert query("select status from aiops.runs where run_id='"+run+"'")=="CREATED"
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->'signal' ? 'enterprise'")==str(count)
                   assert query("select count(*) from aiops.twin_nodes where node_id like 'NODE-CI-ENT-%'")=="18"
+          measured=json.load(open(root+"/multiasset-observed.json"))
+          assert measured["result"]=="PASS" and len(measured["incidents"])==2
+          for item in measured["incidents"]:
+              run=item["run_id"]
+              resource=item["resource"]
+              assert re.fullmatch(r"RUN-[A-F0-9]{16}",run)
+              assert resource in ("NODE-CI-ROOT","NODE-CI-ENT-ASSET-LYO")
+              for db in ("aiops","aiops_restore_ci"):
+                  def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
+                  assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->>'resource'='"+resource+"'")=="4"
+                  assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->'signal'->'enterprise'->'measurement'->>'classification'='MEASURED_SYNTHETIC_LAB'")=="2"
+          print("E3 measured multiasset evidence restore PASS")
           print("Enterprise E1 graph and signal restore PASS")
           PY
           "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci

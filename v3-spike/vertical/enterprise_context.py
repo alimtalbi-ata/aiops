@@ -3,10 +3,13 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import re
+import math
 
 P = "NODE-CI-ENT-"
 ROOT = "NODE-CI-ROOT"
 CHILD = "NODE-CI-CHILD"
+LYON = P+"ASSET-LYO"
+ENTERPRISE_ROOTS = frozenset((ROOT,LYON))
 TYPES = {"enterprise","site","infrastructure","asset","application","user_group","user"}
 REL = {
     "contains": {("enterprise","site"),("site","infrastructure"),("infrastructure","asset")},
@@ -26,7 +29,7 @@ def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(",",":")).encode()).hexdigest()
 
 def normalize(raw, kind):
-    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message"}:
+    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message","measurement"}:
         raise ValueError("invalid enterprise signal scope")
     timestamp=raw["occurred_at"]
     if not isinstance(timestamp,str) or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ",timestamp):
@@ -35,6 +38,13 @@ def normalize(raw, kind):
     for k,v in raw.items():
         if k.endswith("_id") and (not isinstance(v,str) or not re.fullmatch(r"NODE-CI-ENT-[A-Z0-9-]{1,80}",v)):
             raise ValueError("invalid enterprise identity")
+    if "measurement" in raw:
+        m=raw["measurement"]
+        if (kind!="metric" or not isinstance(m,dict) or set(m)!={"classification","samples_ms","method"}
+            or m["classification"]!="MEASURED_SYNTHETIC_LAB" or m["method"]!="HTTP_MONOTONIC_MEDIAN_5"
+            or not isinstance(m["samples_ms"],list) or len(m["samples_ms"])!=5
+            or any(type(v) not in (int,float) or not math.isfinite(v) or not 0<v<=1e9 for v in m["samples_ms"])):
+            raise ValueError("invalid observed measurement metadata")
     if kind in ("log","event"):
         msg=raw.get("message")
         if not isinstance(msg,str) or not 1<=len(msg)<=256 or any(ord(c)<32 for c in msg):
@@ -73,10 +83,11 @@ class Graph:
     def reverse(self, ids, rel):
         return {a for a,b,r in self.edges if b in ids and r==rel}
     def scope(self, root):
-        if root!=ROOT:
-            raise ValueError("E1 supports canonical Paris service only")
-        assets=self.reverse({root},"hosts")
-        apps=self.reverse({root},"depends_on") | self.reverse(assets,"depends_on")
+        if root not in ENTERPRISE_ROOTS or root not in self.nodes:
+            raise ValueError("unsupported enterprise root")
+        assets=self.reverse({root},"hosts") if root==ROOT else {root}
+        services=self.forward(assets,"hosts")
+        apps=self.reverse(services|assets,"depends_on")
         groups={n for n in self.reverse(apps,"uses") if self.nodes[n]["type"]=="user_group"}
         users={n for n in self.reverse(apps,"uses") if self.nodes[n]["type"]=="user"} | self.reverse(groups,"member_of")
         infra=self.reverse(assets,"contains")

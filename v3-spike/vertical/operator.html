@@ -5,7 +5,7 @@
 <header><h1>GAMMA / V3 synthetic operator</h1><p>Synthetic demonstration only · UNBOUND tenant · no production authorization or host actions</p><nav aria-label="Vertical sections"><a href="#input">Input</a><a href="#incident">Incident</a><a href="#twin">Twin & Evidence</a><a href="#policy">Policy & HITL</a><a href="#receipt">Run & Receipt</a></nav></header>
 <main><section id="input"><h2>Import C vertical CLI JSON</h2><p>Paste the output of <code>python v3-spike/vertical/vertical_demo.py</code> or its <code>--approved-synthetic</code> variant. When served by the loopback demo, load a synthetic projection directly.</p><label for="projection-file">Import CLI JSON file (local only, max 1 MiB)</label><input id="projection-file" type="file" accept=".json,application/json"><p id="file-status" role="status" aria-live="polite">No file selected.</p><label for="payload">Synthetic JSON projection</label><textarea id="payload" spellcheck="false" placeholder="Paste complete JSON output from C's vertical_demo.py"></textarea><div><button id="http-deny" type="button">Load HTTP demo (DENY)</button><button id="http-sim" type="button">Load HTTP demo (SIMULATE_ONLY)</button><button id="load" type="button">Inspect synthetic projection</button><button id="clear" type="button">Clear / reset</button></div><p id="state" role="status" aria-live="polite" aria-atomic="true">UNKNOWN — no projection loaded; DENY.</p></section>
 <div class="grid"><section id="incident"><h2>Incident</h2><p id="incident-value">UNKNOWN — no event</p></section><section id="twin"><h2>Twin / Evidence</h2><p id="twin-value">UNKNOWN — correlation unverified</p></section><section id="policy"><h2>Policy / HITL</h2><p id="policy-value">DENY — no verified decision</p><p class="warning">SIMULATE_ONLY is a synthetic label, never a production ALLOW.</p></section><section id="receipt"><h2>Simulated Run / Receipt</h2><p id="run-value">NOT_RUN — no receipt</p><p id="receipt-value">UNKNOWN — no receipt</p></section></div>
-<section id="dynamic-ingestion"><h2>Dynamic synthetic ingestion</h2><p>Creates a DEMO incident and stores synthetic evidence in the isolated lab.</p><button id="create-dynamic" type="button">Create synthetic incident</button><button id="create-enterprise" type="button">Create enterprise scenario (metric, log, event)</button><button id="load-enterprise" type="button" disabled>Open enterprise workbench</button><button id="load-dynamic-context" type="button" disabled>Inspect created incident</button><button id="simulate-dynamic-context" type="button" disabled>Simulate created incident</button><button id="dynamic-hitl-request" type="button" disabled>Request approval for created incident</button><button id="dynamic-hitl-approve" type="button" disabled>Approve simulation</button><button id="dynamic-hitl-deny" type="button" disabled>Refuse simulation</button><pre id="dynamic-hitl-result" role="status">UNKNOWN / DENY</pre><pre id="dynamic-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-clock"><h2>Enterprise clock E2</h2><p>Persistent logical time · modeled values only · no host actions</p><button id="clock-read" type="button">Read world state</button><button id="clock-next" type="button" disabled>Advance or retry tick</button><pre id="clock-result" role="status">UNKNOWN / DENY</pre><label for="clock-run">Published incident run</label><select id="clock-run"></select><button id="clock-open" type="button" disabled>Open incident in Workbench</button></section><section id="enterprise-workbench"><h2>Enterprise Workbench E1</h2><p>Fictional enterprise · potential exposure is not an observed outage · simulation timestamps</p><pre id="enterprise-result" role="status">UNKNOWN / DENY</pre></section><section id="incident-context"><h2>Unified incident context (synthetic lab)</h2><button id="load-context" type="button">Load incident context</button><button id="context-sim" type="button">Request Policy simulation decision</button><pre id="context-result" role="status">UNKNOWN / DENY — not loaded</pre></section><section id="canonical-core"><h2>Canonical Core (synthetic lab)</h2><button id="load-core" type="button">Load Core run</button><pre id="core-result" role="status">UNKNOWN / DENY — not loaded</pre></section><section id="correlated"><h2>Correlated incidents (synthetic)</h2><button id="load-incidents" type="button">Load correlated incidents</button><pre id="correlated-result" role="status">UNKNOWN — not loaded</pre></section><section><h2>Operational eligibility</h2><button id="eligibility" type="button">Check action eligibility</button><p id="decision" role="status" aria-live="polite" aria-atomic="true">DENIED — no operational action permitted.</p><small>Receipt hashes are untrusted labels until independently verified. This projection cannot attest provenance, tenant isolation, or a real HITL decision.</small></section></main>
+<section id="dynamic-ingestion"><h2>Dynamic synthetic ingestion</h2><p>Creates a DEMO incident and stores synthetic evidence in the isolated lab.</p><button id="create-dynamic" type="button">Create synthetic incident</button><button id="create-enterprise" type="button">Create enterprise scenario (metric, log, event)</button><button id="load-enterprise" type="button" disabled>Open enterprise workbench</button><button id="load-dynamic-context" type="button" disabled>Inspect created incident</button><button id="simulate-dynamic-context" type="button" disabled>Simulate created incident</button><button id="dynamic-hitl-request" type="button" disabled>Request approval for created incident</button><button id="dynamic-hitl-approve" type="button" disabled>Approve simulation</button><button id="dynamic-hitl-deny" type="button" disabled>Refuse simulation</button><pre id="dynamic-hitl-result" role="status">UNKNOWN / DENY</pre><pre id="dynamic-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-clock"><h2>Enterprise clock E2</h2><p>Persistent logical time · modeled values only · no host actions</p><button id="clock-read" type="button">Read world state</button><button id="clock-next" type="button" disabled>Advance or retry tick</button><button id="clock-capture" type="button" disabled>Capture measured Paris and Lyon incidents</button><pre id="clock-result" role="status">UNKNOWN / DENY</pre><label for="clock-run">Published incident run</label><select id="clock-run"></select><button id="clock-open" type="button" disabled>Open incident in Workbench</button></section><section id="enterprise-workbench"><h2>Enterprise Workbench</h2><label for="enterprise-run-id">Existing synthetic run ID</label><input id="enterprise-run-id" type="text" maxlength="20" placeholder="RUN-..."><button id="enterprise-open-run" type="button">Open persisted run</button><p>Fictional enterprise · potential exposure is not an observed outage · simulation timestamps</p><pre id="enterprise-result" role="status">UNKNOWN / DENY</pre></section><section id="incident-context"><h2>Unified incident context (synthetic lab)</h2><button id="load-context" type="button">Load incident context</button><button id="context-sim" type="button">Request Policy simulation decision</button><pre id="context-result" role="status">UNKNOWN / DENY — not loaded</pre></section><section id="canonical-core"><h2>Canonical Core (synthetic lab)</h2><button id="load-core" type="button">Load Core run</button><pre id="core-result" role="status">UNKNOWN / DENY — not loaded</pre></section><section id="correlated"><h2>Correlated incidents (synthetic)</h2><button id="load-incidents" type="button">Load correlated incidents</button><pre id="correlated-result" role="status">UNKNOWN — not loaded</pre></section><section><h2>Operational eligibility</h2><button id="eligibility" type="button">Check action eligibility</button><p id="decision" role="status" aria-live="polite" aria-atomic="true">DENIED — no operational action permitted.</p><small>Receipt hashes are untrusted labels until independently verified. This projection cannot attest provenance, tenant isolation, or a real HITL decision.</small></section></main>
 <section><h2>Human approval — synthetic demo</h2><button id="hitl-request">Request approval</button> <button id="hitl-approve" disabled>Approve simulation</button> <button id="hitl-deny" disabled>Refuse</button><pre id="hitl-result">UNKNOWN / DENY</pre></section>
 <script>
 "use strict";
@@ -224,6 +224,16 @@ async function createDynamic(enterprise=false){
 }
 $("create-dynamic").addEventListener("click",()=>createDynamic(false));
 $("create-enterprise").addEventListener("click",()=>createDynamic(true));
+$("enterprise-open-run").addEventListener("click",()=>{
+ const run=$("enterprise-run-id").value.trim();
+ ++dynamicGeneration;++contextGeneration;selectedDynamicRun=null;resetDynamicApproval();
+ $("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
+ $("enterprise-result").textContent="UNKNOWN / DENY";$("context-result").textContent="UNKNOWN / DENY";$("dynamic-result").textContent="UNKNOWN / DENY";
+ if(!/^RUN-[A-F0-9]{16}$/.test(run))return;
+ selectedDynamicRun=run;
+ // The server resolves the root from verified evidence; no caller-supplied asset.
+ $("load-enterprise").disabled=false;$("load-enterprise").click();
+});
 $("load-enterprise").addEventListener("click",async()=>{
  const run=selectedDynamicRun,generation=dynamicGeneration,target=$("enterprise-result");
  if(!run)return;
@@ -237,10 +247,11 @@ $("load-enterprise").addEventListener("click",async()=>{
   const lines=[d.incident_id,d.run_id,"Potential exposure — not observed outage"];
   for(const [kind,nodes] of Object.entries(d.potential_exposure))lines.push(kind+": "+nodes.map(n=>n.name+" ("+n.node_id+")").join(", "));
   lines.push("Reported users: "+(d.reported_user_ids.join(", ")||"None explicitly reported"),"Timeline:");
-  for(const e of d.timeline)lines.push([e.occurred_at||"Time unspecified",e.source,e.asset_id,e.application_id,e.group_id,e.user_id,e.message,e.observation?JSON.stringify(e.observation):null,e.evidence_id,e.payload_hash].filter(Boolean).join(" | "));
+  for(const e of d.timeline)lines.push([e.occurred_at||"Time unspecified",e.source,e.asset_id,e.application_id,e.group_id,e.user_id,e.message,e.observation?JSON.stringify(e.observation):null,e.measurement?JSON.stringify(e.measurement):null,e.evidence_id,e.payload_hash].filter(Boolean).join(" | "));
   lines.push("Document references (not Evidence):",...d.document_references.map(x=>x.id+" v"+x.version+" | "+x.title+" | "+x.sha256),"RCA UNKNOWN · Policy DENY");
   target.textContent=lines.join("\n");
- }catch(_err){if(generation===dynamicGeneration)target.textContent="UNKNOWN / DENY — enterprise context unavailable";}
+  $("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;resetDynamicApproval();
+ }catch(_err){if(generation===dynamicGeneration){target.textContent="UNKNOWN / DENY — enterprise context unavailable";selectedDynamicRun=null;resetDynamicApproval();$("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;}}
 });
 let clockState=null,clockBusy=false;
 async function readClock(){
@@ -249,32 +260,38 @@ async function readClock(){
  const d=await response.json();
  if(d.classification!=="SYNTHETIC_ENTERPRISE_CLOCK_E2"||d.production_authorized!==false||d.operational_decision!=="DENY"||!Number.isInteger(d.current_tick)||!Array.isArray(d.recent))throw Error("unverified clock");
  clockState=d;
- $("clock-result").textContent=[d.world_id,"Logical tick: "+d.current_tick,d.pending?"Pending publication — retry same tick":"Committed","Model-generated, not measured",...d.recent.map(x=>[x.tick,x.simulated_at,x.phase,x.modeled_latency_ms+" ms",x.publication?.run_id||x.publication?.state||"PENDING"].join(" | ")),"Policy DENY"].join("\n");
+ $("clock-result").textContent=[d.world_id,"Logical tick: "+d.current_tick,d.pending?"Pending publication — retry same tick":"Committed","Model-generated, not measured",...d.recent.map(x=>[x.tick,x.simulated_at,x.phase,x.modeled_latency_ms+" ms",x.publication?.run_id||x.publication?.state||"PENDING",x.measured_capture?"Measured capture: "+x.measured_capture.state:""].join(" | ")),"Policy DENY"].join("\n");
  const select=$("clock-run"),old=select.value;
  select.replaceChildren();
  for(const x of d.recent){
-  if(x.publication?.state!=="PUBLISHED")continue;
-  const option=document.createElement("option");
-  option.value=x.publication.run_id;option.textContent="Tick "+x.tick+" · "+x.publication.incident_id;select.appendChild(option);
+  const publications=[...(x.publication?.state==="PUBLISHED"?[x.publication]:[]),...(x.measured_capture?.incidents||[])];
+  for(const item of publications){
+   const option=document.createElement("option");
+   option.value=item.run_id;option.textContent="Tick "+x.tick+" · "+(item.resource?"Measured "+item.resource:"Model")+" · "+item.incident_id;select.appendChild(option);
+  }
  }
  if([...select.options].some(x=>x.value===old))select.value=old;
  $("clock-open").disabled=!select.value;
 }
-async function clockAction(advance){
+async function clockAction(advance,capture=false){
  if(clockBusy)return;
- clockBusy=true;$("clock-next").disabled=true;
+ clockBusy=true;$("clock-next").disabled=true;$("clock-capture").disabled=true;
  try{
-  if(advance&&clockState){
+  if(capture&&clockState){
+   const response=await fetch("/api/v1/enterprise-clock/capture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_tick:clockState.current_tick})});
+   if(!response.ok)throw Error("capture not confirmed");
+  }else if(advance&&clockState){
    const expected_tick=clockState.current_tick+(clockState.pending?0:1);
    const response=await fetch("/api/v1/enterprise-clock/advance",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_tick})});
    if(!response.ok)throw Error("advance not confirmed");
   }
   await readClock();
  }catch(_err){clockState=null;$("clock-result").textContent="UNKNOWN / DENY — refresh state before retry";$("clock-open").disabled=true;}
- finally{clockBusy=false;$("clock-next").disabled=!clockState;}
+ finally{clockBusy=false;const last=clockState?.latest;$("clock-next").disabled=!clockState||last?.measured_capture?.state==="PENDING";$("clock-capture").disabled=!last||last.phase!=="DEGRADED"||last.publication?.state!=="PUBLISHED"||last.measured_capture?.state==="PUBLISHED";}
 }
 $("clock-read").addEventListener("click",()=>clockAction(false));
 $("clock-next").addEventListener("click",()=>clockAction(true));
+$("clock-capture").addEventListener("click",()=>clockAction(false,true));
 $("clock-open").addEventListener("click",()=>{
  const run=$("clock-run").value;
  if(!/^RUN-[A-F0-9]{16}$/.test(run))return;

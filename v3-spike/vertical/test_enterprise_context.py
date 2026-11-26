@@ -25,6 +25,25 @@ class EnterpriseTest(unittest.TestCase):
         for bad in (dict(self.scope,user_id=P+"USER-HR-01"),dict(self.scope,application_id=P+"APP-CRM"),dict(self.scope,asset_id=P+"ASSET-LYO"),dict(self.scope,group_id=P+"GROUP-HR"),dict(self.scope,user_id=P+"USER-DIRECT-01")):
             with self.assertRaises(ValueError):
                 self.graph.validate_signal(ROOT,normalize(bad,"log"))
+    def test_independent_lyon_and_raw_samples(self):
+        from enterprise_context import LYON
+        scope={"asset_id":P+"ASSET-LYO","application_id":P+"APP-HR","group_id":P+"GROUP-HR","user_id":P+"USER-HR-01","occurred_at":"2026-01-01T09:00:11Z","message":"Synthetic HR request"}
+        self.graph.validate_signal(LYON,normalize(scope,"log"))
+        self.assertEqual(self.graph.scope(LYON)["applications"],{P+"APP-HR"})
+        self.assertEqual(self.graph.scope(LYON)["users"],{P+"USER-HR-01"})
+        for root,bad in ((ROOT,scope),(LYON,self.scope),(LYON,dict(scope,user_id=P+"USER-FIN-01"))):
+            with self.assertRaises(ValueError):
+                self.graph.validate_signal(root,normalize(bad,"log"))
+        metric={"id":"measure1","kind":"metric","source":"multiasset-observed-http","resource":LYON,"severity":"critical","tenant":"synthetic-demo","synthetic":True,
+                "enterprise":{"asset_id":P+"ASSET-LYO","application_id":P+"APP-HR","occurred_at":"2026-01-01T09:00:11Z","measurement":{"classification":"MEASURED_SYNTHETIC_LAB","samples_ms":[11,12,10,13,9],"method":"HTTP_MONOTONIC_MEDIAN_5"}},
+                "observation":{"metric":"latency_ms","phase":"baseline","value":11}}
+        signal=ingest([metric])["incidents"][0]["evidence"][0]
+        self.assertEqual(signal["enterprise"]["measurement"]["samples_ms"],[11,12,10,13,9])
+        with self.assertRaises(ValueError):
+            ingest([dict(metric,observation=dict(metric["observation"],value=12))])
+        for samples in ([11], [11,12,10,13,True], [11,12,10,13,float("nan")]):
+            with self.assertRaises(ValueError):
+                ingest([dict(metric,enterprise=dict(metric["enterprise"],measurement=dict(metric["enterprise"]["measurement"],samples_ms=samples)))])
     def test_ingestion_and_projection(self):
         row={"id":"ent-l1","kind":"log","source":"app","resource":ROOT,"severity":"critical","tenant":"synthetic-demo","synthetic":True,"enterprise":self.scope}
         signal=ingest([row])["incidents"][0]["evidence"][0]
