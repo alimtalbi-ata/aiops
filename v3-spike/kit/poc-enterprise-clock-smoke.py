@@ -45,6 +45,15 @@ def smoke(origin, restart):
             assert {x["evidence_id"]:x["payload_hash"] for x in ctx["timeline"]}=={x["evidence_id"]:x["payload_hash"] for x in pub["evidence"]}
             assert all(x["source"].endswith(":enterprise-clock-e2") for x in ctx["timeline"])
             assert ctx["causality_established"] is False
+            assert ctx["document_history"]["state"]=="HISTORICAL_LOGICAL_VERSION"
+            assert ctx["document_history"]["logical_tick"]==n
+            pay=next(d for d in ctx["document_references"] if d["id"]=="ENT-DOC-001")
+            assert pay["version"]==(3 if restart else 2) and pay["valid_from_tick"]==n-1
+            assert all(not d["observed_evidence"] for d in ctx["document_references"])
+            combined=call("/api/v1/incident-context/dynamic?run_id="+pub["run_id"])
+            assert combined["enterprise_context"]==ctx
+            assert combined["copilot"]["enterprise_document_retrieval"]["citations"]==ctx["document_references"]
+            assert combined["copilot"]["enterprise_document_retrieval"]["document_history"]==ctx["document_history"]
             measured=capture(n)
             assert measured==capture(n) and measured["state"]=="PUBLISHED"
             assert re.fullmatch(r"[a-f0-9]{64}",measured["batch_sha256"])
@@ -107,12 +116,19 @@ def smoke(origin, restart):
     if restart:
         old=call("/api/v1/enterprise-context?run_id="+first)
         assert old["run_id"]==first and len(old["timeline"])==4
+        assert old["document_history"]["logical_tick"]==3
+        old_pay=next(d for d in old["document_references"] if d["id"]=="ENT-DOC-001")
+        assert old_pay["version"]==2 and old_pay["sha256"]!=pay["sha256"]
         assert end["recent"][2]["measured_capture"]==old_capture
         assert end["recent"][2]["technical_capture"]==old_technical
         for item in old_technical["incidents"]:
             assert call("/api/v1/enterprise-context?run_id="+item["run_id"])["root"]==item["resource"]
         for item in old_capture["incidents"]:
             assert call("/api/v1/enterprise-context?run_id="+item["run_id"])["root"]==item["resource"]
+    catalog=call("/api/v1/enterprise-corpus")
+    current=next(d for d in catalog["documents"] if d["id"]=="ENT-DOC-001")
+    assert len(catalog["documents"])==10 and current["version"]==(3 if restart else 2)
+    print(json.dumps({"classification":"E7_HISTORICAL_CORPUS","result":"PASS","current_tick":end["current_tick"],"documents":10,"current_payments_version":current["version"],"historical_tick3_version":old_pay["version"] if restart else pay["version"],"current_document_sha256":current["sha256"],"historical_document_sha256":old_pay["sha256"] if restart else pay["sha256"],"production_authorized":False}),file=sys.stderr)
     try: advance(end["current_tick"]+2)
     except HTTPError as exc: assert exc.code==503
     else: raise AssertionError("skipped tick accepted")
