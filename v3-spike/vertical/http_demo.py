@@ -33,9 +33,10 @@ def enterprise_projection(graph, details, run, clock):
     scope.add(result["root"])
     query=" ".join(str(row.get("message",""))+" "+str(row.get("observation",{}).get("metric","")) for row in result["timeline"])[:512]
     history=clock.historical_documents(run["run_id"],scope,query)
-    result["document_history"]={k:v for k,v in history.items() if k!="citations"}
+    result["document_history"]={k:v for k,v in history.items() if k not in ("citations","lifecycle_citations")}
     if history["state"]=="HISTORICAL_LOGICAL_VERSION":
         result["document_references"]=history["citations"]
+        result["lifecycle_references"]=history["lifecycle_citations"]
     elif history["state"]=="PRE_E7_UNAVAILABLE":
         result["document_references"]=[]
     return result
@@ -210,6 +211,18 @@ class Handler(BaseHTTPRequestHandler):
                     "observed_outage_established":False,"production_authorized":False,"operational_decision":"DENY"}).encode())
             except Exception:
                 self.reply(503,b'{"error":"IMPACT_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-knowledge":
+            try:
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                result=self.server.enterprise_clock.knowledge_catalog()
+                if any(not set(d["scope"])<=graph.nodes.keys() for d in result["documents"]):
+                    raise ValueError("unbound knowledge scope")
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"KNOWLEDGE_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-corpus":
             try:
                 if self.server.enterprise_clock is None:
@@ -270,7 +283,7 @@ class Handler(BaseHTTPRequestHandler):
                     result["enterprise_context"]=enterprise
                     result["copilot"]["enterprise_document_retrieval"]={
                         "run_id":run_id,"topology_sha256":enterprise["topology_sha256"],
-                        "citations":enterprise["document_references"],"document_history":enterprise.get("document_history"),"production_authorized":False,
+                        "citations":enterprise["document_references"],"document_history":enterprise.get("document_history"),"lifecycle_citations":enterprise.get("lifecycle_references",[]),"production_authorized":False,
                         "llm_inference_performed":False,"operational_decision":"DENY"}
                     result["copilot"]["enterprise_scope"]={
                         "root":enterprise["root"],"exposure_semantics":enterprise["exposure_semantics"],
