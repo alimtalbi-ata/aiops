@@ -655,6 +655,11 @@ jobs:
           docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
           project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
           compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration)
+          # The dedicated SDK lab worker runs on this disposable runner only.
+          # Publish Temporal on an ephemeral loopback port, never in the product Compose.
+          override="$V3_ROOT/temporal-e17-ci.yml"
+          (umask 077; set -o noclobber; printf '%s\n' 'services:' '  temporal:' '    ports: ["127.0.0.1::7233"]' '    networks: [backend, edge]' > "$override")
+          compose+=(-f "$override")
           # Core and Evidence are already healthy from the preceding real-service
           # qualification. Building worker with dependencies can recreate them
           # and collide with rootless published ports; preserve both instances.
@@ -691,6 +696,16 @@ jobs:
           check_receipt
           python3 v3-spike/kit/poc-temporal-ui-smoke.py "http://$ui" "$V3_ROOT/temporal-boundary.json" > "$V3_ROOT/temporal-ui.json"
           cat "$V3_ROOT/temporal-ui.json"
+          temporal_endpoint=$("${compose[@]}" port temporal 7233)
+          [[ "$temporal_endpoint" =~ ^127\.0\.0\.1:[0-9]+$ ]]
+          case "${temporal_endpoint##*:}" in 7770|7777|7790) exit 1 ;; esac
+          python3 -m venv "$V3_ROOT/temporal-e17-venv"
+          sdk=$(grep -xE 'temporalio==[0-9]+\.[0-9]+\.[0-9]+' app/requirements.txt)
+          "$V3_ROOT/temporal-e17-venv/bin/python" -m pip install --no-cache-dir "$sdk"
+          "$V3_ROOT/temporal-e17-venv/bin/python" v3-spike/kit/poc-temporal-e17-smoke.py "$V3_ROOT" "$temporal_endpoint" \
+            "$("${compose[@]}" port core 810)" "$("${compose[@]}" port twin 811)" \
+            "$("${compose[@]}" port evidence 812)" "$("${compose[@]}" port policy 813)" > "$V3_ROOT/temporal-e17.json"
+          cat "$V3_ROOT/temporal-e17.json"
           "${compose[@]}" stop temporal
           "${compose[@]}" exec -T worker python - unavailable < v3-spike/kit/poc-temporal-boundary-smoke.py
           "${compose[@]}" stop worker
@@ -707,6 +722,9 @@ jobs:
           check_receipt
           python3 v3-spike/kit/poc-temporal-ui-smoke.py "http://$ui" "$V3_ROOT/temporal-boundary-replay.json" > "$V3_ROOT/temporal-ui-replay.json"
           cmp "$V3_ROOT/temporal-ui.json" "$V3_ROOT/temporal-ui-replay.json"
+          test "$temporal_endpoint" = "$("${compose[@]}" port temporal 7233)"
+          "$V3_ROOT/temporal-e17-venv/bin/python" v3-spike/kit/poc-temporal-e17-smoke.py "$V3_ROOT" "$temporal_endpoint" readback > "$V3_ROOT/temporal-e17-replay.json"
+          cat "$V3_ROOT/temporal-e17-replay.json"
           echo "V3 Temporal persisted history and Core state restore PASS"
       - name: Collect bounded Worker diagnostics on failure
         if: failure()
@@ -732,6 +750,8 @@ jobs:
             ${{ env.V3_ROOT }}/temporal-ui.json
             ${{ env.V3_ROOT }}/temporal-ui-replay.json
             ${{ env.V3_ROOT }}/temporal-ui-digests.json
+            ${{ env.V3_ROOT }}/temporal-e17.json
+            ${{ env.V3_ROOT }}/temporal-e17-replay.json
           if-no-files-found: warn
       - if: always()
         run: |
