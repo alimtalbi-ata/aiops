@@ -9,21 +9,32 @@ P = "NODE-CI-ENT-"
 ROOT = "NODE-CI-ROOT"
 CHILD = "NODE-CI-CHILD"
 LYON = P+"ASSET-LYO"
-ENTERPRISE_ROOTS = frozenset((ROOT,LYON))
-TYPES = {"enterprise","site","infrastructure","asset","application","user_group","user"}
+CAPTURE_ROOTS = frozenset((ROOT,LYON))
+TECH_TYPES = {"network","compute","database","storage","identity","endpoint"}
+TECH_ROOTS = frozenset(P+x for x in ("NET-PAR","NET-LYO","WAN","LINUX-PAR","WIN-LYO","DB-PAY","DB-CRM","DB-HR","STORAGE-PAR","STORAGE-LYO","IDENTITY","PC-FIN-01","PC-HR-01","PC-SALES-01"))
+ENTERPRISE_ROOTS = CAPTURE_ROOTS | TECH_ROOTS
+TYPES = {"enterprise","site","infrastructure","asset","application","user_group","user"} | TECH_TYPES
 REL = {
-    "contains": {("enterprise","site"),("site","infrastructure"),("infrastructure","asset")},
+    "contains": {("enterprise","site"),("site","infrastructure"),("infrastructure","asset")} | {("infrastructure",t) for t in TECH_TYPES},
     "hosts": {("asset","service")},
     "depends_on": {("application","service"),("application","asset")},
     "uses": {("user_group","application"),("user","application")},
     "member_of": {("user","user_group")},
     "depends": {("service","service")},
+    "requires": {("asset","compute"),("compute","network"),("network","network"),("application","database"),("database","storage"),("application","identity")},
+    "uses_device": {("user","endpoint")},
 }
 DOCUMENTS = (
     {"id":"ENT-DOC-001","version":1,"scope":[P+"ASSET-PAR",P+"APP-PAY"],"title":"Payments latency runbook","text":"Compare HTTP latency and host observations before simulating intervention."},
     {"id":"ENT-DOC-002","version":1,"scope":[P+"APP-CRM"],"title":"CRM architecture","text":"CRM shares the Paris application service; verify CRM-specific observations."},
     {"id":"ENT-DOC-003","version":1,"scope":[P+"GROUP-FIN"],"title":"Finance user triage","text":"Distinguish a single user report from a group-wide service outage."},
     {"id":"ENT-DOC-004","version":1,"scope":[P+"APP-HR",P+"ASSET-LYO"],"title":"Independent HR portal","text":"Investigate the Lyon HR host independently of the Paris service."},
+    {"id":"ENT-DOC-005","version":1,"scope":[P+"NET-PAR",P+"NET-LYO",P+"WAN"],"title":"Network dependency runbook","text":"Check local access and inter-site WAN separately; distinguish connectivity from application failures."},
+    {"id":"ENT-DOC-006","version":1,"scope":[P+"LINUX-PAR",P+"WIN-LYO"],"title":"Compute operations","text":"Check runtime availability, CPU and memory; no host changes without policy approval."},
+    {"id":"ENT-DOC-007","version":1,"scope":[P+"DB-PAY",P+"DB-CRM",P+"DB-HR"],"title":"Database triage","text":"Compare connection errors, query latency and pool saturation for the specific database."},
+    {"id":"ENT-DOC-008","version":1,"scope":[P+"STORAGE-PAR",P+"STORAGE-LYO"],"title":"Storage triage","text":"Check capacity, I/O latency and affected databases before escalating."},
+    {"id":"ENT-DOC-009","version":1,"scope":[P+"IDENTITY"],"title":"Directory incident runbook","text":"Check authentication failures across applications; distinguish shared identity outage from user credentials."},
+    {"id":"ENT-DOC-010","version":1,"scope":[P+"PC-FIN-01",P+"PC-HR-01",P+"PC-SALES-01"],"title":"Individual workstation triage","text":"Validate device and user binding; do not infer group or application outage from one workstation."},
 )
 def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(",",":")).encode()).hexdigest()
@@ -85,14 +96,35 @@ class Graph:
     def scope(self, root):
         if root not in ENTERPRISE_ROOTS or root not in self.nodes:
             raise ValueError("unsupported enterprise root")
-        assets=self.reverse({root},"hosts") if root==ROOT else {root}
-        services=self.forward(assets,"hosts")
-        apps=self.reverse(services|assets,"depends_on")
+        if root in CAPTURE_ROOTS:
+            assets=self.reverse({root},"hosts") if root==ROOT else {root}
+            services=self.forward(assets,"hosts")
+            apps=self.reverse(services|assets,"depends_on")
+            tech=set()
+        else:
+            # Only reverse dependency traversal: never fan out through shared dependencies.
+            reached={root}
+            for _ in range(len(self.nodes)):
+                expanded=reached|self.reverse(reached,"requires")
+                if expanded==reached:
+                    break
+                reached=expanded
+            else:
+                raise ValueError("dependency traversal did not converge")
+            assets={root}
+            tech={n for n in reached if self.nodes[n]["type"] in TECH_TYPES}
+            hosts={n for n in reached if self.nodes[n]["type"]=="asset"}
+            apps={n for n in reached if self.nodes[n]["type"]=="application"}|self.reverse(hosts|self.forward(hosts,"hosts"),"depends_on")
         groups={n for n in self.reverse(apps,"uses") if self.nodes[n]["type"]=="user_group"}
         users={n for n in self.reverse(apps,"uses") if self.nodes[n]["type"]=="user"} | self.reverse(groups,"member_of")
-        infra=self.reverse(assets,"contains")
+        if self.nodes[root]["type"]=="endpoint":
+            users=self.reverse({root},"uses_device")
+            groups=set()
+            # These are accessible apps for the affected user, not app-wide outages.
+            apps=self.forward(users,"uses")|self.forward(self.forward(users,"member_of"),"uses")
+        infra=self.reverse(assets|tech,"contains")
         sites=self.reverse(infra,"contains")
-        return {"assets":assets,"applications":apps,"groups":groups,"users":users,"infrastructure":infra,"sites":sites}
+        return {"assets":assets,"applications":apps,"groups":groups,"users":users,"infrastructure":infra,"sites":sites,"technical":tech}
     def validate_signal(self, root, scope):
         allowed=self.scope(root)
         asset=scope["asset_id"]
@@ -102,8 +134,10 @@ class Graph:
         for value,k in ((asset,"assets"),(app,"applications"),(group,"groups"),(user,"users")):
             if value is not None and value not in allowed[k]:
                 raise ValueError("signal outside enterprise service scope")
-        if app and app not in self.reverse(self.forward({asset},"hosts")|{asset},"depends_on"):
+        if root in CAPTURE_ROOTS and app and app not in self.reverse(self.forward({asset},"hosts")|{asset},"depends_on"):
             raise ValueError("application not hosted by asset")
+        if self.nodes[root]["type"]=="endpoint" and user not in allowed["users"]:
+            raise ValueError("endpoint requires bound individual")
         if (group or user) and not app:
             raise ValueError("user context requires application")
         if group and app not in self.forward({group},"uses"):
@@ -143,11 +177,14 @@ class Graph:
         # must not silently become proof of a group-wide incident.
         exposed=set().union(*allowed.values())
         doc_scope=scoped or exposed
+        if root in TECH_ROOTS:
+            doc_scope=doc_scope|{root}
         citations=[{**d,"sha256":digest(d),"observed_evidence":False,"provenance":"SYNTHETIC_REFERENCE_ONLY"}
                    for d in DOCUMENTS if set(d["scope"]) & doc_scope]
         return {"classification":"SYNTHETIC_ENTERPRISE_CONTEXT_E1","tenant":"synthetic-demo",
                 "run_id":run["run_id"],"incident_id":run["incident_id"],"root":root,
                 "topology_sha256":digest({"nodes":sorted(self.nodes.values(),key=lambda n:n["node_id"]),"edges":sorted(self.edges)}),
+                "exposure_semantics":"INDIVIDUAL_ACCESS_ONLY" if self.nodes[root]["type"]=="endpoint" else "TOPOLOGICAL_POTENTIAL_ONLY",
                 "potential_exposure":{k:[self.nodes[n] for n in sorted(v)] for k,v in allowed.items()},
                 "reported_user_ids":sorted(subjects),"timeline":timeline,"document_references":citations,
                 "observed_outage_established":False,"causality_established":False,
