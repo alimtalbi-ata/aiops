@@ -706,6 +706,9 @@ jobs:
             "$("${compose[@]}" port core 810)" "$("${compose[@]}" port twin 811)" \
             "$("${compose[@]}" port evidence 812)" "$("${compose[@]}" port policy 813)" > "$V3_ROOT/temporal-e17.json"
           cat "$V3_ROOT/temporal-e17.json"
+          temporal_before=$("${compose[@]}" ps -q temporal)
+          temporal_db_before=$("${compose[@]}" ps -q temporal-postgres)
+          test -n "$temporal_before" && test -n "$temporal_db_before"
           "${compose[@]}" stop temporal
           "${compose[@]}" exec -T worker python - unavailable < v3-spike/kit/poc-temporal-boundary-smoke.py
           "${compose[@]}" stop worker
@@ -715,16 +718,30 @@ jobs:
           evidence_before=$("${compose[@]}" ps -q evidence)
           "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 temporal
           "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 worker
-          test "$core_before" = "$("${compose[@]}" ps -q core)"
-          test "$evidence_before" = "$("${compose[@]}" ps -q evidence)"
-          "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
-          cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json"
-          check_receipt
-          python3 v3-spike/kit/poc-temporal-ui-smoke.py "http://$ui" "$V3_ROOT/temporal-boundary-replay.json" > "$V3_ROOT/temporal-ui-replay.json"
-          cmp "$V3_ROOT/temporal-ui.json" "$V3_ROOT/temporal-ui-replay.json"
-          test "$temporal_endpoint" = "$("${compose[@]}" port temporal 7233)"
-          "$V3_ROOT/temporal-e17-venv/bin/python" v3-spike/kit/poc-temporal-e17-smoke.py "$V3_ROOT" "$temporal_endpoint" readback > "$V3_ROOT/temporal-e17-replay.json"
+          test "$core_before" = "$("${compose[@]}" ps -q core)" || { echo "Core container changed" >&2; exit 1; }
+          test "$evidence_before" = "$("${compose[@]}" ps -q evidence)" || { echo "Evidence container changed" >&2; exit 1; }
+          test "$temporal_before" = "$("${compose[@]}" ps -q temporal)" || { echo "Temporal container changed" >&2; exit 1; }
+          test "$temporal_db_before" = "$("${compose[@]}" ps -q temporal-postgres)" || { echo "Temporal database container changed" >&2; exit 1; }
+          # A rootless daemon may allocate a new ephemeral host port on restart.
+          # Re-resolve the SAME container; persistence is proven by history and
+          # receipt equality, not by the host port number.
+          temporal_restarted=$("${compose[@]}" port temporal 7233)
+          [[ "$temporal_restarted" =~ ^127\.0\.0\.1:[0-9]+$ ]] || { echo "Invalid restarted Temporal endpoint" >&2; exit 1; }
+          case "${temporal_restarted##*:}" in 7770|7777|7790) exit 1 ;; esac
+          printf 'Temporal loopback before=%s after=%s\n' "$temporal_endpoint" "$temporal_restarted"
+          "$V3_ROOT/temporal-e17-venv/bin/python" v3-spike/kit/poc-temporal-e17-smoke.py "$V3_ROOT" "$temporal_restarted" readback > "$V3_ROOT/temporal-e17-replay.json"
           cat "$V3_ROOT/temporal-e17-replay.json"
+          echo "E17 action receipt history readback PASS"
+          "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
+          cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json" || { echo "Boundary receipt changed" >&2; exit 1; }
+          check_receipt || { echo "Core execution receipt count changed" >&2; exit 1; }
+          echo "Boundary and Core readback PASS"
+          ui_restarted=$("${compose[@]}" port temporal-ui 8080)
+          [[ "$ui_restarted" =~ ^127\.0\.0\.1:[0-9]+$ ]]
+          case "${ui_restarted##*:}" in 7770|7777|7790) exit 1 ;; esac
+          python3 v3-spike/kit/poc-temporal-ui-smoke.py "http://$ui_restarted" "$V3_ROOT/temporal-boundary-replay.json" > "$V3_ROOT/temporal-ui-replay.json"
+          cmp "$V3_ROOT/temporal-ui.json" "$V3_ROOT/temporal-ui-replay.json" || { echo "UI history changed" >&2; exit 1; }
+          echo "Temporal UI history readback PASS"
           echo "V3 Temporal persisted history and Core state restore PASS"
       - name: Collect bounded Worker diagnostics on failure
         if: failure()
