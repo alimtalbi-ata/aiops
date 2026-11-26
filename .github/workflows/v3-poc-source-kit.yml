@@ -775,7 +775,7 @@ jobs:
             test "$ready" = 1
           done
           timeout 420s docker exec v3-e21-a ollama pull qwen2.5:0.5b-instruct
-          timeout 420s docker exec v3-e21-c ollama pull qwen2.5:1.5b-instruct
+          timeout 420s docker exec v3-e21-c ollama pull qwen2.5:7b-instruct
       - name: Actual model experiment with bounded process deadline
         run: |
           set -euo pipefail
