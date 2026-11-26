@@ -30,6 +30,8 @@ services:
   callback:
     image: python:3.12-alpine
     command: ["python", "/lab/mattermost-native-callback.py"]
+    environment:
+      MM_LAB_BACKEND_MODE: ${MM_LAB_BACKEND_MODE:-mock}
     volumes:
       - ./mattermost-native-callback.py:/lab/mattermost-native-callback.py:ro
       - ${MM_LAB_BINDING_DIR:?required}:/binding:ro
