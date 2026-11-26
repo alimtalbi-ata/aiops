@@ -22,6 +22,9 @@ def ingest(records):
                 or not math.isfinite(obs["value"])):
                 raise ValueError("Invalid synthetic latency observation")
             event["observation"]=dict(obs)
+        if "enterprise" in row:
+            from enterprise_context import normalize
+            event["enterprise"]=normalize(row["enterprise"],kind)
         events.append(event)
     result=correlate(events)
     result["ingestion"]={"received":len(records),"unique":sum(i["alert_count"] for i in result["incidents"]),
