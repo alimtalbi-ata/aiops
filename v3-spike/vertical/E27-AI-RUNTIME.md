@@ -5,3 +5,7 @@ Default disabled. Dedicated root private ai-runtime.json (owner only, regular fi
 ## CENTRAL E26 / E25 V3 alignment
 
 The HTTP fixture integration now reads the exact persisted review via the E26 telemetry endpoint, matches both receipt ID and digest, and verifies that reading does not trigger an additional invocation. Focused runtime tests run in source-kit config as well as the HTTP workflow, because a stacked PR may not trigger the latter. No independent QA or live runtime model qualification.
+
+## E25 V4 alignment and explicit GAMMA review
+
+Status endpoint exposes only enabled boolean and DENY, no provider configuration. Browser review is disabled until opt-in status confirmed, explicit user click only, single in-flight button, historical selection generation invalidation, verified receipt readback before display, text-only output and separate telemetry read button. Changing selection does not cancel server inference; completed receipts persist and stale UI output is discarded. Actual Chromium exercises synthetic providers and history fixture, receipt matching and no extra inference during telemetry read. No live Core/Evidence/model end-to-end attestation yet.

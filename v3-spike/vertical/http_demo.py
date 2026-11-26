@@ -253,6 +253,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(result).encode())
             except Exception:
                 self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/ai-runtime/status":
+            self.reply(200,json.dumps({"classification":"SYNTHETIC_GAMMA_AI_RUNTIME_STATUS_E27","enabled":self.server.ai_runtime is not None,"production_authorized":False,"operational_decision":"DENY"}).encode())
         elif self.path=="/api/v1/enterprise-inventory":
             try:
                 twin,_,_,_=self.server.context_config

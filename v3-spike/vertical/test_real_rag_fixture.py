@@ -21,11 +21,20 @@ class RealRagFixtureTest(unittest.TestCase):
             self.assertEqual(rec["record"]["invocations"],out["invocations"])
             self.assertEqual(restored.summary([r["review_id"]])["invocations"],2)
             self.assertNotIn("excerpt",str(rec))
+    def test_negative_reference_decision_fails_quality_not_transport(self):
+        with tempfile.TemporaryDirectory() as root:
+            ledger=InvocationLedger(root)
+            history,context=seed(ledger)
+            with provider("fixture-a","ANALYST",lambda o:o.update(reference_reviews={k:"NOT_APPLICABLE" for k in o["reference_reviews"]})) as (a,ar),provider("fixture-c","CRITIC") as (c,cr):
+                out=ledger.execute_rag(history,a,c)["assessment"]
+            self.assertEqual(out["state"],"CANDIDATE_ONLY")
+            self.assertFalse(qualify(out,context)["pass"])
+            self.assertTrue(all(x["status"]=="VALIDATED" for x in out["invocations"]))
     def test_rejected_receipt_persisted_and_quality_fails(self):
         with tempfile.TemporaryDirectory() as root:
             ledger=InvocationLedger(root)
             history,context=seed(ledger)
-            with provider("fixture-a","ANALYST",lambda o:o.update(reference_ids=["invented"])) as (a,ar),provider("fixture-c","CRITIC") as (c,cr):
+            with provider("fixture-a","ANALYST",lambda o:o.update(reference_reviews={"invented":"APPLICABLE_CHECK"})) as (a,ar),provider("fixture-c","CRITIC") as (c,cr):
                 r=ledger.execute_rag(history,a,c)
             self.assertEqual(cr,[])
             self.assertFalse(qualify(r["assessment"],context)["pass"])

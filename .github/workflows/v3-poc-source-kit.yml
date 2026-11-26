@@ -293,6 +293,8 @@ jobs:
           PY
       - name: Verify actual GAMMA AI telemetry browser
         run: PYTHONPATH=v3-spike/vertical python3 v3-spike/vertical/poc_gamma_ai_telemetry.py
+      - name: Verify actual GAMMA explicit AI review browser
+        run: PYTHONPATH=v3-spike/vertical python3 v3-spike/vertical/poc_gamma_ai_runtime.py
       - name: Backup and restore into separate synthetic database
         run: |
           set -euo pipefail

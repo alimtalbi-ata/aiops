@@ -20,7 +20,7 @@ def provider(model,role,mutation=None):
             ctx=json.loads(body["messages"][1]["content"]);seen.append(ctx)
             c=ctx["candidates"][0]
             out={"candidate_id":c["candidate_id"],"evidence_ids":c["evidence_ids"],
-                 "reference_ids":[r["citation_id"] for r in c["reference_context"]],
+                 "reference_reviews":{r["citation_id"]:"APPLICABLE_CHECK" for r in c["reference_context"]},
                  "verdict":"SELECT_CANDIDATE" if role=="ANALYST" else "AGREE_CANDIDATE"}
             if mutation:mutation(out)
             data={"model":model,"choices":[{"finish_reason":"stop","message":{"content":json.dumps(out)}}],
@@ -57,6 +57,7 @@ class RagModelTest(unittest.TestCase):
         self.assertEqual(out["state"],"CANDIDATE_ONLY")
         self.assertEqual(len(out["invocations"]),2)
         self.assertTrue(out["analyst"]["reference_ids"])
+        self.assertEqual(out["reference_reviews"]["ANALYST"],{x:"APPLICABLE_CHECK" for x in out["analyst"]["reference_ids"]})
         self.assertEqual(out["analyst"]["evidence_ids"],["E1","E2"])
         wire,maps,reverse=wire_projection(prepare(self.history,self.clock))
         self.assertEqual(ar[0],wire)
@@ -69,9 +70,11 @@ class RagModelTest(unittest.TestCase):
         self.assertNotIn("excerpt",json.dumps(out))
         self.assertEqual(out["operational_decision"],"DENY")
     def test_reject_reference_fabrication_or_substitution(self):
-        for mutate in (lambda o:o.update(reference_ids=["invented"]),
-                       lambda o:o.update(evidence_ids=o["reference_ids"]),
-                       lambda o:o.update(reference_ids=[o["evidence_ids"][0]]),
+        for mutate in (lambda o:o.update(reference_reviews={"invented":"APPLICABLE_CHECK"}),
+                       lambda o:o.update(evidence_ids=list(o["reference_reviews"])),
+                       lambda o:o.update(reference_reviews={o["evidence_ids"][0]:"APPLICABLE_CHECK"}),
+                       lambda o:o.update(reference_reviews={}),
+                       lambda o:o.update(reference_reviews={k:"invented" for k in o["reference_reviews"]}),
                        lambda o:o.update(evidence_ids=o["evidence_ids"][:-1]),
                        lambda o:o.update(evidence_ids=[o["evidence_ids"][0]]*len(o["evidence_ids"]))):
             out,_,cr=self.run_review(am=mutate)
@@ -79,12 +82,15 @@ class RagModelTest(unittest.TestCase):
             self.assertEqual(out["invocations"][0]["status"],"REJECTED")
             self.assertEqual(cr,[])
     def test_reference_abstention_remains_possible(self):
-        out,_,_=self.run_review(am=lambda o:o.update(reference_ids=[]),cm=lambda o:o.update(reference_ids=[]))
+        out,_,_=self.run_review(am=lambda o:o.update(reference_reviews={k:"NOT_APPLICABLE" for k in o["reference_reviews"]}),
+                                cm=lambda o:o.update(reference_reviews={k:"UNCERTAIN" for k in o["reference_reviews"]}))
         self.assertEqual(out["state"],"CANDIDATE_ONLY")
         self.assertEqual(out["analyst"]["reference_ids"],[])
         self.assertEqual(out["critic"]["reference_ids"],[])
+        self.assertEqual(set(out["reference_reviews"]["ANALYST"].values()),{"NOT_APPLICABLE"})
+        self.assertEqual(set(out["reference_reviews"]["CRITIC"].values()),{"UNCERTAIN"})
     def test_critic_rejects_foreign_reference(self):
-        out,_,_=self.run_review(cm=lambda o:o.update(reference_ids=["invented"]))
+        out,_,_=self.run_review(cm=lambda o:o.update(reference_reviews={"invented":"APPLICABLE_CHECK"}))
         self.assertEqual(out["state"],"UNKNOWN")
         self.assertEqual(out["invocations"][1]["status"],"REJECTED")
 

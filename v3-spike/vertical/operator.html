@@ -7,6 +7,7 @@
 <div class="grid"><section id="incident"><h2>Incident</h2><p id="incident-value">UNKNOWN — no event</p></section><section id="twin"><h2>Twin / Evidence</h2><p id="twin-value">UNKNOWN — correlation unverified</p></section><section id="policy"><h2>Policy / HITL</h2><p id="policy-value">DENY — no verified decision</p><p class="warning">SIMULATE_ONLY is a synthetic label, never a production ALLOW.</p></section><section id="receipt"><h2>Simulated Run / Receipt</h2><p id="run-value">NOT_RUN — no receipt</p><p id="receipt-value">UNKNOWN — no receipt</p></section></div>
 <section id="dynamic-ingestion"><h2>Dynamic synthetic ingestion</h2><p>Creates a DEMO incident and stores synthetic evidence in the isolated lab.</p><button id="create-dynamic" type="button">Create synthetic incident</button><button id="create-enterprise" type="button">Create enterprise scenario (metric, log, event)</button><button id="load-enterprise" type="button" disabled>Open enterprise workbench</button><button id="load-dynamic-context" type="button" disabled>Inspect created incident</button><button id="simulate-dynamic-context" type="button" disabled>Simulate created incident</button><button id="dynamic-hitl-request" type="button" disabled>Request approval for created incident</button><button id="dynamic-hitl-approve" type="button" disabled>Approve simulation</button><button id="dynamic-hitl-deny" type="button" disabled>Refuse simulation</button><pre id="dynamic-hitl-result" role="status">UNKNOWN / DENY</pre><pre id="dynamic-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-clock"><h2>Enterprise clock E2</h2><p>Persistent logical time · modeled values only · no host actions</p><button id="clock-read" type="button">Read world state</button><button id="clock-next" type="button" disabled>Advance or retry tick</button><button id="clock-capture" type="button" disabled>Capture measured Paris and Lyon incidents</button><button id="clock-technical" type="button" disabled>Capture isolated technical workloads</button><button id="clock-scenarios" type="button" disabled>Run two modeled campaign scenarios</button><button id="scenario-catalog" type="button">Browse scenario catalog</button><pre id="scenario-result" role="status">UNKNOWN / DENY</pre><pre id="clock-result" role="status">UNKNOWN / DENY</pre><label for="clock-run">Published incident run</label><select id="clock-run"></select><button id="clock-open" type="button" disabled>Open incident in Workbench</button></section><section id="enterprise-parametric"><h2>Seeded workload campaign</h2><p>Configure once before the first tick of a dedicated world. Modeled workload only.</p><label>Seed <input type="number" id="param-seed" min="0" max="2147483647" value="42"></label><label>Horizon <input type="number" id="param-horizon" min="8" max="120" value="32"></label><label>Start probability (%) <input type="number" id="param-frequency" min="0" max="100" value="50"></label><label>Min duration <input type="number" id="param-min" min="1" max="8" value="1"></label><label>Max duration <input type="number" id="param-max" min="1" max="8" value="5"></label><label>Max exposed users <input type="number" id="param-users" min="1" max="5" value="5"></label><button id="param-configure" type="button">Configure fresh world</button><button id="param-read" type="button">Read materialized observations</button><pre id="param-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-triage"><h2>Diagnostic challenge cases</h2><p>Modeled signals and conservative rule assessment; no automatic incident creation.</p><button id="triage-read" type="button">Read triage cases</button><label for="triage-filter">Disposition</label><select id="triage-filter"><option value="">All dispositions</option><option>INCIDENT_CANDIDATE</option><option>SECURITY_REVIEW</option><option>MAINTENANCE_REVIEW</option><option>CONTRADICTORY_SIGNALS</option><option>INSUFFICIENT_FRESH_DATA</option><option>UNCORROBORATED_ALERT</option><option>NOMINAL_OBSERVATION</option></select><pre id="triage-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-episodes"><h2>Multi-tick incident episodes</h2><p>Modeled temporal patterns and dependency hypotheses, not observed RCA.</p><button id="episodes-read" type="button">Read episode timeline</button><label for="episode-select">Episode</label><select id="episode-select"></select><pre id="episodes-result" role="status">UNKNOWN / DENY</pre><label for="episode-run">Related modeled case</label><select id="episode-run"></select><button id="episode-open" type="button" disabled>Open related case</button></section><section id="enterprise-case-knowledge"><h2>Diverse enterprise case knowledge</h2><button id="cases-read" type="button">Read historical case reports</button><pre id="cases-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-knowledge"><h2>Enterprise lifecycle knowledge</h2><button id="knowledge-read" type="button">Read lifecycle knowledge</button><pre id="knowledge-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-corpus"><h2>Versioned enterprise corpus</h2><button id="corpus-read" type="button">Read current document versions</button><pre id="corpus-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-activity"><h2>Enterprise activity journal</h2><p>Modeled application traffic, alerts and incident links. Not measured evidence.</p><button id="activity-read" type="button">Read recent activity</button><label for="activity-filter">Application</label><select id="activity-filter"><option value="">All applications</option><option value="NODE-CI-ENT-APP-PAY">Payments</option><option value="NODE-CI-ENT-APP-CRM">CRM</option><option value="NODE-CI-ENT-APP-HR">HR</option></select><pre id="activity-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-inventory"><h2>Enterprise technical inventory</h2><button id="inventory-load" type="button">Load Twin inventory</button><label for="inventory-root">Incident resource</label><select id="inventory-root"></select><button id="inventory-impact" type="button" disabled>Preview potential impact</button><pre id="inventory-result" role="status">UNKNOWN / DENY</pre><pre id="inventory-impact-result" role="status">UNKNOWN / DENY</pre></section><section id="enterprise-workbench"><h2>Enterprise Workbench</h2><label for="enterprise-run-id">Existing synthetic run ID</label><input id="enterprise-run-id" type="text" maxlength="20" placeholder="RUN-..."><button id="enterprise-open-run" type="button">Open persisted run</button><p>Fictional enterprise · potential exposure is not an observed outage · simulation timestamps</p><pre id="enterprise-result" role="status">UNKNOWN / DENY</pre><label for="hybrid-query">Historical corpus query for selected run</label><input id="hybrid-query" type="text" maxlength="512" placeholder="Payments latency"><button id="hybrid-search" type="button">Search historical corpus</button><pre id="hybrid-result" role="status">UNKNOWN / DENY</pre></section><section id="historical-assessment"><h2>Historical Analyst / Critic (E18)</h2><p>Read-only comparison of 2–5 persisted synthetic DEMO runs. Temporal order and topology are not causal proof. No LLM inference or operational authorization.</p><label for="assessment-runs">Run IDs, separated by whitespace or comma</label><textarea id="assessment-runs" style="min-height:4rem" maxlength="160" spellcheck="false" placeholder="RUN-..."></textarea><label for="assessment-window">Correlation window (seconds)</label><input id="assessment-window" type="number" min="1" max="3600" value="240"><div><button id="assessment-add" type="button">Add selected clock run</button><button id="assessment-read" type="button">Assess historical runs</button></div><p id="assessment-state" role="status" aria-live="polite">UNKNOWN / DENY</p><div id="assessment-result"></div></section><section id="incident-context"><h2>Unified incident context (synthetic lab)</h2><button id="load-context" type="button">Load incident context</button><button id="context-sim" type="button">Request Policy simulation decision</button><pre id="context-result" role="status">UNKNOWN / DENY — not loaded</pre></section><section id="canonical-core"><h2>Canonical Core (synthetic lab)</h2><button id="load-core" type="button">Load Core run</button><pre id="core-result" role="status">UNKNOWN / DENY — not loaded</pre></section><section id="correlated"><h2>Correlated incidents (synthetic)</h2><button id="load-incidents" type="button">Load correlated incidents</button><pre id="correlated-result" role="status">UNKNOWN — not loaded</pre></section><section><h2>Operational eligibility</h2><button id="eligibility" type="button">Check action eligibility</button><p id="decision" role="status" aria-live="polite" aria-atomic="true">DENIED — no operational action permitted.</p><small>Receipt hashes are untrusted labels until independently verified. This projection cannot attest provenance, tenant isolation, or a real HITL decision.</small></section></main>
 <section><h2>Human approval — synthetic demo</h2><button id="hitl-request">Request approval</button> <button id="hitl-approve" disabled>Approve simulation</button> <button id="hitl-deny" disabled>Refuse</button><pre id="hitl-result">UNKNOWN / DENY</pre></section>
+<section id="ai-runtime"><h2>AI advisory review</h2><p>Uses the historical assessment run IDs and window above. Explicit laboratory inference only, no causal proof or action authorization. A completed review is persisted even if the selection changes.</p><button id="ai-runtime-review" type="button" disabled>Run synthetic AI review</button><button id="ai-runtime-measures" type="button" disabled>Read review measures</button><p id="ai-runtime-state" role="status">Runtime unavailable / DENY</p><pre id="ai-runtime-result"></pre></section>
 <section id="ai-telemetry"><h2>AI invocation telemetry</h2><p>Read-only synthetic ledger. Enter every run belonging to the review (1–5 distinct IDs). No inference, import, cost estimate or production authorization.</p><label for="ai-telemetry-runs">Run IDs</label><textarea id="ai-telemetry-runs" rows="3"></textarea><button type="button" id="ai-telemetry-read">Read persisted measures</button><button type="button" id="ai-telemetry-use-assessment">Use assessment runs</button><p id="ai-telemetry-state" role="status">UNKNOWN / DENY</p><pre id="ai-telemetry-result"></pre></section>
 <script>
 "use strict";
@@ -648,5 +649,79 @@ $("ai-telemetry-read").addEventListener("click",async()=>{
   if(generation===telemetryGeneration)renderTelemetry(d,ids);
  }catch(_err){if(generation===telemetryGeneration)resetTelemetry("UNKNOWN / DENY — telemetry unavailable or unverified");}
 });
+
+let aiEnabled=false,aiBusy=false,aiGeneration=0,aiRunIds=null;
+function resetAI(message="UNKNOWN / DENY"){
+ ++aiGeneration;aiRunIds=null;$("ai-runtime-result").textContent="";$("ai-runtime-measures").disabled=true;
+ $("ai-runtime-state").textContent=message;
+}
+for(const id of ["assessment-runs","assessment-window"])$(id).addEventListener("input",()=>resetAI("UNKNOWN / DENY — selection changed"));
+for(const id of ["clear","assessment-add"])$(id).addEventListener("click",()=>resetAI("UNKNOWN / DENY — selection changed"));
+async function runtimeStatus(){
+ if(location.protocol!=="http:"||location.hostname!=="127.0.0.1")return;
+ try{
+  const response=await fetch("/api/v1/ai-runtime/status",{cache:"no-store"});
+  if(!response.ok)throw Error("status");
+  const d=await response.json();
+  if(d?.classification!=="SYNTHETIC_GAMMA_AI_RUNTIME_STATUS_E27"||typeof d.enabled!=="boolean"||d.production_authorized!==false||d.operational_decision!=="DENY")throw Error("status");
+  aiEnabled=d.enabled;$("ai-runtime-review").disabled=!aiEnabled||aiBusy;
+  $("ai-runtime-state").textContent=aiEnabled?"Ready for explicit synthetic review / DENY":"Runtime disabled / DENY";
+ }catch(_err){aiEnabled=false;$("ai-runtime-review").disabled=true;resetAI("Runtime unavailable / DENY");}
+}
+function verifyAIReview(d,runIds){
+ const a=d?.assessment,roles=["ANALYST","CRITIC"];
+ if(d?.classification!=="SYNTHETIC_GAMMA_AI_RUNTIME_E27"||d.production_authorized!==false||d.operational_decision!=="DENY"||d.tenant_acl_qualified!==false||
+  !/^AI-[a-f0-9]{32}$/.test(d.review_id)||!assessmentHash(d.receipt_sha256)||JSON.stringify(d.run_ids)!==JSON.stringify([...runIds].sort())||
+  a?.classification!=="SYNTHETIC_RAG_ADVISORY_E24"||a.production_authorized!==false||a.operational_decision!=="DENY"||a.tenant_acl_qualified!==false||
+  a.root_cause!=="UNKNOWN"||a.confidence!==null||a.causality_established!==false||a.model_independence_attested!==false||
+  !assessmentHash(a.context_sha256)||!assessmentHash(a.rag_sha256)||!["UNKNOWN","CANDIDATE_ONLY","DISPUTED"].includes(a.state)||
+  !Array.isArray(a.invocations)||a.invocations.length>2||!a.reference_reviews||typeof a.reference_reviews!=="object"||Array.isArray(a.reference_reviews)||
+  Object.keys(a.reference_reviews).some(k=>!roles.includes(k)))throw Error("unverified review");
+ const lines=[d.review_id,"Receipt SHA256 "+d.receipt_sha256,"Context SHA256 "+a.context_sha256,"State: "+a.state+" | RCA UNKNOWN | Policy DENY"];
+ for(let i=0;i<a.invocations.length;i++){
+  const call=a.invocations[i],role=roles[i],result=a[role.toLowerCase()];
+  if(call.role!==role||!["VALIDATED","REJECTED","UNAVAILABLE_OR_INVALID"].includes(call.status))throw Error("invocation");
+  lines.push(role+" | "+call.status);
+  if(result!==null){
+   const decisions=a.reference_reviews[role];
+   if(call.status!=="VALIDATED"||!decisions||Array.isArray(decisions)||typeof decisions!=="object"||
+    !Array.isArray(result.evidence_ids)||!Array.isArray(result.reference_ids)||
+    !["SELECT_CANDIDATE","AGREE_CANDIDATE","CHALLENGE_CANDIDATE","ABSTAIN"].includes(result.verdict)||
+    Object.entries(decisions).some(([k,v])=>!/^REF-[a-f0-9]{64}$/.test(k)||!["APPLICABLE_CHECK","NOT_APPLICABLE","UNCERTAIN"].includes(v))||
+    JSON.stringify([...result.reference_ids].sort())!==JSON.stringify(Object.keys(decisions).filter(k=>decisions[k]==="APPLICABLE_CHECK").sort()))throw Error("review decisions");
+   lines.push(result.verdict+" | Evidence citations "+result.evidence_ids.length+" | RAG citations "+result.reference_ids.length);
+   for(const [key,value] of Object.entries(decisions))lines.push(key+" | "+value);
+  }
+ }
+ if(a.state!=="UNKNOWN"&&(a.invocations.length!==2||a.invocations.some(c=>c.status!=="VALIDATED")||!a.analyst||!a.critic))throw Error("state");
+ return lines;
+}
+$("ai-runtime-review").addEventListener("click",async()=>{
+ if(!aiEnabled||aiBusy)return;
+ resetAI();const generation=aiGeneration,runIds=assessmentIds(),input=$("assessment-window"),window_seconds=input.valueAsNumber;
+ if(runIds.length<2||runIds.length>5||new Set(runIds).size!==runIds.length||!runIds.every(assessmentRunId)||!input.checkValidity()||!Number.isInteger(window_seconds)||window_seconds<1||window_seconds>3600){$("ai-runtime-state").textContent="UNKNOWN / DENY — invalid historical selection";return;}
+ aiBusy=true;$("ai-runtime-review").disabled=true;$("ai-runtime-state").textContent="Review in progress / DENY";
+ try{
+  const options=body=>({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),cache:"no-store"});
+  const response=await fetch("/api/v1/enterprise-correlation/ai-review",options({run_ids:runIds,window_seconds}));
+  if(!response.ok)throw Error("review unavailable");
+  const d=await response.json(),lines=verifyAIReview(d,runIds);
+  if(generation!==aiGeneration)return;
+  const read=await fetch("/api/v1/ai-telemetry",options({run_ids:runIds}));
+  if(!read.ok)throw Error("receipt unavailable");
+  const telemetry=await read.json();
+  if(generation!==aiGeneration)return;
+  if(telemetry?.classification!=="SYNTHETIC_GAMMA_AI_TELEMETRY_E26"||telemetry.production_authorized!==false||telemetry.operational_decision!=="DENY"||telemetry.tenant_acl_qualified!==false||
+   JSON.stringify(telemetry.run_ids)!==JSON.stringify([...runIds].sort())||!Array.isArray(telemetry.reviews)||
+   !telemetry.reviews.some(r=>r.review_id===d.review_id&&r.receipt_sha256===d.receipt_sha256&&r.context_sha256===d.assessment.context_sha256&&r.state===d.assessment.state&&JSON.stringify(r.run_ids)===JSON.stringify(d.run_ids)))throw Error("receipt mismatch");
+  $("ai-runtime-result").textContent=[...lines,"Persisted receipt verified"].join("\n");
+  $("ai-runtime-state").textContent="Review persisted / DENY";aiRunIds=[...runIds];$("ai-runtime-measures").disabled=false;
+ }catch(_err){if(generation===aiGeneration)resetAI("UNKNOWN / DENY — review or receipt unavailable; check persisted measures before retrying");}
+ finally{aiBusy=false;$("ai-runtime-review").disabled=!aiEnabled;}
+});
+$("ai-runtime-measures").addEventListener("click",()=>{
+ if(!aiRunIds)return;$("ai-telemetry-runs").value=aiRunIds.join("\n");resetTelemetry();$("ai-telemetry-read").click();
+});
+runtimeStatus();
 reset();
 </script></html>
