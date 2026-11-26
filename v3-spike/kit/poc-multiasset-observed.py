@@ -35,6 +35,84 @@ class App(BaseHTTPRequestHandler):
         self.server.records.append({"at":now(),"status":200})
         self.wfile.write(b"OK")
 
+
+class LabRecoveryTarget(HTTPServer):
+    """Single disposable E17 target, owner-local only; no action HTTP route.
+
+    The caller must be the trusted lab service with a verified run/evidence
+    context and its own DurableApprovalGate. The target owns its incarnation
+    and never accepts a caller-created reservation or arbitrary action.
+    Results live only for this process lifetime, not a durable Worker receipt.
+    """
+    def __init__(self):
+        super().__init__(("127.0.0.1",0),App)
+        if self.server_port in (7770,7777,7790):
+            self.server_close()
+            raise RuntimeError("protected port")
+        self.delay=.01
+        self.records=[]
+        self._action_lock=threading.Lock()
+        self._fence=None
+        self._result=None
+        self._state="NOMINAL"
+
+    def inject_fault(self):
+        with self._action_lock:
+            if self._state!="NOMINAL":
+                raise ValueError("fault already injected")
+            self.delay=CONFIGS[0][-1]
+            self._state="DEGRADED"
+
+    def bind(self,gate,incident,run,evidence):
+        from lab_target_fence import LabTargetFence
+        from hitl_demo import DurableApprovalGate
+        if not isinstance(gate,DurableApprovalGate):
+            raise ValueError("server-owned durable gate required")
+        with self._action_lock:
+            if self._state!="DEGRADED" or self._fence is not None:
+                raise ValueError("target cannot be rebound")
+            self._fence=LabTargetFence(run_id=run,incident_id=incident,
+                    resource=CONFIGS[0][0],context_sha256=gate.binding(incident,run,evidence))
+            self._gate=gate
+            self._incident=incident
+            self._run=run
+            self._evidence=json.loads(json.dumps(evidence))
+            return self._fence.scope()
+
+    def simulate(self,receipt_id,receipt_sha256,policy_port):
+        """Revalidate and claim before the one fixed in-memory lab reset."""
+        with self._action_lock:
+            if self._fence is None:
+                raise ValueError("unbound target")
+            if self._state!="DEGRADED":
+                return {"status":"UNKNOWN_BLOCKED","production_authorized":False}
+            reservation=self._gate.reserve_lab_action(
+                receipt_id,receipt_sha256,self._incident,self._run,self._evidence,
+                self._fence.scope(),self._run,policy_port)
+            claim=self._fence.claim(reservation)
+            if claim["status"]!="CLAIMED_NO_EXECUTION":
+                self._state="UNKNOWN_BLOCKED"
+                return {"status":"UNKNOWN_BLOCKED","production_authorized":False}
+            # Fail closed if interrupted after claim, including before receipt.
+            self._state="UNKNOWN_BLOCKED"
+            self.delay=.01
+            result={"classification":"SYNTHETIC_LAB_ACTION_RECEIPT",
+                    "status":"SIMULATED","receipt_id":"ACT-"+uuid.uuid4().hex,
+                    "binding":reservation["binding"],"completed_at":now(),
+                    "operational_decision":"DENY","executed_on_host":False,
+                    "production_authorized":False}
+            self._result=json.loads(json.dumps(result))
+            self._state="SIMULATED"
+            return json.loads(json.dumps(result))
+
+    def read_action_result(self,receipt_id):
+        """Read an existing result without repeating an action."""
+        with self._action_lock:
+            if self._result is None or self._result["receipt_id"]!=receipt_id:
+                raise ValueError("unknown target result")
+            return json.loads(json.dumps(self._result))
+
+
 def measure(app):
     values=[]
     for _ in range(5):
