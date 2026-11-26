@@ -54,6 +54,17 @@ def smoke(origin, restart):
             assert combined["enterprise_context"]==ctx
             assert combined["copilot"]["enterprise_document_retrieval"]["citations"]==ctx["document_references"]
             assert combined["copilot"]["enterprise_document_retrieval"]["document_history"]==ctx["document_history"]
+            lifecycle=ctx["lifecycle_references"]
+            assert len(lifecycle)==(4 if restart else 1)
+            assert all(d["valid_from_tick"]<n and d["observed_evidence"] is False for d in lifecycle)
+            assert combined["copilot"]["enterprise_document_retrieval"]["lifecycle_citations"]==lifecycle
+            if restart:
+                assert {d["source"]["run_id"] for d in lifecycle if d["kind"]!="CHANGE"}=={first}
+                prior=call("/api/v1/enterprise-context?run_id="+first)
+                refs={x["evidence_id"]:x["payload_hash"] for x in prior["timeline"]}
+                for d in lifecycle:
+                    if d["kind"]!="CHANGE":
+                        assert {x["evidence_id"]:x["payload_hash"] for x in d["source"]["evidence_refs"]}==refs
             measured=capture(n)
             assert measured==capture(n) and measured["state"]=="PUBLISHED"
             assert re.fullmatch(r"[a-f0-9]{64}",measured["batch_sha256"])
@@ -125,6 +136,12 @@ def smoke(origin, restart):
             assert call("/api/v1/enterprise-context?run_id="+item["run_id"])["root"]==item["resource"]
         for item in old_capture["incidents"]:
             assert call("/api/v1/enterprise-context?run_id="+item["run_id"])["root"]==item["resource"]
+    knowledge=call("/api/v1/enterprise-knowledge")
+    assert len(knowledge["documents"])==(6 if restart else 3)
+    assert all(not d["observed_evidence"] for d in knowledge["documents"])
+    if restart:
+        assert [d["kind"] for d in old["lifecycle_references"]]==["CHANGE"]
+    print(json.dumps({"classification":"E8_LIFECYCLE_KNOWLEDGE","result":"PASS","current_tick":end["current_tick"],"documents":len(knowledge["documents"]),"historical_citations":len(lifecycle),"production_authorized":False}),file=sys.stderr)
     catalog=call("/api/v1/enterprise-corpus")
     current=next(d for d in catalog["documents"] if d["id"]=="ENT-DOC-001")
     assert len(catalog["documents"])==10 and current["version"]==(3 if restart else 2)

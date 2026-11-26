@@ -12,6 +12,7 @@ import stat
 from enterprise_context import P, ROOT, digest
 from enterprise_activity import activity_for, decode_activity
 import enterprise_corpus as corpus
+import enterprise_knowledge as knowledge
 
 WORLD = "ACME-E2-V1"
 EPOCH = datetime(2026,1,1,9,tzinfo=timezone.utc)
@@ -73,6 +74,7 @@ class EnterpriseClock:
             db.execute("CREATE TABLE IF NOT EXISTS technical(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
             db.execute("CREATE TABLE IF NOT EXISTS activity(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS corpus(doc_id TEXT NOT NULL, version INTEGER NOT NULL, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL, PRIMARY KEY(doc_id,version))")
+            db.execute("CREATE TABLE IF NOT EXISTS knowledge(doc_id TEXT PRIMARY KEY, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
     def connect(self):
         db=sqlite3.connect(self.path,timeout=30)
         db.execute("PRAGMA synchronous=FULL")
@@ -126,6 +128,14 @@ class EnterpriseClock:
                 "documents":[{**r,"sha256":digest(r)} for r in rows],
                 "production_authorized":False,"operational_decision":"DENY"}
 
+    def knowledge_catalog(self):
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            tick=db.execute("SELECT COALESCE(MAX(tick),0) FROM journal").fetchone()[0]
+            rows=knowledge.read_at(db,tick,self.decode)
+        return {"classification":"SYNTHETIC_LIFECYCLE_KNOWLEDGE_E8","current_tick":tick,
+                "documents":rows,"limit":knowledge.LIMIT,"production_authorized":False,"operational_decision":"DENY"}
+
     def historical_documents(self, run_id, scope, query):
         if not re.fullmatch(r"RUN-[A-F0-9]{16}",run_id):
             raise ValueError("invalid run identity")
@@ -146,7 +156,8 @@ class EnterpriseClock:
             if not rows:
                 return {"state":"PRE_E7_UNAVAILABLE","logical_tick":tick,"citations":[]}
             return {"state":"HISTORICAL_LOGICAL_VERSION","logical_tick":tick,
-                    "catalog_sha256":digest(rows),"citations":corpus.references(rows,scope,query)}
+                    "catalog_sha256":digest(rows),"citations":corpus.references(rows,scope,query),
+                    "lifecycle_citations":knowledge.rank(knowledge.read_at(db,tick,self.decode,scope),query)}
 
     def advance(self, expected_tick, publish):
         if type(expected_tick) is not int or not 1<=expected_tick<=MAX_TICK:
@@ -165,6 +176,8 @@ class EnterpriseClock:
                 db.execute("INSERT INTO activity(tick,payload,payload_hash) VALUES(?,?,?)",(expected_tick,json.dumps(records,sort_keys=True),digest(records)))
                 previous=corpus.catalog_at(db,expected_tick)
                 corpus.store(db,corpus.change_rows(expected_tick,previous) if previous else corpus.initial_rows(expected_tick))
+                prior=db.execute("SELECT tick,step,step_hash,receipt FROM journal WHERE tick=?",(expected_tick-1,)).fetchone()
+                knowledge.store(db,knowledge.generated(step,self.decode(prior) if prior else None))
             elif expected_tick!=last:
                 raise ValueError("stale or skipped tick")
         # Serialize publication; on failure the pending row is left for retry.
