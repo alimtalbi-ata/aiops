@@ -47,6 +47,13 @@ class CaseKnowledgeTest(unittest.TestCase):
             self.assertEqual(found["citations"][0]["scenario_id"],"WAN_LOSS")
             self.assertEqual(found["citations"][0]["source"]["run_id"],receipts[0]["run_id"])
             self.assertEqual(clock.historical_documents(wan,{P+"APP-HR"},"packet loss WAN")["case_retrieval"]["state"],"NO_MATCH")
+            fin=next(d for d in catalog["documents"] if d["scenario_id"]=="FIN_DEVICE_FAILURE")
+            fin_scope=set(fin["scope"])
+            self.assertIn(P+"USER-FIN-01",fin_scope)
+            self.assertEqual(clock.historical_documents(wan,fin_scope-{P+"USER-FIN-01"},"Finance workstation")["case_retrieval"]["state"],"NO_MATCH")
+            self.assertEqual(clock.historical_documents(wan,(fin_scope-{P+"USER-FIN-01"})|{P+"USER-FIN-02"},"Finance workstation")["case_retrieval"]["state"],"NO_MATCH")
+            correct=clock.historical_documents(wan,fin_scope,"Finance workstation")["case_retrieval"]
+            self.assertEqual(correct["citations"][0]["id"],fin["id"])
             crm=next(d for d in catalog["documents"] if d["scenario_id"]=="CRM_TIMEOUT")
             self.assertEqual(clock.historical_documents(wan,{P+"ASSET-PAR","NODE-CI-ROOT",P+"APP-PAY"},"CRM timeout")["case_retrieval"]["state"],"NO_MATCH")
             with closing(clock.connect()) as db,db:
