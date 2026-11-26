@@ -65,7 +65,7 @@ async def history_receipt(client,rid):
     return result,len(history.events)
 
 
-async def execute(root,temporal,core,twin,evidence,policy):
+async def execute(root,temporal,core,twin,evidence,policy,*,product_submit=None):
     token=dict(line.split("=",1) for line in (root/"poc.env").read_text().splitlines())["V3_LAB_TOKEN"]
     isolated=root/"temporal-e17"
     isolated.mkdir(mode=0o700,exist_ok=False)
@@ -138,21 +138,24 @@ async def execute(root,temporal,core,twin,evidence,policy):
                 return result
 
             await asyncio.sleep(1.1)
-            queue="aiops-v3-e17-lab-"+identity
-            async with Worker(client,task_queue=queue,workflows=[E17LabRecoveryWorkflow],
-                              activities=[reset],max_cached_workflows=0):
-                handle=await client.start_workflow(E17LabRecoveryWorkflow.run,approval,
-                    id=rid,task_queue=queue,execution_timeout=timedelta(seconds=75),
-                    id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
-                receipt=await asyncio.wait_for(handle.result(),timeout=80)
-                try:
-                    await client.start_workflow(E17LabRecoveryWorkflow.run,approval,
+            if product_submit is not None:
+                receipt=await product_submit(client,target,rid,approval)
+            else:
+                queue="aiops-v3-e17-lab-"+identity
+                async with Worker(client,task_queue=queue,workflows=[E17LabRecoveryWorkflow],
+                                  activities=[reset],max_cached_workflows=0):
+                    handle=await client.start_workflow(E17LabRecoveryWorkflow.run,approval,
                         id=rid,task_queue=queue,execution_timeout=timedelta(seconds=75),
                         id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
-                except WorkflowAlreadyStartedError:
-                    pass
-                else:
-                    raise AssertionError("completed workflow ID replay accepted")
+                    receipt=await asyncio.wait_for(handle.result(),timeout=80)
+                    try:
+                        await client.start_workflow(E17LabRecoveryWorkflow.run,approval,
+                            id=rid,task_queue=queue,execution_timeout=timedelta(seconds=75),
+                            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
+                    except WorkflowAlreadyStartedError:
+                        pass
+                    else:
+                        raise AssertionError("completed workflow ID replay accepted")
             # Re-read persisted history after this dedicated worker stopped.
             persisted,events=await history_receipt(client,rid)
             assert persisted==receipt==target.read_action_result(receipt["receipt_id"])
@@ -178,7 +181,8 @@ async def execute(root,temporal,core,twin,evidence,policy):
                     "workflow_id":rid,"history_events":events,"activities_completed":1,
                     "action_receipt":persisted,"action_receipt_sha256":receipt_hash,
                     "verification":result,"http_requests":15,
-                    "core_business_stages_qualified":False,"production_authorized":False}
+                    "core_business_stages_qualified":False,"production_authorized":False,
+                    **({"activity_executor":"V3_PRODUCT_WORKER"} if product_submit is not None else {})}
         finally:
             target.shutdown()
             thread.join(5)
