@@ -1,5 +1,7 @@
 """CI-only image BOM from a disposable loopback registry; no release publication."""
 import json
+import hashlib
+import http.client
 import os
 from pathlib import Path
 import re
@@ -26,6 +28,31 @@ def write_json(path, obj):
         json.dump(obj, f, indent=2, sort_keys=True)
         f.write("\n")
 
+def registry_manifest(service, expected_config):
+    """Read the actual published single-platform manifest, not local RepoDigests."""
+    if service not in ORCHESTRATION_SERVICES or not DIGEST.fullmatch(expected_config):
+        raise ValueError("invalid registry manifest request")
+    media=("application/vnd.oci.image.manifest.v1+json",
+           "application/vnd.docker.distribution.manifest.v2+json")
+    conn=http.client.HTTPConnection("127.0.0.1",15080,timeout=10)
+    try:
+        conn.request("GET","/v2/aiops-v3/"+service+"/manifests/ci",
+                     headers={"Accept":", ".join(media)})
+        response=conn.getresponse()
+        raw=response.read(1048577)
+        digest=response.getheader("Docker-Content-Digest")
+        content_type=response.getheader("Content-Type","").split(";",1)[0].strip()
+        if response.status!=200 or len(raw)>1048576 or content_type not in media:
+            raise ValueError("single-platform registry manifest unavailable: "+service)
+        if not isinstance(digest,str) or not DIGEST.fullmatch(digest) or digest!="sha256:"+hashlib.sha256(raw).hexdigest():
+            raise ValueError("registry manifest digest mismatch: "+service)
+        manifest=json.loads(raw)
+        if manifest.get("schemaVersion")!=2 or manifest.get("mediaType",content_type)!=content_type or manifest.get("config",{}).get("digest")!=expected_config:
+            raise ValueError("published manifest config differs from local image: "+service)
+        return REGISTRY+"/aiops-v3/"+service+"@"+digest
+    finally:
+        conn.close()
+
 def create(out, source_sha, services=SERVICES):
     if not SHA.fullmatch(source_sha):
         raise ValueError("invalid source SHA")
@@ -33,13 +60,21 @@ def create(out, source_sha, services=SERVICES):
     for service in services:
         repo = REGISTRY + "/aiops-v3/" + service
         tag = repo + ":ci"
-        subprocess.run(["docker", "push", tag], check=True)
         info = image_info(tag)
-        refs = [r for r in info["RepoDigests"]
-                if r.startswith(repo + "@") and DIGEST.fullmatch(r.split("@", 1)[1])]
-        if len(refs) != 1:
-            raise ValueError("missing or ambiguous registry digest: " + service)
-        ref = refs[0]
+        if services == ORCHESTRATION_SERVICES:
+            platform=info["Os"]+"/"+info["Architecture"]
+            if platform!="linux/amd64":
+                raise ValueError("this disposable campaign qualifies linux/amd64 only")
+            subprocess.run(["docker","push","--platform",platform,tag],check=True)
+            ref=registry_manifest(service,info["Id"])
+        else:
+            subprocess.run(["docker", "push", tag], check=True)
+            info = image_info(tag)
+            refs = [r for r in info["RepoDigests"]
+                    if r.startswith(repo + "@") and DIGEST.fullmatch(r.split("@", 1)[1])]
+            if len(refs) != 1:
+                raise ValueError("missing or ambiguous registry digest: " + service)
+            ref = refs[0]
         subprocess.run(["docker", "pull", ref], check=True)
         pinned = image_info(ref)
         if pinned["Id"] != info["Id"]:
