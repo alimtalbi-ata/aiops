@@ -191,6 +191,18 @@ class Handler(BaseHTTPRequestHandler):
                     "observed_outage_established":False,"production_authorized":False,"operational_decision":"DENY"}).encode())
             except Exception:
                 self.reply(503,b'{"error":"IMPACT_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-activity":
+            try:
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                result=self.server.enterprise_clock.activity()
+                for record in result["records"]:
+                    graph.validate_signal(record["resource"],normalize(record["scope"],"metric"))
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"ACTIVITY_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-clock":
             try:
                 if self.server.enterprise_clock is None:
