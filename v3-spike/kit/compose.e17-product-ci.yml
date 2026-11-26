@@ -22,6 +22,11 @@ services:
       NO_PROXY: "127.0.0.1,localhost"
     volumes:
       - ${GITHUB_WORKSPACE:?disposable checkout required}/v3-spike:/lab:ro
+      - e17-audit:/audit
     networks: [backend]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+
+volumes:
+  e17-audit:
+    name: ${V3_E17_AUDIT_VOLUME:?disposable audit volume required}
