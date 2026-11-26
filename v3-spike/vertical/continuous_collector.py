@@ -82,11 +82,15 @@ class Collector:
         self.degraded=0
         self.run_id=None
 
+    def checkpoint(self):
+        """Optional durable subclass hook; default remains process-local."""
+
     def observe(self):
         try:
             window=sample(self.target_port)
         except Exception:
             self.nominal=self.degraded=0
+            self.checkpoint()
             return {"state":self.state,"observation":"UNAVAILABLE","run_id":self.run_id}
         value=window["median"]
         result={"median_ms":value,"sampled_at":window["at"],"state":self.state,
@@ -111,6 +115,7 @@ class Collector:
                     # Fail closed BEFORE publication; a lost response must not
                     # lead to a new run or a fresh identity on the next poll.
                     self.state="UNKNOWN_BLOCKED"
+                    self.checkpoint()
                     try:
                         response=admission(self.gamma_port,batch(self.baseline,window))
                         d=response["admission"]
@@ -140,6 +145,7 @@ class Collector:
                     self.run_id=None
             else:
                 self.nominal=0
+        self.checkpoint()
         result.update(state=self.state,run_id=self.run_id)
         return result
 
