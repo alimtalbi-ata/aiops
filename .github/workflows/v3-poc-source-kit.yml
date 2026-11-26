@@ -614,7 +614,14 @@ jobs:
           "${compose[@]}" stop temporal
           "${compose[@]}" exec -T worker python - unavailable < v3-spike/kit/poc-temporal-boundary-smoke.py
           "${compose[@]}" stop worker
-          "${compose[@]}" up --wait --wait-timeout 300 worker
+          # Restart only the stopped orchestration containers. Do not recreate
+          # Core/Evidence or reallocate their rootless loopback port mappings.
+          core_before=$("${compose[@]}" ps -q core)
+          evidence_before=$("${compose[@]}" ps -q evidence)
+          "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 temporal
+          "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 worker
+          test "$core_before" = "$("${compose[@]}" ps -q core)"
+          test "$evidence_before" = "$("${compose[@]}" ps -q evidence)"
           "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
           cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json"
           check_receipt
