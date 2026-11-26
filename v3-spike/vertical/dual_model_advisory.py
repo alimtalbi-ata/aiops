@@ -12,7 +12,7 @@ from historical_analyst_critic import assess
 MAX_REQUEST_BYTES=65536
 MAX_RESPONSE_BYTES=65536
 MAX_OUTPUT_TOKENS=1024
-PROMPT_VERSION="E21_V2"
+PROMPT_VERSION="E21_V3"
 class AdvisoryRejection(ValueError):
     """Fixed diagnostic codes only; never raw provider output."""
 class NoRedirect(HTTPRedirectHandler):
@@ -51,20 +51,26 @@ def call(role,provider,context,timeout_seconds=10):
     candidates=context["candidates"]
     selected=context.get("analyst_selection")
     eligible=[c for c in candidates if role=="ANALYST" or c["candidate_id"]==selected["candidate_id"]]
-    allowed_ids=[c["candidate_id"] for c in eligible]
-    evidence_ids=sorted({ref for c in eligible for ref in c["evidence_ids"]})
-    verdicts=["SELECT_CANDIDATE","ABSTAIN"] if role=="ANALYST" else ["AGREE_CANDIDATE","CHALLENGE_CANDIDATE","ABSTAIN"]
-    schema={"type":"object","properties":{
-        "candidate_id":{"anyOf":[{"type":"string","enum":allowed_ids},{"type":"null"}]},
-        "evidence_ids":{"type":"array","items":{"type":"string","enum":evidence_ids},"maxItems":len(evidence_ids)},
-        "verdict":{"type":"string","enum":verdicts}},
-        "required":["candidate_id","evidence_ids","verdict"],"additionalProperties":False}
+    verdicts=["SELECT_CANDIDATE"] if role=="ANALYST" else ["AGREE_CANDIDATE","CHALLENGE_CANDIDATE"]
+    def decision_schema(candidate,refs,verdict_values):
+        return {"type":"object","properties":{
+            "candidate_id":{"type":"null"} if candidate is None else {"type":"string","enum":[candidate]},
+            "evidence_ids":{"type":"array","items":{"type":"string","enum":refs} if refs else {"type":"string"},
+                            "minItems":len(refs),"maxItems":len(refs)},
+            "verdict":{"type":"string","enum":verdict_values}},
+            "required":["candidate_id","evidence_ids","verdict"],"additionalProperties":False}
+    # Abstention and selection are mutually exclusive schema branches. Keep
+    # every eligible candidate and abstention available; no answer is filled in.
+    schema={"anyOf":[decision_schema(c["candidate_id"],c["evidence_ids"],verdicts) for c in eligible]
+                    +[decision_schema(None,[],["ABSTAIN"])]}
     system=("Review synthetic dependency candidates, never establish cause or authorize action. "
-            "Return JSON only. Copy candidate_id and ALL evidence_ids exactly from one candidate. "
-            "Do not shorten, invent or repeat IDs. "
-            'If uncertain return {"candidate_id":null,"evidence_ids":[],"verdict":"ABSTAIN"}. '
-            + ("Use SELECT_CANDIDATE for a plausible candidate, even if temporal order needs challenge." if role=="ANALYST" else
-               "Review only the selected candidate. Use AGREE_CANDIDATE if compatible, CHALLENGE_CANDIDATE if contradicted or uncertain about ordering."))
+            "Return JSON only. Choose exactly one of two forms. SELECT: copy candidate_id and ALL evidence_ids exactly; "
+            + ("set verdict to SELECT_CANDIDATE. " if role=="ANALYST" else
+               "review the analyst selection only; set verdict to AGREE_CANDIDATE or CHALLENGE_CANDIDATE. ")
+            + 'ABSTAIN: {"candidate_id":null,"evidence_ids":[],"verdict":"ABSTAIN"}. '
+            "Never combine a non-null candidate with ABSTAIN. Do not invent, shorten or repeat IDs. "
+            + ("Temporal uncertainty may be passed as a candidate for the Critic to challenge." if role=="ANALYST" else
+               "Challenge reverse or unresolved temporal ordering; abstain if unable to review."))
     body=json.dumps({"model":provider["model"],"temperature":0,"max_tokens":MAX_OUTPUT_TOKENS,
                      "response_format":{"type":"json_schema","json_schema":{"name":"advisory","strict":True,"schema":schema}},
                      "messages":[{"role":"system","content":system},
@@ -104,6 +110,7 @@ def _validate(output,candidates,role,selected=None):
         raise AdvisoryRejection("SCHEMA_FIELDS_INVALID")
     cid,refs,verdict=output["candidate_id"],output["evidence_ids"],output["verdict"]
     if cid is None and refs==[] and verdict=="ABSTAIN":return output
+    if verdict=="ABSTAIN":raise AdvisoryRejection("ABSTAIN_WITH_SELECTION")
     if not isinstance(cid,str) or cid not in candidates or not isinstance(refs,list) or not all(isinstance(x,str) for x in refs):
         raise AdvisoryRejection("CANDIDATE_OR_CITATION_TYPE_INVALID")
     if len(set(refs))!=len(refs) or sorted(refs)!=candidates[cid]["evidence_ids"]:
