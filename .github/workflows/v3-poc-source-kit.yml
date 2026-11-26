@@ -663,6 +663,8 @@ jobs:
           export V3_E17_ACTIVITY_TOKEN="$(openssl rand -hex 32)"
           echo "::add-mask::$V3_E17_ACTIVITY_TOKEN"
           echo "V3_E17_ACTIVITY_TOKEN=$V3_E17_ACTIVITY_TOKEN" >> "$GITHUB_ENV"
+          export V3_E17_AUDIT_VOLUME="${project}-e17-audit"
+          echo "V3_E17_AUDIT_VOLUME=$V3_E17_AUDIT_VOLUME" >> "$GITHUB_ENV"
           compose+=(-f "$override" -f v3-spike/kit/compose.e17-product-ci.yml)
           # Core and Evidence are already healthy from the preceding real-service
           # qualification. Building worker with dependencies can recreate them
@@ -732,6 +734,19 @@ jobs:
           cat "$V3_ROOT/temporal-e17-worker.json"
           # Target runs as nonroot in the isolated backend. The actual existing
           # Worker container, not the runner SDK, executes its scheduled activity.
+          # Provision a fresh named volume only on this disposable rootless daemon.
+          # The short initializer has no network and only CHOWN capability; the
+          # actual target always runs nonroot and never mounts host audit paths.
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          if docker volume inspect "$V3_E17_AUDIT_VOLUME" >/dev/null 2>&1; then
+            echo "Unexpected existing audit volume" >&2
+            exit 1
+          fi
+          docker volume create "$V3_E17_AUDIT_VOLUME" >/dev/null
+          docker run --rm --network none --user 0:0 --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges --mount "type=volume,source=$V3_E17_AUDIT_VOLUME,target=/audit" --entrypoint python aiops-v3-e17-worker-ci:local -c 'import os; assert not os.listdir("/audit"); os.chmod("/audit",0o700); os.chown("/audit",1000,1000)'
           "${compose[@]}" run --rm --no-deps --use-aliases -T e17-target > "$V3_ROOT/temporal-e17-product.json"
           cat "$V3_ROOT/temporal-e17-product.json"
           "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17-product.json" > "$V3_ROOT/temporal-e17-product-worker.json"
@@ -768,6 +783,12 @@ jobs:
           "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17-product.json" > "$V3_ROOT/temporal-e17-product-worker-replay.json"
           cmp "$V3_ROOT/temporal-e17-product-worker.json" "$V3_ROOT/temporal-e17-product-worker-replay.json"
           echo "Actual Worker E17 activity persisted receipt after restart PASS"
+          # The first target was destroyed by --rm. A fresh container reads the
+          # existing gate, rejects the consumed approval and measures no effect.
+          "${compose[@]}" run --rm --no-deps --use-aliases -T e17-target audit-recreated < "$V3_ROOT/temporal-e17-product.json" > "$V3_ROOT/temporal-e17-recreated-target.json"
+          cat "$V3_ROOT/temporal-e17-recreated-target.json"
+          docker volume rm "$V3_E17_AUDIT_VOLUME"
+          echo "Recreated target durable gate and old-approval rejection PASS"
           "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
           cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json" || { echo "Boundary receipt changed" >&2; exit 1; }
           check_receipt || { echo "Core execution receipt count changed" >&2; exit 1; }
@@ -886,6 +907,7 @@ jobs:
             ${{ env.V3_ROOT }}/temporal-e17-product-worker.json
             ${{ env.V3_ROOT }}/temporal-e17-product-worker-replay.json
             ${{ env.V3_ROOT }}/temporal-e17-product-gamma.json
+            ${{ env.V3_ROOT }}/temporal-e17-recreated-target.json
             ${{ env.V3_ROOT }}/admission-controls.json
             ${{ env.V3_ROOT }}/admission-fault.json
           if-no-files-found: warn
