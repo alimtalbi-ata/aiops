@@ -225,6 +225,19 @@ class Handler(BaseHTTPRequestHandler):
                         "run_id":run_id,"topology_sha256":enterprise["topology_sha256"],
                         "citations":enterprise["document_references"],"production_authorized":False,
                         "llm_inference_performed":False,"operational_decision":"DENY"}
+                    result["copilot"]["enterprise_scope"]={
+                        "root":enterprise["root"],"exposure_semantics":enterprise["exposure_semantics"],
+                        "potential_application_ids":[x["node_id"] for x in enterprise["potential_exposure"]["applications"]],
+                        "potential_user_ids":[x["node_id"] for x in enterprise["potential_exposure"]["users"]],
+                        "reported_user_ids":enterprise["reported_user_ids"],
+                        "observed_outage_established":False}
+                    if enterprise["root"] in ENTERPRISE_ROOTS:
+                        scope=result["copilot"]["enterprise_scope"]
+                        result["copilot"]["answer"]=(f"Incident {enterprise['incident_id']}: "
+                            f"{len(scope['potential_application_ids'])} potentially exposed applications or user-access contexts; "
+                            f"{len(scope['potential_user_ids'])} potentially exposed users; "
+                            f"{len(details['evidence'])} verified evidence records. "
+                            "Root cause UNKNOWN. Operational action DENY.")
                 if simulate:
                     result["simulation"]=simulation_decision(self.server.policy_port,len(details["evidence"]))
                 self.reply(200,json.dumps(result).encode())
