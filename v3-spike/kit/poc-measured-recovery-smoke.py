@@ -11,6 +11,7 @@ import re
 import statistics
 import sys
 import threading
+import time
 import uuid
 from http.server import HTTPServer
 from urllib.request import Request,build_opener,ProxyHandler,HTTPRedirectHandler
@@ -51,6 +52,8 @@ with HTTPServer(("127.0.0.1",0),App) as app:
     thread.start()
     try:
         baseline=metric("baseline",measure(app))
+        # Enterprise timestamps are UTC with one-second resolution.
+        time.sleep(1.1)
         app.delay=degraded
         fault=event("fault","Controlled lab response delay applied")
         incident=metric("incident",measure(app))
@@ -68,6 +71,7 @@ with HTTPServer(("127.0.0.1",0),App) as app:
             assert app.delay==degraded
         approval_binding=digest({"run_id":rid,"evidence":original["context"]["evidence"],"decision":decision})
         # The only intervention is a local Python variable on this fixture.
+        time.sleep(1.1)
         app.delay=.01
         action=event("action","Synthetic HITL fixture-only delay reset; prior run "+rid+"; approval binding "+approval_binding)
         recovery=metric("recovery",measure(app))

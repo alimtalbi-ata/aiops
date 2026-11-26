@@ -1,5 +1,6 @@
 """Synthetic latency hypothesis and counterfactual, not causal proof or execution."""
 import math
+from datetime import datetime
 
 def preview(observations):
     if not isinstance(observations,list) or len(observations)>20:
@@ -41,7 +42,12 @@ def preview(observations):
             or any(metadata[p].get("measurement_scope")!=scope for p in ("incident","recovery"))):
             raise ValueError("distinct same-scope measured recovery evidence required")
         times=[metadata[p].get("occurred_at") for p in ("baseline","incident","recovery")]
-        if not all(isinstance(t,str) for t in times) or times!=sorted(times):
+        try:
+            parsed=[datetime.strptime(t,"%Y-%m-%dT%H:%M:%SZ") for t in times]
+        except (TypeError, ValueError) as exc:
+            raise ValueError("recovery measurement chronology invalid") from exc
+        if not (all(t==dt.strftime("%Y-%m-%dT%H:%M:%SZ") for t,dt in zip(times,parsed))
+                and parsed[0]<parsed[1]<parsed[2]):
             raise ValueError("recovery measurement chronology invalid")
         result["evidence_ids"].append(rid)
         result["recovery"]={"classification":"MEASURED_LAB_RECOVERY_COMPARISON",

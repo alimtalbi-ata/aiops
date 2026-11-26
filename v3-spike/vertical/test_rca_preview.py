@@ -30,3 +30,14 @@ class PreviewTest(unittest.TestCase):
         for bad in (dict(rows[2],evidence_id="E2"),dict(rows[2],measurement_scope=None),dict(rows[2],occurred_at="2025-01-01T00:00:00Z")):
             with self.assertRaises(ValueError):preview([*rows[:2],bad])
         with self.assertRaises(ValueError):preview(rows[1:])
+
+    def test_recovery_requires_strict_canonical_utc_order(self):
+        scope=["NODE-CI-ROOT","NODE-CI-ENT-ASSET-PAR","NODE-CI-ENT-APP-PAY"]
+        rows=[dict(synthetic=True,metric="latency_ms",phase=p,value=v,evidence_id=e,measurement_scope=scope,occurred_at=t)
+              for p,v,e,t in (("baseline",10,"E1","2026-01-01T09:00:00Z"),("incident",120,"E2","2026-01-01T09:00:01Z"),("recovery",11,"E3","2026-01-01T09:00:02Z"))]
+        for idx,stamp in ((1,rows[0]["occurred_at"]),(2,rows[1]["occurred_at"]),(2,"2026-02-30T09:00:02Z"),(2,"2026-01-01T09:00:02+00:00"),(2,None)):
+            with self.subTest(idx=idx,stamp=stamp):
+                altered=[dict(row) for row in rows]
+                altered[idx]["occurred_at"]=stamp
+                with self.assertRaises(ValueError):preview(altered)
+        self.assertTrue(preview(rows)["recovery"]["within_baseline_tolerance"])
