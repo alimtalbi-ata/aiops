@@ -232,7 +232,7 @@ $("enterprise-open-run").addEventListener("click",()=>{
  if(!/^RUN-[A-F0-9]{16}$/.test(run))return;
  selectedDynamicRun=run;
  // The server resolves the root from verified evidence; no caller-supplied asset.
- $("load-enterprise").click();
+ $("load-enterprise").disabled=false;$("load-enterprise").click();
 });
 $("load-enterprise").addEventListener("click",async()=>{
  const run=selectedDynamicRun,generation=dynamicGeneration,target=$("enterprise-result");
