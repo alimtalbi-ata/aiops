@@ -239,6 +239,46 @@ jobs:
                               if incident["resource"]=="NODE-CI-ENT-ASSET-LYO":
                                   expect(page.locator("#enterprise-result")).to_contain_text("ENT-DOC-004")
                                   expect(page.locator("#enterprise-result")).not_to_contain_text("ENT-DOC-001")
+                          # E18 UI: real Core/Evidence/Twin on disposable containers, no mocks for success.
+                          import uuid
+                          from test_enterprise_correlation import row
+                          origin=f"http://127.0.0.1:{http.server_port}"
+                          run_ids=[]
+                          evidence_ids=[]
+                          for resource,stamp in (("NODE-CI-ENT-WAN","2026-01-01T09:00:00Z"),("NODE-CI-ENT-NET-LYO","2026-01-01T09:00:01Z")):
+                              item=row(uuid.uuid4().hex,resource,stamp)
+                              request=urllib.request.Request(origin+"/api/v1/ingest/create",data=json.dumps([item]).encode(),headers={"Origin":origin,"Content-Type":"application/json"})
+                              with urllib.request.urlopen(request,timeout=20) as response:
+                                  created=json.load(response)
+                              run_ids.append(created["core"]["run"]["run_id"])
+                              evidence_ids.append(created["stored_evidence"][0]["evidence_id"])
+                          page.locator("#assessment-runs").fill("\n".join(run_ids))
+                          page.locator("#assessment-read").click()
+                          for value in ("COMPATIBLE_NOT_PROOF","NODE-CI-ENT-WAN","NODE-CI-ENT-NET-LYO","RCA: UNKNOWN","Policy DENY",*run_ids,*evidence_ids):
+                              expect(page.locator("#assessment-result")).to_contain_text(value,timeout=30000)
+                          page.locator("#assessment-result button").first.click()
+                          expect(page.locator("#enterprise-result")).to_contain_text(run_ids[1],timeout=30000)
+                          page.locator("#assessment-runs").fill(run_ids[0]+" "+run_ids[0])
+                          expect(page.locator("#assessment-result")).to_be_empty()
+                          page.locator("#assessment-read").click()
+                          expect(page.locator("#assessment-state")).to_contain_text("2–5 distinct")
+                          page.locator("#assessment-runs").fill("\n".join(run_ids))
+                          held_assessment=[]
+                          def hold_assessment(route):
+                              held_assessment.append((route,route.fetch()))
+                          page.route("**/api/v1/enterprise-correlation/assessment",hold_assessment)
+                          page.locator("#assessment-read").click()
+                          for _ in range(50):
+                              if held_assessment: break
+                              page.wait_for_timeout(100)
+                          assert len(held_assessment)==1
+                          page.locator("#assessment-window").fill("60")
+                          held_assessment[0][0].fulfill(response=held_assessment[0][1])
+                          page.unroute("**/api/v1/enterprise-correlation/assessment",hold_assessment)
+                          page.wait_for_timeout(250)
+                          expect(page.locator("#assessment-result")).to_be_empty()
+                          expect(page.locator("#assessment-state")).to_contain_text("window changed")
+                          print("E18 GAMMA historical assessment actual evidence and stale response isolation PASS")
                       finally:
                           browser.close()
               finally:
