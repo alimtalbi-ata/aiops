@@ -120,11 +120,17 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/v1/incident-context/dynamic?run_id="):
             try:
                 run_id=self.path.split("=",1)[1]
+                simulate=run_id.endswith("&decision=simulate")
+                if simulate:
+                    run_id=run_id.removesuffix("&decision=simulate")
                 port,token,_=self.server.core_config
                 twin,evidence,node,_=self.server.context_config
                 core,details=dynamic_context(port,token,run_id,twin,evidence,node)
-                self.reply(200,json.dumps({"core":core,"context":details,"copilot":answer(core,details),
-                    "binding":"VERIFIED_DYNAMIC_LAB_NODE","production_authorized":False}).encode())
+                result={"core":core,"context":details,"copilot":answer(core,details),
+                    "binding":"VERIFIED_DYNAMIC_LAB_NODE","production_authorized":False}
+                if simulate:
+                    result["simulation"]=simulation_decision(self.server.policy_port,len(details["evidence"]))
+                self.reply(200,json.dumps(result).encode())
             except Exception:
                 self.reply(503,b'{"error":"CONTEXT_UNVERIFIED","policy":"DENY"}')
         elif self.path in ("/api/v1/incident-context", "/api/v1/incident-context?decision=simulate"):
