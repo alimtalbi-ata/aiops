@@ -34,12 +34,15 @@ class DurableApprovalGate(ApprovalGate):
     No raw request token, prompts or external target is persisted.
     """
     def __init__(self, clock):
-        from contextlib import closing
         import threading
         self.clock=clock
         self.lock=threading.Lock()
         super().__init__()
-        with closing(clock.connect()) as db, db:
+
+    def _prepare_storage(self):
+        # Read-only GAMMA routes must not initialize HITL storage.
+        from contextlib import closing
+        with closing(self.clock.connect()) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS hitl_decision_receipts (receipt_id TEXT PRIMARY KEY, payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
 
     @staticmethod
@@ -60,8 +63,9 @@ class DurableApprovalGate(ApprovalGate):
             self.pending={k:v for k,v in self.pending.items() if v[1]>=now}
             if len(self.pending)>=100:
                 raise ValueError("Demo queue full")
+            self._prepare_storage()
             key=secrets.token_urlsafe(24)
-            self.pending[key]=(binding,now+300,incident,run)
+            self.pending[key]=(binding,time.monotonic()+300,incident,run)
         return {"request_id":key,"decision":"HUMAN_APPROVAL","operational_decision":"DENY"}
 
     @staticmethod

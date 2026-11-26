@@ -90,3 +90,15 @@ class DurableHITLTest(unittest.TestCase):
         with self.assertRaises(sqlite3.Error):
             self.decide(key)
         self.assertEqual(self.decide(key)["decision"],"DENY")
+
+    def test_read_only_init_never_opens_storage_and_request_fails_closed(self):
+        from unittest.mock import Mock
+        from hitl_demo import DurableApprovalGate
+        clock=Mock()
+        clock.connect.side_effect=OSError("storage unavailable")
+        gate=DurableApprovalGate(clock)
+        clock.connect.assert_not_called()
+        with self.assertRaises(OSError):
+            gate.request(self.incident,self.run,self.refs)
+        self.assertEqual(gate.pending,{})
+        clock.connect.assert_called_once_with()
