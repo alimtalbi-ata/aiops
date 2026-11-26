@@ -774,6 +774,11 @@ jobs:
           [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
           before=$(snapshot)
           python3 v3-spike/kit/poc-e17-gamma-readback.py "$url" "$V3_ROOT" > "$V3_ROOT/temporal-e17-gamma.json"
+          python3 -m venv "$V3_ROOT/e17-browser-venv"
+          "$V3_ROOT/e17-browser-venv/bin/python" -m pip install --no-cache-dir playwright==1.51.0
+          "$V3_ROOT/e17-browser-venv/bin/python" -m playwright install --with-deps chromium
+          "$V3_ROOT/e17-browser-venv/bin/python" v3-spike/kit/poc-e17-gamma-browser.py "$url" "$V3_ROOT" > "$V3_ROOT/temporal-e17-gamma-browser.json"
+          cat "$V3_ROOT/temporal-e17-gamma-browser.json"
           test "$before" = "$(snapshot)"
           cat "$V3_ROOT/temporal-e17-gamma.json"
           echo "E17 GAMMA read-only PostgreSQL snapshot PASS"
@@ -806,6 +811,7 @@ jobs:
             ${{ env.V3_ROOT }}/temporal-e17-worker.json
             ${{ env.V3_ROOT }}/temporal-e17-worker-replay.json
             ${{ env.V3_ROOT }}/temporal-e17-gamma.json
+            ${{ env.V3_ROOT }}/temporal-e17-gamma-browser.json
           if-no-files-found: warn
       - if: always()
         run: |
