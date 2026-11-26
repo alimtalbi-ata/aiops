@@ -21,6 +21,25 @@ EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
          "tenant": "synthetic-demo"}
 
+def enterprise_projection(graph, details, run, clock):
+    result=graph.project(details,run)
+    if clock is None:
+        return result
+    # Scope comes from the verified graph projection, never a caller's search filter.
+    scope={v for row in result["timeline"] for k,v in row.items()
+           if k in ("asset_id","application_id","group_id","user_id")}
+    if not scope:
+        scope={n["node_id"] for nodes in result["potential_exposure"].values() for n in nodes}
+    scope.add(result["root"])
+    query=" ".join(str(row.get("message",""))+" "+str(row.get("observation",{}).get("metric","")) for row in result["timeline"])[:512]
+    history=clock.historical_documents(run["run_id"],scope,query)
+    result["document_history"]={k:v for k,v in history.items() if k!="citations"}
+    if history["state"]=="HISTORICAL_LOGICAL_VERSION":
+        result["document_references"]=history["citations"]
+    elif history["state"]=="PRE_E7_UNAVAILABLE":
+        result["document_references"]=[]
+    return result
+
 class Handler(BaseHTTPRequestHandler):
     def reply(self, status, data, mime="application/json"):
         self.send_response(status)
@@ -191,6 +210,18 @@ class Handler(BaseHTTPRequestHandler):
                     "observed_outage_established":False,"production_authorized":False,"operational_decision":"DENY"}).encode())
             except Exception:
                 self.reply(503,b'{"error":"IMPACT_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-corpus":
+            try:
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                result=self.server.enterprise_clock.document_catalog()
+                if any(not set(d["scope"])<=graph.nodes.keys() for d in result["documents"]):
+                    raise ValueError("unbound document scope")
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"CORPUS_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-activity":
             try:
                 if self.server.enterprise_clock is None:
@@ -217,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
                 twin,evidence,node,_=self.server.context_config
                 core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True,multiasset=True)
                 graph=Graph(get(twin,"/api/twin/graph"))
-                result=graph.project(details,core["run"])
+                result=enterprise_projection(graph,details,core["run"],self.server.enterprise_clock)
                 self.reply(200,json.dumps(result).encode())
             except Exception:
                 self.reply(503,b'{"error":"ENTERPRISE_CONTEXT_UNVERIFIED","policy":"DENY"}')
@@ -231,7 +262,7 @@ class Handler(BaseHTTPRequestHandler):
                 twin,evidence,node,_=self.server.context_config
                 core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True,multiasset=True)
                 scoped=any("enterprise" in row["signal"] for row in details.get("verified_signals",[]))
-                enterprise=Graph(get(twin,"/api/twin/graph")).project(details,core["run"]) if scoped else None
+                enterprise=enterprise_projection(Graph(get(twin,"/api/twin/graph")),details,core["run"],self.server.enterprise_clock) if scoped else None
                 details.pop("verified_signals",None)
                 result={"core":core,"context":details,"copilot":answer(core,details),
                     "binding":"VERIFIED_DYNAMIC_LAB_NODE","production_authorized":False}
@@ -239,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
                     result["enterprise_context"]=enterprise
                     result["copilot"]["enterprise_document_retrieval"]={
                         "run_id":run_id,"topology_sha256":enterprise["topology_sha256"],
-                        "citations":enterprise["document_references"],"production_authorized":False,
+                        "citations":enterprise["document_references"],"document_history":enterprise.get("document_history"),"production_authorized":False,
                         "llm_inference_performed":False,"operational_decision":"DENY"}
                     result["copilot"]["enterprise_scope"]={
                         "root":enterprise["root"],"exposure_semantics":enterprise["exposure_semantics"],
