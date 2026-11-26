@@ -288,6 +288,8 @@ jobs:
                   http.shutdown()
                   thread.join(5)
           PY
+      - name: Verify actual GAMMA AI telemetry browser
+        run: PYTHONPATH=v3-spike/vertical python3 v3-spike/vertical/poc_gamma_ai_telemetry.py
       - name: Backup and restore into separate synthetic database
         run: |
           set -euo pipefail
