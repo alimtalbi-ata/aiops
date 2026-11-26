@@ -23,6 +23,7 @@ from temporalio import activity
 from temporalio.api.enums.v1 import EventType
 from temporalio.client import Client
 from temporalio.common import WorkflowIDReusePolicy
+from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.worker import Worker
 from poc_temporal_e17_workflow import E17LabRecoveryWorkflow
 
@@ -55,7 +56,10 @@ async def history_receipt(client,rid):
     completed=[e for e in history.events if e.event_type==EventType.EVENT_TYPE_ACTIVITY_TASK_COMPLETED]
     assert len(scheduled)==len(completed)==1
     assert scheduled[0].activity_task_scheduled_event_attributes.activity_type.name=="v3_e17_reset_lab_http_delay"
-    assert completed[0].activity_task_completed_event_attributes.scheduled_event_id==scheduled[0].event_id
+    attrs=completed[0].activity_task_completed_event_attributes
+    assert attrs.scheduled_event_id==scheduled[0].event_id
+    activity_result=await client.data_converter.decode(attrs.result.payloads)
+    assert activity_result==[result], "workflow result differs from recorded activity result"
     assert result["binding"]["workflow_id"]==rid
     assert result["status"]=="SIMULATED" and result["production_authorized"] is False
     return result,len(history.events)
@@ -80,8 +84,8 @@ async def execute(root,temporal,core,twin,evidence,policy):
                         "method":"HTTP_MONOTONIC_MEDIAN_5","samples_ms":samples}),
                     observation=dict(metric="latency_ms",phase=phase,
                                      value=round(statistics.median(samples),3)))
-    def event(name,message):
-        return dict(base,id=identity+"-"+name,kind="event",
+    def event(name,message,kind="event"):
+        return dict(base,id=identity+"-"+name,kind=kind,
                     enterprise=dict(scope,occurred_at=now(),message=message))
     def publish(rows):
         result=create_and_persist(rows,core,token,evidence)
@@ -97,7 +101,10 @@ async def execute(root,temporal,core,twin,evidence,policy):
             target.inject_fault()
             fault=event("fault","Controlled lab response delay applied")
             incident=metric("incident",measure(target))
-            rows=[baseline,fault,incident]
+            assert len(target.records)==10
+            assert all(record["status"]==200 for record in target.records)
+            observed_log=event("http-log","Lab HTTP log: ten requests completed with status 200",kind="log")
+            rows=[baseline,fault,incident,observed_log]
             run,refs=publish(rows)
             rid,inc=run["run_id"],run["incident_id"]
             _,context=read_context(rid)
@@ -138,6 +145,14 @@ async def execute(root,temporal,core,twin,evidence,policy):
                     id=rid,task_queue=queue,execution_timeout=timedelta(seconds=75),
                     id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
                 receipt=await asyncio.wait_for(handle.result(),timeout=80)
+                try:
+                    await client.start_workflow(E17LabRecoveryWorkflow.run,approval,
+                        id=rid,task_queue=queue,execution_timeout=timedelta(seconds=75),
+                        id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
+                except WorkflowAlreadyStartedError:
+                    pass
+                else:
+                    raise AssertionError("completed workflow ID replay accepted")
             # Re-read persisted history after this dedicated worker stopped.
             persisted,events=await history_receipt(client,rid)
             assert persisted==receipt==target.read_action_result(receipt["receipt_id"])
