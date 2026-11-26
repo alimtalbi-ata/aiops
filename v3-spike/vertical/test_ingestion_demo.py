@@ -15,6 +15,24 @@ class IngestionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             ingest([a,dict(a,severity="warning")])
 
+    def test_observation_integrity(self):
+        a=dict(id="m1",kind="metric",source="monitor",resource="NODE-CI-ROOT",severity="critical",tenant="synthetic-demo",synthetic=True,
+               observation={"metric":"latency_ms","phase":"baseline","value":40})
+        b=dict(a,id="m2",observation=dict(a["observation"],phase="incident",value=160))
+        evidence=ingest([a,b,a])["incidents"][0]["evidence"]
+        self.assertEqual([x["observation"]["value"] for x in evidence],[40,160])
+        changed=dict(a,observation=dict(a["observation"],value=41))
+        self.assertNotEqual(evidence[0]["sha256"],ingest([changed])["incidents"][0]["evidence"][0]["sha256"])
+        with self.assertRaises(ValueError):
+            ingest([a,changed])
+        for value in (True,0,-1,float("nan"),float("inf"),1e10,"40"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ingest([dict(a,observation=dict(a["observation"],value=value))])
+        with self.assertRaises(ValueError):
+            ingest([dict(a,kind="log")])
+        with self.assertRaises(ValueError):
+            ingest([dict(a,observation=dict(a["observation"],metric="unknown"))])
+
     def test_http(self):
         import json
         import threading
