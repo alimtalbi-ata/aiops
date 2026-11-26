@@ -4,7 +4,8 @@ umask 077
 export V3_ROOT="${V3_ROOT:-/srv/aiops-v3}"
 [[ "$V3_ROOT" = /* && "$V3_ROOT" != / ]] || { echo "Absolute dedicated root required" >&2; exit 1; }
 [[ "$(id -u)" != 0 ]] || { echo "Rootless user required" >&2; exit 1; }
-docker info --format '{{json .SecurityOptions}}' | grep -q 'name=rootless' || { echo "Rootless daemon required" >&2; exit 1; }
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 "$here/rootless_preflight.py" "$V3_ROOT" --source-daemon-only
 mkdir -p "$V3_ROOT"
 [[ "$(realpath "$V3_ROOT")" = "$V3_ROOT" && -O "$V3_ROOT" ]] || exit 1
 [[ ! -L "$V3_ROOT/data" && ! -L "$V3_ROOT/data/postgres" ]] || exit 1
@@ -20,7 +21,6 @@ fi
 [[ -f "$envfile" && ! -L "$envfile" && -O "$envfile" ]] || exit 1
 chmod 600 "$envfile"
 unset V3_DB_PASSWORD V3_LAB_TOKEN
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 compose=(docker compose --project-name "aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)" --env-file "$envfile" -f "$here/compose.poc-source.yml")
 "${compose[@]}" config --quiet
 # PostgreSQL init scripts only run on an empty data directory.
