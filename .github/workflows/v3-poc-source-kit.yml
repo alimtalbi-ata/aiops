@@ -18,6 +18,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_corpus.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_knowledge.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_hybrid.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_scenarios.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -106,6 +107,13 @@ jobs:
                           page.locator("#hybrid-query").fill("zzzzzzzz")
                           page.locator("#hybrid-search").click()
                           expect(page.locator("#hybrid-result")).to_contain_text("NO_MATCH")
+                          page.locator("#scenario-catalog").click()
+                          expect(page.locator("#scenario-result")).to_contain_text("WAN_LOSS")
+                          expect(page.locator("#scenario-result")).to_contain_text("HR_DEVICE_FAILURE")
+                          expect(page.locator("#scenario-result")).to_contain_text("Model")
+                          page.locator("#clock-scenarios").click()
+                          expect(page.locator("#clock-result")).to_contain_text("Scenario campaign: PUBLISHED")
+                          expect(page.locator("#clock-run")).to_contain_text("CPU_SATURATION")
                           page.locator("#knowledge-read").click()
                           expect(page.locator("#knowledge-result")).to_contain_text("ENT-KNOW-00002-CHANGE")
                           expect(page.locator("#knowledge-result")).not_to_contain_text("ENT-KNOW-00004-INCIDENT")
