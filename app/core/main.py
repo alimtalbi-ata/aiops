@@ -253,6 +253,48 @@ def noc_read_synthetic_run(rid: str, authorization: str | None = Header(default=
     })
 
 
+@app.get("/api/noc/runs/{rid}/e17-receipt")
+def noc_read_e17_receipt(rid: str, authorization: str | None = Header(default=None)):
+    """Internal synthetic relay, never a start/action endpoint or tenant grant."""
+    denial = _noc_core_auth_failure(authorization)
+    if denial is not None:
+        return denial
+    if WORKER != "http://worker:815" or not re.fullmatch(r"RUN-[A-F0-9]{16}", rid):
+        return _noc_core_response({"detail": "e17_receipt_unavailable"}, 503)
+    try:
+        # Reuse the canonical synthetic incident/tenant fence before contacting Worker.
+        canonical = noc_read_synthetic_run(rid, authorization)
+        if canonical.status_code != 200:
+            raise ValueError("unverified canonical run")
+        run = json.loads(canonical.body)["run"]
+        if run["mode"] != "DEMO" or not re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}", run["incident_id"]):
+            raise ValueError("not a synthetic ingestion run")
+        with requests.Session() as session:
+            session.trust_env = False
+            with session.get(WORKER + "/api/v3/lab/e17/receipt/" + rid,
+                             headers={"Authorization": authorization}, timeout=(3, 15),
+                             allow_redirects=False, stream=True) as response:
+                if response.status_code != 200:
+                    raise ValueError("Worker receipt unavailable")
+                raw = bytearray()
+                for chunk in response.iter_content(chunk_size=4096):
+                    raw.extend(chunk)
+                    if len(raw) > 65536:
+                        raise ValueError("oversized Worker receipt")
+        result = json.loads(raw)
+        binding = result["action_receipt"]["binding"]
+        if (result.get("classification") != "V3_E17_WORKER_RECEIPT_READBACK"
+                or result.get("run_id") != rid or binding.get("run_id") != rid
+                or binding.get("workflow_id") != rid or binding.get("incident_id") != run["incident_id"]
+                or result.get("production_authorized") is not False
+                or result.get("operational_decision") != "DENY"
+                or result.get("core_business_stages_qualified") is not False):
+            raise ValueError("unverified Worker projection")
+        return _noc_core_response(result)
+    except Exception:
+        return _noc_core_response({"detail": "e17_receipt_unavailable"}, 503)
+
+
 @app.get("/api/noc/runs/{rid}/policy-status")
 def noc_read_demo_policy_status(rid: str, authorization: str | None = Header(default=None)):
     """Observe a DEMO Core Run and its stored Policy gate without any mutation.

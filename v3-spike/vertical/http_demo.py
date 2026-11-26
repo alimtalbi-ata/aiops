@@ -389,6 +389,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200,json.dumps(result).encode())
             except Exception:
                 self.reply(503,b'{"error":"ENTERPRISE_CONTEXT_UNVERIFIED","policy":"DENY"}')
+        elif self.path.startswith("/api/v1/e17/recovery?"):
+            try:
+                from urllib.parse import parse_qs,urlsplit
+                from e17_readback import dynamic_recovery
+                # Existing loopback-only demo, never a tenant-authorized portal.
+                origin="http://127.0.0.1:%d" % self.server.server_port
+                if self.headers.get("Host")!=origin.removeprefix("http://") or self.headers.get("Origin",origin)!=origin:
+                    raise ValueError("foreign origin")
+                params=parse_qs(urlsplit(self.path).query,strict_parsing=True,max_num_fields=2)
+                if set(params)!={"original_run_id","comparison_run_id"} or any(len(v)!=1 for v in params.values()):
+                    raise ValueError("two selected run IDs required")
+                port,token,_=self.server.core_config
+                twin,evidence,node,_=self.server.context_config
+                result=dynamic_recovery(port,token,twin,evidence,node,
+                    params["original_run_id"][0],params["comparison_run_id"][0])
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"E17_RECOVERY_UNVERIFIED","policy":"DENY","production_authorized":false}')
         elif self.path.startswith("/api/v1/incident-context/dynamic?run_id="):
             try:
                 run_id=self.path.split("=",1)[1]
