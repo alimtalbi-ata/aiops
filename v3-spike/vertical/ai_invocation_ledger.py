@@ -71,14 +71,14 @@ class InvocationLedger:
                 raise ValueError("ledger capacity reached")
             db.execute("INSERT INTO ai_invocation_reviews(review_id,payload,payload_hash) VALUES(?,?,?)",
                        (record["review_id"],raw,digest(record)))
-    def execute(self,history,analyst_provider,critic_provider):
+    def execute(self,history,analyst_provider,critic_provider,*,timeout_seconds=10):
         baseline=assess(history)
         # No model call if the ledger is already full. Concurrent saturation
         # can still cause a post-call persistence failure: return no success.
         with closing(self.clock.connect()) as db:
             if db.execute("SELECT COUNT(*) FROM ai_invocation_reviews").fetchone()[0]>=MAX_RECORDS:
                 raise ValueError("ledger capacity reached")
-        out=review(history,analyst_provider,critic_provider)
+        out=review(history,analyst_provider,critic_provider,timeout_seconds=timeout_seconds)
         record={"classification":"SYNTHETIC_AI_INVOCATION_LEDGER_E23","review_id":"AI-"+uuid.uuid4().hex,
                 "recorded_at":datetime.now(timezone.utc).isoformat(),"run_ids":sorted(baseline["analyst"]["run_ids"]),
                 "correlation_sha256":baseline["analyst"]["correlation_sha256"],"context_sha256":out["context_sha256"],
