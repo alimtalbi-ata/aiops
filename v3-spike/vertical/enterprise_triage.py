@@ -18,7 +18,7 @@ CATALOG=(
  ("WAN_MONITOR_SPIKE","WAN",None,None,None,False,False,
   (sig("wan-monitor","metric","packet_loss"),)),
  ("STORAGE_CAPACITY_CORROBORATED","STORAGE-PAR",None,None,None,False,False,
-  (sig("capacity-monitor","metric","capacity_used"),sig("storage-log","log","write_rejected")))),
+  (sig("capacity-monitor","metric","capacity_used"),sig("storage-log","log","write_rejected"))),
  ("IDENTITY_SUSPICIOUS_ACCESS","IDENTITY",None,None,None,False,True,
   (sig("identity-audit","log","unusual_login_pattern"),)),
  ("PAYMENTS_DEPLOYMENT_WINDOW","ROOT","APP-PAY",None,None,True,False,
