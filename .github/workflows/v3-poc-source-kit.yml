@@ -129,7 +129,7 @@ jobs:
       - name: Verify actual GAMMA launcher
         run: |
           umask 077
-          printf "TOKEN=%s\nCHANNEL_ID=%s\n" "$(python3 -c 'import secrets; print(secrets.token_hex(32))')" "abcdefghijklmnopqrstuvwxyz" > "$V3_ROOT/mattermost.env"
+          printf "TOKEN=%s\nCHANNEL_ID=%s\n" "$(python3 -c 'import secrets; print(secrets.token_hex(13))')" "abcdefghijklmnopqrstuvwxyz" > "$V3_ROOT/mattermost.env"
           python3 v3-spike/kit/poc-gamma.py > "$RUNNER_TEMP/gamma.log" 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
