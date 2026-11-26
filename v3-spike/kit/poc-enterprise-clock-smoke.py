@@ -28,6 +28,7 @@ def smoke(origin, restart):
     assert len(catalog["scenarios"])==16 and len({x["family"] for x in catalog["scenarios"]})==7
     by_id={x["scenario_id"]:x for x in catalog["scenarios"]}
     initial=status()
+    initial_triage=call("/api/v1/enterprise-triage")
     initial_episodes=call("/api/v1/enterprise-episodes")
     initial_activity=activity()
     assert initial["current_tick"]==(4 if restart else 0)
@@ -167,6 +168,18 @@ def smoke(origin, restart):
     print(json.dumps({"classification":"E6_ACTIVITY_JOURNAL","result":"PASS","ticks":recent["current_tick"],"activity_records":len(records),"signals":len(records)*3,"alerts_only":sum(r["disposition"]=="ALERT_ONLY" for r in records),"linked_incidents":sum(r["disposition"]=="INCIDENT_LINKED" for r in records),"production_authorized":False}),file=sys.stderr)
     end=status()
     cases=[r for x in end["recent"] for r in x["scenario_capture"]["incidents"]]
+    from collections import Counter
+    triage=call("/api/v1/enterprise-triage")
+    assert len(triage["records"])==end["current_tick"]*2 and not triage["unavailable_pre_e13_ticks"]
+    assert len({r["scenario_id"] for r in triage["records"]})==len(triage["records"])
+    assert all(r["assessment"]["automatic_incident_created"] is False and r["assessment"]["root_cause"]=="UNKNOWN" and r["assessment"]["compromise_established"] is False for r in triage["records"])
+    counts=Counter(r["assessment"]["disposition"] for r in triage["records"])
+    if restart:
+        assert triage["records"][:8]==initial_triage["records"]
+        assert counts=={"UNCORROBORATED_ALERT":4,"INCIDENT_CANDIDATE":4,"SECURITY_REVIEW":2,"MAINTENANCE_REVIEW":1,"CONTRADICTORY_SIGNALS":1,"INSUFFICIENT_FRESH_DATA":2,"NOMINAL_OBSERVATION":2}
+    else:
+        assert counts=={"UNCORROBORATED_ALERT":2,"INCIDENT_CANDIDATE":1,"SECURITY_REVIEW":1,"MAINTENANCE_REVIEW":1,"CONTRADICTORY_SIGNALS":1,"INSUFFICIENT_FRESH_DATA":1,"NOMINAL_OBSERVATION":1}
+    print(json.dumps({"classification":"E13_TRIAGE_CHALLENGES","result":"PASS","tick":end["current_tick"],"cases":len(triage["records"]),"dispositions":dict(counts),"automatic_incidents":0,"production_authorized":False}),file=sys.stderr)
     episode_data=call("/api/v1/enterprise-episodes")
     assert len(episode_data["records"])==end["current_tick"]*4 and not episode_data["unavailable_pre_e12_ticks"]
     assert len({r["episode_id"] for r in episode_data["records"]})==4
