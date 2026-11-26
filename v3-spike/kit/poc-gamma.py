@@ -34,6 +34,8 @@ def port(service,internal):
 sys.path.insert(0,str(here.parent/"vertical"))
 from http_demo import server
 from enterprise_clock import EnterpriseClock
+from ai_runtime import read_config
+ai_providers=read_config(root)
 chatops=None
 chatfile=root/'mattermost.env'
 if chatfile.exists() or chatfile.is_symlink():
@@ -47,6 +49,7 @@ with server(core_config=(port("core",810),token,"RUN-CI-CONTEXT"),
             context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),
             policy_port=port("policy",813),mattermost_config=chatops,enterprise_clock=EnterpriseClock(root),
             enterprise_collector=runpy.run_path(str(here/'poc-multiasset-observed.py'))['collect'],
-            technical_collector=lambda:runpy.run_path(str(here/'poc-technical-observed.py'))['collect'](root)) as http:
+            technical_collector=lambda:runpy.run_path(str(here/'poc-technical-observed.py'))['collect'](root),
+            ai_providers=ai_providers) as http:
     print(f"POC GAMMA: http://127.0.0.1:{http.server_port}",flush=True)
     http.serve_forever()
