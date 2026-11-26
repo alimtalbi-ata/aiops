@@ -302,6 +302,12 @@ jobs:
               assert {x["node_id"] for x in ctx["potential_exposure"]["applications"]}=={p+x for x in expected_apps}
               assert {x["node_id"] for x in ctx["potential_exposure"]["users"]}=={p+x for x in expected_users}
               assert doc in {x["id"] for x in ctx["document_references"]}
+              with urllib.request.urlopen(origin+"/api/v1/incident-context/dynamic?run_id="+run,timeout=20) as response:
+                  combined=json.load(response)
+              assert combined["enterprise_context"]==ctx
+              assert combined["copilot"]["enterprise_document_retrieval"]["citations"]==ctx["document_references"]
+              assert combined["copilot"]["enterprise_scope"]["potential_application_ids"]==[x["node_id"] for x in ctx["potential_exposure"]["applications"]]
+              assert combined["copilot"]["root_cause"]=="UNKNOWN" and combined["copilot"]["operational_decision"]=="DENY"
               if name=="PC-FIN-01":
                   assert ctx["exposure_semantics"]=="INDIVIDUAL_ACCESS_ONLY" and ctx["reported_user_ids"]==[p+"USER-FIN-01"] and not ctx["potential_exposure"]["groups"]
                   bad=dict(row,id="e4-invalid",enterprise=dict(scope,user_id=p+"USER-FIN-02"))
