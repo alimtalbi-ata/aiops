@@ -40,6 +40,30 @@ def validate_daemon(info, docker_host, uid, root):
         raise ValueError("DockerRootDir must be inside installation root")
 
 
+def source_daemon_preflight(root, env=None, command=None, uid=None):
+    """Reuse daemon attestation without claiming the draft product graph is installed."""
+    env = os.environ if env is None else env
+    uid = os.getuid() if uid is None else uid
+    root = validate_root(root)
+    if uid == 0:
+        raise ValueError("Rootless user required")
+    if env.get("DOCKER_CONTEXT"):
+        raise ValueError("DOCKER_CONTEXT override forbidden")
+    host = env.get("DOCKER_HOST")
+    if host != f"unix:///run/user/{uid}/docker.sock":
+        raise ValueError("DOCKER_HOST must reference the current user's rootless socket")
+    command = subprocess.run if command is None else command
+    result = command(["docker", "info", "--format", "{{json .}}"],
+                     capture_output=True, text=True, check=True, env=env)
+    info = json.loads(result.stdout)
+    validate_daemon(info, host, uid, root)
+    data = Path(info["DockerRootDir"])
+    if (data == root or not data.is_dir() or data.resolve(strict=True) != data
+            or any(part.is_symlink() for part in (data, *data.parents))):
+        raise ValueError("DockerRootDir must be an existing canonical strict descendant")
+    return {"status": "PASS", "mode": "source-daemon-only", "runtime_installed": False}
+
+
 def validate_images(env, profile):
     keys = IMAGE_KEYS + (("DEMO",) if profile == "demo" else ())
     missing = [k for k in keys if not DIGEST.fullmatch(env.get(k + "_IMAGE", ""))
@@ -151,9 +175,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("root", help="new-host root, e.g. /srv/aiops-v3")
     parser.add_argument("--profile", choices=("default", "demo"), default="default")
+    parser.add_argument("--source-daemon-only", action="store_true")
     args = parser.parse_args()
     try:
-        print(json.dumps(run(args.root, args.profile)))
+        print(json.dumps(source_daemon_preflight(args.root) if args.source_daemon_only else run(args.root, args.profile)))
     except (ValueError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         parser.exit(2, f"FAIL closed: {exc}\n")
 

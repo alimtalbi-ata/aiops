@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
+      - run: python3 -m unittest discover -s v3-spike/kit -p test_rootless_preflight.py -v
       - run: python3 -m py_compile app/worker/v3_boundary.py app/worker/v3_boundary_workflow.py v3-spike/kit/poc-temporal-boundary-smoke.py v3-spike/kit/poc-temporal-ui-smoke.py
       - name: Validate Workbench JavaScript syntax before service tests
         run: |
@@ -328,12 +329,23 @@ jobs:
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          # Disposable runner only: provision dedicated daemon storage before starting Docker.
+          test ! -e "$V3_ROOT"
+          install -m 0700 -d "$V3_ROOT" "$HOME/.config/docker"
+          test ! -e "$HOME/.config/docker/daemon.json"
+          (umask 077; printf '{"data-root":"%s/docker-data"}\n' "$V3_ROOT" > "$HOME/.config/docker/daemon.json")
           dockerd-rootless-setuptool.sh install --force
           systemctl --user start docker
           echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
       - name: Start and seed using actual rootless launcher
         run: |
           docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          # The real launcher must refuse the same daemon under a different root, before writes.
+          rejected="$V3_ROOT-rejected"
+          test ! -e "$rejected"
+          if V3_ROOT="$rejected" bash v3-spike/kit/poc-start.sh; then exit 1; fi
+          test ! -e "$rejected"
           bash v3-spike/kit/poc-start.sh
       - name: Qualify upgrade from pre-008 schema on disposable runner
         run: |
@@ -925,6 +937,11 @@ jobs:
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          # Disposable runner only: provision dedicated daemon storage before starting Docker.
+          test ! -e "$V3_ROOT"
+          install -m 0700 -d "$V3_ROOT" "$HOME/.config/docker"
+          test ! -e "$HOME/.config/docker/daemon.json"
+          (umask 077; printf '{"data-root":"%s/docker-data"}\n' "$V3_ROOT" > "$HOME/.config/docker/daemon.json")
           dockerd-rootless-setuptool.sh install --force
           systemctl --user start docker
           echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
@@ -950,7 +967,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$V3_ROOT" = /tmp/aiops-v3-e28-ci
-          test ! -e "$V3_ROOT"
+          test ! -e "$V3_ROOT/poc.env"
+          test ! -e "$V3_ROOT/data"
           bash v3-spike/kit/poc-start.sh
       - run: python3 -m pip install playwright==1.51.0
       - run: python3 -m playwright install --with-deps chromium

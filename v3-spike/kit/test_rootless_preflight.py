@@ -5,6 +5,8 @@ import json
 import tempfile
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 spec = importlib.util.spec_from_file_location("rootless_preflight", Path(__file__).with_name("rootless_preflight.py"))
 module = importlib.util.module_from_spec(spec)
@@ -58,6 +60,41 @@ class RootlessPreflightTests(unittest.TestCase):
         self.info["DockerRootDir"] = "/var/lib/docker"
         with self.assertRaisesRegex(ValueError, "inside installation root"):
             module.validate_daemon(self.info, f"unix:///run/user/{module.os.getuid()}/docker.sock", module.os.getuid(), self.root)
+
+    def test_source_daemon_preflight_strict_confinement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = base / "install"
+            root.mkdir()
+            inside = root / "docker-data"
+            inside.mkdir()
+            outside = base / "outside"
+            outside.mkdir()
+            alias = root / "alias"
+            alias.symlink_to(outside, target_is_directory=True)
+            internal_alias = root / "internal-alias"
+            internal_alias.symlink_to(inside, target_is_directory=True)
+            host = "unix:///run/user/1001/docker.sock"
+            env = {"DOCKER_HOST": host}
+            for data, accepted in ((inside, True), (root, False), (outside, False),
+                                   (alias, False), (internal_alias, False), (root / "missing", False)):
+                with self.subTest(data=data):
+                    info = {"SecurityOptions": ["name=rootless"], "DockerRootDir": str(data)}
+                    command = Mock(return_value=SimpleNamespace(stdout=json.dumps(info)))
+                    if accepted:
+                        self.assertEqual(module.source_daemon_preflight(root, env, command, uid=1001)["status"], "PASS")
+                    else:
+                        with self.assertRaises(ValueError):
+                            module.source_daemon_preflight(root, env, command, uid=1001)
+                    command.assert_called_once_with(["docker", "info", "--format", "{{json .}}"],
+                                                    capture_output=True, text=True, check=True, env=env)
+            for bad_env, uid in (({}, 1001), ({"DOCKER_HOST": "unix:///var/run/docker.sock"}, 1001),
+                                 (dict(env, DOCKER_CONTEXT="other"), 1001), (env, 0)):
+                with self.subTest(env=bad_env, uid=uid):
+                    command = Mock()
+                    with self.assertRaises(ValueError):
+                        module.source_daemon_preflight(root, bad_env, command, uid=uid)
+                    command.assert_not_called()
 
     def test_bind_escape_rejected(self):
         self.graph["services"]["core"]["volumes"] = [{"type": "bind", "source": "/etc", "target": "/etc"}]

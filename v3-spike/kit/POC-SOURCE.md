@@ -2,17 +2,19 @@
 
 Not a production release. Use a dedicated rootless Docker daemon, Compose v2 and an operator-owned absolute V3_ROOT. The target default is /srv/aiops-v3; use a separate writable directory for an isolated lab. Never reuse production credentials or data.
 
-From the repository root, after provisioning rootless Docker:
+From the repository root, after provisioning a dedicated rootless Docker daemon with `data-root` set to an existing canonical strict descendant of `V3_ROOT` (for example `$V3_ROOT/docker-data`). Do not reuse or reconfigure an existing daemon. The launcher checks the explicit current-user socket and daemon storage before writing POC data:
 
 ```sh
 export V3_ROOT="$HOME/aiops-v3-poc"
+export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
+unset DOCKER_CONTEXT
 bash v3-spike/kit/poc-start.sh
 python3 v3-spike/kit/poc-gamma.py
 ```
 
 Open the loopback URL printed by GAMMA. The launcher builds Core, Twin, Evidence and Policy from source, starts PostgreSQL and seeds a synthetic scenario. GAMMA exposes verified context, evidence, conditional latency preview, deterministic Copilot, simulation and synthetic HITL. Root cause remains UNKNOWN; no host action is authorized.
 
-PostgreSQL data is under V3_ROOT/data/postgres. Generated credentials are stored in V3_ROOT/poc.env; do not publish this file. Docker image/cache storage follows the dedicated daemon configuration. Services use ephemeral loopback ports.
+PostgreSQL data is under V3_ROOT/data/postgres. Generated credentials are stored in V3_ROOT/poc.env; do not publish this file. Docker image/cache storage must remain inside V3_ROOT. The source daemon check is not a full product Compose or OCI qualification. Disposable CI runner provisioning writes daemon/service configuration outside V3_ROOT only for the lifetime of that runner; runtime socket is non-persistent. Services use ephemeral loopback ports.
 
 CI evidence: rootless startup, restart, database backup/restore into a separate synthetic database, and HITL approval/refusal/replay passed in workflow 45690970042 (rootless job 139475994884). These are CI tests, not a complete backup/restore CLI or new-host recovery qualification.
 
