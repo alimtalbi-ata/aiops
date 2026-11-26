@@ -669,7 +669,25 @@ jobs:
           test "$(docker inspect -f '{{.State.Health.Status}}' "$core_initial")" = healthy
           test "$(docker inspect -f '{{.State.Health.Status}}' "$evidence_initial")" = healthy
           "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 temporal-postgres
-          "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 temporal
+          # Before the first execution only, recover a confirmed bind collision.
+          # Never remove the database, touch other services, or retry a history test.
+          temporal_log=$(mktemp "$V3_ROOT/.temporal-start.XXXXXX")
+          for attempt in 1 2 3; do
+            if "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 temporal >"$temporal_log" 2>&1; then
+              cat "$temporal_log"
+              break
+            else
+              status=$?
+            fi
+            cat "$temporal_log" >&2
+            if [[ "$attempt" == 3 ]] || ! grep -Eqi 'RootlessKit PortManager.AddPort.*address already in use|port is already allocated' "$temporal_log"; then
+              exit "$status"
+            fi
+            echo "Initial Temporal loopback collision; retrying only this project's unqualified Temporal container" >&2
+            "${compose[@]}" rm -sf temporal
+            sleep "$attempt"
+          done
+          rm -f "$temporal_log"
           "${compose[@]}" build worker
           "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 worker
           test "$core_initial" = "$("${compose[@]}" ps -q core)"
