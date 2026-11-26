@@ -74,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search","/api/v1/enterprise-parametric/configure"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -86,6 +86,14 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 4096:
                 raise ValueError("Invalid length")
             data=json.loads(self.rfile.read(length))
+            if self.path=="/api/v1/enterprise-parametric/configure":
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                result=self.server.enterprise_clock.configure_parametric(data,graph)
+                self.reply(200,json.dumps(result).encode())
+                return
             if self.path=="/api/v1/enterprise-search":
                 if (not isinstance(data,dict) or set(data)!={"run_id","query"} or not isinstance(data["query"],str)
                     or not 1<=len(data["query"])<=512 or self.server.enterprise_clock is None):
@@ -237,6 +245,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200,json.dumps({"classification":"SYNTHETIC_SCENARIO_CATALOG","campaign":VERSION,"scenarios":rows,"production_authorized":False,"operational_decision":"DENY"}).encode())
             except Exception:
                 self.reply(503,b'{"error":"SCENARIOS_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-parametric":
+            try:
+                from enterprise_parametric import validate_graph
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                twin,_,_,_=self.server.context_config
+                result=self.server.enterprise_clock.parametric_timeline()
+                validate_graph(result["records"],Graph(get(twin,"/api/twin/graph")))
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"PARAMETRIC_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-triage":
             try:
                 from enterprise_triage import validate_graph
