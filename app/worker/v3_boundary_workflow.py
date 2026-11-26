@@ -21,3 +21,12 @@ class V3ReadinessWorkflow:
         return await workflow.execute_activity("v3_boundary_probe",nonce,result_type=str,
             start_to_close_timeout=timedelta(seconds=5),schedule_to_close_timeout=timedelta(seconds=20),
             retry_policy=RetryPolicy(maximum_attempts=1))
+
+
+@workflow.defn
+class E17ProductRecoveryWorkflow:
+    @workflow.run
+    async def run(self,approval:dict)->dict:
+        return await workflow.execute_activity("v3_e17_reset_lab_http_delay",approval,result_type=dict,
+            start_to_close_timeout=timedelta(seconds=30),schedule_to_close_timeout=timedelta(seconds=45),
+            retry_policy=RetryPolicy(maximum_attempts=1))
