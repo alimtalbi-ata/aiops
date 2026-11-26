@@ -19,11 +19,15 @@ def get(port, path):
     finally:
         conn.close()
 
-def context(twin_port, evidence_port, run_id, node_id):
+def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None):
     # Only explicitly named synthetic CI fixtures, never arbitrary tenant data.
-    for value in (run_id,node_id):
-        if not re.fullmatch(r"[A-Z]+-CI-[A-Z0-9-]{1,80}",value):
-            raise ValueError("synthetic CI identity required")
+    if not re.fullmatch(r"NODE-CI-[A-Z0-9-]{1,80}",node_id):
+        raise ValueError("synthetic CI node required")
+    if dynamic_incident is None:
+        if not re.fullmatch(r"RUN-CI-[A-Z0-9-]{1,80}",run_id):
+            raise ValueError("synthetic CI run required")
+    elif not (re.fullmatch(r"RUN-[A-F0-9]{16}",run_id) and re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}",dynamic_incident)):
+        raise ValueError("invalid dynamic binding")
     twin=get(twin_port,"/api/twin/impact/"+node_id)
     evidence=get(evidence_port,"/api/evidence?run_id="+run_id+"&limit=20")
     if twin.get("root")!=node_id or not isinstance(twin.get("affected"),list):
@@ -37,10 +41,17 @@ def context(twin_port, evidence_port, run_id, node_id):
         raise ValueError("missing root")
     verified=[]
     observations=[]
+    if dynamic_incident is not None and not 1 <= len(evidence["items"]) <= 20:
+        raise ValueError("dynamic evidence required")
     for item in evidence["items"]:
         provenance=item["provenance"]
         if provenance.get("run_id")!=run_id or provenance.get("synthetic") is not True:
             raise ValueError("non-lab evidence")
+        if dynamic_incident is not None:
+            payload=item["payload"]
+            if (item.get("source")!="v3-synthetic-ingestion" or payload.get("run_id")!=run_id
+                or payload.get("incident_id")!=dynamic_incident or payload.get("resource")!=node_id):
+                raise ValueError("dynamic evidence binding mismatch")
         digest=hashlib.sha256(json.dumps(item["payload"],sort_keys=True,separators=(",",":")).encode()).hexdigest()
         if digest!=item["payload_hash"]:
             raise ValueError("evidence hash mismatch")
@@ -53,3 +64,14 @@ def context(twin_port, evidence_port, run_id, node_id):
     return {"classification":"SYNTHETIC_LAB_CONTEXT","run_id":run_id,"root":node_id,
             "affected":affected,"evidence":verified,"diagnosis":preview(observations),"rca":"UNKNOWN","policy":"DENY",
             "tenant_acl_qualified":False,"production_authorized":False}
+
+
+def dynamic_context(core_port, token, run_id, twin_port, evidence_port, node_id):
+    """Only a verified DEMO ingestion run mapped to the explicitly configured lab node."""
+    from core_read import read_run
+    core=read_run(core_port,token,run_id)
+    run=core["run"]
+    if run["mode"]!="DEMO" or not re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}",run["incident_id"]):
+        raise ValueError("verified ingestion run required")
+    details=context(twin_port,evidence_port,run_id,node_id,dynamic_incident=run["incident_id"])
+    return core,details

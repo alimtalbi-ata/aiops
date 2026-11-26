@@ -5,7 +5,7 @@ from pathlib import Path
 from vertical_demo import execute
 from correlation_demo import correlate
 from core_read import read_run
-from lab_context import context
+from lab_context import context, dynamic_context
 from policy_demo import simulation_decision
 from copilot_context import answer
 import os
@@ -117,6 +117,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(result).encode())
             except Exception:
                 self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
+        elif self.path.startswith("/api/v1/incident-context/dynamic?run_id="):
+            try:
+                run_id=self.path.split("=",1)[1]
+                port,token,_=self.server.core_config
+                twin,evidence,node,_=self.server.context_config
+                core,details=dynamic_context(port,token,run_id,twin,evidence,node)
+                self.reply(200,json.dumps({"core":core,"context":details,"copilot":answer(core,details),
+                    "binding":"VERIFIED_DYNAMIC_LAB_NODE","production_authorized":False}).encode())
+            except Exception:
+                self.reply(503,b'{"error":"CONTEXT_UNVERIFIED","policy":"DENY"}')
         elif self.path in ("/api/v1/incident-context", "/api/v1/incident-context?decision=simulate"):
             try:
                 core = read_run(*self.server.core_config)

@@ -139,7 +139,7 @@ class LabContextReal(unittest.TestCase):
                     self.assertEqual(requests.get(url,timeout=20).status_code,503)
                     http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT")
                     origin="http://127.0.0.1:%d" % http.server_port
-                    a=dict(id="m1",kind="metric",source="monitor",resource="demo-node",severity="critical",tenant="synthetic-demo",synthetic=True)
+                    a=dict(id="m1",kind="metric",source="monitor",resource="NODE-CI-ROOT",severity="critical",tenant="synthetic-demo",synthetic=True)
                     batch=[a,dict(a,id="l1",kind="log")]
                     def persist_http():
                         response=requests.post(origin+"/api/v1/ingest/persist",json=batch,headers={"Origin":origin},timeout=20)
@@ -155,6 +155,22 @@ class LabContextReal(unittest.TestCase):
                         dynamic=first.json()["core"]["run"]
                         self.assertEqual(dynamic["mode"],"DEMO")
                         self.assertEqual(len(first.json()["stored_evidence"]),2)
+                        context_url=origin+"/api/v1/incident-context/dynamic?run_id="+dynamic["run_id"]
+                        projection=requests.get(context_url,timeout=20)
+                        projection.raise_for_status()
+                        details=projection.json()
+                        self.assertEqual(details["core"]["run"],dynamic)
+                        self.assertEqual(details["binding"],"VERIFIED_DYNAMIC_LAB_NODE")
+                        self.assertCountEqual(details["context"]["evidence"],first.json()["stored_evidence"])
+                        self.assertEqual(details["copilot"]["root_cause"],"UNKNOWN")
+                        self.assertEqual(details["copilot"]["operational_decision"],"DENY")
+                        self.assertIn("NODE-CI-CHILD",[x["node_id"] for x in details["context"]["affected"]])
+                        self.assertEqual(requests.get(context_url.replace(dynamic["run_id"],"RUN-CI-CONTEXT"),timeout=20).status_code,503)
+                        http.context_config=(1814,1815,"NODE-CI-CHILD","INC-CI-CONTEXT")
+                        try:
+                            self.assertEqual(requests.get(context_url,timeout=20).status_code,503)
+                        finally:
+                            http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT")
                         with sync_playwright() as pw:
                             browser=pw.chromium.launch(headless=True)
                             try:
