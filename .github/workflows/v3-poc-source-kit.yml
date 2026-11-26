@@ -84,6 +84,17 @@ jobs:
                           expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
                           expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
 
+                          page.locator("#inventory-load").click()
+                          expect(page.locator("#inventory-result")).to_contain_text("34 nodes",timeout=30000)
+                          page.locator("#inventory-root").select_option("NODE-CI-ENT-IDENTITY")
+                          page.locator("#inventory-impact").click()
+                          for value in ("NODE-CI-ENT-APP-PAY","NODE-CI-ENT-APP-CRM","NODE-CI-ENT-APP-HR"):
+                              expect(page.locator("#inventory-impact-result")).to_contain_text(value)
+                          page.locator("#inventory-root").select_option("NODE-CI-ENT-PC-FIN-01")
+                          page.locator("#inventory-impact").click()
+                          expect(page.locator("#inventory-impact-result")).to_contain_text("INDIVIDUAL_ACCESS_ONLY")
+                          expect(page.locator("#inventory-impact-result")).to_contain_text("NODE-CI-ENT-USER-FIN-01")
+                          expect(page.locator("#inventory-impact-result")).not_to_contain_text("NODE-CI-ENT-USER-FIN-02")
                           page.locator("#create-enterprise").click()
                           expect(page.locator("#load-enterprise")).to_be_enabled(timeout=30000)
                           page.locator("#load-enterprise").click()
@@ -271,6 +282,35 @@ jobs:
           receipt={"result":"PASS","run_id":run,"evidence_count":4,"individual_run_id":individual["run_id"],"topology_sha256":ent["topology_sha256"],"production_authorized":False}
           (pathlib.Path(os.environ["V3_ROOT"])/"enterprise-smoke.json").write_text(json.dumps(receipt))
           print(json.dumps(receipt))
+          with urllib.request.urlopen(origin+"/api/v1/enterprise-inventory",timeout=20) as response:
+              inventory=json.load(response)
+          assert len(inventory["nodes"])==34 and len(inventory["incident_roots"])==16
+          assert inventory["production_authorized"] is False
+          technical=[]
+          for name,app,expected_apps,expected_users,doc in (
+              ("IDENTITY",None,{"APP-PAY","APP-CRM","APP-HR"},{"USER-FIN-01","USER-FIN-02","USER-SALES-01","USER-HR-01","USER-DIRECT-01"},"ENT-DOC-009"),
+              ("PC-FIN-01","APP-PAY",{"APP-PAY"},{"USER-FIN-01"},"ENT-DOC-010"),
+              ("DB-PAY","APP-PAY",{"APP-PAY"},{"USER-FIN-01","USER-FIN-02","USER-DIRECT-01"},"ENT-DOC-007")):
+              scope={"asset_id":p+name,"occurred_at":"2026-01-01T09:10:00Z","message":"Synthetic technical dependency incident"}
+              if app: scope["application_id"]=p+app
+              if name=="PC-FIN-01": scope["user_id"]=p+"USER-FIN-01"
+              row=dict(base,id="e4-"+name.lower(),kind="log",resource=p+name,enterprise=scope)
+              created=ingest_enterprise([row])
+              run=created["core"]["run"]["run_id"]
+              ctx=read_enterprise(run)
+              assert ctx["root"]==p+name and ctx["observed_outage_established"] is False
+              assert {x["node_id"] for x in ctx["potential_exposure"]["applications"]}=={p+x for x in expected_apps}
+              assert {x["node_id"] for x in ctx["potential_exposure"]["users"]}=={p+x for x in expected_users}
+              assert doc in {x["id"] for x in ctx["document_references"]}
+              if name=="PC-FIN-01":
+                  assert ctx["exposure_semantics"]=="INDIVIDUAL_ACCESS_ONLY" and ctx["reported_user_ids"]==[p+"USER-FIN-01"] and not ctx["potential_exposure"]["groups"]
+                  bad=dict(row,id="e4-invalid",enterprise=dict(scope,user_id=p+"USER-FIN-02"))
+                  try: ingest_enterprise([bad])
+                  except urllib.error.HTTPError as exc: assert exc.code==503
+                  else: raise AssertionError("unbound workstation user accepted")
+              technical.append({"root":ctx["root"],"run_id":run,"potential_apps":len(expected_apps),"potential_users":len(expected_users)})
+          print(json.dumps({"classification":"E4_TECHNICAL_SCOPE","result":"PASS","incidents":technical,"production_authorized":False}))
+          (pathlib.Path(os.environ["V3_ROOT"])/"technical-smoke.json").write_text(json.dumps(technical))
           def post(path,body):
               req=urllib.request.Request(origin+"/api/v1/hitl/"+path,data=json.dumps(body).encode(),headers={"Origin":origin,"Content-Type":"application/json"})
               with urllib.request.urlopen(req,timeout=20) as response:
@@ -321,7 +361,7 @@ jobs:
                   def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
                   assert query("select status from aiops.runs where run_id='"+run+"'")=="CREATED"
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->'signal' ? 'enterprise'")==str(count)
-                  assert query("select count(*) from aiops.twin_nodes where node_id like 'NODE-CI-ENT-%'")=="18"
+                  assert query("select count(*) from aiops.twin_nodes where node_id like 'NODE-CI-ENT-%'")=="32"
           measured=json.load(open(root+"/multiasset-observed.json"))
           assert measured["result"]=="PASS" and len(measured["incidents"])==2
           for item in measured["incidents"]:
@@ -333,6 +373,16 @@ jobs:
                   def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->>'resource'='"+resource+"'")=="4"
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->'signal'->'enterprise'->'measurement'->>'classification'='MEASURED_SYNTHETIC_LAB'")=="2"
+          technical=json.load(open(root+"/technical-smoke.json"))
+          assert len(technical)==3
+          for item in technical:
+              run=item["run_id"]; resource=item["root"]
+              assert re.fullmatch(r"RUN-[A-F0-9]{16}",run) and resource in ("NODE-CI-ENT-IDENTITY","NODE-CI-ENT-PC-FIN-01","NODE-CI-ENT-DB-PAY")
+              for db in ("aiops","aiops_restore_ci"):
+                  def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
+                  assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->>'resource'='"+resource+"'")=="1"
+                  assert query("select count(*) from aiops.twin_edges where edge_id like 'EDGE-CI-TECH-%'")=="32"
+          print("E4 technical inventory and incident restore PASS")
           print("E3 measured multiasset evidence restore PASS")
           print("Enterprise E1 graph and signal restore PASS")
           PY
