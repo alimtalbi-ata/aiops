@@ -86,52 +86,78 @@ async def poller_diagnostics(c):
         except Exception as exc:
             logger.warning("V3 task queue diagnostic type=%s error=%s",kind,type(exc).__name__)
 
+async def report_probe_failure(handle,c):
+    if handle is not None:
+        try:
+            history=await asyncio.wait_for(handle.fetch_history(),timeout=8)
+            logger.error("V3 readiness failure events=%s",[e.event_type for e in history.events[-30:]])
+            for e in history.events[-30:]:
+                for field in ("workflow_task_failed_event_attributes","activity_task_failed_event_attributes","workflow_execution_failed_event_attributes"):
+                    if e.HasField(field):
+                        attr=getattr(e,field)
+                        if attr.HasField("failure"):
+                            logger.error("V3 readiness failure: %s",attr.failure.message.replace(TOKEN,"[redacted]")[:300])
+        except Exception as exc:
+            logger.error("V3 readiness history unavailable: %s",type(exc).__name__)
+    await poller_diagnostics(c)
+
 async def worker_loop():
     global client,probe_verified
-    # Explicit, unique identity for this process. No readiness from registration alone.
     identity="aiops-v3-"+uuid.uuid4().hex
     for attempt in range(3):
         handle=None
+        worker_task=None
+        engine=None
+        phase="connect"
         try:
-            connected=await Client.connect(TEMP,identity=identity)
-            async with Worker(connected,task_queue=QUEUE,identity=identity,
-                              workflows=[V3BoundaryWorkflow,V3ReadinessWorkflow],
-                              activities=[start_run,block_run,readiness_activity],
-                              max_cached_workflows=0):
-                client=connected
-                logger.info("V3 boundary worker registered queue=%s attempt=%s",QUEUE,attempt+1)
-                nonce=uuid.uuid4().hex
-                handle=await connected.start_workflow(V3ReadinessWorkflow.run,nonce,
-                    id="V3-READINESS-"+nonce,task_queue=QUEUE,execution_timeout=timedelta(seconds=30),
-                    id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
-                actual=await asyncio.wait_for(handle.result(),timeout=35)
-                if actual!=nonce:
-                    raise ValueError("readiness result mismatch")
-                probe_verified=True
-                logger.info("V3 readiness workflow and activity PASS")
-                await poller_diagnostics(connected)
-                await asyncio.Event().wait()
+            connected=await asyncio.wait_for(Client.connect(TEMP,identity=identity),timeout=10)
+            phase="register"
+            engine=Worker(connected,task_queue=QUEUE,identity=identity,
+                          workflows=[V3BoundaryWorkflow,V3ReadinessWorkflow],
+                          activities=[start_run,block_run,readiness_activity],
+                          max_cached_workflows=0,graceful_shutdown_timeout=timedelta(seconds=5))
+            worker_task=asyncio.create_task(engine.run())
+            client=connected
+            logger.info("V3 boundary worker started queue=%s attempt=%s",QUEUE,attempt+1)
+            phase="submit"
+            nonce=uuid.uuid4().hex
+            logger.info("V3 readiness submitting probe id=V3-READINESS-%s",nonce)
+            handle=await asyncio.wait_for(connected.start_workflow(V3ReadinessWorkflow.run,nonce,
+                id="V3-READINESS-"+nonce,task_queue=QUEUE,execution_timeout=timedelta(seconds=30),
+                id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE),timeout=12)
+            logger.info("V3 readiness submitted probe id=%s",handle.id)
+            phase="result"
+            actual=await asyncio.wait_for(handle.result(),timeout=35)
+            if actual!=nonce or worker_task.done():
+                raise ValueError("readiness result mismatch or worker exited")
+            probe_verified=True
+            logger.info("V3 readiness workflow and activity PASS")
+            await poller_diagnostics(connected)
+            phase="polling"
+            await worker_task
+            raise RuntimeError("worker exited")
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error("V3 boundary worker attempt failed: %s",type(exc).__name__)
-            if handle is not None:
-                try:
-                    history=await asyncio.wait_for(handle.fetch_history(),timeout=5)
-                    logger.error("V3 readiness failure events=%s",[e.event_type for e in history.events[-30:]])
-                    for e in history.events[-30:]:
-                        for field in ("workflow_task_failed_event_attributes","activity_task_failed_event_attributes","workflow_execution_failed_event_attributes"):
-                            if e.HasField(field):
-                                attr=getattr(e,field)
-                                if attr.HasField("failure"):
-                                    logger.error("V3 readiness failure: %s",attr.failure.message.replace(TOKEN,"[redacted]")[:300])
-                except Exception as diagnostic_error:
-                    logger.error("V3 readiness history unavailable: %s",type(diagnostic_error).__name__)
+            logger.error("V3 boundary worker attempt failed phase=%s error=%s",phase,type(exc).__name__)
             if client is not None:
-                await poller_diagnostics(client)
+                await report_probe_failure(handle,client)
         finally:
             client=None
             probe_verified=False
+            if engine is not None:
+                try:
+                    await asyncio.wait_for(engine.shutdown(),timeout=10)
+                except Exception as exc:
+                    logger.error("V3 worker shutdown incomplete: %s",type(exc).__name__)
+            if worker_task is not None:
+                if not worker_task.done():
+                    worker_task.cancel()
+                else:
+                    try: worker_task.result()
+                    except asyncio.CancelledError: pass
+                    except Exception as exc:
+                        logger.error("V3 worker task failed: %s",type(exc).__name__)
         await asyncio.sleep(2)
     logger.error("V3 readiness attempts exhausted; restart required")
 
