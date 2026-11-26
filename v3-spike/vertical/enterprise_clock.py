@@ -67,9 +67,11 @@ class EnterpriseClock:
             raise ValueError("unsafe clock database")
         with closing(self.connect()) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS journal(tick INTEGER PRIMARY KEY, step TEXT NOT NULL, step_hash TEXT NOT NULL, receipt TEXT, UNIQUE(step_hash))")
+            db.execute("CREATE TABLE IF NOT EXISTS measured(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
     def connect(self):
         db=sqlite3.connect(self.path,timeout=30)
         db.execute("PRAGMA synchronous=FULL")
+        db.execute("PRAGMA foreign_keys=ON")
         return db
     @staticmethod
     def decode(row):
@@ -82,6 +84,10 @@ class EnterpriseClock:
         with closing(self.connect()) as db:
             rows=db.execute("SELECT tick,step,step_hash,receipt FROM journal ORDER BY tick DESC LIMIT 20").fetchall()
             recent=[self.decode(r) for r in reversed(rows)]
+            for item in recent:
+                capture=db.execute("SELECT batches,batch_hash,receipt FROM measured WHERE tick=?",(item["tick"],)).fetchone()
+                if capture is not None:
+                    item["measured_capture"]=self.decode_capture(capture)
         latest=recent[-1] if recent else None
         return {"classification":"SYNTHETIC_ENTERPRISE_CLOCK_E2","world_id":WORLD,
                 "current_tick":latest["tick"] if latest else 0,"pending":bool(latest and latest["publication"] is None),
@@ -94,6 +100,8 @@ class EnterpriseClock:
             db.execute("BEGIN IMMEDIATE")
             latest=db.execute("SELECT tick,receipt FROM journal ORDER BY tick DESC LIMIT 1").fetchone()
             last=latest[0] if latest else 0
+            if expected_tick==last+1 and db.execute("SELECT 1 FROM measured WHERE receipt IS NULL LIMIT 1").fetchone():
+                raise ValueError("pending measurement publication must be retried")
             if expected_tick==last+1 and (latest is None or latest[1] is not None):
                 step=model(expected_tick)
                 db.execute("INSERT INTO journal(tick,step,step_hash) VALUES(?,?,?)",(expected_tick,json.dumps(step,sort_keys=True),digest(step)))
@@ -123,3 +131,68 @@ class EnterpriseClock:
             db.execute("UPDATE journal SET receipt=? WHERE tick=?",(json.dumps(receipt,sort_keys=True),expected_tick))
             result["publication"]=receipt
             return result
+
+    @staticmethod
+    def decode_capture(row):
+        raw,h,receipt=row
+        batches=json.loads(raw)
+        if digest(batches)!=h:
+            raise ValueError("corrupt measurement snapshot")
+        return {"batch_sha256":h,"state":"PENDING" if receipt is None else "PUBLISHED",
+                "incidents":[] if receipt is None else json.loads(receipt)}
+
+    def capture(self, expected_tick, collect, publish):
+        """Attach actual loopback samples to a committed model degradation, not a new clock."""
+        if type(expected_tick) is not int or not 1<=expected_tick<=MAX_TICK:
+            raise ValueError("invalid capture tick")
+        from enterprise_context import ENTERPRISE_ROOTS
+        from ingestion_demo import ingest
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            latest=db.execute("SELECT tick,step,step_hash,receipt FROM journal ORDER BY tick DESC LIMIT 1").fetchone()
+            if latest is None or latest[0]!=expected_tick:
+                raise ValueError("capture requires current tick")
+            step=self.decode(latest)
+            if step["phase"]!="DEGRADED" or step["publication"] is None:
+                raise ValueError("committed degraded model required")
+            saved=db.execute("SELECT batches,batch_hash,receipt FROM measured WHERE tick=?",(expected_tick,)).fetchone()
+            if saved is None:
+                batches=collect()
+                if not isinstance(batches,list) or len(batches)!=2:
+                    raise ValueError("two measurement batches required")
+                roots=set()
+                for rows in batches:
+                    normalized=ingest(rows)["incidents"]
+                    if len(normalized)!=1 or len(rows)!=4 or len(normalized[0]["evidence"])!=4:
+                        raise ValueError("invalid measured incident")
+                    roots.add(normalized[0]["resource"])
+                    if any("measurement" not in r["enterprise"] for r in rows if r["kind"]=="metric") or sum(r["kind"]=="metric" for r in rows)!=2:
+                        raise ValueError("measured samples required")
+                if roots!=ENTERPRISE_ROOTS:
+                    raise ValueError("distinct asset roots required")
+                db.execute("INSERT INTO measured(tick,batches,batch_hash) VALUES(?,?,?)",
+                           (expected_tick,json.dumps(batches,sort_keys=True),digest(batches)))
+        # Durable raw batches survive a failed remote publication. Both writes are idempotent.
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row=db.execute("SELECT batches,batch_hash,receipt FROM measured WHERE tick=?",(expected_tick,)).fetchone()
+            result=self.decode_capture(row)
+            if result["state"]=="PUBLISHED":
+                return result
+            receipts=[]
+            for rows in json.loads(row[0]):
+                response=publish(rows)
+                run=response["core"]["run"]
+                refs=response["stored_evidence"]
+                if (response.get("production_authorized") is not False or run["mode"]!="DEMO"
+                    or not re.fullmatch(r"RUN-[A-F0-9]{16}",run["run_id"])
+                    or not re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}",run["incident_id"])
+                    or len(refs)!=4 or len({r["evidence_id"] for r in refs})!=4
+                    or any(not re.fullmatch(r"[a-f0-9]{64}",r["payload_hash"]) for r in refs)):
+                    raise ValueError("unverified measured publication")
+                receipts.append({"resource":rows[0]["resource"],"run_id":run["run_id"],
+                                 "incident_id":run["incident_id"],"evidence":refs})
+            if len({r["run_id"] for r in receipts})!=2:
+                raise ValueError("distinct measured runs required")
+            db.execute("UPDATE measured SET receipt=? WHERE tick=?",(json.dumps(receipts,sort_keys=True),expected_tick))
+            return {"batch_sha256":result["batch_sha256"],"state":"PUBLISHED","incidents":receipts}
