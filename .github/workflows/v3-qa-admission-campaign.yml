@@ -4,6 +4,9 @@ on:
     paths:
       - 'v3-spike/kit/poc-qa-admission-campaign.py'
       - 'v3-spike/kit/poc-qa-measured-campaign.py'
+      - 'v3-spike/vertical/measured_rca.py'
+      - 'v3-spike/vertical/lab_context.py'
+      - 'v3-spike/vertical/test_rca_preview.py'
       - '.github/workflows/v3-qa-admission-campaign.yml'
   workflow_dispatch:
 permissions:
@@ -68,6 +71,16 @@ jobs:
           python3 v3-spike/kit/poc-qa-admission-campaign.py "$url" "$V3_ROOT"
           test "$(counts)" = "$((i+30))|$((r+30))|$((e+150))|$x"
           echo "D countercampaign: 30 incidents, 30 runs, 150 evidence, zero additional execution receipts PASS"
+          # Independent score uses the pre-registered ground truth and actual API
+          # outputs, not the implementation's self-reported quality.
+          python3 - "$V3_ROOT/qa-admission-report.json" <<'PY'
+          import json,sys
+          report=json.load(open(sys.argv[1]))
+          assert report["thresholds"]["rca_top3_recall"]==.9
+          assert report["admission_result"]=="PASS" and report["fault_episodes"]==30
+          assert report["rca_top3_recall"]>=report["thresholds"]["rca_top3_recall"], "RCA recall below pre-registered target"
+          print("D measured RCA top3 recall threshold PASS: "+str(report["rca_top3_recall"]))
+          PY
       - name: Upload independent ground truth and measurements
         if: always()
         uses: actions/upload-artifact@v4
