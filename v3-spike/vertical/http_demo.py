@@ -159,9 +159,18 @@ class Handler(BaseHTTPRequestHandler):
                     run_id=run_id.removesuffix("&decision=simulate")
                 port,token,_=self.server.core_config
                 twin,evidence,node,_=self.server.context_config
-                core,details=dynamic_context(port,token,run_id,twin,evidence,node)
+                core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True)
+                scoped=any("enterprise" in row["signal"] for row in details.get("verified_signals",[]))
+                enterprise=Graph(get(twin,"/api/twin/graph")).project(details,core["run"]) if scoped else None
+                details.pop("verified_signals",None)
                 result={"core":core,"context":details,"copilot":answer(core,details),
                     "binding":"VERIFIED_DYNAMIC_LAB_NODE","production_authorized":False}
+                if enterprise is not None:
+                    result["enterprise_context"]=enterprise
+                    result["copilot"]["enterprise_document_retrieval"]={
+                        "run_id":run_id,"topology_sha256":enterprise["topology_sha256"],
+                        "citations":enterprise["document_references"],"production_authorized":False,
+                        "llm_inference_performed":False,"operational_decision":"DENY"}
                 if simulate:
                     result["simulation"]=simulation_decision(self.server.policy_port,len(details["evidence"]))
                 self.reply(200,json.dumps(result).encode())
