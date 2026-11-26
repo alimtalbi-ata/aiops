@@ -241,6 +241,17 @@ def smoke(origin, restart):
     actual={(r["run_id"],r["evidence_id"],r["payload_hash"]) for g in result["groups"] for signal in g["signals"] for r in signal["evidence_refs"]}
     assert actual=={(r["run_id"],e["evidence_id"],e["payload_hash"]) for r in selected for e in r["evidence"]}
     print(json.dumps({"classification":"E16_HISTORICAL_CORRELATION","result":"PASS","tick":end["current_tick"],"run_ids":sorted(run_ids),"verified_evidence_count":8,"candidate_count":result["candidate_count"],"production_authorized":False}),file=sys.stderr)
+    assessment=lambda ids:call("/api/v1/enterprise-correlation/assessment",{"run_ids":ids,"window_seconds":240})
+    review=assessment(run_ids)
+    assert review==assessment(list(reversed(run_ids)))
+    assert review["critic"]["projection_matches"] and review["critic"]["causality_established"] is False
+    assert review["analyst"]["hypotheses"] and review["analyst"]["graph_sha256"]==result["graph_sha256"]
+    for hypothesis in review["analyst"]["hypotheses"]:
+        refs=hypothesis["dependent_evidence"]+hypothesis["dependency_evidence"]
+        assert {(r["run_id"],r["evidence_id"],r["payload_hash"]) for r in refs}<=actual
+        assert hypothesis["confidence"] is None and hypothesis["root_cause"]=="UNKNOWN"
+    assert review["production_authorized"] is False and review["operational_decision"]=="DENY"
+    print(json.dumps({"classification":"E18_HISTORICAL_ANALYST_CRITIC","result":"PASS","tick":end["current_tick"],"run_ids":sorted(run_ids),"hypotheses":len(review["analyst"]["hypotheses"]),"correlation_sha256":review["analyst"]["correlation_sha256"],"production_authorized":False}),file=sys.stderr)
     assert end["current_tick"]==(8 if restart else 4)
     assert [x["phase"] for x in end["recent"]]==["NOMINAL","CHANGE","DEGRADED","MODEL_RECOVERY"]*(2 if restart else 1)
     if restart:

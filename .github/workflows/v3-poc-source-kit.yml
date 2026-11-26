@@ -592,7 +592,22 @@ jobs:
           docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
           project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
           compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration)
-          "${compose[@]}" up --build --wait --wait-timeout 300 worker
+          # Core and Evidence are already healthy from the preceding real-service
+          # qualification. Building worker with dependencies can recreate them
+          # and collide with rootless published ports; preserve both instances.
+          core_initial=$("${compose[@]}" ps -q core)
+          evidence_initial=$("${compose[@]}" ps -q evidence)
+          test -n "$core_initial" && test -n "$evidence_initial"
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$core_initial")" = healthy
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$evidence_initial")" = healthy
+          "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 temporal-postgres
+          "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 temporal
+          "${compose[@]}" build worker
+          "${compose[@]}" up --no-deps --no-recreate --wait --wait-timeout 300 worker
+          test "$core_initial" = "$("${compose[@]}" ps -q core)"
+          test "$evidence_initial" = "$("${compose[@]}" ps -q evidence)"
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$core_initial")" = healthy
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$evidence_initial")" = healthy
           "${compose[@]}" up -d --no-deps temporal-ui
           ui=$("${compose[@]}" port temporal-ui 8080)
           [[ "$ui" =~ ^127\.0\.0\.1:[0-9]+$ ]]
