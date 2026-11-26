@@ -208,3 +208,27 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
         return {"workflow_id":h.id,"run_id":args["run_id"],"executor":"temporal","production_authorized":False}
     except WorkflowAlreadyStartedError:
         return {"workflow_id":args["run_id"],"run_id":args["run_id"],"executor":"temporal","idempotent":True,"production_authorized":False}
+
+
+@app.get("/api/v3/lab/e17/receipt/{run_id}")
+async def e17_receipt(run_id:str,authorization:str|None=Header(default=None)):
+    """Internal synthetic read only; never submit or repeat an action."""
+    if not hmac.compare_digest(authorization or "","Bearer "+TOKEN):
+        raise HTTPException(401,"Invalid internal token")
+    if not re.fullmatch(r"RUN-[A-F0-9]{16}",run_id):
+        raise HTTPException(422,"Unsupported run identity")
+    c=await ready()
+    try:
+        run=(await asyncio.to_thread(get_json,CORE,"/api/runs/"+run_id,timeout=3,token=TOKEN))["run"]
+        if run.get("run_id")!=run_id:
+            raise ValueError("foreign Core run")
+        from worker.v3_e17_receipt import project_receipt
+        result=await asyncio.wait_for(project_receipt(c,run),timeout=10)
+        if c is not client or not probe_verified:
+            raise HTTPException(503,"Worker changed during receipt read")
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.info("E17 receipt unavailable: %s",type(exc).__name__)
+        raise HTTPException(404,"Verified E17 receipt unavailable")
