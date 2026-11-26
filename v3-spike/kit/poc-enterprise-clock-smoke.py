@@ -39,6 +39,9 @@ def smoke(origin, restart):
         assert step==advance(n) and step["tick"]==n
         assert step["measurement_kind"]=="MODEL_GENERATED"
         assert step["production_authorized"] is False and step["operational_decision"]=="DENY"
+        reports=call("/api/v1/enterprise-case-knowledge")
+        assert reports["total_documents"]==2*(n-1)
+        assert all(d["valid_from_tick"]<=n and d["source"]["logical_tick"]==d["valid_from_tick"]-1 and not d["observed_evidence"] for d in reports["documents"])
         diverse=campaign(n)
         assert diverse==campaign(n) and diverse["state"]=="PUBLISHED" and len(diverse["incidents"])==2
         for item in diverse["incidents"]:
@@ -47,6 +50,9 @@ def smoke(origin, restart):
             assert ctx_case["root"]==definition["resource"] and not ctx_case["observed_outage_established"]
             assert ctx_case["document_history"]["logical_tick"]==n
             assert ctx_case["document_references"]
+            assert all(d["source"]["run_id"]!=item["run_id"] for d in ctx_case["case_retrieval"]["citations"])
+            combined_case=call("/api/v1/incident-context/dynamic?run_id="+item["run_id"])
+            assert combined_case["copilot"]["enterprise_document_retrieval"]["case_retrieval"]==ctx_case["case_retrieval"]
             assert {x["evidence_id"]:x["payload_hash"] for x in ctx_case["timeline"]}=={x["evidence_id"]:x["payload_hash"] for x in item["evidence"]}
             meta=[x["scenario"] for x in ctx_case["timeline"]]
             assert {m["scenario_id"] for m in meta}=={item["scenario_id"]}
@@ -160,6 +166,16 @@ def smoke(origin, restart):
     print(json.dumps({"classification":"E6_ACTIVITY_JOURNAL","result":"PASS","ticks":recent["current_tick"],"activity_records":len(records),"signals":len(records)*3,"alerts_only":sum(r["disposition"]=="ALERT_ONLY" for r in records),"linked_incidents":sum(r["disposition"]=="INCIDENT_LINKED" for r in records),"production_authorized":False}),file=sys.stderr)
     end=status()
     cases=[r for x in end["recent"] for r in x["scenario_capture"]["incidents"]]
+    reports=call("/api/v1/enterprise-case-knowledge")
+    assert reports["total_documents"]==len(cases)-2
+    by_run={r["run_id"]:r for r in cases}
+    for doc in reports["documents"]:
+        source=doc["source"]
+        assert source["evidence_refs"]==by_run[source["run_id"]]["evidence"]
+        assert doc["scenario_id"]==by_run[source["run_id"]]["scenario_id"]
+        old_context=call("/api/v1/enterprise-context?run_id="+source["run_id"])
+        assert doc["id"] not in {d["id"] for d in old_context["case_retrieval"]["citations"]}
+    print(json.dumps({"classification":"E11_CASE_KNOWLEDGE","result":"PASS","tick":end["current_tick"],"documents":reports["total_documents"],"families":len({d["family"] for d in reports["documents"]}),"production_authorized":False}),file=sys.stderr)
     assert len(cases)==(16 if restart else 8) and len({r["run_id"] for r in cases})==len(cases)
     assert len({r["scenario_id"] for r in cases})==len(cases)
     if restart:

@@ -33,11 +33,12 @@ def enterprise_projection(graph, details, run, clock, search_query=None):
     scope.add(result["root"])
     query=" ".join(str(row.get("message",""))+" "+str(row.get("observation",{}).get("metric","")) for row in result["timeline"])[:512]
     history=clock.historical_documents(run["run_id"],scope,query if search_query is None else search_query)
-    result["document_history"]={k:v for k,v in history.items() if k not in ("citations","lifecycle_citations","hybrid_retrieval")}
+    result["document_history"]={k:v for k,v in history.items() if k not in ("citations","lifecycle_citations","hybrid_retrieval","case_retrieval")}
     if history["state"]=="HISTORICAL_LOGICAL_VERSION":
         result["document_references"]=history["citations"]
         result["lifecycle_references"]=history["lifecycle_citations"]
         result["hybrid_retrieval"]=history["hybrid_retrieval"]
+        result["case_retrieval"]=history["case_retrieval"]
     elif history["state"]=="PRE_E7_UNAVAILABLE":
         result["document_references"]=[]
     return result
@@ -95,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
                 result=enterprise_projection(Graph(get(twin,"/api/twin/graph")),details,core["run"],self.server.enterprise_clock,data["query"])
                 if "hybrid_retrieval" not in result:
                     raise ValueError("historical corpus unavailable")
-                self.reply(200,json.dumps({"run_id":result["run_id"],"incident_id":result["incident_id"],**result["hybrid_retrieval"]}).encode())
+                self.reply(200,json.dumps({"run_id":result["run_id"],"incident_id":result["incident_id"],**result["hybrid_retrieval"],"case_retrieval":result["case_retrieval"]}).encode())
                 return
             if self.path=="/api/v1/ingest":
                 self.reply(200,json.dumps(ingest(data)).encode())
@@ -236,6 +237,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200,json.dumps({"classification":"SYNTHETIC_SCENARIO_CATALOG","campaign":VERSION,"scenarios":rows,"production_authorized":False,"operational_decision":"DENY"}).encode())
             except Exception:
                 self.reply(503,b'{"error":"SCENARIOS_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-case-knowledge":
+            try:
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                result=self.server.enterprise_clock.case_catalog()
+                if any(not set(d["scope"])<=graph.nodes.keys() for d in result["documents"]):
+                    raise ValueError("unbound case scope")
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"CASE_KNOWLEDGE_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-knowledge":
             try:
                 if self.server.enterprise_clock is None:
@@ -308,7 +321,7 @@ class Handler(BaseHTTPRequestHandler):
                     result["enterprise_context"]=enterprise
                     result["copilot"]["enterprise_document_retrieval"]={
                         "run_id":run_id,"topology_sha256":enterprise["topology_sha256"],
-                        "citations":enterprise["document_references"],"document_history":enterprise.get("document_history"),"lifecycle_citations":enterprise.get("lifecycle_references",[]),"hybrid_retrieval":enterprise.get("hybrid_retrieval"),"production_authorized":False,
+                        "citations":enterprise["document_references"],"document_history":enterprise.get("document_history"),"lifecycle_citations":enterprise.get("lifecycle_references",[]),"hybrid_retrieval":enterprise.get("hybrid_retrieval"),"case_retrieval":enterprise.get("case_retrieval"),"production_authorized":False,
                         "llm_inference_performed":False,"operational_decision":"DENY"}
                     result["copilot"]["enterprise_scope"]={
                         "root":enterprise["root"],"exposure_semantics":enterprise["exposure_semantics"],
