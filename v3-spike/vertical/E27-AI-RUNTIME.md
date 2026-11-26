@@ -9,3 +9,5 @@ The HTTP fixture integration now reads the exact persisted review via the E26 te
 ## E25 V4 alignment and explicit GAMMA review
 
 Status endpoint exposes only enabled boolean and DENY, no provider configuration. Browser review is disabled until opt-in status confirmed, explicit user click only, single in-flight button, historical selection generation invalidation, verified receipt readback before display, text-only output and separate telemetry read button. Changing selection does not cancel server inference; completed receipts persist and stale UI output is discarded. Actual Chromium exercises synthetic providers and history fixture, receipt matching and no extra inference during telemetry read. No live Core/Evidence/model end-to-end attestation yet.
+
+E25 V4 qualified and merged into CENTRAL a94c46cf246ccf36074c40a4de49689f8cdc54a7. Full exact-head CENTRAL CI required before E27 merge.
