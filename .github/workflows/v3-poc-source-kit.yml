@@ -604,6 +604,15 @@ jobs:
           python3 v3-spike/kit/poc-temporal-ui-smoke.py "http://$ui" "$V3_ROOT/temporal-boundary-replay.json" > "$V3_ROOT/temporal-ui-replay.json"
           cmp "$V3_ROOT/temporal-ui.json" "$V3_ROOT/temporal-ui-replay.json"
           echo "V3 Temporal persisted history and Core state restore PASS"
+      - name: Collect bounded Worker diagnostics on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          if [[ -f "$V3_ROOT/poc.env" ]]; then
+            project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+            docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration ps
+            docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration logs --no-color --tail 100 worker
+          fi
       - name: Upload synthetic orchestration receipts
         if: always()
         uses: actions/upload-artifact@v4

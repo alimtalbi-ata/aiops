@@ -25,7 +25,33 @@ def call(base,path,body=None):
 async def verify(rid):
     client=await Client.connect("temporal:7233")
     handle=client.get_workflow_handle(rid)
-    result=await asyncio.wait_for(handle.result(),timeout=90)
+    try:
+        result=await asyncio.wait_for(handle.result(),timeout=90)
+    except Exception as exc:
+        # Keep a bounded, synthetic-only diagnostic, never mark a failed run PASS.
+        report={"classification":"V3_TEMPORAL_BOUNDARY_DIAGNOSTIC","result":"FAIL","run_id":rid,"exception":type(exc).__name__,"production_authorized":False}
+        try:
+            history=await asyncio.wait_for(handle.fetch_history(),timeout=8)
+            report["events"]=[{"id":e.event_id,"type":EventType.Name(e.event_type)} for e in history.events[-60:]]
+            failures=[]
+            for e in history.events[-60:]:
+                for field in ("workflow_task_failed_event_attributes","activity_task_failed_event_attributes","workflow_execution_failed_event_attributes"):
+                    if e.HasField(field):
+                        attr=getattr(e,field)
+                        if attr.HasField("failure"):
+                            message=attr.failure.message.replace(os.environ["AIOPS_INTERNAL_TOKEN"],"[redacted]")
+                            failures.append({"event":e.event_id,"message":message[:400]})
+            report["failures"]=failures
+        except Exception as diagnostic_error:
+            report["history_unavailable"]=type(diagnostic_error).__name__
+        try:
+            run=call(core,"/api/runs/"+rid)["run"]
+            report["core_status"]=run["status"]
+            report["core_version"]=run["version"]
+        except Exception as diagnostic_error:
+            report["core_unavailable"]=type(diagnostic_error).__name__
+        print(json.dumps(report,sort_keys=True),file=sys.stderr,flush=True)
+        raise
     assert result=={"run_id":rid,"status":"BLOCKED","final_version":3,"reason":"V3_STAGE_ADAPTERS_NOT_QUALIFIED","executed_on_host":False,"production_authorized":False}
     history=await handle.fetch_history()
     assert sum(e.event_type==EventType.EVENT_TYPE_ACTIVITY_TASK_COMPLETED for e in history.events)==2
@@ -57,6 +83,7 @@ elif len(sys.argv)==3 and sys.argv[1]=="replay":
 else:
     health=call(worker,"/health")
     assert health["classification"]=="V3_ORCHESTRATION_BOUNDARY" and not health["business_stages_qualified"]
+    assert health["workflow_poller"] is True and health["activity_poller"] is True
     created=call(core,"/api/runs",{"mode":"DEMO","scenario_id":"CI-TEMPORAL-BOUNDARY","incident_id":"INC-CI-CONTEXT","idempotency_key":"ci-v3-temporal-boundary-v1"})
     rid=created["run_id"]
     assert re.fullmatch(r"RUN-[A-F0-9]{16}",rid) and created["status"]=="CREATED"
@@ -66,4 +93,5 @@ else:
     assert call(core,"/api/runs/"+rid)["run"]["status"]=="CREATED"
     receipt=call(core,"/api/runs/"+rid+"/execute",{})
     assert receipt["workflow_id"]==rid
+    print(json.dumps({"classification":"V3_TEMPORAL_SUBMITTED","run_id":rid,"production_authorized":False}),file=sys.stderr,flush=True)
     print(json.dumps(asyncio.run(verify(rid)),sort_keys=True))

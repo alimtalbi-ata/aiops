@@ -4,6 +4,8 @@ Never starts the historical generic business-stage workflow.
 """
 import asyncio
 import hmac
+import logging
+from datetime import timedelta
 import os
 import re
 from contextlib import asynccontextmanager
@@ -11,6 +13,9 @@ from fastapi import FastAPI, Header, HTTPException
 from temporalio import activity
 from temporalio.client import Client
 from temporalio.common import WorkflowIDReusePolicy
+from temporalio.api.enums.v1 import TaskQueueType
+from temporalio.api.taskqueue.v1 import TaskQueue
+from temporalio.api.workflowservice.v1 import DescribeTaskQueueRequest
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.worker import Worker
 from shared.http import get_json, post_json
@@ -26,6 +31,7 @@ if CORE!="http://core:810" or TEMP!="temporal:7233" or len(TOKEN)<32:
 QUEUE="aiops-v3-boundary"
 SCENARIO="CI-TEMPORAL-BOUNDARY"
 client=None
+logger=logging.getLogger('uvicorn.error')
 
 def validate(args):
     if (not isinstance(args,dict) or set(args)!={"run_id","mode","scenario_id","version"}
@@ -69,11 +75,12 @@ async def worker_loop():
             connected=await Client.connect(TEMP)
             async with Worker(connected,task_queue=QUEUE,workflows=[V3BoundaryWorkflow],activities=[start_run,block_run]):
                 client=connected
+                logger.info('V3 boundary worker registered queue=%s',QUEUE)
                 await asyncio.Event().wait()
         except asyncio.CancelledError:
             raise
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error('V3 boundary worker loop failed: %s',type(exc).__name__)
         finally:
             client=None
         await asyncio.sleep(2)
@@ -94,11 +101,18 @@ async def ready():
     c=client
     if c is None:
         raise HTTPException(503,"Temporal worker not connected")
+    async def pollers(kind):
+        response=await c.workflow_service.describe_task_queue(DescribeTaskQueueRequest(
+            namespace=c.namespace,task_queue=TaskQueue(name=QUEUE),task_queue_type=kind))
+        return any(p.identity==c.identity for p in response.pollers)
     try:
-        healthy=await asyncio.wait_for(c.service_client.check_health(),timeout=3)
+        healthy,workflow_poller,activity_poller=await asyncio.wait_for(asyncio.gather(
+            c.service_client.check_health(),
+            pollers(TaskQueueType.TASK_QUEUE_TYPE_WORKFLOW),
+            pollers(TaskQueueType.TASK_QUEUE_TYPE_ACTIVITY)),timeout=3)
     except Exception:
         raise HTTPException(503,"Temporal service unavailable")
-    if not healthy or c is not client:
+    if not (healthy and workflow_poller and activity_poller) or c is not client:
         raise HTTPException(503,"Temporal worker not ready")
     return c
 
@@ -106,7 +120,7 @@ async def ready():
 async def health():
     await ready()
     return {"status":"ok","component":"worker","executor":"temporal","task_queue":QUEUE,
-            "classification":"V3_ORCHESTRATION_BOUNDARY","business_stages_qualified":False,"production_authorized":False}
+            "workflow_poller":True,"activity_poller":True,"classification":"V3_ORCHESTRATION_BOUNDARY","business_stages_qualified":False,"production_authorized":False}
 
 @app.post("/api/execution/start")
 async def start(args:dict,authorization:str|None=Header(default=None)):
@@ -121,7 +135,7 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
         raise HTTPException(409,"Run not executable")
     try:
         h=await c.start_workflow(V3BoundaryWorkflow.run,args,id=args["run_id"],task_queue=QUEUE,
-                                 id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
+                                 id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,execution_timeout=timedelta(seconds=75))
         return {"workflow_id":h.id,"run_id":args["run_id"],"executor":"temporal","production_authorized":False}
     except WorkflowAlreadyStartedError:
         return {"workflow_id":args["run_id"],"run_id":args["run_id"],"executor":"temporal","idempotent":True,"production_authorized":False}
