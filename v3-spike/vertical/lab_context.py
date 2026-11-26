@@ -96,8 +96,18 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None,
                 observation["measurement_scope"]=[node_id,scope["asset_id"],scope.get("application_id")]
                 observation["occurred_at"]=scope["occurred_at"]
             observations.append(observation)
+    diagnosis=preview(observations)
+    # Only the server-read normalized signals are eligible for measured RCA.
+    # Preserve the existing UNKNOWN causal state and never authorize an action.
+    if dynamic_incident is not None and include_signals and any(
+        isinstance(row["signal"].get("enterprise",{}).get("message"),str)
+        and row["signal"]["enterprise"]["message"].startswith("HTTP_PROBE_V1 ") for row in signals):
+        from measured_rca import assess
+        measured=assess(signals,diagnosis)
+        diagnosis["candidates"]=measured["candidates"]
+        diagnosis["measured_rca"]=measured
     return {"classification":"SYNTHETIC_LAB_CONTEXT","run_id":run_id,"root":node_id,
-            "affected":affected,"evidence":verified,"diagnosis":preview(observations),"rca":"UNKNOWN","policy":"DENY",
+            "affected":affected,"evidence":verified,"diagnosis":diagnosis,"rca":"UNKNOWN","policy":"DENY",
             "tenant_acl_qualified":False,"production_authorized":False,**({"verified_signals":signals} if include_signals else {})}
 
 
