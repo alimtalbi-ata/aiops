@@ -140,7 +140,8 @@ class LabContextReal(unittest.TestCase):
                     http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-CONTEXT")
                     origin="http://127.0.0.1:%d" % http.server_port
                     a=dict(id="m1",kind="metric",source="monitor",resource="NODE-CI-ROOT",severity="critical",tenant="synthetic-demo",synthetic=True)
-                    batch=[a,dict(a,id="l1",kind="log")]
+                    batch=[dict(a,observation={"metric":"latency_ms","phase":"baseline","value":40}),
+                           dict(a,id="m2",observation={"metric":"latency_ms","phase":"incident","value":160})]
                     def persist_http():
                         response=requests.post(origin+"/api/v1/ingest/persist",json=batch,headers={"Origin":origin},timeout=20)
                         response.raise_for_status()
@@ -162,6 +163,12 @@ class LabContextReal(unittest.TestCase):
                         self.assertEqual(details["core"]["run"],dynamic)
                         self.assertEqual(details["binding"],"VERIFIED_DYNAMIC_LAB_NODE")
                         self.assertCountEqual(details["context"]["evidence"],first.json()["stored_evidence"])
+                        diagnosis=details["context"]["diagnosis"]
+                        self.assertEqual(diagnosis["hypothesis"],"LATENCY_REGRESSION_OBSERVED")
+                        self.assertEqual(diagnosis["preview"]["conditional_reduction_ms"],120)
+                        self.assertCountEqual(diagnosis["evidence_ids"],[e["evidence_id"] for e in first.json()["stored_evidence"]])
+                        self.assertIsNone(diagnosis["confidence"])
+                        self.assertFalse(diagnosis["executed_on_host"])
                         self.assertEqual(details["copilot"]["root_cause"],"UNKNOWN")
                         self.assertEqual(details["copilot"]["operational_decision"],"DENY")
                         self.assertIn("NODE-CI-CHILD",[x["node_id"] for x in details["context"]["affected"]])

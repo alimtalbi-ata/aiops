@@ -57,6 +57,19 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None)
             raise ValueError("evidence hash mismatch")
         verified.append({"evidence_id":item["evidence_id"],"payload_hash":digest})
         payload=item["payload"]
+        # Dynamic measurements originate in the hashed normalized signal; legacy fixtures use flat payloads.
+        if dynamic_incident is not None:
+            signal=payload.get("signal")
+            if not isinstance(signal,dict):
+                raise ValueError("invalid dynamic signal")
+            observation=signal.get("observation")
+            if observation is not None:
+                if (not isinstance(observation,dict) or set(observation)!={"metric","phase","value"}
+                    or observation["metric"]!="latency_ms" or not signal.get("source","").startswith("metric:")):
+                    raise ValueError("invalid dynamic observation")
+                payload=observation
+            else:
+                payload={}
         if isinstance(payload,dict) and payload.get("metric")=="latency_ms":
             observations.append({"synthetic":True,"metric":"latency_ms",
                                  "phase":payload.get("phase"),"value":payload.get("value"),
