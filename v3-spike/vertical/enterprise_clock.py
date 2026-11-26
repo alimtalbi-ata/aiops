@@ -145,7 +145,7 @@ class EnterpriseClock:
         """Attach actual loopback samples to a committed model degradation, not a new clock."""
         if type(expected_tick) is not int or not 1<=expected_tick<=MAX_TICK:
             raise ValueError("invalid capture tick")
-        from enterprise_context import ENTERPRISE_ROOTS
+        from enterprise_context import CAPTURE_ROOTS
         from ingestion_demo import ingest
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -168,7 +168,7 @@ class EnterpriseClock:
                     roots.add(normalized[0]["resource"])
                     if any("measurement" not in r["enterprise"] for r in rows if r["kind"]=="metric") or sum(r["kind"]=="metric" for r in rows)!=2:
                         raise ValueError("measured samples required")
-                if roots!=ENTERPRISE_ROOTS:
+                if roots!=CAPTURE_ROOTS:
                     raise ValueError("distinct asset roots required")
                 db.execute("INSERT INTO measured(tick,batches,batch_hash) VALUES(?,?,?)",
                            (expected_tick,json.dumps(batches,sort_keys=True),digest(batches)))

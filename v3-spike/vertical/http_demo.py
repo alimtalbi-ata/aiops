@@ -164,6 +164,29 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(result).encode())
             except Exception:
                 self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-inventory":
+            try:
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                roots=sorted(ENTERPRISE_ROOTS & graph.nodes.keys())
+                self.reply(200,json.dumps({"classification":"SYNTHETIC_ENTERPRISE_INVENTORY",
+                    "nodes":sorted(graph.nodes.values(),key=lambda n:n["node_id"]),
+                    "edges":[{"source_id":a,"target_id":b,"relation_type":r} for a,b,r in sorted(graph.edges)],
+                    "incident_roots":roots,"production_authorized":False,"operational_decision":"DENY"}).encode())
+            except Exception:
+                self.reply(503,b'{"error":"INVENTORY_UNVERIFIED","policy":"DENY"}')
+        elif self.path.startswith("/api/v1/enterprise-impact?root="):
+            try:
+                root=self.path.split("=",1)[1]
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                scope=graph.scope(root)
+                self.reply(200,json.dumps({"classification":"SYNTHETIC_TOPOLOGICAL_IMPACT",
+                    "root":root,"exposure_semantics":"INDIVIDUAL_ACCESS_ONLY" if graph.nodes[root]["type"]=="endpoint" else "TOPOLOGICAL_POTENTIAL_ONLY",
+                    "potential_exposure":{k:[graph.nodes[n] for n in sorted(v)] for k,v in scope.items()},
+                    "observed_outage_established":False,"production_authorized":False,"operational_decision":"DENY"}).encode())
+            except Exception:
+                self.reply(503,b'{"error":"IMPACT_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-clock":
             try:
                 if self.server.enterprise_clock is None:
@@ -202,6 +225,19 @@ class Handler(BaseHTTPRequestHandler):
                         "run_id":run_id,"topology_sha256":enterprise["topology_sha256"],
                         "citations":enterprise["document_references"],"production_authorized":False,
                         "llm_inference_performed":False,"operational_decision":"DENY"}
+                    result["copilot"]["enterprise_scope"]={
+                        "root":enterprise["root"],"exposure_semantics":enterprise["exposure_semantics"],
+                        "potential_application_ids":[x["node_id"] for x in enterprise["potential_exposure"]["applications"]],
+                        "potential_user_ids":[x["node_id"] for x in enterprise["potential_exposure"]["users"]],
+                        "reported_user_ids":enterprise["reported_user_ids"],
+                        "observed_outage_established":False}
+                    if enterprise["root"] in ENTERPRISE_ROOTS:
+                        scope=result["copilot"]["enterprise_scope"]
+                        result["copilot"]["answer"]=(f"Incident {enterprise['incident_id']}: "
+                            f"{len(scope['potential_application_ids'])} potentially exposed applications or user-access contexts; "
+                            f"{len(scope['potential_user_ids'])} potentially exposed users; "
+                            f"{len(details['evidence'])} verified evidence records. "
+                            "Root cause UNKNOWN. Operational action DENY.")
                 if simulate:
                     result["simulation"]=simulation_decision(self.server.policy_port,len(details["evidence"]))
                 self.reply(200,json.dumps(result).encode())
