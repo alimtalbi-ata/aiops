@@ -11,6 +11,7 @@ import stat
 
 from enterprise_context import P, ROOT, digest
 from enterprise_activity import activity_for, decode_activity
+import enterprise_corpus as corpus
 
 WORLD = "ACME-E2-V1"
 EPOCH = datetime(2026,1,1,9,tzinfo=timezone.utc)
@@ -71,6 +72,7 @@ class EnterpriseClock:
             db.execute("CREATE TABLE IF NOT EXISTS measured(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
             db.execute("CREATE TABLE IF NOT EXISTS technical(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
             db.execute("CREATE TABLE IF NOT EXISTS activity(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS corpus(doc_id TEXT NOT NULL, version INTEGER NOT NULL, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL, PRIMARY KEY(doc_id,version))")
     def connect(self):
         db=sqlite3.connect(self.path,timeout=30)
         db.execute("PRAGMA synchronous=FULL")
@@ -115,6 +117,37 @@ class EnterpriseClock:
                 "current_tick":rows[0][0] if rows else 0,"unavailable_pre_e6_ticks":missing,
                 "records":timeline,"operational_decision":"DENY","production_authorized":False}
 
+    def document_catalog(self):
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            tick=db.execute("SELECT COALESCE(MAX(tick),0) FROM journal").fetchone()[0]
+            rows=corpus.catalog_at(db,tick) if tick else []
+        return {"classification":"SYNTHETIC_VERSIONED_CORPUS_E7","current_tick":tick,
+                "documents":[{**r,"sha256":digest(r)} for r in rows],
+                "production_authorized":False,"operational_decision":"DENY"}
+
+    def historical_documents(self, run_id, scope, query):
+        if not re.fullmatch(r"RUN-[A-F0-9]{16}",run_id):
+            raise ValueError("invalid run identity")
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            ticks=set()
+            for tick,raw in db.execute("SELECT tick,receipt FROM journal WHERE receipt IS NOT NULL"):
+                receipt=json.loads(raw)
+                if receipt.get("run_id")==run_id: ticks.add(tick)
+            for table in ("measured","technical"):
+                for tick,raw in db.execute("SELECT tick,receipt FROM "+table+" WHERE receipt IS NOT NULL"):
+                    if any(r["run_id"]==run_id for r in json.loads(raw)): ticks.add(tick)
+            if not ticks:
+                return {"state":"UNBOUND_LEGACY","logical_tick":None,"citations":[]}
+            if len(ticks)!=1: raise ValueError("ambiguous run tick")
+            tick=ticks.pop()
+            rows=corpus.catalog_at(db,tick)
+            if not rows:
+                return {"state":"PRE_E7_UNAVAILABLE","logical_tick":tick,"citations":[]}
+            return {"state":"HISTORICAL_LOGICAL_VERSION","logical_tick":tick,
+                    "catalog_sha256":digest(rows),"citations":corpus.references(rows,scope,query)}
+
     def advance(self, expected_tick, publish):
         if type(expected_tick) is not int or not 1<=expected_tick<=MAX_TICK:
             raise ValueError("invalid expected tick")
@@ -130,6 +163,8 @@ class EnterpriseClock:
                 db.execute("INSERT INTO journal(tick,step,step_hash) VALUES(?,?,?)",(expected_tick,json.dumps(step,sort_keys=True),digest(step)))
                 records=activity_for(step)
                 db.execute("INSERT INTO activity(tick,payload,payload_hash) VALUES(?,?,?)",(expected_tick,json.dumps(records,sort_keys=True),digest(records)))
+                previous=corpus.catalog_at(db,expected_tick)
+                corpus.store(db,corpus.change_rows(expected_tick,previous) if previous else corpus.initial_rows(expected_tick))
             elif expected_tick!=last:
                 raise ValueError("stale or skipped tick")
         # Serialize publication; on failure the pending row is left for retry.
