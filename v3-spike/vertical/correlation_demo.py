@@ -21,7 +21,7 @@ def correlate(events):
     for (tenant, resource), entries in sorted(groups.items()):
         entries.sort(key=lambda item: item[0]["id"])
         evidence = [{"event_id": event["id"], "source": event["source"],
-                     "sha256": digest} for event, digest in entries]
+                     "sha256": digest, **({"observation": event["observation"]} if "observation" in event else {})} for event, digest in entries]
         incidents.append({
             "id": "inc-" + sha256(canonical([tenant, resource]).encode()).hexdigest()[:16],
             "tenant": tenant, "resource": resource,
