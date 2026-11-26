@@ -35,8 +35,9 @@ def smoke(root):
         assert restored.status()==before and restored.activity()==activity_before and restored.document_catalog()==corpus_before and restored.knowledge_catalog()==knowledge_before
         with closing(source.connect()) as a, closing(restored.connect()) as b:
             for table,count in (("journal",8),("measured",2),("technical",2),("activity",8),("corpus",12),("knowledge",6)):
-                rows=a.execute("SELECT * FROM "+table+" ORDER BY tick").fetchall()
-                assert len(rows)==count and rows==b.execute("SELECT * FROM "+table+" ORDER BY tick").fetchall()
+                order={"corpus":"doc_id,version","knowledge":"doc_id"}.get(table,"tick")
+                rows=a.execute("SELECT * FROM "+table+" ORDER BY "+order).fetchall()
+                assert len(rows)==count and rows==b.execute("SELECT * FROM "+table+" ORDER BY "+order).fetchall()
         restored.advance(9,lambda _: (_ for _ in ()).throw(AssertionError("nominal tick cannot publish")))
         assert restored.status()["current_tick"]==9 and source.status()==before
         assert len(restored.activity()["records"])==27 and source.activity()==activity_before
