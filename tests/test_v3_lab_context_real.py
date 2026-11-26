@@ -196,6 +196,9 @@ class LabContextReal(unittest.TestCase):
                                 page.locator("#create-dynamic").click()
                                 for value in ("Incident: INC-","Run: RUN-","Mode: DEMO","RCA: UNKNOWN","Policy: DENY","Evidence: "):
                                     expect(page.locator("#dynamic-result")).to_contain_text(value,timeout=20000)
+                                page.locator("#simulate-dynamic-context").click()
+                                for value in ("Verified dynamic lab binding","Policy decision: SIMULATE","Host execution: NONE","Conditional reduction: 120 ms"):
+                                    expect(page.locator("#context-result")).to_contain_text(value,timeout=20000)
                                 previous=page.locator("#dynamic-result").inner_text()
                                 page.locator("#create-dynamic").click()
                                 expect(page.locator("#dynamic-result")).to_have_text(previous,timeout=20000)
