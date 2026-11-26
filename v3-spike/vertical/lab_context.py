@@ -84,9 +84,18 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None,
             else:
                 payload={}
         if isinstance(payload,dict) and payload.get("metric")=="latency_ms":
-            observations.append({"synthetic":True,"metric":"latency_ms",
-                                 "phase":payload.get("phase"),"value":payload.get("value"),
-                                 "evidence_id":item["evidence_id"]})
+            observation={"synthetic":True,"metric":"latency_ms",
+                         "phase":payload.get("phase"),"value":payload.get("value"),
+                         "evidence_id":item["evidence_id"]}
+            if dynamic_incident is not None and "measurement" in signal.get("enterprise",{}):
+                from enterprise_context import normalize
+                from statistics import median
+                scope=normalize(signal["enterprise"],"metric")
+                if payload["value"]!=round(median(scope["measurement"]["samples_ms"]),3):
+                    raise ValueError("measured median does not match stored samples")
+                observation["measurement_scope"]=[node_id,scope["asset_id"],scope.get("application_id")]
+                observation["occurred_at"]=scope["occurred_at"]
+            observations.append(observation)
     return {"classification":"SYNTHETIC_LAB_CONTEXT","run_id":run_id,"root":node_id,
             "affected":affected,"evidence":verified,"diagnosis":preview(observations),"rca":"UNKNOWN","policy":"DENY",
             "tenant_acl_qualified":False,"production_authorized":False,**({"verified_signals":signals} if include_signals else {})}

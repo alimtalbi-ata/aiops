@@ -571,6 +571,8 @@ jobs:
           cmp "$V3_ROOT/correlation-preview.json" "$V3_ROOT/correlation-preview-restart.json"
           echo "E15 deterministic preview after restart PASS"
           python3 v3-spike/kit/poc-enterprise-clock-smoke.py "$url" --restart > "$V3_ROOT/clock-restart.json"
+          python3 v3-spike/kit/poc-measured-recovery-smoke.py "$url" > "$V3_ROOT/measured-recovery.json"
+          cat "$V3_ROOT/measured-recovery.json"
           cat "$V3_ROOT/clock-restart.json"
       - name: Verify isolated SQLite clock backup and restore
         run: |

@@ -17,3 +17,16 @@ class PreviewTest(unittest.TestCase):
             preview([rows[0],dict(rows[1],evidence_id="E1")])
         with self.assertRaises(ValueError):
             preview([rows[0],dict(rows[1],value=float("nan"))])
+    def test_measured_recovery_comparison(self):
+        scope=["NODE-CI-ROOT","NODE-CI-ENT-ASSET-PAR","NODE-CI-ENT-APP-PAY"]
+        rows=[dict(synthetic=True,metric="latency_ms",phase=p,value=v,evidence_id=e,measurement_scope=scope,occurred_at=t)
+              for p,v,e,t in (("baseline",10,"E1","2026-01-01T09:00:00Z"),("incident",120,"E2","2026-01-01T09:00:01Z"),("recovery",11,"E3","2026-01-01T09:00:02Z"))]
+        d=preview(rows)
+        self.assertTrue(d["recovery"]["within_baseline_tolerance"])
+        self.assertEqual(d["recovery"]["observed_reduction_ms"],109)
+        self.assertFalse(d["recovery"]["causality_established"])
+        self.assertEqual(d["evidence_ids"],["E1","E2","E3"])
+        self.assertFalse(preview([*rows[:2],dict(rows[2],value=110)])["recovery"]["within_baseline_tolerance"])
+        for bad in (dict(rows[2],evidence_id="E2"),dict(rows[2],measurement_scope=None),dict(rows[2],occurred_at="2025-01-01T00:00:00Z")):
+            with self.assertRaises(ValueError):preview([*rows[:2],bad])
+        with self.assertRaises(ValueError):preview(rows[1:])

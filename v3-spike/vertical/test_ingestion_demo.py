@@ -33,6 +33,15 @@ class IngestionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             ingest([dict(a,observation=dict(a["observation"],metric="unknown"))])
 
+    def test_recovery_requires_measured_samples(self):
+        a=dict(id="r1",kind="metric",source="monitor",resource="NODE-CI-ROOT",severity="critical",tenant="synthetic-demo",synthetic=True,
+               observation={"metric":"latency_ms","phase":"recovery","value":11})
+        with self.assertRaises(ValueError):ingest([a])
+        a["enterprise"]={"asset_id":"NODE-CI-ENT-ASSET-PAR","application_id":"NODE-CI-ENT-APP-PAY","occurred_at":"2026-01-01T09:00:00Z",
+                         "measurement":{"classification":"MEASURED_SYNTHETIC_LAB","method":"HTTP_MONOTONIC_MEDIAN_5","samples_ms":[10,11,11,12,13]}}
+        self.assertEqual(ingest([a])["incidents"][0]["evidence"][0]["observation"]["phase"],"recovery")
+        with self.assertRaises(ValueError):ingest([dict(a,observation=dict(a["observation"],value=12))])
+
     def test_http(self):
         import json
         import threading
