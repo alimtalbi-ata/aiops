@@ -8,13 +8,15 @@ from urllib.parse import urlencode
 from urllib.request import build_opener,ProxyHandler,HTTPRedirectHandler,Request
 from urllib.error import HTTPError
 
-origin,root=sys.argv[1:]
+origin,root=sys.argv[1:3]
+assert sys.argv[3:] in ([],["product"])
+name="temporal-e17-product" if sys.argv[3:] else "temporal-e17"
 assert re.fullmatch(r"http://127\.0\.0\.1:[0-9]{4,5}",origin)
 assert int(origin.rsplit(":",1)[1]) not in (7770,7777,7790)
 root=Path(root)
 assert root==Path("/tmp/aiops-v3-rootless-ci")
-report=json.loads((root/"temporal-e17.json").read_text())
-worker=json.loads((root/"temporal-e17-worker-replay.json").read_text())
+report=json.loads((root/(name+".json")).read_text())
+worker=json.loads((root/(name+"-worker-replay.json")).read_text())
 rid=report["workflow_id"]
 comparison=report["verification"]["comparison_run_id"]
 assert all(re.fullmatch(r"RUN-[A-F0-9]{16}",v) for v in (rid,comparison))
