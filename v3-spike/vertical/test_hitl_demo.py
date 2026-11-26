@@ -102,3 +102,57 @@ class DurableHITLTest(unittest.TestCase):
             gate.request(self.incident,self.run,self.refs)
         self.assertEqual(gate.pending,{})
         clock.connect.assert_called_once_with()
+
+
+    def test_action_reservation_binding_replay_and_conflict(self):
+        from unittest.mock import patch
+        from hitl_demo import DurableApprovalGate
+        scope={"action":"RESET_LAB_HTTP_DELAY","resource":"NODE-CI-ROOT","target_id":"c"*32}
+        policy={"policy_decision":"SIMULATE","simulation_only":True,"operational_decision":"DENY",
+                "executed_on_host":False,"production_authorized":False}
+        def approval(action):
+            key=self.gate.request(self.incident,self.run,self.refs,lab_action=action)["request_id"]
+            return self.gate.decide(key,self.incident,self.run,self.refs,True,lab_action=action)
+        def reserve(result,action=scope,refs=None,workflow=None):
+            return self.gate.reserve_lab_action(result["receipt_id"],result["receipt_sha256"],self.incident,
+                       self.run,self.refs if refs is None else refs,action,self.run if workflow is None else workflow,18001)
+        generic=approval(None)
+        result=approval(scope)
+        with patch("policy_demo.simulation_decision",return_value=policy):
+            for invalid in (lambda:reserve(generic),lambda:reserve(result,dict(scope,target_id="d"*32)),
+                            lambda:reserve(result,refs=[dict(self.refs[0],payload_hash="d"*64),self.refs[1]]),
+                            lambda:reserve(result,workflow="RUN-"+"B"*16)):
+                with self.assertRaises(ValueError):invalid()
+            first=reserve(result)
+            self.assertEqual(first["disposition"],"RESERVED_NO_EXECUTION")
+            self.assertFalse(first["action_authorized"])
+            self.gate=DurableApprovalGate(self.clock)
+            second=reserve(result)
+            self.assertEqual(second["disposition"],"ALREADY_RESERVED_BLOCKED")
+            self.assertEqual(first["reservation_sha256"],second["reservation_sha256"])
+            with self.assertRaises(ValueError):reserve(approval(scope))
+
+    def test_action_reservation_expiry_and_policy(self):
+        from unittest.mock import patch
+        from contextlib import closing
+        import json
+        scope={"action":"RESET_LAB_HTTP_DELAY","resource":"NODE-CI-ROOT","target_id":"e"*32}
+        key=self.gate.request(self.incident,self.run,self.refs,lab_action=scope)["request_id"]
+        wrong=self.gate.decide(key,self.incident,self.run,self.refs,True,lab_action=dict(scope,target_id="f"*32))
+        self.assertEqual(wrong["decision"],"DENY")
+        key=self.gate.request(self.incident,self.run,self.refs,lab_action=scope)["request_id"]
+        result=self.gate.decide(key,self.incident,self.run,self.refs,True,lab_action=scope)
+        def reserve(digest):
+            return self.gate.reserve_lab_action(result["receipt_id"],digest,self.incident,self.run,
+                                               self.refs,scope,self.run,18001)
+        with patch("policy_demo.simulation_decision",return_value={"policy_decision":"DENY"}):
+            with self.assertRaises(ValueError):reserve(result["receipt_sha256"])
+        record=self.gate.read_receipt(result["receipt_id"])["record"]
+        record["recorded_at"]="2000-01-01T00:00:00+00:00"
+        digest=self.gate._hash(record)
+        with closing(self.clock.connect()) as db,db:
+            db.execute("UPDATE hitl_decision_receipts SET payload=?,payload_hash=? WHERE receipt_id=?",
+                       (json.dumps(record),digest,result["receipt_id"]))
+        with patch("policy_demo.simulation_decision",return_value={"policy_decision":"SIMULATE","simulation_only":True,
+                   "operational_decision":"DENY","executed_on_host":False,"production_authorized":False}):
+            with self.assertRaises(ValueError):reserve(digest)
