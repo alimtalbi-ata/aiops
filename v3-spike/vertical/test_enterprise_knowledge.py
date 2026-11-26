@@ -25,6 +25,19 @@ class KnowledgeTest(unittest.TestCase):
             clock=EnterpriseClock(root)
             catalog=clock.knowledge_catalog()["documents"]
             self.assertEqual(len(catalog),6)
+            for doc in catalog:
+                self.assertFalse(doc["production_authorized"])
+                self.assertFalse(doc["observed_evidence"])
+                self.assertEqual(doc["tenant"],"synthetic-demo")
+                self.assertEqual(set(doc["scope"]),{P+"ASSET-PAR",P+"APP-PAY"})
+                if doc["kind"]=="CHANGE":
+                    self.assertIsNone(doc["source"]["run_id"])
+                    self.assertIsNone(doc["source"]["incident_id"])
+                    self.assertEqual(doc["source"]["evidence_refs"],[])
+                else:
+                    self.assertEqual(doc["source"]["logical_tick"],doc["valid_from_tick"]-1)
+                    self.assertIn(doc["source"]["run_id"],runs)
+            self.assertEqual(clock.historical_documents(runs[0],{P+"APP-HR"},"Payments")["lifecycle_citations"],[])
             self.assertEqual(clock.historical_documents(runs[0],scope,"Payments latency")["lifecycle_citations"],early)
             later=clock.historical_documents(runs[1],scope,"Payments latency")["lifecycle_citations"]
             self.assertEqual({x["valid_from_tick"] for x in later},{2,4,6})
