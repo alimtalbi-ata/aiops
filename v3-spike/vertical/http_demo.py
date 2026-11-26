@@ -477,8 +477,30 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None, ai_providers=None):
-    http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+class ContainerLabHandler(Handler):
+    def trusted_origin(self):
+        origin="http://127.0.0.1:18080"
+        return self.headers.get("Host")=="127.0.0.1:18080" and self.headers.get("Origin",origin)==origin
+
+    def do_GET(self):
+        if not self.trusted_origin():
+            self.reply(403,b'{"policy":"DENY"}')
+        else:
+            super().do_GET()
+
+    def do_POST(self):
+        if not self.trusted_origin():
+            self.reply(403,b'{"policy":"DENY"}')
+        else:
+            super().do_POST()
+
+def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None, ai_providers=None, *, container_lab=False):
+    if container_lab:
+        if os.environ.get("AIOPS_V3_GAMMA_CONTAINER_LAB")!="1" or os.getuid()==0 or port!=18080 or enterprise_clock is None:
+            raise ValueError("explicit nonroot synthetic container profile required")
+        http=ThreadingHTTPServer(("0.0.0.0",port),ContainerLabHandler)
+    else:
+        http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     http.core_config = core_config
     http.context_config = context_config
     http.policy_port = policy_port
