@@ -132,6 +132,44 @@ jobs:
                           page.locator("#clock-scenarios").click()
                           expect(page.locator("#clock-result")).to_contain_text("Scenario campaign: PUBLISHED")
                           expect(page.locator("#clock-run")).to_contain_text("CPU_SATURATION")
+                          # A: actual historical search, then select a different verified run.
+                          old_run=page.locator("#clock-run").input_value()
+                          page.locator("#clock-open").click()
+                          expect(page.locator("#enterprise-result")).to_contain_text(old_run)
+                          page.locator("#hybrid-query").fill("Payments latency runbook")
+                          page.locator("#hybrid-search").click()
+                          expect(page.locator("#hybrid-result")).to_contain_text("ENT-DOC-001 v2")
+                          hr_run=page.locator("#clock-run option").filter(has_text="HR_HTTP_ERRORS").get_attribute("value")
+                          assert hr_run and hr_run!=old_run
+                          page.locator("#clock-run").select_option(hr_run)
+                          page.locator("#clock-open").click()
+                          expect(page.locator("#enterprise-result")).to_contain_text(hr_run)
+                          expect(page.locator("#hybrid-result")).to_have_text("UNKNOWN / DENY — selection changed")
+                          expect(page.locator("#hybrid-result")).not_to_contain_text(old_run)
+                          # Delayed response from A must not reappear after selecting B.
+                          page.locator("#clock-run").select_option(old_run)
+                          page.locator("#clock-open").click()
+                          expect(page.locator("#enterprise-result")).to_contain_text(old_run)
+                          held=[]
+                          def hold_search(route):
+                              held.append((route,route.fetch()))
+                          page.route("**/api/v1/enterprise-search",hold_search)
+                          page.locator("#hybrid-search").click()
+                          for _ in range(50):
+                              if held: break
+                              page.wait_for_timeout(100)
+                          assert len(held)==1
+                          page.locator("#clock-run").select_option(hr_run)
+                          page.locator("#clock-open").click()
+                          expect(page.locator("#enterprise-result")).to_contain_text(hr_run)
+                          held[0][0].fulfill(response=held[0][1])
+                          page.unroute("**/api/v1/enterprise-search",hold_search)
+                          page.wait_for_timeout(250)
+                          expect(page.locator("#hybrid-result")).to_have_text("UNKNOWN / DENY — selection changed")
+                          page.locator("#clock-run").select_option(old_run)
+                          page.locator("#clock-open").click()
+                          expect(page.locator("#enterprise-result")).to_contain_text(old_run)
+                          print("A RAG run switch and late response isolation PASS")
                           page.locator("#clock-next").click()
                           expect(page.locator("#clock-result")).to_contain_text("Logical tick: 4")
                           page.locator("#param-read").click()

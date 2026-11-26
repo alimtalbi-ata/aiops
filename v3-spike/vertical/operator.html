@@ -170,6 +170,11 @@ $("hitl-request").addEventListener("click",()=>hitl("request"));
 $("hitl-approve").addEventListener("click",()=>hitl("decide",true));
 $("hitl-deny").addEventListener("click",()=>hitl("decide",false));
 let selectedDynamicRun=null,dynamicGeneration=0,dynamicApproval=null;
+function selectDynamicRun(run){
+ selectedDynamicRun=run;
+ ++hybridGeneration;
+ $("hybrid-result").textContent="UNKNOWN / DENY — selection changed";
+}
 function resetDynamicApproval(){dynamicApproval=null;$("dynamic-hitl-request").disabled=!selectedDynamicRun;$("dynamic-hitl-approve").disabled=true;$("dynamic-hitl-deny").disabled=true;$("dynamic-hitl-result").textContent="UNKNOWN / DENY";}
 async function dynamicHitl(action,approved=false){
  const generation=dynamicGeneration,run=selectedDynamicRun,key=dynamicApproval;
@@ -192,14 +197,14 @@ async function dynamicHitl(action,approved=false){
 $("dynamic-hitl-request").addEventListener("click",()=>dynamicHitl("request"));
 $("dynamic-hitl-approve").addEventListener("click",()=>dynamicHitl("decide",true));
 $("dynamic-hitl-deny").addEventListener("click",()=>dynamicHitl("decide",false));
-$("clear").addEventListener("click",()=>{++dynamicGeneration;selectedDynamicRun=null;resetDynamicApproval();$("load-enterprise").disabled=true;$("enterprise-result").textContent="UNKNOWN / DENY";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;$("dynamic-result").textContent="UNKNOWN / DENY";});
+$("clear").addEventListener("click",()=>{++dynamicGeneration;selectDynamicRun(null);resetDynamicApproval();$("load-enterprise").disabled=true;$("enterprise-result").textContent="UNKNOWN / DENY";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;$("dynamic-result").textContent="UNKNOWN / DENY";});
 $("load-dynamic-context").addEventListener("click",()=>{if(selectedDynamicRun)loadContext(false,selectedDynamicRun);});
 $("simulate-dynamic-context").addEventListener("click",()=>{if(selectedDynamicRun)loadContext(true,selectedDynamicRun);});
 async function createDynamic(enterprise=false){
  const button=$(enterprise?"create-enterprise":"create-dynamic"),target=$("dynamic-result");
  const generation=++dynamicGeneration;
  ++contextGeneration;$("context-result").textContent="UNKNOWN / DENY — not loaded";
- selectedDynamicRun=null;resetDynamicApproval();$("load-enterprise").disabled=true;$("enterprise-result").textContent="UNKNOWN / DENY";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
+ selectDynamicRun(null);resetDynamicApproval();$("load-enterprise").disabled=true;$("enterprise-result").textContent="UNKNOWN / DENY";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
  button.disabled=true;target.textContent="Pending synthetic ingestion";
  try{
   if(location.protocol!=="http:"||location.hostname!=="127.0.0.1")throw Error("loopback required");
@@ -217,7 +222,7 @@ async function createDynamic(enterprise=false){
   const d=await response.json(),c=d.core,r=c.run,e=d.stored_evidence;
   if(d.production_authorized!==false||c.production_authorized!==false||c.classification!=="SYNTHETIC_CANONICAL_RUN"||c.policy!=="DENY"||c.rca!=="UNKNOWN"||r.mode!=="DEMO"||!validString(r.run_id)||!validString(r.incident_id)||!Array.isArray(e)||e.length!==rows.length||!e.every(x=>validString(x.evidence_id)&&/^[a-f0-9]{64}$/.test(x.payload_hash)))throw Error("unverified result");
   if(generation!==dynamicGeneration)return;
-  selectedDynamicRun=r.run_id;resetDynamicApproval();$("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;
+  selectDynamicRun(r.run_id);resetDynamicApproval();$("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;
   target.textContent=["Incident: "+r.incident_id,"Run: "+r.run_id,"Mode: DEMO","RCA: UNKNOWN","Policy: DENY",...e.map(x=>"Evidence: "+x.evidence_id+" | "+x.payload_hash)].join("\n");
  }catch(_err){if(generation===dynamicGeneration)target.textContent="UNKNOWN / DENY — ingestion unavailable or unverified";}
  finally{button.disabled=false;}
@@ -226,11 +231,11 @@ $("create-dynamic").addEventListener("click",()=>createDynamic(false));
 $("create-enterprise").addEventListener("click",()=>createDynamic(true));
 $("enterprise-open-run").addEventListener("click",()=>{
  const run=$("enterprise-run-id").value.trim();
- ++dynamicGeneration;++contextGeneration;selectedDynamicRun=null;resetDynamicApproval();
+ ++dynamicGeneration;++contextGeneration;selectDynamicRun(null);resetDynamicApproval();
  $("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
  $("enterprise-result").textContent="UNKNOWN / DENY";$("context-result").textContent="UNKNOWN / DENY";$("dynamic-result").textContent="UNKNOWN / DENY";
  if(!/^RUN-[A-F0-9]{16}$/.test(run))return;
- selectedDynamicRun=run;
+ selectDynamicRun(run);
  // The server resolves the root from verified evidence; no caller-supplied asset.
  $("load-enterprise").disabled=false;$("load-enterprise").click();
 });
@@ -254,7 +259,7 @@ $("load-enterprise").addEventListener("click",async()=>{
   if(d.case_retrieval)lines.push("Historical case retrieval: "+d.case_retrieval.state,...d.case_retrieval.citations.map(x=>[x.id,x.family,x.source.run_id,x.sha256].join(" | ")));
   target.textContent=lines.join("\n");
   $("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;resetDynamicApproval();
- }catch(_err){if(generation===dynamicGeneration){target.textContent="UNKNOWN / DENY — enterprise context unavailable";selectedDynamicRun=null;resetDynamicApproval();$("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;}}
+ }catch(_err){if(generation===dynamicGeneration){target.textContent="UNKNOWN / DENY — enterprise context unavailable";selectDynamicRun(null);resetDynamicApproval();$("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;}}
 });
 let clockState=null,clockBusy=false;
 async function readClock(){
@@ -306,8 +311,9 @@ $("clock-scenarios").addEventListener("click",()=>clockAction(false,false,false,
 $("clock-open").addEventListener("click",()=>{
  const run=$("clock-run").value;
  if(!/^RUN-[A-F0-9]{16}$/.test(run))return;
- ++dynamicGeneration;++contextGeneration;selectedDynamicRun=run;resetDynamicApproval();
+ ++dynamicGeneration;++contextGeneration;selectDynamicRun(run);resetDynamicApproval();
  $("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;
+ $("context-result").textContent="UNKNOWN / DENY — not loaded";
  $("dynamic-result").textContent="Selected persistent enterprise run: "+run;
  $("load-enterprise").click();
 });
