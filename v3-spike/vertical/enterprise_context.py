@@ -122,9 +122,13 @@ class Graph:
             groups=set()
             # These are accessible apps for the affected user, not app-wide outages.
             apps=self.forward(users,"uses")|self.forward(self.forward(users,"member_of"),"uses")
-        infra=self.reverse(assets|tech,"contains")
+        # Site/infrastructure context includes hosting assets of affected applications,
+        # not a claim that their hosts have failed.
+        app_dependencies=self.forward(apps,"depends_on")
+        app_hosts={n for n in app_dependencies if self.nodes[n]["type"]=="asset"}|self.reverse(app_dependencies,"hosts")
+        infra=self.reverse(assets|tech|app_hosts,"contains")
         sites=self.reverse(infra,"contains")
-        return {"assets":assets,"applications":apps,"groups":groups,"users":users,"infrastructure":infra,"sites":sites,"technical":tech}
+        return {"assets":assets,"applications":apps,"groups":groups,"users":users,"infrastructure":infra,"sites":sites,"technical":tech,"application_hosts":app_hosts}
     def validate_signal(self, root, scope):
         allowed=self.scope(root)
         asset=scope["asset_id"]
