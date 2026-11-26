@@ -15,6 +15,7 @@ import enterprise_corpus as corpus
 import enterprise_knowledge as knowledge
 import enterprise_hybrid as hybrid
 import enterprise_case_knowledge as cases
+import enterprise_episodes as episodes
 
 WORLD = "ACME-E2-V1"
 EPOCH = datetime(2026,1,1,9,tzinfo=timezone.utc)
@@ -79,6 +80,7 @@ class EnterpriseClock:
             db.execute("CREATE TABLE IF NOT EXISTS corpus(doc_id TEXT NOT NULL, version INTEGER NOT NULL, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL, PRIMARY KEY(doc_id,version))")
             db.execute("CREATE TABLE IF NOT EXISTS knowledge(doc_id TEXT PRIMARY KEY, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS case_knowledge(doc_id TEXT PRIMARY KEY, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS episodes(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
     def connect(self):
         db=sqlite3.connect(self.path,timeout=30)
         db.execute("PRAGMA synchronous=FULL")
@@ -143,6 +145,11 @@ class EnterpriseClock:
         return {"classification":"SYNTHETIC_LIFECYCLE_KNOWLEDGE_E8","current_tick":tick,
                 "documents":rows,"limit":knowledge.LIMIT,"production_authorized":False,"operational_decision":"DENY"}
 
+    def episode_timeline(self):
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            return episodes.read_recent(db,self.decode)
+
     def case_catalog(self):
         with closing(self.connect()) as db:
             db.execute("BEGIN")
@@ -202,6 +209,7 @@ class EnterpriseClock:
                 knowledge.store(db,knowledge.generated(step,self.decode(prior) if prior else None))
                 snapshot=db.execute("SELECT batches,batch_hash,receipt FROM scenarios WHERE tick=?",(expected_tick-1,)).fetchone()
                 cases.store(db,cases.generated(step,self.decode(prior) if prior else None,snapshot))
+                episodes.store(db,step)
             elif expected_tick!=last:
                 raise ValueError("stale or skipped tick")
         # Serialize publication; on failure the pending row is left for retry.
