@@ -21,7 +21,7 @@ EVENT = {"id": "synthetic-001", "source": "synthetic-monitor",
          "severity": "critical", "resource": "demo-node-01",
          "tenant": "synthetic-demo"}
 
-def enterprise_projection(graph, details, run, clock):
+def enterprise_projection(graph, details, run, clock, search_query=None):
     result=graph.project(details,run)
     if clock is None:
         return result
@@ -32,11 +32,12 @@ def enterprise_projection(graph, details, run, clock):
         scope={n["node_id"] for nodes in result["potential_exposure"].values() for n in nodes}
     scope.add(result["root"])
     query=" ".join(str(row.get("message",""))+" "+str(row.get("observation",{}).get("metric","")) for row in result["timeline"])[:512]
-    history=clock.historical_documents(run["run_id"],scope,query)
-    result["document_history"]={k:v for k,v in history.items() if k not in ("citations","lifecycle_citations")}
+    history=clock.historical_documents(run["run_id"],scope,query if search_query is None else search_query)
+    result["document_history"]={k:v for k,v in history.items() if k not in ("citations","lifecycle_citations","hybrid_retrieval")}
     if history["state"]=="HISTORICAL_LOGICAL_VERSION":
         result["document_references"]=history["citations"]
         result["lifecycle_references"]=history["lifecycle_citations"]
+        result["hybrid_retrieval"]=history["hybrid_retrieval"]
     elif history["state"]=="PRE_E7_UNAVAILABLE":
         result["document_references"]=[]
     return result
@@ -72,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-search"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -84,6 +85,18 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 4096:
                 raise ValueError("Invalid length")
             data=json.loads(self.rfile.read(length))
+            if self.path=="/api/v1/enterprise-search":
+                if (not isinstance(data,dict) or set(data)!={"run_id","query"} or not isinstance(data["query"],str)
+                    or not 1<=len(data["query"])<=512 or self.server.enterprise_clock is None):
+                    raise ValueError("invalid historical search")
+                port,token,_=self.server.core_config
+                twin,evidence,node,_=self.server.context_config
+                core,details=dynamic_context(port,token,data["run_id"],twin,evidence,node,include_signals=True,multiasset=True)
+                result=enterprise_projection(Graph(get(twin,"/api/twin/graph")),details,core["run"],self.server.enterprise_clock,data["query"])
+                if "hybrid_retrieval" not in result:
+                    raise ValueError("historical corpus unavailable")
+                self.reply(200,json.dumps({"run_id":result["run_id"],"incident_id":result["incident_id"],**result["hybrid_retrieval"]}).encode())
+                return
             if self.path=="/api/v1/ingest":
                 self.reply(200,json.dumps(ingest(data)).encode())
                 return
@@ -283,7 +296,7 @@ class Handler(BaseHTTPRequestHandler):
                     result["enterprise_context"]=enterprise
                     result["copilot"]["enterprise_document_retrieval"]={
                         "run_id":run_id,"topology_sha256":enterprise["topology_sha256"],
-                        "citations":enterprise["document_references"],"document_history":enterprise.get("document_history"),"lifecycle_citations":enterprise.get("lifecycle_references",[]),"production_authorized":False,
+                        "citations":enterprise["document_references"],"document_history":enterprise.get("document_history"),"lifecycle_citations":enterprise.get("lifecycle_references",[]),"hybrid_retrieval":enterprise.get("hybrid_retrieval"),"production_authorized":False,
                         "llm_inference_performed":False,"operational_decision":"DENY"}
                     result["copilot"]["enterprise_scope"]={
                         "root":enterprise["root"],"exposure_semantics":enterprise["exposure_semantics"],

@@ -17,6 +17,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_activity.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_corpus.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_knowledge.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_hybrid.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -94,6 +95,17 @@ jobs:
                           for tick in (1,2):
                               page.locator("#clock-next").click()
                               expect(page.locator("#clock-result")).to_contain_text("Logical tick: "+str(tick))
+                          page.locator("#clock-next").click()
+                          expect(page.locator("#clock-result")).to_contain_text("Logical tick: 3")
+                          page.locator("#clock-open").click()
+                          expect(page.locator("#enterprise-result")).to_contain_text("HISTORICAL_LOGICAL_VERSION")
+                          page.locator("#hybrid-query").fill("Payments latency runbook")
+                          page.locator("#hybrid-search").click()
+                          expect(page.locator("#hybrid-result")).to_contain_text("ENT-DOC-001 v2")
+                          expect(page.locator("#hybrid-result")).to_contain_text("BM25_CHAR_TRIGRAM_TFIDF_RRF_V1")
+                          page.locator("#hybrid-query").fill("zzzzzzzz")
+                          page.locator("#hybrid-search").click()
+                          expect(page.locator("#hybrid-result")).to_contain_text("NO_MATCH")
                           page.locator("#knowledge-read").click()
                           expect(page.locator("#knowledge-result")).to_contain_text("ENT-KNOW-00002-CHANGE")
                           expect(page.locator("#knowledge-result")).not_to_contain_text("ENT-KNOW-00004-INCIDENT")
@@ -103,7 +115,7 @@ jobs:
                           expect(page.locator("#corpus-result")).to_contain_text("not observed evidence")
                           page.locator("#activity-read").click()
                           expect(page.locator("#activity-result")).to_contain_text("ALERT_ONLY")
-                          expect(page.locator("#activity-result")).not_to_contain_text("INCIDENT_LINKED")
+                          expect(page.locator("#activity-result")).to_contain_text("INCIDENT_LINKED")
                           page.locator("#activity-filter").select_option("NODE-CI-ENT-APP-HR")
                           expect(page.locator("#activity-result")).to_contain_text("NODE-CI-ENT-APP-HR")
                           expect(page.locator("#activity-result")).not_to_contain_text("NODE-CI-ENT-APP-CRM")

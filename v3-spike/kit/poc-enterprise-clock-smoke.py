@@ -58,6 +58,19 @@ def smoke(origin, restart):
             assert len(lifecycle)==(4 if restart else 1)
             assert all(d["valid_from_tick"]<n and d["observed_evidence"] is False for d in lifecycle)
             assert combined["copilot"]["enterprise_document_retrieval"]["lifecycle_citations"]==lifecycle
+            assert combined["copilot"]["enterprise_document_retrieval"]["hybrid_retrieval"]==ctx["hybrid_retrieval"]
+            search=lambda run,q:call("/api/v1/enterprise-search",{"run_id":run,"query":q})
+            ranked=search(pub["run_id"],"Payments latency runbook")
+            assert ranked["logical_tick"]==n and ranked["state"]=="MATCHED"
+            assert ranked["citations"][0]["id"]=="ENT-DOC-001" and ranked["citations"][0]["version"]==(3 if restart else 2)
+            assert all(d["valid_from_tick"]<=n and not d["observed_evidence"] for d in ranked["citations"])
+            assert search(pub["run_id"],"zzzzzzzz")["state"]=="NO_MATCH"
+            if restart:
+                historical=search(first,"Payments latency runbook")
+                assert historical["logical_tick"]==3 and historical["citations"][0]["version"]==2
+                recovery=search(pub["run_id"],"recovery remediation measured")
+                assert recovery["citations"][0]["kind"]=="RECOVERY" and recovery["citations"][0]["source"]["run_id"]==first
+            print(json.dumps({"classification":"E9_HYBRID_RETRIEVAL","result":"PASS","tick":n,"top_document":ranked["citations"][0]["id"],"version":ranked["citations"][0]["version"],"bm25":ranked["citations"][0]["bm25_score"],"cosine":ranked["citations"][0]["vector_cosine"],"no_match":True,"production_authorized":False}),file=sys.stderr)
             if restart:
                 assert {d["source"]["run_id"] for d in lifecycle if d["kind"]!="CHANGE"}=={first}
                 prior=call("/api/v1/enterprise-context?run_id="+first)
@@ -73,6 +86,10 @@ def smoke(origin, restart):
             for item in measured["incidents"]:
                 observed=call("/api/v1/enterprise-context?run_id="+item["run_id"])
                 assert observed["root"]==item["resource"]
+                if item["resource"]=="NODE-CI-ENT-ASSET-LYO":
+                    hr=search(item["run_id"],"HR portal")
+                    assert [d["id"] for d in hr["citations"]]==["ENT-DOC-004"]
+                    assert search(item["run_id"],"Payments latency runbook")["state"]=="NO_MATCH"
                 assert len([x for x in observed["timeline"] if x.get("measurement",{}).get("classification")=="MEASURED_SYNTHETIC_LAB"])==2
             if restart:
                 assert not {x["run_id"] for x in measured["incidents"]}&{x["run_id"] for x in old_capture["incidents"]}
