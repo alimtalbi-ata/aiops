@@ -28,8 +28,10 @@ def main(mode):
     require(b"<html" in call("/",raw=True).lower(),"GAMMA UI missing")
     reject("/api/v1/incident-context",{"Host":"foreign.invalid"},403)
     reject("/api/v1/incident-context",{"Origin":"http://foreign.invalid"},403)
+    seeded=call("/api/v1/incident-context?decision=simulate")
+    require(seeded["core"]["run"]["run_id"]=="RUN-CI-CONTEXT" and seeded["context"]["policy"]=="DENY" and seeded["simulation"]["policy_decision"]=="SIMULATE","seeded functional readiness failed")
     if mode=="initial":
-        common={"kind":"metric","source":"gamma-oci-ci","resource":"NODE-CI-ROOT","severity":"warning","tenant":"synthetic-demo","synthetic":True}
+        common={"kind":"metric","source":"gamma-oci-ci","resource":"NODE-CI-ROOT","severity":"critical","tenant":"synthetic-demo","synthetic":True}
         rows=[dict(common,id="gamma-oci-"+p,observation={"metric":"latency_ms","phase":p,"value":v}) for p,v in (("baseline",40),("incident",160))]
         publication=call("/api/v1/ingest/create",rows)
         require(publication==call("/api/v1/ingest/create",rows),"publication replay changed")
