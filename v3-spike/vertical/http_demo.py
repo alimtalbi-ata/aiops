@@ -10,7 +10,7 @@ from enterprise_context import Graph, normalize, ENTERPRISE_ROOTS
 from policy_demo import simulation_decision
 from copilot_context import answer
 import os
-from hitl_demo import ApprovalGate
+from hitl_demo import ApprovalGate, DurableApprovalGate
 from ingestion_demo import ingest
 from ingestion_store import persist
 from core_ingest import create_and_persist
@@ -452,7 +452,7 @@ def server(port=0, core_config=None, context_config=None, policy_port=None, matt
     http.context_config = context_config
     http.policy_port = policy_port
     http.mattermost_config = mattermost_config
-    http.approval_gate = ApprovalGate()
+    http.approval_gate = DurableApprovalGate(enterprise_clock) if enterprise_clock is not None else ApprovalGate()
     http.enterprise_clock = enterprise_clock
     http.enterprise_collector = enterprise_collector
     http.technical_collector = technical_collector
