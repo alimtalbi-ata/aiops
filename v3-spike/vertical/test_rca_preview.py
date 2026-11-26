@@ -53,8 +53,8 @@ class RecoveryVerifyTest(unittest.TestCase):
         def signal(i,sec,phase=None,value=None,message=None):
             ent = dict(asset_id=scope[1],application_id=scope[2],
                        occurred_at="2026-01-01T09:00:%02dZ"%sec)
-            result = dict(id=i,tenant="synthetic-demo",resource=scope[0],
-                          source=("metric:" if phase else "event:")+"measured-recovery-ci",
+            result = dict(id=i,tenant="synthetic-demo",resource=scope[0],synthetic=True,
+                          kind="metric" if phase else "event",source="measured-recovery-ci",
                           severity="critical",enterprise=ent)
             if phase:
                 ent["measurement"] = dict(classification="MEASURED_SYNTHETIC_LAB",
@@ -66,9 +66,15 @@ class RecoveryVerifyTest(unittest.TestCase):
         old=[signal("base",0,"baseline",10),signal("fault",1,message="fault"),
              signal("incident",2,"incident",120)]
         def snapshot(rid,inc,signals):
+            from ingestion_demo import ingest
+            correlated=ingest(signals)["incidents"][0]
+            assert correlated["resource"]==scope[0] and correlated["tenant"]=="synthetic-demo"
+            normalized={sig["event_id"]:sig for sig in correlated["evidence"]}
             rows=[dict(evidence_id="EVD-"+rid[-1]+str(i),payload_hash=digest(
-                dict(run_id=rid,incident_id=inc,resource=scope[0],signal=sig)),signal=deepcopy(sig))
-                  for i,sig in enumerate(signals)]
+                dict(run_id=rid,incident_id=inc,resource=scope[0],
+                     correlation_id=correlated["id"],signal=normalized[raw["id"]])),
+                     signal=deepcopy(normalized[raw["id"]]))
+                  for i,raw in enumerate(signals)]
             refs=[{k:r[k] for k in ("evidence_id","payload_hash")} for r in rows]
             return (dict(run=dict(run_id=rid,incident_id=inc,mode="DEMO"),
                          production_authorized=False),
@@ -138,3 +144,14 @@ class RecoveryVerifyTest(unittest.TestCase):
         kwargs["read_context"]=changing
         with self.assertRaises(ValueError):
             verify_recovery(**kwargs)
+
+
+    def test_verify_rejects_noncanonical_signal_shape(self):
+        from recovery_verify import verify_recovery
+        for changes in ({"id":"base"}, {"sha256":"broken"}, {"source":"untyped"},
+                        {"event_id":"../bad"}, {"tenant":"other"}):
+            kwargs,snapshots,_=self.fixture()
+            row=snapshots[kwargs["original_run_id"]][1]["verified_signals"][0]
+            row["signal"].update(changes)
+            with self.subTest(changes=changes),self.assertRaises(ValueError):
+                verify_recovery(**kwargs)
