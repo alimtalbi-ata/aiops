@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
-      - run: python3 -m py_compile v3-spike/kit/poc-gamma.py
+      - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
           V3_ROOT: /tmp/aiops-v3-ci
@@ -140,6 +140,8 @@ jobs:
             sleep 1
           done
           [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
+          python3 v3-spike/kit/poc-dynamic-smoke.py "$url" > "$V3_ROOT/dynamic-smoke.json"
+          cat "$V3_ROOT/dynamic-smoke.json"
           curl --fail --silent --show-error "$url/api/v1/incident-context?decision=simulate" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["simulation"]["policy_decision"]=="SIMULATE"; assert d["simulation"]["executed_on_host"] is False; assert d["context"]["rca"]=="UNKNOWN"; assert d["copilot"]["sources"]==d["context"]["evidence"]; assert d["copilot"]["confidence"] is None'
           python3 - "$url" <<'PY'
           import json,sys,urllib.request,urllib.parse,urllib.error,os,pathlib
@@ -181,6 +183,18 @@ jobs:
           "${compose[@]}" exec -T postgres pg_restore --exit-on-error -U aiops -d aiops_restore_ci < "$V3_ROOT/backup/poc.dump"
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops_restore_ci -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
+          python3 - "$V3_ROOT/dynamic-smoke.json" <<'PY'
+          import json,sys,subprocess,os,hashlib,re
+          receipt=json.load(open(sys.argv[1]))
+          run=receipt["run_id"]
+          assert re.fullmatch(r"RUN-[A-F0-9]{16}",run) and receipt["result"]=="PASS"
+          root=os.environ["V3_ROOT"]
+          compose=["docker","compose","--project-name","aiops-v3-poc-"+hashlib.sha256(root.encode()).hexdigest()[:12],"--env-file",root+"/poc.env","-f","v3-spike/kit/compose.poc-source.yml"]
+          for db in ("aiops","aiops_restore_ci"):
+              def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
+              assert query("select status from aiops.runs where run_id=\'"+run+"\'")=="CREATED"
+              assert query("select count(*) from aiops.evidence where provenance->>\'run_id\'=\'"+run+"\'")==str(receipt["evidence_count"])
+          PY
           "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci
       - if: always()
         run: |
