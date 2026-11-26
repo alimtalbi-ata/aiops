@@ -31,6 +31,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_case_knowledge.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_episodes.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_triage.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_parametric.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -105,6 +106,11 @@ jobs:
 
                           page.locator("#clock-read").click()
                           expect(page.locator("#clock-result")).to_contain_text("Logical tick: 0")
+                          page.locator("#param-horizon").fill("8")
+                          page.locator("#param-frequency").fill("100")
+                          page.locator("#param-configure").click()
+                          expect(page.locator("#param-result")).to_contain_text("Planned episodes (not evidence): 7")
+                          expect(page.locator("#param-result")).to_contain_text("Materialized observations: 0")
                           for tick in (1,2):
                               page.locator("#clock-next").click()
                               expect(page.locator("#clock-result")).to_contain_text("Logical tick: "+str(tick))
@@ -128,6 +134,10 @@ jobs:
                           expect(page.locator("#clock-run")).to_contain_text("CPU_SATURATION")
                           page.locator("#clock-next").click()
                           expect(page.locator("#clock-result")).to_contain_text("Logical tick: 4")
+                          page.locator("#param-read").click()
+                          expect(page.locator("#param-result")).to_contain_text("Logical tick: 4")
+                          expect(page.locator("#param-result")).to_contain_text("ONSET")
+                          expect(page.locator("#param-result")).to_contain_text("Model only. Policy DENY.")
                           page.locator("#triage-read").click()
                           expect(page.locator("#triage-result")).to_contain_text("8 / 8 modeled triage cases")
                           expect(page.locator("#triage-result")).to_contain_text("CPU_CONTRADICTORY_PROBES")

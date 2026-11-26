@@ -17,6 +17,7 @@ import enterprise_hybrid as hybrid
 import enterprise_case_knowledge as cases
 import enterprise_episodes as episodes
 import enterprise_triage as triage
+import enterprise_parametric as parametric
 
 WORLD = "ACME-E2-V1"
 EPOCH = datetime(2026,1,1,9,tzinfo=timezone.utc)
@@ -83,6 +84,8 @@ class EnterpriseClock:
             db.execute("CREATE TABLE IF NOT EXISTS case_knowledge(doc_id TEXT PRIMARY KEY, valid_from_tick INTEGER NOT NULL REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS episodes(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS triage(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS parametric_profile(id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS parametric_ticks(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
     def connect(self):
         db=sqlite3.connect(self.path,timeout=30)
         db.execute("PRAGMA synchronous=FULL")
@@ -146,6 +149,19 @@ class EnterpriseClock:
             rows=knowledge.read_at(db,tick,self.decode)
         return {"classification":"SYNTHETIC_LIFECYCLE_KNOWLEDGE_E8","current_tick":tick,
                 "documents":rows,"limit":knowledge.LIMIT,"production_authorized":False,"operational_decision":"DENY"}
+
+    def configure_parametric(self,value,graph):
+        # Validate all planned resources and populations before committing config.
+        parametric.validate_graph(parametric.plan(value),graph)
+        with closing(self.connect()) as db,db:
+            db.execute("BEGIN IMMEDIATE")
+            parametric.configure(db,value)
+            return parametric.timeline(db,self.decode)
+
+    def parametric_timeline(self):
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            return parametric.timeline(db,self.decode)
 
     def triage_timeline(self):
         with closing(self.connect()) as db:
@@ -218,6 +234,7 @@ class EnterpriseClock:
                 cases.store(db,cases.generated(step,self.decode(prior) if prior else None,snapshot))
                 episodes.store(db,step)
                 triage.store(db,step)
+                parametric.store(db,step)
             elif expected_tick!=last:
                 raise ValueError("stale or skipped tick")
         # Serialize publication; on failure the pending row is left for retry.
