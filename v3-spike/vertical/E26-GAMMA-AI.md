@@ -1,0 +1,3 @@
+# E26 GAMMA AI telemetry read-only projection
+
+Explicit 1–5 run IDs, include only reviews whose entire run set is requested. Read-only SQLite connection and snapshot; no ledger creation, inference, upload, or mutation. All receipt hashes and schema checked; bounded results, unknown usage remains null, p50/p95 and grouped provider counts. Browser invalidates stale requests, renders text only, and fails closed. Actual Chromium + HTTP + synthetic provider fixture persisted ledger; not a connected live LLM runtime, no authenticated tenant ACL, no production authority. No automatic import of CI experiment artifacts; operator runtime can read only its configured dedicated clock database.

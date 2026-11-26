@@ -68,6 +68,14 @@ class RuntimeTest(unittest.TestCase):
                     history.assert_called_once()
                     reopened=InvocationLedger(self.root)
                     self.assertEqual(reopened.read(result["review_id"])["receipt_sha256"],result["receipt_sha256"])
+                    base="http://127.0.0.1:%d"%http.server_port
+                    req=Request(base+"/api/v1/ai-telemetry",data=json.dumps({"run_ids":self.history["run_ids"]}).encode(),headers={"Origin":base,"Content-Type":"application/json"})
+                    with urlopen(req,timeout=5) as response:telemetry=json.load(response)
+                    self.assertEqual(telemetry["invocation_count"],2)
+                    self.assertEqual(telemetry["reviews"][0]["review_id"],result["review_id"])
+                    self.assertEqual(telemetry["reviews"][0]["receipt_sha256"],result["receipt_sha256"])
+                    self.assertEqual(telemetry["operational_decision"],"DENY")
+                    self.assertEqual((len(ar),len(cr)),(1,1))
                 finally:http.shutdown();t.join(5)
 
 if __name__=="__main__":unittest.main()

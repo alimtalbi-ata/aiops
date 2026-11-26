@@ -1,3 +1,7 @@
 # E27 opt-in synthetic runtime bridge
 
 Default disabled. Dedicated root private ai-runtime.json (owner only, regular file, no symlink, max 4096 bytes) explicitly names two distinct loopback model endpoints and model labels. No automatic discovery, credentials or provider identity attestation. Launcher and server validate configuration and reject overlap with Core/Twin/Evidence/Policy/HTTP ports. New same-origin POST /api/v1/enterprise-correlation/ai-review accepts only run_ids/window_seconds; server reconstructs verified E16 history, E24/E25 RAG and E23 ledger, reads receipt before returning. One in-flight review per process, no retry/fallback, 120s per-socket timeout (not a hard process deadline); explicit operator request, no operational authority. No UI trigger yet, no actual live runtime LLM/Core end-to-end attestation, no authenticated tenant ACL or independent QA. HTTP fixture tests cover default disabled, invalid origin/context, busy rejection, config security and persistent receipt. Depends on E25; E26 display can read the same clock DB after integration. Do not copy CI artifact data into a running instance.
+
+## CENTRAL E26 / E25 V3 alignment
+
+The HTTP fixture integration now reads the exact persisted review via the E26 telemetry endpoint, matches both receipt ID and digest, and verifies that reading does not trigger an additional invocation. Focused runtime tests run in source-kit config as well as the HTTP workflow, because a stacked PR may not trigger the latter. No independent QA or live runtime model qualification.

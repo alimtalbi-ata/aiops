@@ -48,5 +48,6 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_historical_rag_context.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_ai_invocation_ledger.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_rag_model_advisory.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_gamma_ai_telemetry.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_real_rag_fixture.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_ai_runtime.py -v

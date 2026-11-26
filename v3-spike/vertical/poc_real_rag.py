@@ -83,7 +83,7 @@ def main():
         history,context=seed(ledger)
         report["context_sha256"]=digest(context)
         report["wire_context_sha256"]=digest(wire_projection(context)[0])
-        report["experiment_variant"]="V2_COMPACT_BIJECTIVE_CITATIONS"
+        report["experiment_variant"]="V3_RESOURCE_BOUND_REFERENCE_RELEVANCE"
         report["rag_sha256"]=context["rag_sha256"]
         report["verified_evidence_count"]=history["verified_evidence_count"]
         report["approved_references"]=[{k:v for k,v in x.items() if k!="excerpt"} for x in context["candidates"][0]["reference_context"]]
