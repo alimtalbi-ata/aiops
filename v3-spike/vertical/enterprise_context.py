@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import re
+import math
 
 P = "NODE-CI-ENT-"
 ROOT = "NODE-CI-ROOT"
@@ -28,7 +29,7 @@ def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(",",":")).encode()).hexdigest()
 
 def normalize(raw, kind):
-    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message"}:
+    if not isinstance(raw,dict) or not {"occurred_at","asset_id"} <= set(raw) or set(raw)-{"occurred_at","asset_id","application_id","group_id","user_id","message","measurement"}:
         raise ValueError("invalid enterprise signal scope")
     timestamp=raw["occurred_at"]
     if not isinstance(timestamp,str) or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ",timestamp):
@@ -37,6 +38,13 @@ def normalize(raw, kind):
     for k,v in raw.items():
         if k.endswith("_id") and (not isinstance(v,str) or not re.fullmatch(r"NODE-CI-ENT-[A-Z0-9-]{1,80}",v)):
             raise ValueError("invalid enterprise identity")
+    if "measurement" in raw:
+        m=raw["measurement"]
+        if (kind!="metric" or not isinstance(m,dict) or set(m)!={"classification","samples_ms","method"}
+            or m["classification"]!="MEASURED_SYNTHETIC_LAB" or m["method"]!="HTTP_MONOTONIC_MEDIAN_5"
+            or not isinstance(m["samples_ms"],list) or len(m["samples_ms"])!=5
+            or any(type(v) not in (int,float) or not math.isfinite(v) or not 0<v<=1e9 for v in m["samples_ms"])):
+            raise ValueError("invalid observed measurement metadata")
     if kind in ("log","event"):
         msg=raw.get("message")
         if not isinstance(msg,str) or not 1<=len(msg)<=256 or any(ord(c)<32 for c in msg):
