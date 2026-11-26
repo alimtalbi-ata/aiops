@@ -1,17 +1,25 @@
 name: V3 HTTP vertical synthetic smoke
 on:
   push:
-    branches: [v3-spike/p0-http-vertical-20261125, v3-spike/p0-core-read-20261125, v3-spike/central-integration]
+    branches: ['v3-spike/**']
+    paths:
+      - 'v3-spike/vertical/**'
+      - '.github/workflows/v3-http-vertical.yml'
   pull_request:
     branches: [v3-spike/central-integration]
+concurrency:
+  group: v3-http-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Record exact tested revision
+        run: git rev-parse HEAD && python3 --version
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_http_demo.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_vertical_demo.py -v
 
