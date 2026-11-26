@@ -2,6 +2,7 @@
 Only call with historical_preview output from the trusted service boundary.
 A matching Critic projection is not independent QA or independent source proof.
 """
+from copy import deepcopy
 from enterprise_context import digest
 from evidence_retrieval import validated_reference
 from enterprise_correlation import timestamp
@@ -48,11 +49,11 @@ def analyze(history):
         else:
             order="OVERLAPPING_OR_SIMULTANEOUS"
         hypotheses.append({"hypothesis_id":"HC-"+digest([history["graph_sha256"],link])[:24],
-                           "candidate":link,"temporal_order":order,"dependent_evidence":de,"dependency_evidence":dy,
+                           "candidate":deepcopy(link),"temporal_order":order,"dependent_evidence":de,"dependency_evidence":dy,
                            "root_cause":"UNKNOWN","confidence":None,"independent_sources_verified":False,
                            "causality_established":False})
     return {"classification":"SYNTHETIC_HISTORICAL_RULE_BASED_ANALYST","correlation_sha256":digest(history),
-            "graph_sha256":history["graph_sha256"],"run_ids":run_ids,
+            "graph_sha256":history["graph_sha256"],"run_ids":list(run_ids),
             "state":"CANDIDATES_ONLY" if hypotheses else ("PARTIAL_NO_CANDIDATE" if history["candidates_truncated"] else "UNKNOWN"),
             "hypotheses":hypotheses,"candidates_truncated":history["candidates_truncated"],
             "root_cause":"UNKNOWN","confidence":None,"llm_inference_performed":False,

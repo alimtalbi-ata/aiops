@@ -48,7 +48,7 @@ class HistoricalAnalystCriticTest(unittest.TestCase):
         proposed=copy.deepcopy(analyze(h))
         proposed["hypotheses"][0]["dependent_evidence"][0]["payload_hash"]="b"*64
         self.assertFalse(critique(proposed,h)["projection_matches"])
-        proposed=copy.deepcopy(analyze(h))
+        proposed=analyze(h)
         proposed["hypotheses"][0]["candidate"]["path"]=[]
         self.assertFalse(critique(proposed,h)["projection_matches"])
         for bad in (dict(h,production_authorized=True),dict(h,tenant="foreign")):
