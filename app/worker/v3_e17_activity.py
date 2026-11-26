@@ -7,15 +7,17 @@ from temporalio import activity
 from worker.v3_e17_receipt import matches,require,validate_receipt
 
 def enabled():
-    return os.environ.get("AIOPS_V3_E17_TARGET")=="http://e17-target:816"
+    return (os.environ.get("AIOPS_V3_E17_TARGET")=="http://e17-target:816"
+            and matches(os.environ.get("V3_E17_ACTIVITY_TOKEN"),r"[a-f0-9]{64}")
+            and os.environ.get("V3_E17_ACTIVITY_TOKEN")!=os.environ.get("AIOPS_INTERNAL_TOKEN"))
 
 def validate_approval(args):
     require(isinstance(args,dict) and set(args)=={"receipt_id","receipt_sha256"}
             and matches(args["receipt_id"],r"HITL-[a-f0-9]{32}")
             and matches(args["receipt_sha256"],r"[a-f0-9]{64}"))
 
-def read_json(host,port,method,path,token,body=None):
-    connection=http.client.HTTPConnection(host,port,timeout=8)
+def read_json(host,port,method,path,token,body=None,timeout=8):
+    connection=http.client.HTTPConnection(host,port,timeout=timeout)
     try:
         connection.request(method,path,body=None if body is None else json.dumps(body),
                            headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})
@@ -42,7 +44,7 @@ def reset(rid,args):
     validate_approval(args)
     run=canonical_run(rid)
     receipt=read_json("e17-target",816,"POST","/internal/e17/reset",
-                      os.environ["AIOPS_INTERNAL_TOKEN"],{"workflow_id":rid,**args})
+                      os.environ["V3_E17_ACTIVITY_TOKEN"],{"workflow_id":rid,**args},timeout=20)
     validate_receipt(receipt,run)
     binding=receipt["binding"]
     require(binding["receipt_id"]==args["receipt_id"] and binding["receipt_sha256"]==args["receipt_sha256"])
