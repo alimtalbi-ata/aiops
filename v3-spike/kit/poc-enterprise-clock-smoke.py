@@ -28,6 +28,7 @@ def smoke(origin, restart):
     assert len(catalog["scenarios"])==16 and len({x["family"] for x in catalog["scenarios"]})==7
     by_id={x["scenario_id"]:x for x in catalog["scenarios"]}
     initial=status()
+    initial_episodes=call("/api/v1/enterprise-episodes")
     initial_activity=activity()
     assert initial["current_tick"]==(4 if restart else 0)
     assert initial["pending"] is False and initial["production_authorized"] is False
@@ -166,6 +167,22 @@ def smoke(origin, restart):
     print(json.dumps({"classification":"E6_ACTIVITY_JOURNAL","result":"PASS","ticks":recent["current_tick"],"activity_records":len(records),"signals":len(records)*3,"alerts_only":sum(r["disposition"]=="ALERT_ONLY" for r in records),"linked_incidents":sum(r["disposition"]=="INCIDENT_LINKED" for r in records),"production_authorized":False}),file=sys.stderr)
     end=status()
     cases=[r for x in end["recent"] for r in x["scenario_capture"]["incidents"]]
+    episode_data=call("/api/v1/enterprise-episodes")
+    assert len(episode_data["records"])==end["current_tick"]*4 and not episode_data["unavailable_pre_e12_ticks"]
+    assert len({r["episode_id"] for r in episode_data["records"]})==4
+    assert all(not r["causality_established"] and not r["observed_recovery_established"] for r in episode_data["records"])
+    if restart: assert episode_data["records"][:16]==initial_episodes["records"]
+    refs={r["run_id"]:r for r in cases}
+    related=[ref for r in episode_data["records"] for ref in r["related_cases"]]
+    assert len(related)==(8 if restart else 6)
+    for ref in related:
+        assert ref["evidence_refs"]==refs[ref["run_id"]]["evidence"]
+        ctx=call("/api/v1/enterprise-context?run_id="+ref["run_id"])
+        assert ctx["root"]==ref["resource"] and ctx["causality_established"] is False
+    if restart:
+        lyon=[r for r in episode_data["records"] if r["scenario"]=="LYON_INTERMITTENT"]
+        assert [r["tick"] for r in lyon if r["phase"]=="RECURRENCE"]==[4,6]
+    print(json.dumps({"classification":"E12_EPISODES","result":"PASS","tick":end["current_tick"],"episodes":4,"stages":len(episode_data["records"]),"related_cases":len(related),"production_authorized":False}),file=sys.stderr)
     reports=call("/api/v1/enterprise-case-knowledge")
     assert reports["total_documents"]==len(cases)-2
     by_run={r["run_id"]:r for r in cases}
