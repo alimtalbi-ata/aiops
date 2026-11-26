@@ -8,15 +8,20 @@ permissions:
 jobs:
   native:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [mock, real]
     env:
+      MM_LAB_BACKEND_MODE: ${{ matrix.backend }}
       MM_LAB_IMAGE: mattermost/mattermost-team-edition:12.1.0
       MM_LAB_PORT: "18065"
       MM_LAB_COMMAND_URL: http://callback:8080/api/v1/mattermost/command
       COMPOSE_PROJECT_NAME: v3-mm-ci
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Native transport smoke (mock backend explicitly identified)
+      - name: Native transport smoke (${{ matrix.backend }} backend)
         shell: bash
         run: |
           set -euo pipefail
@@ -24,7 +29,18 @@ jobs:
           export MM_LAB_BINDING_DIR="$(mktemp -d)"
           export MM_LAB_BINDING_FILE="$MM_LAB_BINDING_DIR/binding.json"
           compose() { docker compose -f v3-spike/kit/mattermost-native.compose.yml "$@"; }
-          trap 'compose down -v --remove-orphans; rm -rf "$MM_LAB_BINDING_DIR"' EXIT
+          export V3_ROOT="$(mktemp -d)"
+          export V3_DB_PASSWORD="$(openssl rand -hex 24)"
+          export V3_LAB_TOKEN="$(openssl rand -hex 32)"
+          kit() { docker compose --project-name v3-mm-backend-ci -f v3-spike/kit/compose.poc-source.yml "$@"; }
+          relay_pid=""
+          cleanup() {
+            if [[ -n "$relay_pid" ]]; then kill "$relay_pid" 2>/dev/null || true; fi
+            compose down -v --remove-orphans || true
+            if [[ "$MM_LAB_BACKEND_MODE" = real ]]; then kit down || true; fi
+            rm -rf "$MM_LAB_BINDING_DIR"
+          }
+          trap cleanup EXIT
           compose config --quiet
           compose pull
           compose up -d
@@ -34,6 +50,29 @@ jobs:
           done
           curl -fsS "http://127.0.0.1:$MM_LAB_PORT/api/v4/system/ping"
           python3 v3-spike/kit/mattermost-native-smoke.py
+          if [[ "$MM_LAB_BACKEND_MODE" = real ]]; then
+            mkdir -p "$V3_ROOT/data/postgres"
+            kit up --build --wait --wait-timeout 300
+            kit exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops < v3-spike/kit/poc-seed.sql
+            for pair in core:810 twin:811 evidence:812 policy:813; do
+              endpoint=$(kit port "${pair%:*}" "${pair#*:}")
+              [[ "$endpoint" =~ ^127\.0\.0\.1:[0-9]+$ ]]
+              name="${pair%:*}"
+              export "${name^^}_PORT=${endpoint##*:}"
+            done
+            for sample in baseline:40 incident:160; do
+              phase="${sample%:*}"; value="${sample#*:}"
+              curl -fsS -H 'Content-Type: application/json' -d "{\"source\":\"mm-native-$phase\",\"claim\":\"synthetic latency\",\"confidence\":0.5,\"provenance\":{\"run_id\":\"RUN-CI-CONTEXT\",\"synthetic\":true},\"payload\":{\"metric\":\"latency_ms\",\"phase\":\"$phase\",\"value\":$value}}" "http://127.0.0.1:$EVIDENCE_PORT/api/evidence" >/dev/null
+            done
+            python3 v3-spike/kit/mattermost-native-relay.py &
+            relay_pid=$!
+            for i in $(seq 1 30); do
+              [[ -S "$MM_LAB_BINDING_DIR/gamma.sock" ]] && break
+              kill -0 "$relay_pid"
+              sleep 1
+            done
+            [[ -S "$MM_LAB_BINDING_DIR/gamma.sock" ]]
+          fi
           if ! MM_LAB_EXECUTE=1 python3 v3-spike/kit/mattermost-native-smoke.py; then
             compose logs --tail=80 callback
             compose logs --tail=80 mattermost | python3 -c 'import sys,re; print(re.sub(r"(?i)(token|password|authorization)([^, ]*)",r"\1[redacted]",sys.stdin.read()))'
