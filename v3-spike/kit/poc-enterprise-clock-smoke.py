@@ -194,7 +194,7 @@ def smoke(origin, restart):
     try: advance(end["current_tick"]+2)
     except HTTPError as exc: assert exc.code==503
     else: raise AssertionError("skipped tick accepted")
-    print(json.dumps({"classification":"E2_CLOCK_RESTART" if restart else "E2_CLOCK_FIRST_CYCLE","result":"PASS","current_tick":end["current_tick"],"published_run_ids":[x["publication"]["run_id"] for x in end["recent"] if x["publication"]["state"]=="PUBLISHED"],"measured_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("measured_capture",{}).get("incidents",[])],"technical_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("technical_capture",{}).get("incidents",[])],"production_authorized":False}))
+    print(json.dumps({"classification":"E2_CLOCK_RESTART" if restart else "E2_CLOCK_FIRST_CYCLE","result":"PASS","current_tick":end["current_tick"],"published_run_ids":[x["publication"]["run_id"] for x in end["recent"] if x["publication"]["state"]=="PUBLISHED"],"measured_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("measured_capture",{}).get("incidents",[])],"technical_run_ids":[item["run_id"] for x in end["recent"] for item in x.get("technical_capture",{}).get("incidents",[])],"scenario_runs":cases,"production_authorized":False}))
 
 if __name__=="__main__":
     if len(sys.argv) not in (2,3) or (len(sys.argv)==3 and sys.argv[2]!="--restart"):
