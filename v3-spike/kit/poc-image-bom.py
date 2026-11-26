@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 SERVICES = ("postgres", "core", "twin", "evidence", "policy")
+ORCHESTRATION_SERVICES = SERVICES + ("temporal-postgres", "temporal", "worker")
 REGISTRY = "127.0.0.1:15080"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -25,11 +26,11 @@ def write_json(path, obj):
         json.dump(obj, f, indent=2, sort_keys=True)
         f.write("\n")
 
-def create(out, source_sha):
+def create(out, source_sha, services=SERVICES):
     if not SHA.fullmatch(source_sha):
         raise ValueError("invalid source SHA")
     images = {}
-    for service in SERVICES:
+    for service in services:
         repo = REGISTRY + "/aiops-v3/" + service
         tag = repo + ":ci"
         subprocess.run(["docker", "push", tag], check=True)
@@ -54,15 +55,15 @@ def create(out, source_sha):
         service: {"image": item["reference"]} for service, item in images.items()}})
     print("Image BOM generated for", source_sha)
 
-def verify(out, container_ids):
+def verify(out, container_ids, services=SERVICES):
     bom = json.loads((out / "image-bom.json").read_text())
-    if set(bom["images"]) != set(SERVICES) or len(container_ids) != len(SERVICES):
+    if set(bom["images"]) != set(services) or len(container_ids) != len(services):
         raise ValueError("missing service")
     if not SHA.fullmatch(bom["source_sha"]) or bom["production_authorized"] is not False:
         raise ValueError("invalid BOM scope")
     override = json.loads((out / "compose.pinned.json").read_text())
     receipts = {}
-    for service, cid in zip(SERVICES, container_ids):
+    for service, cid in zip(services, container_ids):
         if not re.fullmatch(r"[0-9a-f]{12,64}", cid):
             raise ValueError("invalid container identity")
         expected = bom["images"][service]
@@ -95,5 +96,9 @@ if __name__ == "__main__":
         create(Path(sys.argv[2]), sys.argv[3])
     elif len(sys.argv) == 8 and sys.argv[1] == "verify":
         verify(Path(sys.argv[2]), sys.argv[3:])
+    elif len(sys.argv) == 4 and sys.argv[1] == "create-orchestration":
+        create(Path(sys.argv[2]), sys.argv[3], ORCHESTRATION_SERVICES)
+    elif len(sys.argv) == 3 + len(ORCHESTRATION_SERVICES) and sys.argv[1] == "verify-orchestration":
+        verify(Path(sys.argv[2]), sys.argv[3:], ORCHESTRATION_SERVICES)
     else:
-        raise SystemExit("usage: poc-image-bom.py create OUT SHA | verify OUT POSTGRES CORE TWIN EVIDENCE POLICY")
+        raise SystemExit("usage: poc-image-bom.py create OUT SHA | verify OUT IDS... | create-orchestration OUT SHA | verify-orchestration OUT IDS...")
