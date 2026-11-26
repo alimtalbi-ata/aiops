@@ -13,6 +13,7 @@ from enterprise_context import P, ROOT, digest
 from enterprise_activity import activity_for, decode_activity
 import enterprise_corpus as corpus
 import enterprise_knowledge as knowledge
+import enterprise_hybrid as hybrid
 
 WORLD = "ACME-E2-V1"
 EPOCH = datetime(2026,1,1,9,tzinfo=timezone.utc)
@@ -155,9 +156,11 @@ class EnterpriseClock:
             rows=corpus.catalog_at(db,tick)
             if not rows:
                 return {"state":"PRE_E7_UNAVAILABLE","logical_tick":tick,"citations":[]}
+            lifecycle=knowledge.read_at(db,tick,self.decode,scope)
             return {"state":"HISTORICAL_LOGICAL_VERSION","logical_tick":tick,
                     "catalog_sha256":digest(rows),"citations":corpus.references(rows,scope,query),
-                    "lifecycle_citations":knowledge.rank(knowledge.read_at(db,tick,self.decode,scope),query)}
+                    "lifecycle_citations":knowledge.rank(lifecycle,query),
+                    "hybrid_retrieval":hybrid.retrieve(rows+lifecycle,scope,query or " ",tick)}
 
     def advance(self, expected_tick, publish):
         if type(expected_tick) is not int or not 1<=expected_tick<=MAX_TICK:
