@@ -1,6 +1,7 @@
 """Bounded read-only Copilot projection from verified synthetic lab context."""
 from analyst_critic import analyze, critique
 from evidence_retrieval import retrieve
+from document_retrieval import references
 
 def answer(core, context, *, topic="rca"):
     run=core["run"]
@@ -12,9 +13,10 @@ def answer(core, context, *, topic="rca"):
         raise ValueError("unverified context")
     sources=[{"evidence_id":e["evidence_id"],"payload_hash":e["payload_hash"]} for e in context["evidence"]]
     retrieval=retrieve(core,context,topic)
+    documents=references(context,retrieval)
     analysis=analyze(context)
     criticism=critique(analysis,context)
-    return {"retrieval":retrieval,"analysis":analysis,"criticism":criticism,"classification":"SYNTHETIC_COPILOT_CONTEXT",
+    return {"document_retrieval":documents,"retrieval":retrieval,"analysis":analysis,"criticism":criticism,"classification":"SYNTHETIC_COPILOT_CONTEXT",
             "incident_id":run["incident_id"],"run_id":run["run_id"],
             "answer":f"Incident {run['incident_id']}: {len(context['affected'])} topology nodes in scope; {len(sources)} verified evidence records. Root cause UNKNOWN. Operational action DENY.",
             "sources":sources,"confidence":None,"root_cause":"UNKNOWN",
