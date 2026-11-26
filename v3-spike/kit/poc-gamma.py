@@ -3,6 +3,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import runpy
 import subprocess
 import sys
 
@@ -44,6 +45,7 @@ if chatfile.exists() or chatfile.is_symlink():
     chatops=(chat['TOKEN'],chat['CHANNEL_ID'])
 with server(core_config=(port("core",810),token,"RUN-CI-CONTEXT"),
             context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),
-            policy_port=port("policy",813),mattermost_config=chatops,enterprise_clock=EnterpriseClock(root)) as http:
+            policy_port=port("policy",813),mattermost_config=chatops,enterprise_clock=EnterpriseClock(root),
+            enterprise_collector=runpy.run_path(str(here/'poc-multiasset-observed.py'))['collect']) as http:
     print(f"POC GAMMA: http://127.0.0.1:{http.server_port}",flush=True)
     http.serve_forever()
