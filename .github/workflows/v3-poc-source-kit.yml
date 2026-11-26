@@ -123,7 +123,7 @@ jobs:
                           expect(page.locator("#corpus-result")).to_contain_text("not observed evidence")
                           page.locator("#activity-read").click()
                           expect(page.locator("#activity-result")).to_contain_text("ALERT_ONLY")
-                          expect(page.locator("#activity-result")).not_to_contain_text("INCIDENT_LINKED")
+                          expect(page.locator("#activity-result")).to_contain_text("INCIDENT_LINKED")
                           page.locator("#activity-filter").select_option("NODE-CI-ENT-APP-HR")
                           expect(page.locator("#activity-result")).to_contain_text("NODE-CI-ENT-APP-HR")
                           expect(page.locator("#activity-result")).not_to_contain_text("NODE-CI-ENT-APP-CRM")
