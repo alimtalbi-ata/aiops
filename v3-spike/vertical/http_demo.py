@@ -52,7 +52,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -66,6 +66,20 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if self.path=="/api/v1/ingest":
                 self.reply(200,json.dumps(ingest(data)).encode())
+                return
+            if self.path=="/api/v1/enterprise-clock/advance":
+                if not isinstance(data,dict) or set(data)!={"expected_tick"} or self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured or invalid command")
+                port,token,_=self.server.core_config
+                twin,evidence,node,_=self.server.context_config
+                def publish(rows):
+                    graph=Graph(get(twin,"/api/twin/graph"))
+                    for row in rows:
+                        if row["resource"]!=node:
+                            raise ValueError("unbound model resource")
+                        graph.validate_signal(node,normalize(row["enterprise"],row["kind"]))
+                    return create_and_persist(rows,port,token,evidence)
+                self.reply(200,json.dumps(self.server.enterprise_clock.advance(data["expected_tick"],publish)).encode())
                 return
             if self.path=="/api/v1/ingest/create":
                 port,token,_=self.server.core_config
@@ -140,6 +154,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(result).encode())
             except Exception:
                 self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-clock":
+            try:
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                self.reply(200,json.dumps(self.server.enterprise_clock.status()).encode())
+            except Exception:
+                self.reply(503,b'{"error":"CLOCK_UNVERIFIED","policy":"DENY"}')
         elif self.path.startswith("/api/v1/enterprise-context?run_id="):
             try:
                 run_id=self.path.split("=",1)[1]
@@ -195,13 +216,14 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None):
+def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None):
     http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     http.core_config = core_config
     http.context_config = context_config
     http.policy_port = policy_port
     http.mattermost_config = mattermost_config
     http.approval_gate = ApprovalGate()
+    http.enterprise_clock = enterprise_clock
     return http
 
 if __name__ == "__main__":
