@@ -1,9 +1,31 @@
-"""Native transport smoke with explicitly mocked backend context."""
+"""Native callback: explicit mock or private Unix-socket relay to lab GAMMA."""
 import json
+import os
+import socket
+import http.client
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 sys.path.insert(0,"/vertical")
-from mattermost_demo import command
+from mattermost_demo import command, authenticate
+
+class UnixConnection(http.client.HTTPConnection):
+    def connect(self):
+        self.sock=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+        self.sock.settimeout(20)
+        self.sock.connect("/binding/gamma.sock")
+
+def real_backend(body):
+    conn=UnixConnection("localhost",timeout=20)
+    try:
+        conn.request("POST","/api/v1/mattermost/command",body,{"Content-Type":"application/x-www-form-urlencoded"})
+        response=conn.getresponse()
+        raw=response.read(65537)
+        if response.status!=200 or len(raw)>65536: raise ValueError("backend unavailable")
+        result=json.loads(raw)
+        if result.get("response_type")!="ephemeral": raise ValueError("invalid backend response")
+        return result
+    finally:
+        conn.close()
 
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -14,8 +36,16 @@ class Handler(BaseHTTPRequestHandler):
             with open("/binding/binding.json") as f: binding=json.load(f)
             core={"production_authorized":False,"run":{"run_id":"RUN-CI-MOCK","incident_id":"INC-CI-MOCK"}}
             context={"classification":"SYNTHETIC_LAB_CONTEXT","production_authorized":False,"run_id":"RUN-CI-MOCK","policy":"DENY","affected":[],"evidence":[]}
-            result=command(self.rfile.read(size),binding["token"],binding["channel_id"],core,context)
-            result["text"]+="\nMOCK BACKEND — transport test only"
+            body=self.rfile.read(size)
+            authenticate(body,binding["token"],binding["channel_id"])
+            mode=os.environ.get("MM_LAB_BACKEND_MODE","mock")
+            if mode=="real":
+                result=real_backend(body)
+            elif mode=="mock":
+                result=command(body,binding["token"],binding["channel_id"],core,context)
+                result["text"]+="\nMOCK BACKEND — transport test only"
+            else:
+                raise ValueError("invalid backend mode")
             status=200
         except Exception as exc:
             print("Callback rejected:",type(exc).__name__,flush=True)
