@@ -8,7 +8,17 @@ def graph():
     nodes += [{"node_id":i,"type":"service","name":i,"site":None} for i in (ROOT,CHILD)]
     def ident(x): return x if x in (ROOT,CHILD) else P+x
     edges=[(ROOT,CHILD,"depends"),("COMPANY","SITE-PAR","contains"),("COMPANY","SITE-LYO","contains"),("SITE-PAR","INFRA-PAR","contains"),("SITE-LYO","INFRA-LYO","contains"),("INFRA-PAR","ASSET-PAR","contains"),("INFRA-LYO","ASSET-LYO","contains"),("ASSET-PAR",ROOT,"hosts"),("APP-PAY",ROOT,"depends_on"),("APP-CRM",ROOT,"depends_on"),("APP-HR","ASSET-LYO","depends_on"),("GROUP-FIN","APP-PAY","uses"),("GROUP-SALES","APP-CRM","uses"),("GROUP-HR","APP-HR","uses"),("USER-FIN-01","GROUP-FIN","member_of"),("USER-FIN-02","GROUP-FIN","member_of"),("USER-SALES-01","GROUP-SALES","member_of"),("USER-HR-01","GROUP-HR","member_of"),("USER-DIRECT-01","APP-PAY","uses")]
-    return Graph({"nodes":nodes,"edges":[{"source_id":ident(a),"target_id":ident(b),"relation_type":r} for a,b,r in edges]})
+    # Read the actual seed fixture to avoid divergent technical test topology.
+    from pathlib import Path
+    import re
+    seed=(Path(__file__).resolve().parent.parent/"kit"/"poc-seed.sql").read_text()
+    technical=seed.split("-- E4 persistent fictional technical inventory;")[1]
+    for node_id,kind,name,site in re.findall(r"\('([^']+)','([^']+)','([^']+)','([^']+)'\)",technical.split("INSERT INTO aiops.twin_edges")[0]):
+        nodes.append({"node_id":node_id,"type":kind,"name":name,"site":site})
+    graph_edges=[{"source_id":ident(a),"target_id":ident(b),"relation_type":r} for a,b,r in edges]
+    for source,target,rel in re.findall(r"\('EDGE-CI-TECH-[0-9]+','([^']+)','([^']+)','([^']+)',1\)",technical):
+        graph_edges.append({"source_id":source,"target_id":target,"relation_type":rel})
+    return Graph({"nodes":nodes,"edges":graph_edges})
 
 class EnterpriseTest(unittest.TestCase):
     def setUp(self):
@@ -44,6 +54,33 @@ class EnterpriseTest(unittest.TestCase):
         for samples in ([11], [11,12,10,13,True], [11,12,10,13,float("nan")]):
             with self.assertRaises(ValueError):
                 ingest([dict(metric,enterprise=dict(metric["enterprise"],measurement=dict(metric["enterprise"]["measurement"],samples_ms=samples)))])
+    def test_technical_dependency_scope(self):
+        g=self.graph
+        apps=lambda root:g.scope(P+root)["applications"]
+        self.assertEqual(len(g.nodes),34)
+        self.assertEqual(apps("IDENTITY"),{P+"APP-PAY",P+"APP-CRM",P+"APP-HR"})
+        self.assertEqual(apps("WAN"),apps("IDENTITY"))
+        self.assertEqual(apps("DB-PAY"),{P+"APP-PAY"})
+        self.assertEqual(apps("STORAGE-PAR"),{P+"APP-PAY",P+"APP-CRM"})
+        self.assertEqual(apps("NET-LYO"),{P+"APP-HR"})
+        scope=g.scope(P+"PC-FIN-01")
+        self.assertEqual(scope["users"],{P+"USER-FIN-01"})
+        self.assertEqual(scope["groups"],set())
+        self.assertEqual(scope["applications"],{P+"APP-PAY"})
+        log={"asset_id":P+"PC-FIN-01","application_id":P+"APP-PAY","user_id":P+"USER-FIN-01","occurred_at":"2026-01-01T09:00:00Z","message":"Synthetic workstation error"}
+        g.validate_signal(P+"PC-FIN-01",normalize(log,"log"))
+        for wrong in (dict(log,user_id=P+"USER-FIN-02"),dict(log,application_id=P+"APP-HR"),dict(log,group_id=P+"GROUP-FIN")):
+            with self.assertRaises(ValueError):
+                g.validate_signal(P+"PC-FIN-01",normalize(wrong,"log"))
+        ev={"evidence_id":"E1","payload_hash":"a"*64}
+        row={"id":"pc-fin-1","kind":"log","source":"fixture","resource":P+"PC-FIN-01","severity":"critical","tenant":"synthetic-demo","synthetic":True,"enterprise":log}
+        sig=ingest([row])["incidents"][0]["evidence"][0]
+        result=g.project({"root":P+"PC-FIN-01","run_id":"RUN-CI-E4","policy":"DENY","production_authorized":False,"evidence":[ev],"verified_signals":[{**ev,"signal":sig}]},{"run_id":"RUN-CI-E4","incident_id":"INC-CI-E4"})
+        self.assertEqual(result["exposure_semantics"],"INDIVIDUAL_ACCESS_ONLY")
+        self.assertIn("ENT-DOC-010",{d["id"] for d in result["document_references"]})
+        self.assertNotIn("ENT-DOC-009",{d["id"] for d in result["document_references"]})
+        self.assertFalse(result["observed_outage_established"])
+
     def test_ingestion_and_projection(self):
         row={"id":"ent-l1","kind":"log","source":"app","resource":ROOT,"severity":"critical","tenant":"synthetic-demo","synthetic":True,"enterprise":self.scope}
         signal=ingest([row])["incidents"][0]["evidence"][0]
