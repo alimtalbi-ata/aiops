@@ -30,10 +30,13 @@ def preview(records,window=120): return call("/api/v1/enterprise-correlation/pre
 d=preview(rows)
 assert d==preview(list(reversed(rows)))
 assert d["unique"]==5 and len(d["groups"])==5
-assert d["candidate_count"]==1
-link=d["candidates"][0]
+assert d["candidate_count"]==3 # Lyon + two separate Finance contexts depend on WAN
+link=next(c for c in d["candidates"] if c["dependent_resource"]==p+"NET-LYO")
 assert link["dependent_resource"]==p+"NET-LYO" and link["dependency_resource"]==p+"WAN" and link["gap_seconds"]==1
 assert link["path"]==[{"source_id":p+"NET-LYO","target_id":p+"WAN","relation_type":"requires"}]
+finance=[c for c in d["candidates"] if c["dependent_resource"]=="NODE-CI-ROOT"]
+assert len(finance)==2 and len({c["dependent_group_id"] for c in finance})==2
+assert all(c["dependency_resource"]==p+"WAN" and c["gap_seconds"]==0 and len(c["path"])==4 for c in finance)
 assert d["causality_established"] is False and d["incidents_created"] is False and d["operational_decision"]=="DENY" and d["production_authorized"] is False
 assert re.fullmatch(r"[a-f0-9]{64}",d["graph_sha256"])
 assert len(preview([rows[0],rows[0]])["groups"])==1
