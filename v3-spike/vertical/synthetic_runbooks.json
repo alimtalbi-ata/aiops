@@ -1,0 +1,42 @@
+{
+  "classification": "SYNTHETIC_REFERENCE_ONLY",
+  "version": 1,
+  "documents": [
+    {
+      "doc_id": "SYN-LATENCY-001",
+      "asset": "NODE-CI-ROOT",
+      "topics": [
+        "latency",
+        "baseline",
+        "regression",
+        "response"
+      ],
+      "title": "Compare synthetic response-time phases",
+      "text": "Compare baseline and incident HTTP response durations measured using the same method. Check sample count and timing variation; a regression alone is not causal proof."
+    },
+    {
+      "doc_id": "SYN-DEPENDENCY-002",
+      "asset": "NODE-CI-ROOT",
+      "topics": [
+        "dependency",
+        "topology",
+        "impact",
+        "latency"
+      ],
+      "title": "Inspect synthetic dependency scope",
+      "text": "Review the Twin dependency path and compare observations on affected nodes. Topology reachability is not proof of a failing dependency."
+    },
+    {
+      "doc_id": "SYN-VERIFY-003",
+      "asset": "NODE-CI-ROOT",
+      "topics": [
+        "simulation",
+        "verification",
+        "recovery",
+        "latency"
+      ],
+      "title": "Verify a conditional synthetic model",
+      "text": "Compare the conditional target with a fresh observation from the same synthetic scenario. Record evidence before changing any hypothesis. Operational actions remain denied."
+    }
+  ]
+}

@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'v3-spike/kit/**'
+      - 'v3-spike/vertical/**'
       - '.github/workflows/v3-poc-source-kit.yml'
 jobs:
   config:
@@ -175,6 +176,32 @@ jobs:
           except urllib.error.HTTPError as exc: assert exc.code==403
           else: raise AssertionError("invalid token accepted")
           origin=sys.argv[1]
+          # Validate reference documents through the actual GAMMA launcher, for both
+          # deterministic and measured HTTP-latency runs. Do not count them as evidence.
+          import re
+          for receipt_name in ("dynamic-smoke.json","observed-smoke.json"):
+              receipt=json.loads((pathlib.Path(os.environ["V3_ROOT"])/receipt_name).read_text())
+              run=receipt["run_id"]
+              assert re.fullmatch(r"RUN-[A-F0-9]{16}",run)
+              endpoint=origin+"/api/v1/incident-context/dynamic?run_id="+run
+              with urllib.request.urlopen(endpoint,timeout=20) as response:
+                  projection=json.load(response)
+              copilot=projection["copilot"]
+              docs=copilot["document_retrieval"]
+              assert docs["run_id"]==run and docs["state"]=="MATCHED"
+              assert docs["classification"]=="SYNTHETIC_DOCUMENT_RETRIEVAL"
+              assert docs["operational_decision"]=="DENY" and docs["production_authorized"] is False
+              assert docs["llm_inference_performed"] is False and docs["causality_established"] is False
+              assert re.fullmatch(r"[a-f0-9]{64}",docs["catalog_sha256"])
+              citations=docs["citations"]
+              assert citations and citations[0]["doc_id"]=="SYN-LATENCY-001"
+              assert all(c["asset"]=="NODE-CI-ROOT" and c["provenance"]=="SYNTHETIC_REFERENCE_ONLY" and c["observed_evidence"] is False and re.fullmatch(r"[a-f0-9]{64}",c["doc_sha256"]) for c in citations)
+              assert copilot["sources"]==projection["context"]["evidence"]
+              assert len(copilot["sources"])==receipt["evidence_count"]
+              assert copilot["root_cause"]=="UNKNOWN" and copilot["confidence"] is None
+              with urllib.request.urlopen(endpoint,timeout=20) as response:
+                  assert json.load(response)["copilot"]["document_retrieval"]==docs
+              print(json.dumps({"scenario":receipt_name,"run_id":run,"document_retrieval":"PASS","catalog_sha256":docs["catalog_sha256"],"citation_ids":[c["doc_id"] for c in citations],"observed_evidence_count":len(copilot["sources"]),"production_authorized":False}))
           def post(path,body):
               req=urllib.request.Request(origin+"/api/v1/hitl/"+path,data=json.dumps(body).encode(),headers={"Origin":origin,"Content-Type":"application/json"})
               with urllib.request.urlopen(req,timeout=20) as response:
