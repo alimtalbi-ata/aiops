@@ -10,6 +10,7 @@ import sqlite3
 import stat
 
 from enterprise_context import P, ROOT, digest
+from enterprise_activity import activity_for, decode_activity
 
 WORLD = "ACME-E2-V1"
 EPOCH = datetime(2026,1,1,9,tzinfo=timezone.utc)
@@ -69,6 +70,7 @@ class EnterpriseClock:
             db.execute("CREATE TABLE IF NOT EXISTS journal(tick INTEGER PRIMARY KEY, step TEXT NOT NULL, step_hash TEXT NOT NULL, receipt TEXT, UNIQUE(step_hash))")
             db.execute("CREATE TABLE IF NOT EXISTS measured(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
             db.execute("CREATE TABLE IF NOT EXISTS technical(tick INTEGER PRIMARY KEY REFERENCES journal(tick), batches TEXT NOT NULL, batch_hash TEXT NOT NULL, receipt TEXT)")
+            db.execute("CREATE TABLE IF NOT EXISTS activity(tick INTEGER PRIMARY KEY REFERENCES journal(tick), payload TEXT NOT NULL, payload_hash TEXT NOT NULL)")
     def connect(self):
         db=sqlite3.connect(self.path,timeout=30)
         db.execute("PRAGMA synchronous=FULL")
@@ -96,6 +98,23 @@ class EnterpriseClock:
         return {"classification":"SYNTHETIC_ENTERPRISE_CLOCK_E2","world_id":WORLD,
                 "current_tick":latest["tick"] if latest else 0,"pending":bool(latest and latest["publication"] is None),
                 "latest":latest,"recent":recent,"clock_mode":"MANUAL_LOGICAL_TIME","production_authorized":False,"operational_decision":"DENY"}
+    def activity(self):
+        """Read bounded recent activity; never fabricate activity for pre-E6 ticks."""
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            rows=db.execute("SELECT j.tick,j.step,j.step_hash,j.receipt,a.payload,a.payload_hash FROM journal j LEFT JOIN activity a ON a.tick=j.tick ORDER BY j.tick DESC LIMIT 20").fetchall()
+            missing=[]
+            timeline=[]
+            for row in reversed(rows):
+                step=self.decode(row[:4])
+                if row[4] is None:
+                    missing.append(step["tick"])
+                else:
+                    timeline.extend(decode_activity(step,row[4],row[5]))
+        return {"classification":"SYNTHETIC_ACTIVITY_JOURNAL_E6","world_id":WORLD,
+                "current_tick":rows[0][0] if rows else 0,"unavailable_pre_e6_ticks":missing,
+                "records":timeline,"operational_decision":"DENY","production_authorized":False}
+
     def advance(self, expected_tick, publish):
         if type(expected_tick) is not int or not 1<=expected_tick<=MAX_TICK:
             raise ValueError("invalid expected tick")
@@ -109,6 +128,8 @@ class EnterpriseClock:
             if expected_tick==last+1 and (latest is None or latest[1] is not None):
                 step=model(expected_tick)
                 db.execute("INSERT INTO journal(tick,step,step_hash) VALUES(?,?,?)",(expected_tick,json.dumps(step,sort_keys=True),digest(step)))
+                records=activity_for(step)
+                db.execute("INSERT INTO activity(tick,payload,payload_hash) VALUES(?,?,?)",(expected_tick,json.dumps(records,sort_keys=True),digest(records)))
             elif expected_tick!=last:
                 raise ValueError("stale or skipped tick")
         # Serialize publication; on failure the pending row is left for retry.
