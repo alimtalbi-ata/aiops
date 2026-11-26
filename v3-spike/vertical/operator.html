@@ -199,7 +199,7 @@ async function createDynamic(enterprise=false){
  const button=$(enterprise?"create-enterprise":"create-dynamic"),target=$("dynamic-result");
  const generation=++dynamicGeneration;
  ++contextGeneration;$("context-result").textContent="UNKNOWN / DENY — not loaded";
- selectedDynamicRun=null;resetDynamicApproval();$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
+ selectedDynamicRun=null;resetDynamicApproval();$("load-enterprise").disabled=true;$("enterprise-result").textContent="UNKNOWN / DENY";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
  button.disabled=true;target.textContent="Pending synthetic ingestion";
  try{
   if(location.protocol!=="http:"||location.hostname!=="127.0.0.1")throw Error("loopback required");
