@@ -74,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search","/api/v1/enterprise-parametric/configure","/api/v1/enterprise-correlation/preview","/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context","/api/v1/ai-telemetry","/api/v1/enterprise-correlation/ai-review"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/ingest/admit","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search","/api/v1/enterprise-parametric/configure","/api/v1/enterprise-correlation/preview","/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context","/api/v1/ai-telemetry","/api/v1/enterprise-correlation/ai-review"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -175,6 +175,19 @@ class Handler(BaseHTTPRequestHandler):
                     result=self.server.enterprise_clock.capture(data["expected_tick"],self.server.enterprise_collector,publish)
                 else:
                     result=self.server.enterprise_clock.advance(data["expected_tick"],publish)
+                self.reply(200,json.dumps(result).encode())
+                return
+            if self.path=="/api/v1/ingest/admit":
+                from incident_admission import admit
+                port,token,_=self.server.core_config
+                twin,evidence,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                admission=admit(data,graph)
+                # The existing explicit manual create route is intentionally unchanged.
+                # Admission creates a DEMO run only; no execution command is issued.
+                result={"admission":admission,"publication":None,"production_authorized":False}
+                if admission["admitted"]:
+                    result["publication"]=create_and_persist(data,port,token,evidence)
                 self.reply(200,json.dumps(result).encode())
                 return
             if self.path=="/api/v1/ingest/create":

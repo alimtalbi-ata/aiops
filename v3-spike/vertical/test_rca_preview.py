@@ -187,3 +187,67 @@ class RecoveryVerifyTest(unittest.TestCase):
                 project_recovery(read_receipt=lambda rid:projection|bad,**request)
         with self.assertRaises(ValueError):
             project_recovery(read_receipt=read,**(request|{"comparison_run_id":kwargs["original_run_id"]}))
+
+
+class MeasuredAdmissionTest(unittest.TestCase):
+    def fixture(self):
+        from datetime import datetime,timezone
+        from unittest.mock import Mock
+        now=datetime(2026,1,1,9,0,10,tzinfo=timezone.utc)
+        common=dict(resource="NODE-CI-ROOT",source="qa-http",tenant="synthetic-demo",
+                    synthetic=True,severity="warning")
+        scope=dict(asset_id="NODE-CI-ENT-ASSET-PAR",application_id="NODE-CI-ENT-APP-PAY")
+        def metric(phase,v,at):
+            return dict(common,id=phase,kind="metric",enterprise=dict(scope,occurred_at=at,
+                measurement=dict(classification="MEASURED_SYNTHETIC_LAB",
+                    method="HTTP_MONOTONIC_MEDIAN_5",samples_ms=[v]*5)),
+                observation=dict(metric="latency_ms",phase=phase,value=v))
+        rows=[metric("baseline",10,"2026-01-01T09:00:00Z"),
+              metric("incident",100,"2026-01-01T09:00:02Z"),
+              dict(common,id="log",kind="log",enterprise=dict(scope,occurred_at="2026-01-01T09:00:02Z",message="HTTP request observed"))]
+        graph=Mock()
+        return rows,graph,now
+
+    def test_admit_measured_pair_and_exact_duplicates(self):
+        from incident_admission import admit
+        rows,graph,now=self.fixture()
+        result=admit(rows+rows,graph,now=now)
+        self.assertTrue(result["admitted"])
+        self.assertEqual(result["disposition"],"MEASURED_INCIDENT_CANDIDATE")
+        self.assertEqual((result["received"],result["unique"]),(6,3))
+        self.assertEqual(result["root_cause"],"UNKNOWN")
+        self.assertFalse(result["production_authorized"])
+        self.assertEqual(graph.validate_signal.call_count,3)
+
+    def test_admission_suppresses_nominal_incomplete_and_ambiguous(self):
+        from incident_admission import admit
+        from copy import deepcopy
+        rows,graph,now=self.fixture()
+        nominal=deepcopy(rows)
+        nominal[1]["observation"]["value"]=11
+        nominal[1]["enterprise"]["measurement"]["samples_ms"]=[11]*5
+        simultaneous=deepcopy(rows)
+        simultaneous[1]["enterprise"]["occurred_at"]=rows[0]["enterprise"]["occurred_at"]
+        repeated=deepcopy(rows[1]); repeated["id"]="different-incident-sample"
+        foreign_scope=deepcopy(rows);foreign_scope[2]["enterprise"]["application_id"]="NODE-CI-ENT-APP-CRM"
+        for batch,expected in ((nominal,"NOMINAL_OBSERVATION"),(rows[1:],"INSUFFICIENT_EVIDENCE"),
+                               (rows[:2],"INSUFFICIENT_EVIDENCE"),(simultaneous,"AMBIGUOUS_EVIDENCE"),
+                               (rows+[repeated],"AMBIGUOUS_EVIDENCE"),(foreign_scope,"AMBIGUOUS_EVIDENCE")):
+            with self.subTest(expected=expected):
+                result=admit(batch,graph,now=now)
+                self.assertFalse(result["admitted"])
+                self.assertEqual(result["disposition"],expected)
+
+    def test_admission_rejects_stale_untrusted_or_conflicting_samples(self):
+        from datetime import timedelta
+        from incident_admission import admit
+        from copy import deepcopy
+        rows,graph,now=self.fixture()
+        self.assertEqual(admit(rows,graph,now=now+timedelta(seconds=121))["disposition"],"STALE_OR_FUTURE_EVIDENCE")
+        for bad in (dict(rows[0],tenant="foreign"),dict(rows[0],synthetic=False),
+                    dict(rows[0],severity="critical")):
+            with self.assertRaises(ValueError):
+                admit(rows+[bad],graph,now=now)
+        graph.validate_signal.side_effect=ValueError("foreign topology")
+        with self.assertRaises(ValueError):
+            admit(rows,graph,now=now)
