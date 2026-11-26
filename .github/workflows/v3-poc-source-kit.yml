@@ -30,6 +30,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_scenarios.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_case_knowledge.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_episodes.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_triage.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -127,6 +128,13 @@ jobs:
                           expect(page.locator("#clock-run")).to_contain_text("CPU_SATURATION")
                           page.locator("#clock-next").click()
                           expect(page.locator("#clock-result")).to_contain_text("Logical tick: 4")
+                          page.locator("#triage-read").click()
+                          expect(page.locator("#triage-result")).to_contain_text("8 / 8 modeled triage cases")
+                          expect(page.locator("#triage-result")).to_contain_text("CPU_CONTRADICTORY_PROBES")
+                          page.locator("#triage-filter").select_option("SECURITY_REVIEW")
+                          expect(page.locator("#triage-result")).to_contain_text("IDENTITY_SUSPICIOUS_ACCESS")
+                          expect(page.locator("#triage-result")).not_to_contain_text("CPU_CONTRADICTORY_PROBES")
+                          expect(page.locator("#triage-result")).to_contain_text("No automatic incident, cause or compromise established")
                           page.locator("#episodes-read").click()
                           expect(page.locator("#episodes-result")).to_contain_text("STORAGE_CASCADE")
                           page.locator("#episode-select").select_option("E12-0001-LYON_INTERMITTENT")
