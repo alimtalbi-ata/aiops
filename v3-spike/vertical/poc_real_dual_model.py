@@ -7,10 +7,13 @@ import re
 import sys
 import time
 from urllib.request import build_opener, ProxyHandler
-from dual_model_advisory import review, config, NoRedirect
+from dual_model_advisory import config, NoRedirect
+from ai_invocation_ledger import InvocationLedger
+from contextlib import closing
+import tempfile
 from test_historical_analyst_critic import HistoricalAnalystCriticTest
 
-SPECS=(("qwen2.5:0.5b-instruct","a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67"),("qwen2.5:7b-instruct","845dbda0ea48"))
+SPECS=(("qwen2.5:0.5b-instruct","a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67"),("qwen2.5:7b-instruct","845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e"))
 IMAGE="ollama/ollama@sha256:1514372d3cef7387b6202b253e761d820e00e44b28f268aad5029389d0479e99"
 
 def get(port,path):
@@ -24,13 +27,12 @@ def attest(port,model,expected_digest):
     rows=[row for row in entries if row.get("name")==model]
     if len(rows)!=1:raise ValueError("expected single model")
     sha=rows[0]["digest"].removeprefix("sha256:")
-    full_pin=len(expected_digest)==64
-    if not re.fullmatch("[a-f0-9]{64}",sha) or not re.fullmatch("[a-f0-9]{12}|[a-f0-9]{64}",expected_digest) or (sha!=expected_digest if full_pin else not sha.startswith(expected_digest)):
+    if not re.fullmatch("[a-f0-9]{64}",sha) or sha!=expected_digest:
         raise ValueError("pinned model fingerprint mismatch")
     version=get(port,"/api/version")["version"]
     if version!="0.11.4":raise ValueError("unexpected Ollama version")
     return {"model":model,"manifest_sha256":sha,"expected_digest":expected_digest,
-            "full_digest_preconfigured":full_pin,"engine_version":version}
+            "full_digest_preconfigured":True,"engine_version":version}
 
 def main():
     parser=argparse.ArgumentParser()
@@ -42,7 +44,7 @@ def main():
     providers=[config({"endpoint":"http://127.0.0.1:%d/v1/chat/completions"%port,"model":spec[0]}) for port,spec in zip(ports,SPECS)]
     if len(set(ports))!=2:raise ValueError("distinct endpoints required")
     report={"classification":"E21_REAL_LOCAL_MODEL_EXPERIMENT","result":"FAIL","source_sha":os.environ.get("E21_SOURCE_SHA"),
-            "image":IMAGE,"experiment_variant":"V4_CRITIC_7B_PROTOCOL_V3","models":[],"cases":[],"production_authorized":False,
+            "image":IMAGE,"experiment_variant":"V5_TEMPORAL_CONTRACT_AND_REAL_LEDGER","models":[],"cases":[],"production_authorized":False,
             "model_independence_attested":False,"scope":"synthetic E18 history fixture; actual local model inference"}
     def save():
         args.report.parent.mkdir(parents=True,exist_ok=True)
@@ -54,13 +56,20 @@ def main():
         report["models"]=[attest(port,*spec) for port,spec in zip(ports,SPECS)]
         if len({x["manifest_sha256"] for x in report["models"]})!=2:raise ValueError("model digests must differ")
         save()
+        root=args.report.parent/"ledger"
+        root.mkdir(mode=0o700,exist_ok=False)
+        ledger=InvocationLedger(root)
         fixture=HistoricalAnalystCriticTest()
         cases=(("forward",fixture.history(),"CANDIDATE_ONLY",2),
                ("reverse",fixture.history(dep_at="2026-01-01T09:00:02Z"),"DISPUTED",2),
                ("overlap",fixture.history(dependent_at="2026-01-01T09:00:00Z"),"DISPUTED",2))
         for name,history,expected,expected_calls in cases:
             started=time.monotonic()
-            out=review(history,*providers,timeout_seconds=120)
+            persisted=ledger.execute(history,*providers,timeout_seconds=120)
+            out=persisted["assessment"]
+            record=ledger.read(persisted["review_id"])
+            if record["receipt_sha256"]!=persisted["receipt_sha256"] or record["record"]["invocations"]!=out["invocations"]:
+                raise ValueError("ledger readback mismatch")
             calls=out["invocations"]
             safe=(out["root_cause"]=="UNKNOWN" and out["confidence"] is None and out["causality_established"] is False
                   and out["production_authorized"] is False and out["operational_decision"]=="DENY")
@@ -69,11 +78,22 @@ def main():
             passed=(safe and out["state"]==expected and actual_verdict==expected_verdict and len(calls)==expected_calls and all(x["status"]=="VALIDATED" for x in calls))
             report["cases"].append({"case":name,"expected_state":expected,"actual_state":out["state"],
                 "safe":safe,"pass":passed,"expected_critic_verdict":expected_verdict,"actual_critic_verdict":actual_verdict,"wall_ms":round((time.monotonic()-started)*1000,3),
-                "context_sha256":out["context_sha256"],"analyst":out["analyst"],"critic":out["critic"],"invocations":calls})
+                "context_sha256":out["context_sha256"],"analyst":out["analyst"],"critic":out["critic"],"invocations":calls,
+                "review_id":persisted["review_id"],"receipt_sha256":persisted["receipt_sha256"]})
             save()
+        ids=[c["review_id"] for c in report["cases"]]
+        reopened=InvocationLedger(root)
+        summary=reopened.summary(ids)
+        with tempfile.TemporaryDirectory() as restored:
+            backup=InvocationLedger(restored)
+            with closing(reopened.clock.connect()) as src,closing(backup.clock.connect()) as dest:src.backup(dest)
+            restored_ok=backup.summary(ids)==summary and all(backup.read(i)==reopened.read(i) for i in ids)
+        report["ledger"]={"reopen_and_backup_restore_match":restored_ok,"summary":summary,
+                          "receipt_count":len(ids),"invocations_match":summary["invocations"]==sum(len(c["invocations"]) for c in report["cases"])}
+        save()
         after=[attest(port,*spec) for port,spec in zip(ports,SPECS)]
         report["model_digests_unchanged"]=after==report["models"]
-        report["result"]="PASS" if report["model_digests_unchanged"] and all(x["pass"] for x in report["cases"]) else "FAIL"
+        report["result"]="PASS" if report["model_digests_unchanged"] and report["ledger"]["reopen_and_backup_restore_match"] and report["ledger"]["invocations_match"] and len(report["cases"])==3 and all(x["pass"] for x in report["cases"]) else "FAIL"
     except Exception as exc:
         report["error_class"]=type(exc).__name__
     finally:

@@ -1,0 +1,3 @@
+# E22 historical RAG reference context
+
+Read-only server endpoint over E16 verified runs, E18 correlation digest and E9 historical retrieval. Exact per-run resource scope, no potential impact scope, caller-supplied text, current version fallback or raw document text in model-bound projection. References include ID/version/hash/logical validity; Evidence IDs separate. No learned embeddings, actual model invocation or authenticated tenant ACL. Tests include malicious reference text omission and scope/hash/time violations. The model prompt and separate reference citation contract are a future increment after E21.

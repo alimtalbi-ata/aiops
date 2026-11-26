@@ -12,7 +12,7 @@ from historical_analyst_critic import assess
 MAX_REQUEST_BYTES=65536
 MAX_RESPONSE_BYTES=65536
 MAX_OUTPUT_TOKENS=1024
-PROMPT_VERSION="E21_V3"
+PROMPT_VERSION="E21_V5"
 class AdvisoryRejection(ValueError):
     """Fixed diagnostic codes only; never raw provider output."""
 class NoRedirect(HTTPRedirectHandler):
@@ -70,7 +70,10 @@ def call(role,provider,context,timeout_seconds=10):
             + 'ABSTAIN: {"candidate_id":null,"evidence_ids":[],"verdict":"ABSTAIN"}. '
             "Never combine a non-null candidate with ABSTAIN. Do not invent, shorten or repeat IDs. "
             + ("Temporal uncertainty may be passed as a candidate for the Critic to challenge." if role=="ANALYST" else
-               "Challenge reverse or unresolved temporal ordering; abstain if unable to review."))
+               "Interpret temporal_order as follows: DEPENDENCY_OBSERVED_FIRST means temporally compatible only, not proof of cause: AGREE_CANDIDATE. "
+               "DEPENDENT_OBSERVED_FIRST means reverse order: CHALLENGE_CANDIDATE. "
+               "OVERLAPPING_OR_SIMULTANEOUS means no demonstrated precedence: CHALLENGE_CANDIDATE. "
+               "ABSTAIN if unable to review. Apply these definitions to the provided candidate; never infer missing facts."))
     body=json.dumps({"model":provider["model"],"temperature":0,"max_tokens":MAX_OUTPUT_TOKENS,
                      "response_format":{"type":"json_schema","json_schema":{"name":"advisory","strict":True,"schema":schema}},
                      "messages":[{"role":"system","content":system},
