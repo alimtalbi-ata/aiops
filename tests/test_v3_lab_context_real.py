@@ -79,6 +79,33 @@ class LabContextReal(unittest.TestCase):
                             page.locator("#load-context").click()
                             for value in ("INC-CI-CONTEXT","RUN-CI-CONTEXT","NODE-CI-CHILD",result["evidence"][0]["evidence_id"],"RCA: UNKNOWN","Policy: DENY","Conditional reduction: 120 ms","Copilot: Incident INC-CI-CONTEXT","Source: "):
                                 expect(page.locator("#context-result")).to_contain_text(value)
+                            # #833: assert the actual HTTP Analyst/Critic projection in Chromium.
+                            analysis=body["copilot"]["analysis"]
+                            criticism=body["copilot"]["criticism"]
+                            self.assertEqual(analysis["hypothesis"],"INCIDENT_OBSERVED")
+                            self.assertEqual(set(analysis["evidence_ids"]),{e["evidence_id"] for e in result["evidence"]})
+                            self.assertTrue(criticism["evidence_supported"])
+                            self.assertFalse(criticism["causality_established"])
+                            for value in ("Analyst: "+analysis["hypothesis"],
+                                          "Critic evidence: SUPPORTED",
+                                          "Causality: NOT ESTABLISHED",
+                                          "Critic operational decision: DENY"):
+                                expect(page.locator("#context-result")).to_contain_text(value)
+                            # Corrupt only the browser response, not the backend or database.
+                            def unbound_evidence(route):
+                                upstream=route.fetch()
+                                projection=upstream.json()
+                                projection["copilot"]["analysis"]["evidence_ids"]=["UNBOUND-CI-EVIDENCE"]
+                                route.fulfill(response=upstream,json=projection)
+                            page.route(url,unbound_evidence)
+                            try:
+                                page.locator("#load-context").click()
+                                expect(page.locator("#context-result")).to_contain_text("UNKNOWN / DENY")
+                                expect(page.locator("#context-result")).not_to_contain_text("Critic evidence: SUPPORTED")
+                            finally:
+                                page.unroute(url,unbound_evidence)
+                            page.locator("#load-context").click()
+                            expect(page.locator("#context-result")).to_contain_text("Critic evidence: SUPPORTED")
                             page.locator("#context-sim").click()
                             expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
                             expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
