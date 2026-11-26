@@ -17,7 +17,7 @@ def ingest(records):
         if "observation" in row:
             obs=row["observation"]
             if (kind!="metric" or not isinstance(obs,dict) or set(obs)!={"metric","phase","value"}
-                or obs["metric"]!="latency_ms" or obs["phase"] not in ("baseline","incident")
+                or obs["metric"]!="latency_ms" or obs["phase"] not in ("baseline","incident","recovery")
                 or type(obs["value"]) not in (int,float) or not 0<obs["value"]<=1e9
                 or not math.isfinite(obs["value"])):
                 raise ValueError("Invalid synthetic latency observation")
@@ -33,6 +33,8 @@ def ingest(records):
                 from statistics import median
                 if "observation" not in event or event["observation"]["value"]!=round(median(event["enterprise"]["measurement"]["samples_ms"]),3):
                     raise ValueError("measured median does not match samples")
+        if event.get("observation",{}).get("phase")=="recovery" and "measurement" not in event.get("enterprise",{}):
+            raise ValueError("recovery requires measured lab samples")
         events.append(event)
     result=correlate(events)
     result["ingestion"]={"received":len(records),"unique":sum(i["alert_count"] for i in result["incidents"]),
