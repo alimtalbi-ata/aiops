@@ -1,6 +1,29 @@
 """Run-scoped structured retrieval over the verified lab projection, not LLM inference."""
 import re
 
+def validated_reference(item):
+    """Validate reference format, not authenticity (checked by lab_context)."""
+    if not isinstance(item,dict):
+        raise ValueError("invalid evidence reference")
+    eid=item.get("evidence_id")
+    digest=item.get("payload_hash")
+    if (not isinstance(eid,str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}",eid)
+        or not isinstance(digest,str) or not re.fullmatch(r"[a-f0-9]{64}",digest)):
+        raise ValueError("invalid evidence reference")
+    return {"evidence_id":eid,"payload_hash":digest}
+
+def index_references(items):
+    if not isinstance(items,list) or len(items)>20:
+        raise ValueError("invalid evidence corpus")
+    indexed={}
+    for item in items:
+        ref=validated_reference(item)
+        eid=ref["evidence_id"]
+        if eid in indexed:
+            raise ValueError("duplicate evidence reference")
+        indexed[eid]=ref
+    return indexed
+
 def retrieve(core, context, topic="rca", *, limit=5):
     run=core["run"]
     if (core.get("production_authorized") is not False
@@ -12,18 +35,7 @@ def retrieve(core, context, topic="rca", *, limit=5):
         raise ValueError("unverified retrieval scope")
     if topic not in ("rca","evidence") or type(limit) is not int or not 1<=limit<=20:
         raise ValueError("invalid retrieval request")
-    items=context["evidence"]
-    if not isinstance(items,list) or len(items)>20:
-        raise ValueError("invalid evidence corpus")
-    indexed={}
-    for item in items:
-        eid=item["evidence_id"]
-        digest=item["payload_hash"]
-        if (not isinstance(eid,str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}",eid)
-            or not isinstance(digest,str) or not re.fullmatch(r"[a-f0-9]{64}",digest)
-            or eid in indexed):
-            raise ValueError("invalid or duplicate evidence reference")
-        indexed[eid]={"evidence_id":eid,"payload_hash":digest}
+    indexed=index_references(context["evidence"])
     if topic=="rca":
         model=context.get("diagnosis")
         selected=[]
