@@ -65,9 +65,9 @@ async def history_receipt(client,rid):
     return result,len(history.events)
 
 
-async def execute(root,temporal,core,twin,evidence,policy,*,product_submit=None):
+async def execute(root,temporal,core,twin,evidence,policy,*,product_submit=None,gate_root=None):
     token=dict(line.split("=",1) for line in (root/"poc.env").read_text().splitlines())["V3_LAB_TOKEN"]
-    isolated=root/"temporal-e17"
+    isolated=(root if gate_root is None else gate_root)/"temporal-e17"
     isolated.mkdir(mode=0o700,exist_ok=False)
     gate=DurableApprovalGate(EnterpriseClock(isolated))
     def read_context(rid):
