@@ -19,7 +19,7 @@ def get(port, path):
     finally:
         conn.close()
 
-def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None, include_signals=False):
+def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None, include_signals=False, evidence_snapshot=None):
     # Only explicitly named synthetic CI fixtures, never arbitrary tenant data.
     if not re.fullmatch(r"NODE-CI-[A-Z0-9-]{1,80}",node_id):
         raise ValueError("synthetic CI node required")
@@ -29,7 +29,7 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None,
     elif not (re.fullmatch(r"RUN-[A-F0-9]{16}",run_id) and re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}",dynamic_incident)):
         raise ValueError("invalid dynamic binding")
     twin=get(twin_port,"/api/twin/impact/"+node_id)
-    evidence=get(evidence_port,"/api/evidence?run_id="+run_id+"&limit=20")
+    evidence=evidence_snapshot if evidence_snapshot is not None else get(evidence_port,"/api/evidence?run_id="+run_id+"&limit=20")
     if twin.get("root")!=node_id or not isinstance(twin.get("affected"),list):
         raise ValueError("invalid impact")
     affected=[]
@@ -82,12 +82,31 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None,
             "tenant_acl_qualified":False,"production_authorized":False,**({"verified_signals":signals} if include_signals else {})}
 
 
-def dynamic_context(core_port, token, run_id, twin_port, evidence_port, node_id, *, include_signals=False):
+def dynamic_context(core_port, token, run_id, twin_port, evidence_port, node_id, *, include_signals=False, multiasset=False):
     """Only a verified DEMO ingestion run mapped to the explicitly configured lab node."""
     from core_read import read_run
     core=read_run(core_port,token,run_id)
     run=core["run"]
     if run["mode"]!="DEMO" or not re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}",run["incident_id"]):
         raise ValueError("verified ingestion run required")
-    details=context(twin_port,evidence_port,run_id,node_id,dynamic_incident=run["incident_id"],include_signals=include_signals)
+    snapshot=None
+    if multiasset:
+        from enterprise_context import ENTERPRISE_ROOTS, Graph, normalize
+        snapshot=get(evidence_port,"/api/evidence?run_id="+run_id+"&limit=20")
+        items=snapshot["items"]
+        if not 1<=len(items)<=20:
+            raise ValueError("bounded evidence required")
+        roots={item["payload"].get("resource") for item in items}
+        if len(roots)!=1:
+            raise ValueError("ambiguous incident root")
+        root=next(iter(roots))
+        if root!=node_id:
+            if root not in ENTERPRISE_ROOTS:
+                raise ValueError("unknown enterprise root")
+            graph=Graph(get(twin_port,"/api/twin/graph"))
+            for item in items:
+                sig=item["payload"]["signal"]
+                graph.validate_signal(root,normalize(sig["enterprise"],sig["source"].split(":",1)[0]))
+            node_id=root
+    details=context(twin_port,evidence_port,run_id,node_id,dynamic_incident=run["incident_id"],include_signals=include_signals,evidence_snapshot=snapshot)
     return core,details
