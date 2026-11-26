@@ -29,10 +29,33 @@ def get(route,headers=None):
         assert len(raw)<=65536 and r.headers["Cache-Control"]=="no-store"
         return json.loads(raw)
 result=get(path(rid,comparison))
-assert result=={"classification":"SYNTHETIC_GAMMA_E17_VERIFIED_READBACK",
-                "worker":worker,"verification":report["verification"],
-                "operational_decision":"DENY","production_authorized":False,
-                "tenant_acl_qualified":False,"core_business_stages_qualified":False}
+def canonical_projection(value):
+    # Evidence collections are unordered sets of immutable references. Preserve
+    # every ID and digest, reject duplicate IDs, and compare all other fields exactly.
+    from copy import deepcopy
+    copy=deepcopy(value)
+    for key in ("original_evidence","comparison_evidence"):
+        refs=copy["verification"][key]
+        assert isinstance(refs,list) and 1<=len(refs)<=20
+        assert all(set(r)=={"evidence_id","payload_hash"} and
+                   re.fullmatch(r"[A-Za-z0-9_.-]{1,128}",r["evidence_id"]) and
+                   re.fullmatch(r"[a-f0-9]{64}",r["payload_hash"]) for r in refs)
+        assert len({r["evidence_id"] for r in refs})==len(refs)
+        copy["verification"][key]=sorted(refs,key=lambda r:r["evidence_id"])
+    return copy
+
+expected={"classification":"SYNTHETIC_GAMMA_E17_VERIFIED_READBACK",
+          "worker":worker,"verification":report["verification"],
+          "operational_decision":"DENY","production_authorized":False,
+          "tenant_acl_qualified":False,"core_business_stages_qualified":False}
+actual=canonical_projection(result)
+expected=canonical_projection(expected)
+if actual!=expected:
+    fields=[key for key in sorted(actual.keys()|expected.keys()) if actual.get(key)!=expected.get(key)]
+    verify_fields=[key for key in sorted(actual["verification"].keys()|expected["verification"].keys())
+                   if actual["verification"].get(key)!=expected["verification"].get(key)]
+    raise AssertionError("E17 projection mismatch: fields="+str(fields)+" verification="+str(verify_fields))
+print("E17 receipt, measured result and exact evidence reference sets match",file=sys.stderr)
 for route,headers in ((path(comparison,rid),{}),(path(rid,rid),{}),
                       (path(rid,comparison)+"&extra=1",{}),
                       (path(rid,comparison),{"Origin":"http://foreign.invalid"}),
@@ -41,10 +64,10 @@ for route,headers in ((path(comparison,rid),{}),(path(rid,rid),{}),
     except HTTPError as exc:
         assert exc.code==503 and json.load(exc)["policy"]=="DENY"
     else: raise AssertionError("unverified request accepted")
-assert get(path(rid,comparison))==result
+assert canonical_projection(get(path(rid,comparison)))==actual
 print(json.dumps({"classification":"V3_GAMMA_E17_REAL_READBACK","result":"PASS",
                   "original_run_id":rid,"comparison_run_id":comparison,
                   "action_receipt_sha256":worker["action_receipt_sha256"],
                   "verification":result["verification"]["status"],
-                  "projection_sha256":hashlib.sha256(json.dumps(result,sort_keys=True,separators=(",",":")).encode()).hexdigest(),
+                  "projection_sha256":hashlib.sha256(json.dumps(actual,sort_keys=True,separators=(",",":")).encode()).hexdigest(),
                   "negative_cases":5,"production_authorized":False},sort_keys=True))
