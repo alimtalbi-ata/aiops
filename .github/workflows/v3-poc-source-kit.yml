@@ -58,9 +58,10 @@ jobs:
           import sys, subprocess, threading, urllib.request, json, os
           sys.path.insert(0,"v3-spike/vertical")
           from http_demo import server
+          from enterprise_clock import EnterpriseClock
           def port(name,n):
               return int(subprocess.check_output(["docker","compose","-f","v3-spike/kit/compose.poc-source.yml","port",name,str(n)],text=True).strip().rsplit(":",1)[1])
-          with server(core_config=(port("core",810),os.environ["V3_LAB_TOKEN"],"RUN-CI-CONTEXT"),context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),policy_port=port("policy",813)) as http:
+          with server(core_config=(port("core",810),os.environ["V3_LAB_TOKEN"],"RUN-CI-CONTEXT"),context_config=(port("twin",811),port("evidence",812),"NODE-CI-ROOT","INC-CI-CONTEXT"),policy_port=port("policy",813),enterprise_clock=EnterpriseClock(os.environ["V3_ROOT"])) as http:
               thread=threading.Thread(target=http.serve_forever,daemon=True)
               thread.start()
               try:
@@ -86,6 +87,18 @@ jobs:
                           expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
                           expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
 
+                          page.locator("#clock-read").click()
+                          expect(page.locator("#clock-result")).to_contain_text("Logical tick: 0")
+                          for tick in (1,2):
+                              page.locator("#clock-next").click()
+                              expect(page.locator("#clock-result")).to_contain_text("Logical tick: "+str(tick))
+                          page.locator("#activity-read").click()
+                          expect(page.locator("#activity-result")).to_contain_text("ALERT_ONLY")
+                          expect(page.locator("#activity-result")).not_to_contain_text("INCIDENT_LINKED")
+                          page.locator("#activity-filter").select_option("NODE-CI-ENT-APP-HR")
+                          expect(page.locator("#activity-result")).to_contain_text("NODE-CI-ENT-APP-HR")
+                          expect(page.locator("#activity-result")).not_to_contain_text("NODE-CI-ENT-APP-CRM")
+                          expect(page.locator("#activity-result")).not_to_contain_text("ALERT_ONLY")
                           page.locator("#inventory-load").click()
                           expect(page.locator("#inventory-result")).to_contain_text("34 nodes",timeout=30000)
                           page.locator("#inventory-root").select_option("NODE-CI-ENT-IDENTITY")
