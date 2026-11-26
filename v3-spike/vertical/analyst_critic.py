@@ -6,7 +6,6 @@ def analyze(context):
     return {"classification":"SYNTHETIC_RULE_BASED_ANALYST","hypothesis":"INCIDENT_OBSERVED" if sources else "UNKNOWN","evidence_ids":sources,"root_cause":"UNKNOWN","confidence":None}
 
 def critique(analysis, context):
-    analyze(context)
-    verified={e["evidence_id"] for e in context["evidence"]}
-    supported=set(analysis["evidence_ids"])<=verified and bool(analysis["evidence_ids"])
+    expected=analyze(context)
+    supported=analysis == expected and bool(expected["evidence_ids"])
     return {"classification":"SYNTHETIC_RULE_BASED_CRITIC","evidence_supported":supported,"causality_established":False,"root_cause":"UNKNOWN","confidence":None,"operational_decision":"DENY","production_authorized":False}
