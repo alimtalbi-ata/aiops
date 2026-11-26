@@ -27,6 +27,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_historical_rag_context.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_real_rag_fixture.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_gamma_ai_telemetry.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_ai_runtime.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_clock.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_telemetry.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_activity.py -v
@@ -292,6 +293,8 @@ jobs:
           PY
       - name: Verify actual GAMMA AI telemetry browser
         run: PYTHONPATH=v3-spike/vertical python3 v3-spike/vertical/poc_gamma_ai_telemetry.py
+      - name: Verify actual GAMMA explicit AI review browser
+        run: PYTHONPATH=v3-spike/vertical python3 v3-spike/vertical/poc_gamma_ai_runtime.py
       - name: Backup and restore into separate synthetic database
         run: |
           set -euo pipefail

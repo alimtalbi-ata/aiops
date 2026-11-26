@@ -74,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search","/api/v1/enterprise-parametric/configure","/api/v1/enterprise-correlation/preview","/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context","/api/v1/ai-telemetry"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search","/api/v1/enterprise-parametric/configure","/api/v1/enterprise-correlation/preview","/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context","/api/v1/ai-telemetry","/api/v1/enterprise-correlation/ai-review"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -91,16 +91,24 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(data,dict) or set(data)!={"run_ids"} or self.server.enterprise_clock is None:raise ValueError("invalid telemetry request")
                 self.reply(200,json.dumps(snapshot(self.server.enterprise_clock,data["run_ids"])).encode())
                 return
-            if self.path in ("/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context"):
+            if self.path in ("/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context","/api/v1/enterprise-correlation/ai-review"):
                 from enterprise_historical_correlation import historical_preview
                 if not isinstance(data,dict) or set(data)!={"run_ids","window_seconds"}:
                     raise ValueError("invalid historical correlation request")
-                port,token,_=self.server.core_config
-                twin,evidence,node,_=self.server.context_config
-                graph=Graph(get(twin,"/api/twin/graph"))
-                def load(rid):
-                    return dynamic_context(port,token,rid,twin,evidence,node,include_signals=True,multiasset=True)
-                result=historical_preview(data["run_ids"],data["window_seconds"],graph,load)
+                if self.path.endswith("/ai-review") and self.server.ai_runtime is None:
+                    raise ValueError("AI runtime disabled")
+                def load_history():
+                    port,token,_=self.server.core_config
+                    twin,evidence,node,_=self.server.context_config
+                    graph=Graph(get(twin,"/api/twin/graph"))
+                    def load(rid):
+                        return dynamic_context(port,token,rid,twin,evidence,node,include_signals=True,multiasset=True)
+                    return historical_preview(data["run_ids"],data["window_seconds"],graph,load)
+                if self.path.endswith("/ai-review"):
+                    result=self.server.ai_runtime.execute(load_history)
+                    self.reply(200,json.dumps(result).encode())
+                    return
+                result=load_history()
                 if self.path.endswith("/assessment"):
                     from historical_analyst_critic import assess
                     result=assess(result)
@@ -245,6 +253,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(result).encode())
             except Exception:
                 self.reply(503, b'{"error":"CORE_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/ai-runtime/status":
+            self.reply(200,json.dumps({"classification":"SYNTHETIC_GAMMA_AI_RUNTIME_STATUS_E27","enabled":self.server.ai_runtime is not None,"production_authorized":False,"operational_decision":"DENY"}).encode())
         elif self.path=="/api/v1/enterprise-inventory":
             try:
                 twin,_,_,_=self.server.context_config
@@ -436,7 +446,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None):
+def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None, ai_providers=None):
     http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     http.core_config = core_config
     http.context_config = context_config
@@ -446,6 +456,16 @@ def server(port=0, core_config=None, context_config=None, policy_port=None, matt
     http.enterprise_clock = enterprise_clock
     http.enterprise_collector = enterprise_collector
     http.technical_collector = technical_collector
+    http.ai_runtime = None
+    if ai_providers is not None:
+        try:
+            from ai_runtime import AdvisoryRuntime
+            if core_config is None or context_config is None:raise ValueError("verified service configuration required")
+            forbidden=(http.server_port,core_config[0],context_config[0],context_config[1],policy_port)
+            http.ai_runtime=AdvisoryRuntime(enterprise_clock,ai_providers,forbidden)
+        except Exception:
+            http.server_close()
+            raise
     return http
 
 if __name__ == "__main__":
