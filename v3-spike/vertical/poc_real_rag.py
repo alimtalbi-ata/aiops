@@ -9,7 +9,7 @@ from enterprise_context import digest
 from enterprise_historical_correlation import historical_preview
 from historical_analyst_critic import assess
 from ingestion_demo import ingest
-from rag_model_advisory import prepare
+from rag_model_advisory import prepare,wire_projection
 from ai_invocation_ledger import InvocationLedger
 from dual_model_advisory import config
 from poc_real_dual_model import SPECS,IMAGE,attest
@@ -82,6 +82,8 @@ def main():
         ledger=InvocationLedger(root)
         history,context=seed(ledger)
         report["context_sha256"]=digest(context)
+        report["wire_context_sha256"]=digest(wire_projection(context)[0])
+        report["experiment_variant"]="V2_COMPACT_BIJECTIVE_CITATIONS"
         report["rag_sha256"]=context["rag_sha256"]
         report["verified_evidence_count"]=history["verified_evidence_count"]
         report["approved_references"]=[{k:v for k,v in x.items() if k!="excerpt"} for x in context["candidates"][0]["reference_context"]]

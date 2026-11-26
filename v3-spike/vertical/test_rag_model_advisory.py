@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from enterprise_context import DOCUMENTS,digest
 from enterprise_hybrid import retrieve
 from historical_rag_context import build
-from rag_model_advisory import prepare,review_with_rag
+from rag_model_advisory import prepare,review_with_rag,wire_projection,translate
 from test_historical_analyst_critic import HistoricalAnalystCriticTest
 
 @contextmanager
@@ -58,13 +58,20 @@ class RagModelTest(unittest.TestCase):
         self.assertEqual(len(out["invocations"]),2)
         self.assertTrue(out["analyst"]["reference_ids"])
         self.assertEqual(out["analyst"]["evidence_ids"],["E1","E2"])
-        self.assertEqual(cr[0]["analyst_selection"],out["analyst"])
+        wire,maps,reverse=wire_projection(prepare(self.history,self.clock))
+        self.assertEqual(ar[0],wire)
+        self.assertEqual(cr[0]["analyst_selection"],translate(out["analyst"],maps))
+        self.assertEqual(translate(cr[0]["analyst_selection"],reverse),out["analyst"])
+        self.assertNotIn("REF-",json.dumps(ar[0]))
+        self.assertNotIn("sha256",json.dumps(ar[0]))
         self.assertNotIn("excerpt",json.dumps(out))
         self.assertEqual(out["operational_decision"],"DENY")
     def test_reject_reference_fabrication_or_substitution(self):
         for mutate in (lambda o:o.update(reference_ids=["invented"]),
                        lambda o:o.update(evidence_ids=o["reference_ids"]),
-                       lambda o:o.update(reference_ids=["E1"])):
+                       lambda o:o.update(reference_ids=[o["evidence_ids"][0]]),
+                       lambda o:o.update(evidence_ids=o["evidence_ids"][:-1]),
+                       lambda o:o.update(evidence_ids=[o["evidence_ids"][0]]*len(o["evidence_ids"]))):
             out,_,cr=self.run_review(am=mutate)
             self.assertEqual(out["state"],"UNKNOWN")
             self.assertEqual(out["invocations"][0]["status"],"REJECTED")
