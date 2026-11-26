@@ -6,7 +6,7 @@ from vertical_demo import execute
 from correlation_demo import correlate
 from core_read import read_run
 from lab_context import context, dynamic_context, get
-from enterprise_context import Graph, normalize
+from enterprise_context import Graph, normalize, ENTERPRISE_ROOTS
 from policy_demo import simulation_decision
 from copilot_context import answer
 import os
@@ -72,16 +72,19 @@ class Handler(BaseHTTPRequestHandler):
                 twin,evidence,node,_=self.server.context_config
                 if isinstance(data,list) and any(isinstance(row,dict) and "enterprise" in row for row in data):
                     graph=Graph(get(twin,"/api/twin/graph"))
+                    roots={row["resource"] for row in data}
+                    if len(roots)!=1 or not roots<=ENTERPRISE_ROOTS:
+                        raise ValueError("one verified enterprise resource per incident required")
                     for row in data:
-                        if row["resource"]!=node or "enterprise" not in row:
+                        if "enterprise" not in row:
                             raise ValueError("mixed or unbound enterprise signal")
-                        graph.validate_signal(node,normalize(row["enterprise"],row["kind"]))
+                        graph.validate_signal(row["resource"],normalize(row["enterprise"],row["kind"]))
                 self.reply(200,json.dumps(create_and_persist(data,port,token,evidence)).encode())
                 return
             if self.path in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide"):
                 port,token,_=self.server.core_config
                 twin,evidence,node,_=self.server.context_config
-                core,details=dynamic_context(port,token,data["run_id"],twin,evidence,node)
+                core,details=dynamic_context(port,token,data["run_id"],twin,evidence,node,multiasset=True)
                 run=core["run"]
                 policy=simulation_decision(self.server.policy_port,len(details["evidence"]))
                 if policy["policy_decision"]!="SIMULATE" or policy["simulation_only"] is not True:
@@ -145,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
                 run_id=self.path.split("=",1)[1]
                 port,token,_=self.server.core_config
                 twin,evidence,node,_=self.server.context_config
-                core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True)
+                core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True,multiasset=True)
                 graph=Graph(get(twin,"/api/twin/graph"))
                 result=graph.project(details,core["run"])
                 self.reply(200,json.dumps(result).encode())
@@ -159,7 +162,7 @@ class Handler(BaseHTTPRequestHandler):
                     run_id=run_id.removesuffix("&decision=simulate")
                 port,token,_=self.server.core_config
                 twin,evidence,node,_=self.server.context_config
-                core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True)
+                core,details=dynamic_context(port,token,run_id,twin,evidence,node,include_signals=True,multiasset=True)
                 scoped=any("enterprise" in row["signal"] for row in details.get("verified_signals",[]))
                 enterprise=Graph(get(twin,"/api/twin/graph")).project(details,core["run"]) if scoped else None
                 details.pop("verified_signals",None)
