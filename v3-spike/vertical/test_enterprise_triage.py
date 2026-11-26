@@ -40,6 +40,10 @@ class TriageTest(unittest.TestCase):
         s=modeled(model(1))[0]["signals"][0]
         self.assertEqual(evaluate([s,dict(s,kind="log")],False,False)["disposition"],"UNCORROBORATED_ALERT")
         self.assertEqual(evaluate([s,dict(s,source="other",kind="log",age_seconds=121)],False,False)["disposition"],"UNCORROBORATED_ALERT")
+        self.assertEqual(evaluate([s,dict(s,source="other",kind="log",age_seconds=120)],False,False)["disposition"],"INCIDENT_CANDIDATE")
+        self.assertEqual(evaluate([s,dict(s,source="other",kind="probe",state="NORMAL")],True,True)["disposition"],"CONTRADICTORY_SIGNALS")
+        self.assertEqual(evaluate([dict(s,age_seconds=121)],True,True)["disposition"],"INSUFFICIENT_FRESH_DATA")
+        self.assertEqual(evaluate([s,dict(s,source="other",kind="log")],True,True)["disposition"],"SECURITY_REVIEW")
 
     def test_restart_and_tamper(self):
         with tempfile.TemporaryDirectory() as root:
