@@ -160,6 +160,22 @@ services:
       retries: 50
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+  # Optional technical console, not the GAMMA business interface.
+  temporal-ui:
+    profiles: [orchestration]
+    image: temporalio/ui:2.56.4
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_UI_PORT: "8080"
+      TEMPORAL_DISABLE_WRITE_ACTIONS: "true"
+    ports:
+      - "127.0.0.1::8080"
+    depends_on:
+      temporal:
+        condition: service_started
+    networks: [backend, edge]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
 networks:
   edge: {}
   backend:

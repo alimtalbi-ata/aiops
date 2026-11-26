@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
-      - run: python3 -m py_compile app/worker/v3_boundary.py app/worker/v3_boundary_workflow.py v3-spike/kit/poc-temporal-boundary-smoke.py
+      - run: python3 -m py_compile app/worker/v3_boundary.py app/worker/v3_boundary_workflow.py v3-spike/kit/poc-temporal-boundary-smoke.py v3-spike/kit/poc-temporal-ui-smoke.py
       - name: Validate Workbench JavaScript syntax before service tests
         run: |
           set -euo pipefail
@@ -292,16 +292,21 @@ jobs:
           compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml)
           "${compose[@]}" stop core twin evidence policy
           # Only the disposable CI database, before any dynamic run is created.
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select count(*) from aiops.execution_receipts")" = 0
+          "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -c "drop table aiops.execution_receipts"
           "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -c "alter table aiops.run_events drop column event_key"
           bash v3-spike/kit/poc-start.sh
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select to_regclass('aiops.ux_run_events_event_key') is not null")" = t
+          test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select to_regclass('aiops.execution_receipts') is not null")" = t
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select count(*) from aiops.evidence where provenance->>'run_id'='RUN-CI-CONTEXT'")" = 2
           test "$("${compose[@]}" exec -T postgres psql -U aiops -d aiops -Atc "select status from aiops.runs where run_id='RUN-CI-CONTEXT'")" = CREATED
-          backup=$(find "$V3_ROOT/backup" -maxdepth 1 -type f -name 'pre-008.*' -print -quit)
+          backup=$(find "$V3_ROOT/backup" -maxdepth 1 -type f -name 'pre-poc-schema.*' -print -quit)
           test -s "$backup"
           "${compose[@]}" exec -T postgres pg_restore --list < "$backup" >/dev/null
           bash v3-spike/kit/poc-start.sh
-          test "$(find "$V3_ROOT/backup" -maxdepth 1 -type f -name 'pre-008.*' | wc -l)" = 1
+          test "$(find "$V3_ROOT/backup" -maxdepth 1 -type f -name 'pre-poc-schema.*' | wc -l)" = 1
       - name: Verify actual GAMMA launcher
         run: |
           umask 077
@@ -569,6 +574,14 @@ jobs:
           project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
           compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration)
           "${compose[@]}" up --build --wait --wait-timeout 300 worker
+          "${compose[@]}" up -d --no-deps temporal-ui
+          ui=$("${compose[@]}" port temporal-ui 8080)
+          [[ "$ui" =~ ^127\.0\.0\.1:[0-9]+$ ]]
+          case "${ui##*:}" in 7770|7777|7790) exit 1 ;; esac
+          test "$("${compose[@]}" exec -T temporal-ui printenv TEMPORAL_DISABLE_WRITE_ACTIONS)" = true
+          ui_image=$("${compose[@]}" images -q temporal-ui)
+          docker image inspect --format '{{json .RepoDigests}}' "$ui_image" > "$V3_ROOT/temporal-ui-digests.json"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert any("temporalio/ui@sha256:" in x for x in d)' "$V3_ROOT/temporal-ui-digests.json"
           "${compose[@]}" exec -T worker python - < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary.json"
           cat "$V3_ROOT/temporal-boundary.json"
           run=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_id"])' "$V3_ROOT/temporal-boundary.json")
@@ -579,6 +592,8 @@ jobs:
             [[ "$result" = 1 ]]
           }
           check_receipt
+          python3 v3-spike/kit/poc-temporal-ui-smoke.py "http://$ui" "$V3_ROOT/temporal-boundary.json" > "$V3_ROOT/temporal-ui.json"
+          cat "$V3_ROOT/temporal-ui.json"
           "${compose[@]}" stop temporal
           "${compose[@]}" exec -T worker python - unavailable < v3-spike/kit/poc-temporal-boundary-smoke.py
           "${compose[@]}" stop worker
@@ -586,7 +601,21 @@ jobs:
           "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
           cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json"
           check_receipt
+          python3 v3-spike/kit/poc-temporal-ui-smoke.py "http://$ui" "$V3_ROOT/temporal-boundary-replay.json" > "$V3_ROOT/temporal-ui-replay.json"
+          cmp "$V3_ROOT/temporal-ui.json" "$V3_ROOT/temporal-ui-replay.json"
           echo "V3 Temporal persisted history and Core state restore PASS"
+      - name: Upload synthetic orchestration receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-temporal-orchestration-receipts
+          path: |
+            ${{ env.V3_ROOT }}/temporal-boundary.json
+            ${{ env.V3_ROOT }}/temporal-boundary-replay.json
+            ${{ env.V3_ROOT }}/temporal-ui.json
+            ${{ env.V3_ROOT }}/temporal-ui-replay.json
+            ${{ env.V3_ROOT }}/temporal-ui-digests.json
+          if-no-files-found: warn
       - if: always()
         run: |
           if [[ -f "$V3_ROOT/poc.env" ]]; then
