@@ -782,6 +782,43 @@ jobs:
           test "$before" = "$(snapshot)"
           cat "$V3_ROOT/temporal-e17-gamma.json"
           echo "E17 GAMMA read-only PostgreSQL snapshot PASS"
+      - name: Qualify measured incident admission against actual GAMMA
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+          compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration -f "$V3_ROOT/temporal-e17-ci.yml")
+          snapshot() {
+            local table
+            for table in incidents runs run_events evidence gates command_receipts execution_receipts; do
+              "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -Atc "select count(*), md5(coalesce(string_agg(to_jsonb(t)::text, '|' order by to_jsonb(t)::text), '')) from aiops.$table t"
+            done
+          }
+          counts() {
+            "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -Atc "select (select count(*) from aiops.incidents),(select count(*) from aiops.runs),(select count(*) from aiops.evidence),(select count(*) from aiops.execution_receipts)"
+          }
+          python3 v3-spike/kit/poc-gamma.py > "$RUNNER_TEMP/gamma-admission.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            url=$(sed -n 's/^POC GAMMA: //p' "$RUNNER_TEMP/gamma-admission.log")
+            if [[ -n "$url" ]]; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
+          before=$(snapshot)
+          python3 v3-spike/kit/poc-admission-smoke.py "$url" controls > "$V3_ROOT/admission-controls.json"
+          test "$before" = "$(snapshot)"
+          cat "$V3_ROOT/admission-controls.json"
+          echo "Admission controls no canonical writes PASS"
+          IFS='|' read -r i r e x <<< "$(counts)"
+          python3 v3-spike/kit/poc-admission-smoke.py "$url" fault > "$V3_ROOT/admission-fault.json"
+          test "$(counts)" = "$((i+1))|$((r+1))|$((e+3))|$x"
+          cat "$V3_ROOT/admission-fault.json"
+          echo "Admission exactly one incident/run, three evidence, zero execution receipts PASS"
       - name: Collect bounded Worker diagnostics on failure
         if: failure()
         run: |
@@ -812,6 +849,8 @@ jobs:
             ${{ env.V3_ROOT }}/temporal-e17-worker-replay.json
             ${{ env.V3_ROOT }}/temporal-e17-gamma.json
             ${{ env.V3_ROOT }}/temporal-e17-gamma-browser.json
+            ${{ env.V3_ROOT }}/admission-controls.json
+            ${{ env.V3_ROOT }}/admission-fault.json
           if-no-files-found: warn
       - if: always()
         run: |
