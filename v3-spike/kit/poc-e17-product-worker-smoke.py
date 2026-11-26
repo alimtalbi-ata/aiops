@@ -5,8 +5,9 @@ expose only their enumerated routes to fixed isolated Compose service names.
 No caller-supplied destination, shell execution, host port, or production target.
 """
 import asyncio
-from contextlib import ExitStack,contextmanager
+from contextlib import ExitStack,contextmanager,closing
 import hmac
+import hashlib
 import http.client
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import json
@@ -16,6 +17,7 @@ import re
 import runpy
 import sys
 import threading
+import stat
 from temporalio.api.enums.v1 import EventType
 from temporalio.client import Client
 
@@ -154,6 +156,91 @@ async def submit(client,target,rid,approval):
         require(target.delay==.01,"target did not recover")
         return receipt
 
+def audit_root():
+    root=Path("/audit")
+    info=root.lstat()
+    require(root.resolve()==root and stat.S_ISDIR(info.st_mode) and info.st_uid==os.getuid()
+            and not info.st_mode&0o077,"private audit volume required")
+    return root
+
+def gate_snapshot(gate,receipt):
+    binding=receipt["binding"]
+    approved=gate.read_receipt(binding["receipt_id"])
+    record=approved["record"]
+    require(approved["receipt_sha256"]==binding["receipt_sha256"] and record["decision"]=="SIMULATE_ONLY"
+            and record["lab_action"]==binding["lab_action"] and record["context_sha256"]==binding["context_sha256"],
+            "unverified stored approval")
+    with closing(gate.clock.connect()) as db:
+        decisions=db.execute("SELECT receipt_id,payload,payload_hash FROM hitl_decision_receipts ORDER BY receipt_id").fetchall()
+        reservations=db.execute("SELECT run_id,receipt_id,target_id,payload,payload_hash FROM hitl_lab_reservations ORDER BY run_id").fetchall()
+    require(len(decisions)==2 and len(reservations)==1,"unexpected audit cardinality")
+    for identity,payload,digest in decisions:
+        checked=gate.read_receipt(identity)
+        require(checked["receipt_sha256"]==digest and checked["record"]==json.loads(payload),"decision changed")
+    require({json.loads(r[1])["decision"] for r in decisions}=={"DENY","SIMULATE_ONLY"},"decision set changed")
+    rid,hid,tid,payload,digest=reservations[0]
+    saved=json.loads(payload)
+    require((rid,hid,tid)==(binding["run_id"],binding["receipt_id"],binding["lab_action"]["target_id"])
+            and saved["binding"]==binding and gate._hash(saved)==digest and saved["action_authorized"] is False
+            and saved["operational_decision"]=="DENY" and saved["production_authorized"] is False,"reservation changed")
+    return {"decision_count":2,"reservation_count":1,"audit_sha256":hashlib.sha256(
+        json.dumps([decisions,reservations],sort_keys=True,separators=(",",":")).encode()).hexdigest(),
+        "reservation_sha256":digest,"target_id":tid}
+
+async def audit_recreated(report,root):
+    from enterprise_clock import EnterpriseClock
+    from hitl_demo import DurableApprovalGate
+    from lab_context import dynamic_context
+    fixture=runpy.run_path(str(Path(__file__).with_name("poc-multiasset-observed.py")))
+    require(report["activity_executor"]=="V3_PRODUCT_WORKER" and report["production_authorized"] is False,
+            "invalid original report")
+    receipt=report["action_receipt"]
+    binding=receipt["binding"]
+    rid,inc=binding["run_id"],binding["incident_id"]
+    client=await asyncio.wait_for(Client.connect("temporal:7233"),timeout=10)
+    stored=await asyncio.wait_for(client.get_workflow_handle(rid).result(),timeout=10)
+    require(stored==receipt and hashlib.sha256(json.dumps(stored,sort_keys=True,separators=(",",":")).encode()).hexdigest()==report["action_receipt_sha256"],
+            "historical receipt changed")
+    require((root/"temporal-e17"/"enterprise-e2"/"world.sqlite3").is_file(),"audit database missing")
+    gate=DurableApprovalGate(EnterpriseClock(root/"temporal-e17"))
+    before=gate_snapshot(gate,receipt)
+    require(before==report["target_audit"],"audit lost or changed after recreation")
+    def read_context(run):
+        return dynamic_context(18110,TOKEN,run,18111,18112,"NODE-CI-ROOT",include_signals=True,multiasset=True)
+    _,context=read_context(rid)
+    refs=context["evidence"]
+    # Re-open the existing immutable reservation, never a new action.
+    reservation=gate.reserve_lab_action(binding["receipt_id"],binding["receipt_sha256"],inc,rid,refs,
+                                        binding["lab_action"],rid,18113)
+    require(reservation["disposition"]=="ALREADY_RESERVED_BLOCKED" and reservation["reservation_sha256"]==before["reservation_sha256"],
+            "consumed reservation reopened")
+    with fixture["LabRecoveryTarget"]() as target:
+        thread=threading.Thread(target=target.serve_forever)
+        thread.start()
+        try:
+            target.inject_fault()
+            scope=target.bind(gate,inc,rid,refs,read_context=read_context,policy_port=18113)
+            require(scope["target_id"]!=before["target_id"],"recreated target identity reused")
+            baseline=fixture["measure"](target)
+            try:
+                target.simulate(binding["receipt_id"],binding["receipt_sha256"],workflow_id=rid)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("old approval accepted by new incarnation")
+            observed=fixture["measure"](target)
+            require(target.delay==.12 and len(target.records)==10 and min(baseline+observed)>=100,
+                    "replay changed recreated target")
+        finally:
+            target.shutdown()
+            thread.join(5)
+            require(not thread.is_alive(),"target leaked")
+    require(gate_snapshot(gate,receipt)==before,"recreated audit mutated")
+    return {"classification":"V3_E17_RECREATED_TARGET_AUDIT","result":"PASS","run_id":rid,
+            "historical_receipt_sha256":report["action_receipt_sha256"],"audit":before,
+            "new_target_id":scope["target_id"],"old_approval_rejected":True,"reservation_replay_blocked":True,
+            "http_requests":10,"minimum_degraded_ms":min(baseline+observed),"production_authorized":False}
+
 if __name__=="__main__":
     require(os.environ.get("GITHUB_ACTIONS")=="true" and os.getuid()!=0,"disposable nonroot target required")
     require(os.environ.get("AIOPS_V3_E17_TARGET")=="http://e17-target:816"
@@ -162,8 +249,18 @@ if __name__=="__main__":
     root.mkdir(mode=0o700,exist_ok=False)
     with (root/"poc.env").open("x") as f: f.write("V3_LAB_TOKEN="+TOKEN+"\n")
     (root/"poc.env").chmod(0o600)
+    audit=audit_root()
+    require(sys.argv[1:] in ([],["audit-recreated"]),"unsupported target mode")
     with ExitStack() as stack:
         for port in PORTS: stack.enter_context(serve(("127.0.0.1",port),Relay))
-        report=asyncio.run(execute(root,"temporal:7233",*PORTS,product_submit=submit))
-    require(report["activity_executor"]=="V3_PRODUCT_WORKER" and report["verification"]["status"]=="RECOVERED","missing product proof")
+        if sys.argv[1:]:
+            report=asyncio.run(audit_recreated(json.load(sys.stdin),audit))
+        else:
+            require(not any(audit.iterdir()),"fresh audit volume required")
+            report=asyncio.run(execute(root,"temporal:7233",*PORTS,product_submit=submit,gate_root=audit))
+            require(report["activity_executor"]=="V3_PRODUCT_WORKER" and report["verification"]["status"]=="RECOVERED","missing product proof")
+            from enterprise_clock import EnterpriseClock
+            from hitl_demo import DurableApprovalGate
+            gate=DurableApprovalGate(EnterpriseClock(audit/"temporal-e17"))
+            report["target_audit"]=gate_snapshot(gate,report["action_receipt"])
     print(json.dumps(report,sort_keys=True))
