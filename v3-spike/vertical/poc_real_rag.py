@@ -52,7 +52,9 @@ def qualify(out,context):
     calls=out["invocations"]
     citation_use=all(o is not None and o["candidate_id"]==c["candidate_id"] and o["evidence_ids"]==c["evidence_ids"]
         and bool(o["reference_ids"]) and set(o["reference_ids"])<=allowed for o in (out["analyst"],out["critic"]))
-    return {"safe":safe,"reference_use":citation_use,"pass":safe and citation_use
+    decisions=out.get("reference_reviews",{})
+    explicit=all(set(decisions.get(role,{}))==allowed for role in ("ANALYST","CRITIC"))
+    return {"safe":safe,"reference_use":citation_use,"explicit_reference_review":explicit,"pass":safe and citation_use and explicit
         and out["state"]=="CANDIDATE_ONLY" and (out["critic"] or {}).get("verdict")=="AGREE_CANDIDATE"
         and len(calls)==2 and all(x["status"]=="VALIDATED" and x["usage_source"]=="provider_reported" for x in calls)}
 
@@ -83,7 +85,7 @@ def main():
         history,context=seed(ledger)
         report["context_sha256"]=digest(context)
         report["wire_context_sha256"]=digest(wire_projection(context)[0])
-        report["experiment_variant"]="V3_RESOURCE_BOUND_REFERENCE_RELEVANCE"
+        report["experiment_variant"]="V4_EXPLICIT_REFERENCE_APPLICABILITY"
         report["rag_sha256"]=context["rag_sha256"]
         report["verified_evidence_count"]=history["verified_evidence_count"]
         report["approved_references"]=[{k:v for k,v in x.items() if k!="excerpt"} for x in context["candidates"][0]["reference_context"]]
