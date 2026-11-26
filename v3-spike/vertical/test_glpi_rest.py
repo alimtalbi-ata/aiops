@@ -10,7 +10,9 @@ from glpi_rest import LabGLPI
 class RestTest(unittest.TestCase):
     def test_session(self):
         calls=[]
-        session=base64.b64encode(base64.b64encode(bytes(range(72)))).decode()
+        session=base64.b64encode(base64.b64encode(bytes(range(73)))).decode()
+        self.assertGreater(len(session),128)
+        self.assertTrue(session.endswith('='))
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 calls.append((self.path,self.headers.get("App-Token"),self.headers.get("Session-Token"),self.headers.get("Authorization")))
@@ -44,6 +46,22 @@ class RestTest(unittest.TestCase):
                 thread.join(5)
         for port in (7770,7777,7790):
             with self.assertRaises(ValueError): LabGLPI(port,"a"*32,"u"*32)
+    def test_legacy_and_encrypted_session_boundaries(self):
+        for token in ("s"*32, "s"*128, *(base64.b64encode(base64.b64encode(bytes(n))).decode() for n in (40,73,256))):
+            client=LabGLPI(18180,"a"*32,"u"*32)
+            with self.subTest(length=len(token)), patch.object(client,"_get",side_effect=[{"session_token":token},{}]) as get:
+                with client as opened:
+                    self.assertIs(opened,client)
+                    self.assertEqual(opened.session,token)
+                self.assertIsNone(client.session)
+                get.assert_called_with("killSession",{"Session-Token":token})
+    def test_invalid_encrypted_session_boundaries(self):
+        for size in (39,257):
+            token=base64.b64encode(base64.b64encode(bytes(size))).decode()
+            client=LabGLPI(18180,"a"*32,"u"*32)
+            with self.subTest(size=size), patch.object(client,"_get",return_value={"session_token":token}), self.assertRaises(ValueError):
+                client.__enter__()
+            self.assertIsNone(client.session)
     def test_invalid_session_envelopes(self):
         for token in ("x\r\nInjected: value","a"*513,"++++","="*132,base64.b64encode(b"not-inner-base64").decode(),None):
             client=LabGLPI(18180,"a"*32,"u"*32)
