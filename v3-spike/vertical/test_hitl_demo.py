@@ -156,3 +156,79 @@ class DurableHITLTest(unittest.TestCase):
         with patch("policy_demo.simulation_decision",return_value={"policy_decision":"SIMULATE","simulation_only":True,
                    "operational_decision":"DENY","executed_on_host":False,"production_authorized":False}):
             with self.assertRaises(ValueError):reserve(digest)
+
+
+    def _fence_fixture(self):
+        from lab_target_fence import LabTargetFence
+        binding = dict(run_id=self.run, incident_id=self.incident,
+                       resource="NODE-CI-ROOT",
+                       context_sha256=self.gate.binding(self.incident,self.run,self.refs))
+        fence = LabTargetFence(**binding)
+        scope = fence.scope()
+        key = self.gate.request(self.incident,self.run,self.refs,lab_action=scope)["request_id"]
+        approval = self.gate.decide(key,self.incident,self.run,self.refs,True,lab_action=scope)
+        def reserve(gate):
+            return gate.reserve_lab_action(approval["receipt_id"],approval["receipt_sha256"],
+                self.incident,self.run,self.refs,scope,self.run,18001)
+        policy = {"policy_decision":"SIMULATE","simulation_only":True,
+                  "operational_decision":"DENY","executed_on_host":False,
+                  "production_authorized":False}
+        return fence,binding,reserve,policy
+
+    def test_target_fence_rejects_replay_after_preclaim_snapshot_restore(self):
+        from contextlib import closing
+        from unittest.mock import patch
+        from enterprise_clock import EnterpriseClock
+        from hitl_demo import DurableApprovalGate
+        from lab_target_fence import LabTargetFence
+        fence,binding,reserve,policy = self._fence_fixture()
+        other = self.root/"preclaim-snapshot"
+        other.mkdir(mode=0o700)
+        restored = EnterpriseClock(other)
+        with closing(self.clock.connect()) as src, closing(restored.connect()) as dst:
+            src.backup(dst)
+        with patch("policy_demo.simulation_decision",return_value=policy):
+            first = reserve(self.gate)
+            self.assertEqual(fence.claim(first)["status"],"CLAIMED_NO_EXECUTION")
+            # An old snapshot has no reservation: SQLite alone admits it again.
+            replay = reserve(DurableApprovalGate(restored))
+        self.assertEqual(replay["disposition"],"RESERVED_NO_EXECUTION")
+        self.assertEqual(replay["reservation_sha256"],first["reservation_sha256"])
+        blocked = fence.claim(replay)
+        self.assertEqual(blocked["status"],"UNKNOWN_BLOCKED")
+        self.assertFalse(blocked["action_authorized"])
+        self.assertFalse(blocked["production_authorized"])
+        restarted = LabTargetFence(**binding)
+        self.assertNotEqual(restarted.scope()["target_id"],fence.scope()["target_id"])
+        with self.assertRaises(ValueError):
+            restarted.claim(replay)
+
+    def test_target_fence_concurrent_claim_and_tamper(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from unittest.mock import patch
+        from copy import deepcopy
+        fence,_,reserve,policy = self._fence_fixture()
+        with patch("policy_demo.simulation_decision",return_value=policy):
+            reservation = reserve(self.gate)
+        wrong = deepcopy(reservation)
+        wrong["binding"]["workflow_id"] = "RUN-"+"B"*16
+        unsigned = {k:v for k,v in wrong.items() if k not in ("reservation_sha256","disposition")}
+        wrong["reservation_sha256"] = self.gate._hash(unsigned)
+        with self.assertRaises(ValueError):
+            fence.claim(wrong)
+        with self.assertRaises(ValueError):
+            fence.claim(dict(reservation,reservation_sha256="0"*64))
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(fence.claim,[reservation,reservation]))
+        self.assertEqual(sorted(x["status"] for x in outcomes),["CLAIMED_NO_EXECUTION","UNKNOWN_BLOCKED"])
+        self.assertTrue(all(x["action_authorized"] is False and x["executed_on_host"] is False
+                            for x in outcomes))
+
+    def test_target_fence_existing_reservation_is_ambiguous_even_on_first_contact(self):
+        from unittest.mock import patch
+        fence,_,reserve,policy = self._fence_fixture()
+        with patch("policy_demo.simulation_decision",return_value=policy):
+            first = reserve(self.gate)
+            replay = reserve(self.gate)
+        self.assertEqual(fence.claim(replay)["status"],"UNKNOWN_BLOCKED")
+        self.assertEqual(fence.claim(first)["status"],"UNKNOWN_BLOCKED")
