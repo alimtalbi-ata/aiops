@@ -20,7 +20,8 @@ from temporalio.api.workflowservice.v1 import DescribeTaskQueueRequest
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.worker import Worker
 from shared.http import get_json, post_json
-from worker.v3_boundary_workflow import V3BoundaryWorkflow, V3ReadinessWorkflow
+from worker.v3_boundary_workflow import V3BoundaryWorkflow, V3ReadinessWorkflow, E17ProductRecoveryWorkflow
+from worker.v3_e17_activity import enabled as e17_enabled, canonical_run, validate_approval, reset_lab_http_delay
 
 if os.getenv("AIOPS_V3_BOUNDARY")!="1":
     raise RuntimeError("Explicit V3 boundary profile required")
@@ -112,9 +113,14 @@ async def worker_loop():
         try:
             connected=await asyncio.wait_for(Client.connect(TEMP,identity=identity),timeout=10)
             phase="register"
+            workflows=[V3BoundaryWorkflow,V3ReadinessWorkflow]
+            activities=[start_run,block_run,readiness_activity]
+            if e17_enabled():
+                workflows.append(E17ProductRecoveryWorkflow)
+                activities.append(reset_lab_http_delay)
             engine=Worker(connected,task_queue=QUEUE,identity=identity,
-                          workflows=[V3BoundaryWorkflow,V3ReadinessWorkflow],
-                          activities=[start_run,block_run,readiness_activity],
+                          workflows=workflows,
+                          activities=activities,
                           max_cached_workflows=0,graceful_shutdown_timeout=timedelta(seconds=5))
             worker_task=asyncio.create_task(engine.run())
             client=connected
@@ -232,3 +238,25 @@ async def e17_receipt(run_id:str,authorization:str|None=Header(default=None)):
     except Exception as exc:
         logger.info("E17 receipt unavailable: %s",type(exc).__name__)
         raise HTTPException(404,"Verified E17 receipt unavailable")
+
+
+@app.post("/api/v3/lab/e17/start/{run_id}")
+async def e17_start(run_id:str,args:dict,authorization:str|None=Header(default=None)):
+    """Internal, opt-in E17 submission. Only the target owns approval and action state."""
+    if not hmac.compare_digest(authorization or "","Bearer "+TOKEN):
+        raise HTTPException(401,"Invalid internal token")
+    if not e17_enabled():
+        raise HTTPException(404,"Dedicated E17 target unavailable")
+    try:
+        validate_approval(args)
+        await asyncio.to_thread(canonical_run,run_id)
+    except Exception:
+        raise HTTPException(422,"Unsupported E17 submission")
+    c=await ready()
+    try:
+        h=await c.start_workflow(E17ProductRecoveryWorkflow.run,args,id=run_id,task_queue=QUEUE,
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,execution_timeout=timedelta(seconds=75))
+        return {"workflow_id":h.id,"run_id":run_id,"executor":"temporal",
+                "classification":"V3_E17_PRODUCT_WORKER_SUBMITTED","production_authorized":False}
+    except WorkflowAlreadyStartedError:
+        raise HTTPException(409,"E17 workflow identity already consumed")

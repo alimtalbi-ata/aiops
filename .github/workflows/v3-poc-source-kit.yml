@@ -659,7 +659,11 @@ jobs:
           # Publish Temporal on an ephemeral loopback port, never in the product Compose.
           override="$V3_ROOT/temporal-e17-ci.yml"
           (umask 077; set -o noclobber; printf '%s\n' 'services:' '  temporal:' '    ports: ["127.0.0.1::7233"]' '    networks: [backend, edge]' > "$override")
-          compose+=(-f "$override")
+          # An isolated target and dedicated credential exist only in this CI proof.
+          export V3_E17_ACTIVITY_TOKEN="$(openssl rand -hex 32)"
+          echo "::add-mask::$V3_E17_ACTIVITY_TOKEN"
+          echo "V3_E17_ACTIVITY_TOKEN=$V3_E17_ACTIVITY_TOKEN" >> "$GITHUB_ENV"
+          compose+=(-f "$override" -f v3-spike/kit/compose.e17-product-ci.yml)
           # Core and Evidence are already healthy from the preceding real-service
           # qualification. Building worker with dependencies can recreate them
           # and collide with rootless published ports; preserve both instances.
@@ -726,6 +730,12 @@ jobs:
           cat "$V3_ROOT/temporal-e17.json"
           "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17.json" > "$V3_ROOT/temporal-e17-worker.json"
           cat "$V3_ROOT/temporal-e17-worker.json"
+          # Target runs as nonroot in the isolated backend. The actual existing
+          # Worker container, not the runner SDK, executes its scheduled activity.
+          "${compose[@]}" run --rm --no-deps --use-aliases -T e17-target > "$V3_ROOT/temporal-e17-product.json"
+          cat "$V3_ROOT/temporal-e17-product.json"
+          "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17-product.json" > "$V3_ROOT/temporal-e17-product-worker.json"
+          cat "$V3_ROOT/temporal-e17-product-worker.json"
           temporal_before=$("${compose[@]}" ps -q temporal)
           temporal_db_before=$("${compose[@]}" ps -q temporal-postgres)
           test -n "$temporal_before" && test -n "$temporal_db_before"
@@ -755,6 +765,9 @@ jobs:
           "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17.json" > "$V3_ROOT/temporal-e17-worker-replay.json"
           cmp "$V3_ROOT/temporal-e17-worker.json" "$V3_ROOT/temporal-e17-worker-replay.json"
           echo "Worker E17 authenticated receipt readback PASS"
+          "${compose[@]}" exec -T worker python -c "$(cat v3-spike/kit/poc-temporal-e17-worker-readback.py)" "$run" < "$V3_ROOT/temporal-e17-product.json" > "$V3_ROOT/temporal-e17-product-worker-replay.json"
+          cmp "$V3_ROOT/temporal-e17-product-worker.json" "$V3_ROOT/temporal-e17-product-worker-replay.json"
+          echo "Actual Worker E17 activity persisted receipt after restart PASS"
           "${compose[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$V3_ROOT/temporal-boundary-replay.json"
           cmp "$V3_ROOT/temporal-boundary.json" "$V3_ROOT/temporal-boundary-replay.json" || { echo "Boundary receipt changed" >&2; exit 1; }
           check_receipt || { echo "Core execution receipt count changed" >&2; exit 1; }
@@ -799,6 +812,8 @@ jobs:
           cat "$V3_ROOT/temporal-e17-gamma-browser.json"
           test "$before" = "$(snapshot)"
           cat "$V3_ROOT/temporal-e17-gamma.json"
+          python3 v3-spike/kit/poc-e17-gamma-readback.py "$url" "$V3_ROOT" product > "$V3_ROOT/temporal-e17-product-gamma.json"
+          cat "$V3_ROOT/temporal-e17-product-gamma.json"
           echo "E17 GAMMA read-only PostgreSQL snapshot PASS"
       - name: Qualify measured incident admission against actual GAMMA
         run: |
@@ -867,6 +882,10 @@ jobs:
             ${{ env.V3_ROOT }}/temporal-e17-worker-replay.json
             ${{ env.V3_ROOT }}/temporal-e17-gamma.json
             ${{ env.V3_ROOT }}/temporal-e17-gamma-browser.json
+            ${{ env.V3_ROOT }}/temporal-e17-product.json
+            ${{ env.V3_ROOT }}/temporal-e17-product-worker.json
+            ${{ env.V3_ROOT }}/temporal-e17-product-worker-replay.json
+            ${{ env.V3_ROOT }}/temporal-e17-product-gamma.json
             ${{ env.V3_ROOT }}/admission-controls.json
             ${{ env.V3_ROOT }}/admission-fault.json
           if-no-files-found: warn

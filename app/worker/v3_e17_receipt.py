@@ -73,8 +73,10 @@ async def project_receipt(client,run):
     activity=scheduled.activity_task_scheduled_event_attributes
     attempt=active.activity_task_started_event_attributes
     result=completed.activity_task_completed_event_attributes
-    require(workflow.workflow_type.name=="E17LabRecoveryWorkflow"
-            and matches(workflow.task_queue.name,r"aiops-v3-e17-lab-[a-f0-9]{32}")
+    require(((workflow.workflow_type.name=="E17LabRecoveryWorkflow"
+              and matches(workflow.task_queue.name,r"aiops-v3-e17-lab-[a-f0-9]{32}"))
+             or (workflow.workflow_type.name=="E17ProductRecoveryWorkflow"
+                 and workflow.task_queue.name=="aiops-v3-boundary"))
             and activity.task_queue.name==workflow.task_queue.name
             and activity.activity_type.name=="v3_e17_reset_lab_http_delay"
             and activity.retry_policy.maximum_attempts==1 and attempt.attempt==1
