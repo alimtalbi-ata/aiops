@@ -886,3 +886,96 @@ jobs:
           if [[ -n "${DOCKER_HOST:-}" ]] && docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless; then
             docker rm -f v3-e25-a v3-e25-c || true
           fi
+  e28-real-model:
+    name: E28 actual Core Evidence LLM GAMMA experiment
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'v3-spike/full-ai-gamma-qualification-d-20261126'
+    permissions:
+      contents: read
+    concurrency:
+      group: v3-e28-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      V3_ROOT: /tmp/aiops-v3-e28-ci
+      E28_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      OLLAMA_IMAGE: ollama/ollama@sha256:1514372d3cef7387b6202b253e761d820e00e44b28f268aad5029389d0479e99
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Record exact source and prepare receipt directory
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$(git rev-parse HEAD)" = "$E28_SOURCE_SHA"
+          test "$(uname -m)" = x86_64
+          mkdir -p "$RUNNER_TEMP/e28"
+          git rev-parse HEAD > "$RUNNER_TEMP/e28/source-sha.txt"
+      - name: Start isolated rootless daemon
+        run: |
+          set -euo pipefail
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
+          sudo apt-get update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Pull exact CPU runtime and start two local model services
+        run: |
+          set -euo pipefail
+          docker info --format '{{json .SecurityOptions}}' | tee "$RUNNER_TEMP/e28/docker-security.json" | grep -q name=rootless
+          timeout 420s docker pull --platform linux/amd64 "$OLLAMA_IMAGE"
+          docker image inspect --format '{{json .RepoDigests}}' "$OLLAMA_IMAGE" > "$RUNNER_TEMP/e28/runtime-digests.json"
+          python3 -c 'import json,os,sys; assert os.environ["OLLAMA_IMAGE"] in json.load(open(sys.argv[1]))' "$RUNNER_TEMP/e28/runtime-digests.json"
+          for role in a c; do
+            docker run -d --name "v3-e28-$role" --pull never --cap-drop ALL --security-opt no-new-privileges -e OLLAMA_NUM_PARALLEL=1 -e OLLAMA_MAX_LOADED_MODELS=1 -e OLLAMA_CONTEXT_LENGTH=4096 -p 127.0.0.1::11434 "$OLLAMA_IMAGE"
+            ready=0
+            for i in $(seq 1 60); do
+              if docker exec "v3-e28-$role" ollama list >/dev/null 2>&1; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+          done
+          timeout 420s docker exec v3-e28-a ollama pull qwen2.5:0.5b-instruct
+          timeout 420s docker exec v3-e28-c ollama pull qwen2.5:7b-instruct
+      - name: Start fresh dedicated Core Evidence Twin laboratory
+        run: |
+          set -euo pipefail
+          test "$V3_ROOT" = /tmp/aiops-v3-e28-ci
+          test ! -e "$V3_ROOT"
+          bash v3-spike/kit/poc-start.sh
+      - run: python3 -m pip install playwright==1.51.0
+      - run: python3 -m playwright install --with-deps chromium
+      - name: Actual model experiment with bounded process deadline
+        run: |
+          set -euo pipefail
+          a=$(docker port v3-e28-a 11434/tcp)
+          c=$(docker port v3-e28-c 11434/tcp)
+          [[ "$a" =~ ^127\.0\.0\.1:[0-9]+$ && "$c" =~ ^127\.0\.0\.1:[0-9]+$ ]]
+          timeout --kill-after=10s 760s python3 v3-spike/vertical/poc_real_gamma_ai.py --analyst-port "${a##*:}" --critic-port "${c##*:}" --report "$RUNNER_TEMP/e28/experiment.json"
+      - name: Preserve experiment evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-e28-gamma-experiment-${{ github.run_id }}
+          path: ${{ runner.temp }}/e28/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove only isolated experiment containers
+        if: always()
+        run: |
+          if [[ -n "${DOCKER_HOST:-}" ]] && docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless; then
+            docker rm -f v3-e28-a v3-e28-c || true
+            if [[ "$V3_ROOT" = /tmp/aiops-v3-e28-ci && -f "$V3_ROOT/poc.env" ]]; then
+              project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+              docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml down || true
+            fi
+          fi
