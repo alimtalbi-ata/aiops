@@ -78,3 +78,20 @@ jobs:
             compose logs --tail=80 mattermost | python3 -c 'import sys,re; print(re.sub(r"(?i)(token|password|authorization)([^, ]*)",r"\1[redacted]",sys.stdin.read()))'
             exit 1
           fi
+          if [[ "$MM_LAB_BACKEND_MODE" = real ]]; then
+            kill "$relay_pid"
+            wait "$relay_pid" || true
+            relay_pid=""
+            compose exec -T callback python - <<'PY'
+          import json,urllib.parse,urllib.request,urllib.error
+          binding=json.load(open("/binding/binding.json"))
+          body=urllib.parse.urlencode({"token":binding["token"],"channel_id":binding["channel_id"],"command":"/aiops","text":"incident"}).encode()
+          try:
+              urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8080/api/v1/mattermost/command",data=body),timeout=20)
+          except urllib.error.HTTPError as exc:
+              assert exc.code==403
+              assert json.load(exc)["policy"]=="DENY"
+          else:
+              raise RuntimeError("unavailable real backend did not fail closed")
+          PY
+          fi
