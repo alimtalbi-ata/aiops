@@ -9,7 +9,7 @@ class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
 
-def smoke(origin):
+def smoke(origin, batch=None, measurement=None):
     if not re.fullmatch(r"http://127\.0\.0\.1:[0-9]{4,5}",origin):
         raise ValueError("isolated loopback origin required")
     port=int(origin.rsplit(":",1)[1])
@@ -28,8 +28,11 @@ def smoke(origin):
         if not value:
             raise RuntimeError(description)
     common={"kind":"metric","source":"kit-ci","resource":"NODE-CI-ROOT","severity":"critical","tenant":"synthetic-demo","synthetic":True}
-    batch=[{**common,"id":"kit-baseline","observation":{"metric":"latency_ms","phase":"baseline","value":40}},
-           {**common,"id":"kit-incident","observation":{"metric":"latency_ms","phase":"incident","value":160}}]
+    if batch is None:
+        batch=[{**common,"id":"kit-baseline","observation":{"metric":"latency_ms","phase":"baseline","value":40}},
+               {**common,"id":"kit-incident","observation":{"metric":"latency_ms","phase":"incident","value":160}}]
+    values={row["observation"]["phase"]:row["observation"]["value"] for row in batch}
+    expected_reduction=values["incident"]-values["baseline"]
     created=call("/api/v1/ingest/create",batch)
     require(created==call("/api/v1/ingest/create",batch),"ingestion replay changed receipt")
     run=created["core"]["run"]
@@ -42,7 +45,7 @@ def smoke(origin):
     require(context["evidence"] and {e["evidence_id"]:e["payload_hash"] for e in context["evidence"]}=={e["evidence_id"]:e["payload_hash"] for e in created["stored_evidence"]},"evidence mismatch")
     require("NODE-CI-CHILD" in [n["node_id"] for n in context["affected"]],"missing topology impact")
     diagnosis=context["diagnosis"]
-    require(diagnosis["hypothesis"]=="LATENCY_REGRESSION_OBSERVED" and diagnosis["preview"]["conditional_reduction_ms"]==120 and diagnosis["root_cause"]=="UNKNOWN","unexpected RCA preview")
+    require(diagnosis["hypothesis"]=="LATENCY_REGRESSION_OBSERVED" and abs(diagnosis["preview"]["conditional_reduction_ms"]-expected_reduction)<0.001 and diagnosis["root_cause"]=="UNKNOWN","unexpected RCA preview")
     copilot=projection["copilot"]
     require(copilot["criticism"]["evidence_supported"] is True and copilot["criticism"]["causality_established"] is False,"invalid critic")
     require({m["evidence_id"] for m in copilot["retrieval"]["matches"]}=={e["evidence_id"] for e in context["evidence"]},"retrieval mismatch")
@@ -63,7 +66,15 @@ def smoke(origin):
         raise RuntimeError("unsafe action accepted")
     after=call(path)
     require(after["core"]["run"]==run and after["context"]["evidence"]==context["evidence"],"simulation mutated state")
-    print(json.dumps({"run_id":rid,"incident_id":run["incident_id"],"evidence_count":len(context["evidence"]),"result":"PASS","host_execution":False}))
+    print(json.dumps({"run_id":rid,"incident_id":run["incident_id"],"evidence_count":len(context["evidence"]),"result":"PASS","host_execution":False,"measurement":measurement,"conditional_reduction_ms":expected_reduction}))
 
 if __name__=="__main__":
-    smoke(sys.argv[1])
+    if len(sys.argv)==3 and sys.argv[2]=="--observed":
+        import runpy
+        from pathlib import Path
+        batch,measurement=runpy.run_path(str(Path(__file__).with_name("poc-observed-latency.py")))["observed_batch"]()
+        smoke(sys.argv[1],batch,measurement)
+    elif len(sys.argv)==2:
+        smoke(sys.argv[1])
+    else:
+        raise SystemExit("usage: poc-dynamic-smoke.py ORIGIN [--observed]")
