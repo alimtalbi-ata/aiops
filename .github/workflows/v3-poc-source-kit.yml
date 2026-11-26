@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_context.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -81,6 +82,15 @@ jobs:
                           page.locator("#context-sim").click()
                           expect(page.locator("#context-result")).to_contain_text("Policy decision: SIMULATE")
                           expect(page.locator("#context-result")).to_contain_text("Host execution: NONE")
+
+                          page.locator("#create-enterprise").click()
+                          expect(page.locator("#load-enterprise")).to_be_enabled(timeout=30000)
+                          page.locator("#load-enterprise").click()
+                          for value in ("Potential exposure", "Payments", "Customer CRM", "NODE-CI-ENT-USER-FIN-01", "Synthetic user reports slow payment", "ENT-DOC-001", "ENT-DOC-003", "Policy DENY"):
+                              expect(page.locator("#enterprise-result")).to_contain_text(value,timeout=30000)
+                          expect(page.locator("#enterprise-result")).not_to_contain_text("Independent HR portal")
+                          page.locator("#load-dynamic-context").click()
+                          expect(page.locator("#context-result")).to_contain_text("Conditional reduction: 120 ms",timeout=30000)
                       finally:
                           browser.close()
               finally:
@@ -202,6 +212,51 @@ jobs:
               with urllib.request.urlopen(endpoint,timeout=20) as response:
                   assert json.load(response)["copilot"]["document_retrieval"]==docs
               print(json.dumps({"scenario":receipt_name,"run_id":run,"document_retrieval":"PASS","catalog_sha256":docs["catalog_sha256"],"citation_ids":[c["doc_id"] for c in citations],"observed_evidence_count":len(copilot["sources"]),"production_authorized":False}))
+          # Enterprise E1: real persisted Core, Twin and Evidence, mixed signals.
+          def ingest_enterprise(rows):
+              req=urllib.request.Request(origin+"/api/v1/ingest/create",data=json.dumps(rows).encode(),headers={"Origin":origin,"Content-Type":"application/json"})
+              with urllib.request.urlopen(req,timeout=20) as response:
+                  return json.load(response)
+          def read_enterprise(run):
+              with urllib.request.urlopen(origin+"/api/v1/enterprise-context?run_id="+run,timeout=20) as response:
+                  return json.load(response)
+          p="NODE-CI-ENT-"
+          base={"kind":"metric","source":"ent-ci","resource":"NODE-CI-ROOT","severity":"critical","tenant":"synthetic-demo","synthetic":True}
+          scope={"asset_id":p+"ASSET-PAR","application_id":p+"APP-PAY"}
+          rows=[
+              dict(base,id="ent-ci-m1",enterprise=dict(scope,occurred_at="2026-01-01T09:00:00Z"),observation={"metric":"latency_ms","phase":"baseline","value":40}),
+              dict(base,id="ent-ci-m2",enterprise=dict(scope,occurred_at="2026-01-01T09:00:10Z"),observation={"metric":"latency_ms","phase":"incident","value":160}),
+              dict(base,id="ent-ci-l1",kind="log",enterprise=dict(scope,occurred_at="2026-01-01T09:00:11Z",group_id=p+"GROUP-FIN",user_id=p+"USER-FIN-01",message="Synthetic slow payment")),
+              dict(base,id="ent-ci-e1",kind="event",enterprise=dict(scope,occurred_at="2026-01-01T09:00:12Z",message="Synthetic latency alarm"))]
+          created=ingest_enterprise(rows)
+          run=created["core"]["run"]["run_id"]
+          assert created==ingest_enterprise(rows)
+          ent=read_enterprise(run)
+          assert ent["run_id"]==run and ent["incident_id"]==created["core"]["run"]["incident_id"]
+          assert len(ent["timeline"])==4 and ent["reported_user_ids"]==[p+"USER-FIN-01"]
+          assert [x["event_id"] for x in ent["timeline"]]==["ent-ci-m1","ent-ci-m2","ent-ci-l1","ent-ci-e1"]
+          assert {x["node_id"] for x in ent["potential_exposure"]["applications"]}=={p+"APP-PAY",p+"APP-CRM"}
+          assert {x["node_id"] for x in ent["potential_exposure"]["users"]}=={p+"USER-FIN-01",p+"USER-FIN-02",p+"USER-SALES-01",p+"USER-DIRECT-01"}
+          assert {x["id"] for x in ent["document_references"]}=={"ENT-DOC-001","ENT-DOC-003"}
+          assert ent["observed_outage_established"] is False and ent["production_authorized"] is False
+          assert {x["evidence_id"]:x["payload_hash"] for x in ent["timeline"]}=={x["evidence_id"]:x["payload_hash"] for x in created["stored_evidence"]}
+          with urllib.request.urlopen(origin+"/api/v1/incident-context/dynamic?run_id="+run,timeout=20) as response:
+              combined=json.load(response)
+          assert combined["enterprise_context"]==ent
+          assert combined["copilot"]["enterprise_document_retrieval"]["citations"]==ent["document_references"]
+          assert combined["copilot"]["sources"]==combined["context"]["evidence"]
+          single=dict(rows[2],id="ent-ci-user-only",enterprise=dict(scope,occurred_at="2026-01-01T09:01:00Z",user_id=p+"USER-DIRECT-01",message="Synthetic isolated user report"))
+          other=ingest_enterprise([single])
+          individual=read_enterprise(other["core"]["run"]["run_id"])
+          assert individual["run_id"]!=run and individual["reported_user_ids"]==[p+"USER-DIRECT-01"]
+          assert len(individual["timeline"])==1 and individual["observed_outage_established"] is False
+          for bad in (dict(rows[2],id="ent-ci-invalid",enterprise=dict(rows[2]["enterprise"],user_id=p+"USER-HR-01")),dict(rows[2],id="ent-ci-foreign",tenant="foreign")):
+              try: ingest_enterprise([bad])
+              except urllib.error.HTTPError as exc: assert exc.code==503
+              else: raise AssertionError("foreign or contradictory scope accepted")
+          receipt={"result":"PASS","run_id":run,"evidence_count":4,"individual_run_id":individual["run_id"],"topology_sha256":ent["topology_sha256"],"production_authorized":False}
+          (pathlib.Path(os.environ["V3_ROOT"])/"enterprise-smoke.json").write_text(json.dumps(receipt))
+          print(json.dumps(receipt))
           def post(path,body):
               req=urllib.request.Request(origin+"/api/v1/hitl/"+path,data=json.dumps(body).encode(),headers={"Origin":origin,"Content-Type":"application/json"})
               with urllib.request.urlopen(req,timeout=20) as response:
@@ -240,6 +295,20 @@ jobs:
               def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
               assert query("select status from aiops.runs where run_id=\'"+run+"\'")=="CREATED"
               assert query("select count(*) from aiops.evidence where provenance->>\'run_id\'=\'"+run+"\'")==str(receipt["evidence_count"])
+          PY
+          python3 - "$V3_ROOT/enterprise-smoke.json" <<'PY'
+          import json,sys,subprocess,os,hashlib,re
+          receipt=json.load(open(sys.argv[1]))
+          root=os.environ["V3_ROOT"]
+          compose=["docker","compose","--project-name","aiops-v3-poc-"+hashlib.sha256(root.encode()).hexdigest()[:12],"--env-file",root+"/poc.env","-f","v3-spike/kit/compose.poc-source.yml"]
+          for run,count in ((receipt["run_id"],4),(receipt["individual_run_id"],1)):
+              assert re.fullmatch(r"RUN-[A-F0-9]{16}",run)
+              for db in ("aiops","aiops_restore_ci"):
+                  def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
+                  assert query("select status from aiops.runs where run_id='"+run+"'")=="CREATED"
+                  assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->'signal' ? 'enterprise'")==str(count)
+                  assert query("select count(*) from aiops.twin_nodes where node_id like 'NODE-CI-ENT-%'")=="18"
+          print("Enterprise E1 graph and signal restore PASS")
           PY
           "${compose[@]}" exec -T postgres dropdb -U aiops aiops_restore_ci
       - if: always()

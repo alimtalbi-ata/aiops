@@ -19,7 +19,7 @@ def get(port, path):
     finally:
         conn.close()
 
-def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None):
+def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None, include_signals=False):
     # Only explicitly named synthetic CI fixtures, never arbitrary tenant data.
     if not re.fullmatch(r"NODE-CI-[A-Z0-9-]{1,80}",node_id):
         raise ValueError("synthetic CI node required")
@@ -41,6 +41,7 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None)
         raise ValueError("missing root")
     verified=[]
     observations=[]
+    signals=[]
     if dynamic_incident is not None and not 1 <= len(evidence["items"]) <= 20:
         raise ValueError("dynamic evidence required")
     for item in evidence["items"]:
@@ -62,6 +63,8 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None)
             signal=payload.get("signal")
             if not isinstance(signal,dict):
                 raise ValueError("invalid dynamic signal")
+            if include_signals:
+                signals.append({"evidence_id":item["evidence_id"],"payload_hash":digest,"signal":signal})
             observation=signal.get("observation")
             if observation is not None:
                 if (not isinstance(observation,dict) or set(observation)!={"metric","phase","value"}
@@ -76,15 +79,15 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None)
                                  "evidence_id":item["evidence_id"]})
     return {"classification":"SYNTHETIC_LAB_CONTEXT","run_id":run_id,"root":node_id,
             "affected":affected,"evidence":verified,"diagnosis":preview(observations),"rca":"UNKNOWN","policy":"DENY",
-            "tenant_acl_qualified":False,"production_authorized":False}
+            "tenant_acl_qualified":False,"production_authorized":False,**({"verified_signals":signals} if include_signals else {})}
 
 
-def dynamic_context(core_port, token, run_id, twin_port, evidence_port, node_id):
+def dynamic_context(core_port, token, run_id, twin_port, evidence_port, node_id, *, include_signals=False):
     """Only a verified DEMO ingestion run mapped to the explicitly configured lab node."""
     from core_read import read_run
     core=read_run(core_port,token,run_id)
     run=core["run"]
     if run["mode"]!="DEMO" or not re.fullmatch(r"INC-CI-INGEST-[a-f0-9]{32}",run["incident_id"]):
         raise ValueError("verified ingestion run required")
-    details=context(twin_port,evidence_port,run_id,node_id,dynamic_incident=run["incident_id"])
+    details=context(twin_port,evidence_port,run_id,node_id,dynamic_incident=run["incident_id"],include_signals=include_signals)
     return core,details
