@@ -22,7 +22,9 @@ def smoke(origin, restart):
     advance=lambda n:call("/api/v1/enterprise-clock/advance",{"expected_tick":n})
     capture=lambda n:call("/api/v1/enterprise-clock/capture",{"expected_tick":n})
     technical=lambda n:call("/api/v1/enterprise-clock/capture-technical",{"expected_tick":n})
+    activity=lambda:call("/api/v1/enterprise-activity")
     initial=status()
+    initial_activity=activity()
     assert initial["current_tick"]==(4 if restart else 0)
     assert initial["pending"] is False and initial["production_authorized"] is False
     first=initial["recent"][2]["publication"]["run_id"] if restart else None
@@ -82,6 +84,23 @@ def smoke(origin, restart):
             print(json.dumps({"classification":"E5_TECHNICAL_CAPTURE","tick":n,"result":"PASS","measurements":measurements,"production_authorized":False}),file=sys.stderr)
         else:
             assert step["publication"]["state"]=="MODEL_ONLY"
+    recent=activity()
+    assert recent["current_tick"]==(8 if restart else 4)
+    assert not recent["unavailable_pre_e6_ticks"]
+    records=recent["records"]
+    assert len(records)==(24 if restart else 12)
+    assert len({r["activity_id"] for r in records})==len(records)
+    assert sum(r["disposition"]=="INCIDENT_LINKED" for r in records)==(2 if restart else 1)
+    assert sum(r["disposition"]=="ALERT_ONLY" for r in records)==(2 if restart else 1)
+    assert sum(r["disposition"]=="OBSERVATION_ONLY" for r in records)==(20 if restart else 10)
+    assert all(r["classification"]=="MODEL_GENERATED" and not r["observed_outage_established"] for r in records)
+    assert all(r["run_id"] is None for r in records if r["disposition"]!="INCIDENT_LINKED")
+    if restart: assert records[:12]==initial_activity["records"]
+    for r in records:
+        if r["run_id"]:
+            ctx=call("/api/v1/enterprise-context?run_id="+r["run_id"])
+            assert ctx["incident_id"]==r["incident_id"] and ctx["root"]==r["resource"]
+    print(json.dumps({"classification":"E6_ACTIVITY_JOURNAL","result":"PASS","ticks":recent["current_tick"],"activity_records":len(records),"signals":len(records)*3,"alerts_only":sum(r["disposition"]=="ALERT_ONLY" for r in records),"linked_incidents":sum(r["disposition"]=="INCIDENT_LINKED" for r in records),"production_authorized":False}),file=sys.stderr)
     end=status()
     assert end["current_tick"]==(8 if restart else 4)
     assert [x["phase"] for x in end["recent"]]==["NOMINAL","CHANGE","DEGRADED","MODEL_RECOVERY"]*(2 if restart else 1)
