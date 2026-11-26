@@ -1,4 +1,6 @@
 """Read-only GLPI legacy REST client for an isolated synthetic lab."""
+import base64
+import binascii
 import json
 import re
 import urllib.request
@@ -28,8 +30,18 @@ class LabGLPI:
             return json.loads(raw)
     def __enter__(self):
         token=self._get("initSession",{"Authorization":"user_token "+self.user_token})["session_token"]
-        if not isinstance(token,str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}",token):
+        # GLPI 12 legacy REST returns base64(GLPIKey-encrypted session ID).
+        # Retain old opaque tokens for earlier lab versions, never header controls.
+        if not isinstance(token,str) or len(token)>512:
             raise ValueError("invalid session")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,128}",token):
+            try:
+                inner=base64.b64decode(token,validate=True)
+                encrypted=base64.b64decode(inner,validate=True)
+                if not 40<=len(encrypted)<=256 or base64.b64encode(inner).decode()!=token or base64.b64encode(encrypted)!=inner:
+                    raise ValueError("invalid encrypted session envelope")
+            except (ValueError,binascii.Error) as exc:
+                raise ValueError("invalid session") from exc
         self.session=token
         return self
     def __exit__(self,*args):

@@ -1,8 +1,8 @@
-name: V3 native GLPI boot lab
+name: V3 native GLPI REST lab
 on:
   pull_request:
     branches: [v3-spike/central-integration]
-    paths: ['v3-spike/kit/glpi-native*', '.github/workflows/v3-native-glpi.yml']
+    paths: ['v3-spike/kit/glpi-native*', 'v3-spike/vertical/glpi_rest.py', 'v3-spike/vertical/test_glpi_rest.py', '.github/workflows/v3-native-glpi.yml']
 permissions:
   contents: read
 jobs:
@@ -15,7 +15,7 @@ jobs:
       COMPOSE_PROJECT_NAME: v3-glpi-ci
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Boot fresh GLPI
+      - name: Boot fresh GLPI and qualify read-only REST
         shell: bash
         run: |
           set -euo pipefail
@@ -26,12 +26,57 @@ jobs:
           compose config --quiet
           compose pull
           compose up -d
+          ready=false
           for i in $(seq 1 120); do
-            if curl -fsSL --max-time 5 "http://127.0.0.1:$GLPI_LAB_PORT/" -o /tmp/glpi-lab.html && grep -qi GLPI /tmp/glpi-lab.html; then
-              echo "Native GLPI HTTP page available; installation and REST not yet qualified"
-              exit 0
+            if compose exec -T glpi test -f /var/glpi/config/config_db.php && curl -fsSL --max-time 5 "http://127.0.0.1:$GLPI_LAB_PORT/" -o /tmp/glpi-lab.html && grep -qi GLPI /tmp/glpi-lab.html; then
+              ready=true
+              break
             fi
             sleep 3
           done
-          compose ps
-          exit 1
+          if [[ "$ready" != true ]]; then
+            compose ps
+            exit 1
+          fi
+          export AIOPS_GLPI_DISPOSABLE=v3-glpi-ci
+          export AIOPS_GLPI_APP_TOKEN="$(openssl rand -hex 24)"
+          export AIOPS_GLPI_USER_TOKEN="$(openssl rand -hex 24)"
+          echo "::add-mask::$AIOPS_GLPI_APP_TOKEN"
+          echo "::add-mask::$AIOPS_GLPI_USER_TOKEN"
+          echo "::add-mask::$GLPI_LAB_DB_PASSWORD"
+          echo "::add-mask::$GLPI_LAB_ROOT_PASSWORD"
+          fixture=$(compose exec -T -u www-data -e AIOPS_GLPI_DISPOSABLE -e AIOPS_GLPI_APP_TOKEN -e AIOPS_GLPI_USER_TOKEN glpi php < v3-spike/kit/glpi-native-fixture.php)
+          export AIOPS_GLPI_FIXTURE="$fixture"
+          compose restart glpi
+          for i in $(seq 1 60); do
+            if curl -fsSL --max-time 5 "http://127.0.0.1:$GLPI_LAB_PORT/" -o /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          PYTHONPATH=v3-spike/vertical python3 - <<'PY'
+          import json, os, secrets
+          from urllib.error import HTTPError
+          from glpi_rest import LabGLPI
+          fixture=json.loads(os.environ["AIOPS_GLPI_FIXTURE"])
+          tid,fid=fixture["ticket_id"],fixture["followup_id"]
+          port=int(os.environ["GLPI_LAB_PORT"])
+          app,user=os.environ["AIOPS_GLPI_APP_TOKEN"],os.environ["AIOPS_GLPI_USER_TOKEN"]
+          def denied(fn):
+              try:
+                  fn()
+              except HTTPError as exc:
+                  assert exc.code in (400,401,403), exc.code
+              else:
+                  raise AssertionError("invalid credentials or session accepted")
+          denied(lambda: LabGLPI(port,app,secrets.token_hex(24)).__enter__())
+          denied(lambda: LabGLPI(port,secrets.token_hex(24),user).__enter__())
+          with LabGLPI(port,app,user) as client:
+              session=client.session
+              ticket,followups=client.read_ticket(tid)
+              assert ticket["name"]=="AIOPS-V3-CI-TICKET"
+              assert any(f["id"]==fid and f["content"]=="AIOPS-V3-CI-FOLLOWUP" and int(f["is_private"])==1 for f in followups)
+          assert client.session is None
+          denied(lambda: client._get(f"Ticket/{tid}",{"Session-Token":session}))
+          print(json.dumps({"classification":"DISPOSABLE_NATIVE_GLPI_REST","version":"12.0.2","ticket_id":tid,"followup_id":fid,"session_length":len(session),"negative_auth":True,"closed_session_denied":True,"result":"PASS","production_authorized":False}))
+          PY
