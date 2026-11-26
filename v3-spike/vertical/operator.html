@@ -295,7 +295,7 @@ async function clockAction(advance,capture=false,technical=false,scenarios=false
   }
   await readClock();
  }catch(_err){clockState=null;$("clock-result").textContent="UNKNOWN / DENY — refresh state before retry";$("clock-open").disabled=true;}
- finally{clockBusy=false;const last=clockState?.latest;$("clock-next").disabled=!clockState||last?.measured_capture?.state==="PENDING"||last?.technical_capture?.state==="PENDING"||last?.scenario_capture?.state==="PENDING";$("clock-capture").disabled=!last||last.phase!=="DEGRADED"||last.publication?.state!=="PUBLISHED"||last.measured_capture?.state==="PUBLISHED";$("clock-technical").disabled=!last||!last.publication||last.technical_capture?.state==="PUBLISHED";$("clock-scenarios").disabled=!last||!last.publication||last.scenario_capture?.state==="PUBLISHED";
+ finally{clockBusy=false;const last=clockState?.latest;$("clock-next").disabled=!clockState||last?.measured_capture?.state==="PENDING"||last?.technical_capture?.state==="PENDING"||last?.scenario_capture?.state==="PENDING";$("clock-capture").disabled=!last||last.phase!=="DEGRADED"||last.publication?.state!=="PUBLISHED"||last.measured_capture?.state==="PUBLISHED";$("clock-technical").disabled=!last||!last.publication||last.technical_capture?.state==="PUBLISHED";$("clock-scenarios").disabled=!last||!last.publication||last.scenario_capture?.state==="PUBLISHED";}
 }
 $("clock-read").addEventListener("click",()=>clockAction(false));
 $("clock-next").addEventListener("click",()=>clockAction(true));
