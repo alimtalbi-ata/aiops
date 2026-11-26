@@ -1,0 +1,27 @@
+# Disposable CI override only; never use as canonical product compose.
+services:
+  worker:
+    image: aiops-v3-e17-worker-ci:local
+    environment:
+      AIOPS_V3_E17_TARGET: http://e17-target:816
+      V3_E17_ACTIVITY_TOKEN: ${V3_E17_ACTIVITY_TOKEN:?dedicated CI activity token required}
+  e17-target:
+    profiles: [e17-target-ci]
+    image: aiops-v3-e17-worker-ci:local
+    entrypoint: ["python", "/lab/kit/poc-e17-product-worker-smoke.py"]
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    environment:
+      GITHUB_ACTIONS: "true"
+      AIOPS_V3_E17_TARGET: http://e17-target:816
+      AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+      V3_E17_ACTIVITY_TOKEN: ${V3_E17_ACTIVITY_TOKEN:?dedicated CI activity token required}
+      PYTHONDONTWRITEBYTECODE: "1"
+      NO_PROXY: "127.0.0.1,localhost"
+    volumes:
+      - ${GITHUB_WORKSPACE:?disposable checkout required}/v3-spike:/lab:ro
+    networks: [backend]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
