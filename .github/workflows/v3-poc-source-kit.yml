@@ -449,6 +449,18 @@ jobs:
                   def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"'")== "3"
                   assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->'signal'->'enterprise'->'telemetry'->>'classification'='MEASURED_ISOLATED_WORKLOAD'")=="2"
+          cases=clock["scenario_runs"]
+          assert len(cases)==8 and len({r["run_id"] for r in cases})==8
+          for case in cases:
+              run=case["run_id"]; resource=case["resource"]; ident=case["scenario_id"]
+              assert re.fullmatch(r"RUN-[A-F0-9]{16}",run)
+              assert re.fullmatch(r"NODE-CI-[A-Z0-9-]{1,80}",resource)
+              assert re.fullmatch(r"[A-Z0-9_]{1,80}",ident)
+              for db in ("aiops","aiops_restore_ci"):
+                  def query(sql): return subprocess.check_output(compose+["exec","-T","postgres","psql","-U","aiops","-d",db,"-Atc",sql],text=True).strip()
+                  assert query("select count(*) from aiops.evidence where provenance->>'run_id'='"+run+"' and payload->>'resource'='"+resource+"' and payload->'signal'->'enterprise'->'scenario'->>'scenario_id'='"+ident+"'")=="4"
+                  assert query("select count(*) from aiops.runs where run_id='"+run+"'")=="1"
+          print("E10 first-cycle campaign PostgreSQL restore PASS: 8 runs / 32 evidence")
           print("E5 technical evidence restore PASS")
           print("E4 technical inventory and incident restore PASS")
           print("E3 measured multiasset evidence restore PASS")
