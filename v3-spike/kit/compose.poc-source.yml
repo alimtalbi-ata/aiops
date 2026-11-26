@@ -12,6 +12,7 @@ services:
       - ../../db/migrations/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ../../db/migrations/004_operational_model.sql:/docker-entrypoint-initdb.d/004_operational_model.sql:ro
       - ../../db/migrations/008_event_idempotency.sql:/docker-entrypoint-initdb.d/008_event_idempotency.sql:ro
+      - ./poc-execution-receipts.sql:/docker-entrypoint-initdb.d/009_poc_execution_receipts.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aiops -d aiops"]
       interval: 5s

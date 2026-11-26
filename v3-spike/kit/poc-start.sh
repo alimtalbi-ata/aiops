@@ -26,12 +26,12 @@ compose=(docker compose --project-name "aiops-v3-poc-$(printf %s "$V3_ROOT" | sh
 # PostgreSQL init scripts only run on an empty data directory.
 # Apply the additive 008 migration before starting newer application services.
 "${compose[@]}" up --wait --wait-timeout 120 postgres
-schema_ready=$("${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -Atc "select exists(select 1 from information_schema.columns where table_schema='aiops' and table_name='run_events' and column_name='event_key') and to_regclass('aiops.ux_run_events_event_key') is not null")
+schema_ready=$("${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -Atc "select exists(select 1 from information_schema.columns where table_schema='aiops' and table_name='run_events' and column_name='event_key') and to_regclass('aiops.ux_run_events_event_key') is not null and to_regclass('aiops.execution_receipts') is not null")
 if [[ "$schema_ready" != t ]]; then
   [[ ! -L "$V3_ROOT/backup" ]] || exit 1
   mkdir -p "$V3_ROOT/backup"
   [[ "$(realpath "$V3_ROOT/backup")" = "$V3_ROOT/backup" && -O "$V3_ROOT/backup" ]] || exit 1
-  backup=$(mktemp "$V3_ROOT/backup/pre-008.XXXXXX")
+  backup=$(mktemp "$V3_ROOT/backup/pre-poc-schema.XXXXXX")
   if ! "${compose[@]}" exec -T postgres pg_dump -U aiops -Fc aiops > "$backup" || [[ ! -s "$backup" ]]; then
     rm -f "$backup"
     echo "Pre-upgrade backup failed; refusing migration" >&2
@@ -40,6 +40,7 @@ if [[ "$schema_ready" != t ]]; then
   echo "Pre-upgrade backup: $backup"
 fi
 "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --single-transaction -U aiops -d aiops < "$here/../../db/migrations/008_event_idempotency.sql"
+"${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --single-transaction -U aiops -d aiops < "$here/poc-execution-receipts.sql"
 # Retry only a confirmed port binding collision, never delete persistent data.
 log=$(mktemp "$V3_ROOT/.compose-start.XXXXXX")
 trap 'rm -f "$log"' EXIT

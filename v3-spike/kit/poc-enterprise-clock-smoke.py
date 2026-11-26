@@ -28,6 +28,14 @@ def smoke(origin, restart):
     assert len(catalog["scenarios"])==16 and len({x["family"] for x in catalog["scenarios"]})==7
     by_id={x["scenario_id"]:x for x in catalog["scenarios"]}
     initial=status()
+    cfg={"seed":42,"horizon":8,"frequency_pct":100,"min_duration":1,"max_duration":5,"max_users":5}
+    param=lambda:call("/api/v1/enterprise-parametric")
+    if not restart:
+        assert param()["state"]=="DISABLED"
+        configured=call("/api/v1/enterprise-parametric/configure",cfg)
+        assert configured["records"]==[] and configured["planned_episode_count"]==7
+    initial_param=param()
+    assert initial_param["configuration"]==cfg
     initial_triage=call("/api/v1/enterprise-triage")
     initial_episodes=call("/api/v1/enterprise-episodes")
     initial_activity=activity()
@@ -168,6 +176,17 @@ def smoke(origin, restart):
     print(json.dumps({"classification":"E6_ACTIVITY_JOURNAL","result":"PASS","ticks":recent["current_tick"],"activity_records":len(records),"signals":len(records)*3,"alerts_only":sum(r["disposition"]=="ALERT_ONLY" for r in records),"linked_incidents":sum(r["disposition"]=="INCIDENT_LINKED" for r in records),"production_authorized":False}),file=sys.stderr)
     end=status()
     cases=[r for x in end["recent"] for r in x["scenario_capture"]["incidents"]]
+    workload=param()
+    assert workload["plan_sha256"]==initial_param["plan_sha256"]
+    assert all(r["tick"]<=end["current_tick"] and not r["observed_outage_established"] for r in workload["records"])
+    if restart:
+        assert workload["state"]=="HORIZON_COMPLETE"
+        assert len({r["episode_id"] for r in workload["records"]})==7
+        assert sum(r["phase"]=="MODEL_RECOVERY" for r in workload["records"])==7
+        assert [r for r in workload["records"] if r["tick"]<=4]==initial_param["records"]
+    else:
+        assert workload["state"]=="CONFIGURED"
+    print(json.dumps({"classification":"E14_PARAMETRIC_WORKLOAD","result":"PASS","tick":end["current_tick"],"episodes":len({r["episode_id"] for r in workload["records"]}),"observations":len(workload["records"]),"plan_sha256":workload["plan_sha256"],"production_authorized":False}),file=sys.stderr)
     from collections import Counter
     triage=call("/api/v1/enterprise-triage")
     assert len(triage["records"])==end["current_tick"]*2 and not triage["unavailable_pre_e13_ticks"]
