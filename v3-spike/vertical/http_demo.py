@@ -237,6 +237,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200,json.dumps({"classification":"SYNTHETIC_SCENARIO_CATALOG","campaign":VERSION,"scenarios":rows,"production_authorized":False,"operational_decision":"DENY"}).encode())
             except Exception:
                 self.reply(503,b'{"error":"SCENARIOS_UNVERIFIED","policy":"DENY"}')
+        elif self.path=="/api/v1/enterprise-episodes":
+            try:
+                from enterprise_episodes import validate_graph
+                if self.server.enterprise_clock is None:
+                    raise ValueError("clock not configured")
+                twin,_,_,_=self.server.context_config
+                graph=Graph(get(twin,"/api/twin/graph"))
+                result=self.server.enterprise_clock.episode_timeline()
+                validate_graph(result["records"],graph)
+                self.reply(200,json.dumps(result).encode())
+            except Exception:
+                self.reply(503,b'{"error":"EPISODES_UNVERIFIED","policy":"DENY"}')
         elif self.path=="/api/v1/enterprise-case-knowledge":
             try:
                 if self.server.enterprise_clock is None:

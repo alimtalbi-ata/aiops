@@ -21,6 +21,7 @@ def smoke(root):
     corpus_before=source.document_catalog()
     knowledge_before=source.knowledge_catalog()
     cases_before=source.case_catalog()
+    episodes_before=source.episode_timeline()
     assert before["current_tick"]==8 and not before["pending"]
     backup=root/"backup"/"enterprise-world.sqlite3"
     fd=os.open(backup,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,0o600)
@@ -33,9 +34,9 @@ def smoke(root):
         restored=EnterpriseClock(tmp)
         with closing(sqlite3.connect(backup)) as db, closing(restored.connect()) as dest:
             db.backup(dest)
-        assert restored.status()==before and restored.activity()==activity_before and restored.document_catalog()==corpus_before and restored.knowledge_catalog()==knowledge_before and restored.case_catalog()==cases_before
+        assert restored.status()==before and restored.activity()==activity_before and restored.document_catalog()==corpus_before and restored.knowledge_catalog()==knowledge_before and restored.case_catalog()==cases_before and restored.episode_timeline()==episodes_before
         with closing(source.connect()) as a, closing(restored.connect()) as b:
-            for table,count in (("journal",8),("measured",2),("technical",2),("activity",8),("corpus",12),("knowledge",6),("scenarios",8),("case_knowledge",14)):
+            for table,count in (("journal",8),("measured",2),("technical",2),("activity",8),("corpus",12),("knowledge",6),("scenarios",8),("case_knowledge",14),("episodes",8)):
                 order={"corpus":"doc_id,version","knowledge":"doc_id","case_knowledge":"doc_id"}.get(table,"tick")
                 rows=a.execute("SELECT * FROM "+table+" ORDER BY "+order).fetchall()
                 assert len(rows)==count and rows==b.execute("SELECT * FROM "+table+" ORDER BY "+order).fetchall()
@@ -46,6 +47,7 @@ def smoke(root):
         assert restored.knowledge_catalog()["documents"]==knowledge_before["documents"] and source.knowledge_catalog()==knowledge_before
         assert restored.case_catalog()["total_documents"]==16 and source.case_catalog()==cases_before
         assert len({d["family"] for d in restored.case_catalog()["documents"]})==7
+        assert len(restored.episode_timeline()["records"])==36 and source.episode_timeline()==episodes_before
     print(json.dumps({"classification":"E5_SQLITE_BACKUP_RESTORE","result":"PASS","ticks":8,"technical_captures":2,"measured_captures":2,"restored_next_tick":9,"backup_sha256":hashlib.sha256(backup.read_bytes()).hexdigest(),"production_authorized":False}))
 
 if __name__=="__main__":

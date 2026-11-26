@@ -29,6 +29,7 @@ jobs:
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_hybrid.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_scenarios.py -v
       - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_case_knowledge.py -v
+      - run: python3 -m unittest discover -s v3-spike/vertical -p test_enterprise_episodes.py -v
       - run: python3 -m py_compile v3-spike/kit/poc-gamma.py v3-spike/kit/poc-dynamic-smoke.py
       - run: docker compose -f v3-spike/kit/compose.poc-source.yml config --quiet
         env:
@@ -126,6 +127,15 @@ jobs:
                           expect(page.locator("#clock-run")).to_contain_text("CPU_SATURATION")
                           page.locator("#clock-next").click()
                           expect(page.locator("#clock-result")).to_contain_text("Logical tick: 4")
+                          page.locator("#episodes-read").click()
+                          expect(page.locator("#episodes-result")).to_contain_text("STORAGE_CASCADE")
+                          page.locator("#episode-select").select_option("E12-0001-LYON_INTERMITTENT")
+                          expect(page.locator("#episodes-result")).to_contain_text("RECURRENCE")
+                          expect(page.locator("#episodes-result")).to_contain_text("Modeled only; cause and observed recovery UNKNOWN")
+                          page.locator("#episode-select").select_option("E12-0001-SHARED_IDENTITY")
+                          expect(page.locator("#episode-run")).to_contain_text("HR_HTTP_ERRORS")
+                          page.locator("#episode-open").click()
+                          expect(page.locator("#enterprise-result")).to_contain_text("HR_HTTP_ERRORS")
                           page.locator("#cases-read").click()
                           expect(page.locator("#cases-result")).to_contain_text("2 modeled case reports")
                           expect(page.locator("#cases-result")).to_contain_text("ENT-CASE-00003-CPU_SATURATION")
