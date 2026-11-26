@@ -36,6 +36,8 @@ class EpisodeTest(unittest.TestCase):
             receipts={}
             for tick in range(1,9):
                 clock.advance(tick,publish)
+                pending=clock.episode_timeline()
+                self.assertTrue(all(not r["related_cases"] for r in pending["records"] if r["tick"]==tick))
                 for item in clock.capture_scenarios(tick,publish)["incidents"]:
                     receipts[item["scenario_id"]]=item
                 clock=EnterpriseClock(root)
