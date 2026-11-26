@@ -182,6 +182,22 @@ class LabContextReal(unittest.TestCase):
                         self.assertFalse(simulation["executed_on_host"])
                         self.assertFalse(simulation["production_authorized"])
                         self.assertEqual(requests.get(context_url+"&decision=execute",timeout=20).status_code,503)
+                        def dynamic_hitl(action,data):
+                            return requests.post(origin+"/api/v1/hitl/dynamic/"+action,json=data,headers={"Origin":origin},timeout=20)
+                        approval=dynamic_hitl("request",{"run_id":dynamic["run_id"]})
+                        approval.raise_for_status()
+                        self.assertEqual(approval.json()["decision"],"HUMAN_APPROVAL")
+                        self.assertEqual(approval.json()["run_id"],dynamic["run_id"])
+                        decision_payload={"run_id":dynamic["run_id"],"request_id":approval.json()["request_id"],"approved":True}
+                        for expected_decision in ("SIMULATE_ONLY","DENY"):
+                            receipt=dynamic_hitl("decide",decision_payload)
+                            receipt.raise_for_status()
+                            self.assertEqual(receipt.json()["decision"],expected_decision)
+                            self.assertFalse(receipt.json()["executed_on_host"])
+                            self.assertFalse(receipt.json()["production_authorized"])
+                            self.assertEqual(receipt.json()["operational_decision"],"DENY")
+                        self.assertEqual(dynamic_hitl("request",{"run_id":"RUN-CI-CONTEXT"}).status_code,503)
+                        self.assertEqual(requests.post(origin+"/api/v1/hitl/dynamic/request",json={"run_id":dynamic["run_id"]},headers={"Origin":"https://invalid.example"},timeout=20).status_code,503)
                         self.assertEqual(requests.get(context_url.replace(dynamic["run_id"],"RUN-CI-CONTEXT"),timeout=20).status_code,503)
                         http.context_config=(1814,1815,"NODE-CI-CHILD","INC-CI-CONTEXT")
                         try:
@@ -199,6 +215,14 @@ class LabContextReal(unittest.TestCase):
                                 page.locator("#simulate-dynamic-context").click()
                                 for value in ("Verified dynamic lab binding","Policy decision: SIMULATE","Host execution: NONE","Conditional reduction: 120 ms"):
                                     expect(page.locator("#context-result")).to_contain_text(value,timeout=20000)
+                                page.locator("#dynamic-hitl-request").click()
+                                expect(page.locator("#dynamic-hitl-result")).to_contain_text("HUMAN_APPROVAL",timeout=20000)
+                                page.locator("#dynamic-hitl-approve").click()
+                                expect(page.locator("#dynamic-hitl-result")).to_contain_text("SIMULATE_ONLY",timeout=20000)
+                                page.locator("#dynamic-hitl-request").click()
+                                expect(page.locator("#dynamic-hitl-result")).to_contain_text("HUMAN_APPROVAL",timeout=20000)
+                                page.locator("#dynamic-hitl-deny").click()
+                                expect(page.locator("#dynamic-hitl-result")).to_have_text(__import__("re").compile(r"^DENY — RUN-"),timeout=20000)
                                 previous=page.locator("#dynamic-result").inner_text()
                                 page.locator("#create-dynamic").click()
                                 expect(page.locator("#dynamic-result")).to_have_text(previous,timeout=20000)
