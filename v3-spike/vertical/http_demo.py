@@ -51,7 +51,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -70,6 +70,22 @@ class Handler(BaseHTTPRequestHandler):
                 port,token,_=self.server.core_config
                 _,evidence,_,_=self.server.context_config
                 self.reply(200,json.dumps(create_and_persist(data,port,token,evidence)).encode())
+                return
+            if self.path in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide"):
+                port,token,_=self.server.core_config
+                twin,evidence,node,_=self.server.context_config
+                core,details=dynamic_context(port,token,data["run_id"],twin,evidence,node)
+                run=core["run"]
+                policy=simulation_decision(self.server.policy_port,len(details["evidence"]))
+                if policy["policy_decision"]!="SIMULATE" or policy["simulation_only"] is not True:
+                    raise ValueError("simulation decision required")
+                args=(run["incident_id"],run["run_id"],details["evidence"])
+                if self.path.endswith("/request"):
+                    result=self.server.approval_gate.request(*args)
+                else:
+                    result=self.server.approval_gate.decide(data["request_id"],*args,data.get("approved"))
+                result.update(run_id=run["run_id"],incident_id=run["incident_id"],production_authorized=False)
+                self.reply(200,json.dumps(result).encode())
                 return
             core=read_run(*self.server.core_config)
             twin,evidence,node,expected=self.server.context_config
