@@ -1,0 +1,86 @@
+name: V3 disposable digest-pinned POC image BOM
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'app/**'
+      - 'db/migrations/**'
+      - 'v3-spike/kit/**'
+      - 'v3-spike/vertical/**'
+      - '.github/workflows/v3-poc-image-bom.yml'
+permissions:
+  contents: read
+jobs:
+  image-bom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      V3_ROOT: /tmp/aiops-v3-bom-ci
+      COMPOSE_PROJECT_NAME: v3-bom-ci
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build, push to loopback registry and qualify pinned start
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export V3_DB_PASSWORD="$(openssl rand -hex 24)"
+          export V3_LAB_TOKEN="$(openssl rand -hex 32)"
+          echo "::add-mask::$V3_DB_PASSWORD"
+          echo "::add-mask::$V3_LAB_TOKEN"
+          mkdir -p "$V3_ROOT/data/postgres" "$V3_ROOT/bom"
+          out="$V3_ROOT/bom"
+          base=v3-spike/kit/compose.poc-source.yml
+          compose=(docker compose -f "$base")
+          pinned=(docker compose -f "$base" -f "$out/compose.pinned.json")
+          cleanup() {
+            "${compose[@]}" down --remove-orphans || true
+            docker rm -f v3-bom-ci-registry || true
+          }
+          trap cleanup EXIT
+          docker run -d --name v3-bom-ci-registry -p 127.0.0.1:15080:5000 registry:2
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:15080/v2/ >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:15080/v2/ >/dev/null
+          python3 -m py_compile v3-spike/kit/poc-image-bom.py
+          python3 - "$V3_ROOT/build.json" <<'PY'
+          import json, sys
+          services = {s: {"image": "127.0.0.1:15080/aiops-v3/"+s+":ci"} for s in ("core","twin","evidence","policy")}
+          with open(sys.argv[1], "x") as f:
+              json.dump({"services": services}, f)
+          PY
+          docker compose -f "$base" -f "$V3_ROOT/build.json" build core twin evidence policy
+          "${compose[@]}" pull postgres
+          docker tag postgres:16-alpine 127.0.0.1:15080/aiops-v3/postgres:ci
+          python3 v3-spike/kit/poc-image-bom.py create "$out" "$(git rev-parse HEAD)"
+          "${pinned[@]}" config --quiet
+          "${pinned[@]}" up -d --no-build --pull always --wait --wait-timeout 300
+          ids=()
+          for service in postgres core twin evidence policy; do
+            ids+=("$("${pinned[@]}" ps -q "$service")")
+          done
+          python3 v3-spike/kit/poc-image-bom.py verify "$out" "${ids[@]}"
+          for service_port in core:810 twin:811 evidence:812 policy:813; do
+            service="${service_port%:*}"
+            port="${service_port#*:}"
+            endpoint=$("${pinned[@]}" port "$service" "$port")
+            [[ "$endpoint" =~ ^127\.0\.0\.1:[0-9]+$ ]]
+            case "${endpoint##*:}" in 7770|7777|7790) exit 1;; esac
+            curl --fail --silent --show-error --max-time 10 "http://$endpoint/health"
+            printf '\n'
+          done
+          cat "$out/image-bom.json"
+      - name: Upload BOM and pinned-start receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-poc-image-bom
+          path: |
+            /tmp/aiops-v3-bom-ci/bom/image-bom.json
+            /tmp/aiops-v3-bom-ci/bom/compose.pinned.json
+            /tmp/aiops-v3-bom-ci/bom/pinned-start.json
+          if-no-files-found: error
+          retention-days: 14
