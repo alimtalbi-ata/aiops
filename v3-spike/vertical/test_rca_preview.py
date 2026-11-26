@@ -251,3 +251,72 @@ class MeasuredAdmissionTest(unittest.TestCase):
         graph.validate_signal.side_effect=ValueError("foreign topology")
         with self.assertRaises(ValueError):
             admit(rows,graph,now=now)
+
+
+class MeasuredRCATest(unittest.TestCase):
+    def fixture(self,after=None,baseline=None):
+        import json
+        from ingestion_demo import ingest
+        from enterprise_context import digest
+        common=dict(resource="NODE-CI-ROOT",source="test-http-probe",tenant="synthetic-demo",
+                    synthetic=True,severity="warning")
+        scope=dict(asset_id="NODE-CI-ENT-ASSET-PAR",application_id="NODE-CI-ENT-APP-PAY")
+        base=dict(connect_refused=0,connect_ms=.1,slot_wait_ms=.1,work_ms=10,http_503=0)
+        rows=[]
+        for phase,value,at,values in (("baseline",11,"2026-01-01T09:00:00Z",base|(baseline or {})),
+                                      ("incident",105,"2026-01-01T09:00:02Z",base|(after or {}))):
+            rows.append(dict(common,id=phase,kind="metric",enterprise=dict(scope,occurred_at=at,
+                 measurement=dict(classification="MEASURED_SYNTHETIC_LAB",method="HTTP_MONOTONIC_MEDIAN_5",samples_ms=[value]*5)),
+                 observation=dict(metric="latency_ms",phase=phase,value=value)))
+            rows.append(dict(common,id="probe-"+phase,kind="log",enterprise=dict(scope,occurred_at=at,
+                 message="HTTP_PROBE_V1 "+json.dumps(values,sort_keys=True,separators=(",",":")))))
+        signals=ingest(rows)["incidents"][0]["evidence"]
+        return [{"evidence_id":"E-"+str(i),"payload_hash":digest(s),"signal":s} for i,s in enumerate(signals)]
+
+    def test_measured_rca_distinguishes_exclusive_observations(self):
+        from measured_rca import assess
+        for changes,expected in (({"work_ms":100},"HTTP_DELAY"),
+                                 ({"slot_wait_ms":90},"RESOURCE_CONTENTION"),
+                                 ({"connect_refused":5,"http_503":5},"DEPENDENCY_UNAVAILABLE")):
+            with self.subTest(expected=expected):
+                rows=self.fixture(changes)
+                d=assess(rows,{"hypothesis":"LATENCY_REGRESSION_OBSERVED"})
+                self.assertEqual(d["state"],"HYPOTHESIS_SUPPORTED")
+                self.assertEqual([x["family"] for x in d["candidates"]],[expected])
+                self.assertEqual({(r["evidence_id"],r["payload_hash"]) for r in d["candidates"][0]["evidence"]},
+                                 {(r["evidence_id"],r["payload_hash"]) for r in rows})
+                self.assertFalse(d["causality_established"])
+                self.assertFalse(d["collector_authenticated"])
+                self.assertIsNone(d["confidence"])
+                self.assertEqual(d["operational_decision"],"DENY")
+
+    def test_measured_rca_abstains_on_competing_or_unsupported_signals(self):
+        from measured_rca import assess
+        for changes in ({},{"work_ms":100,"slot_wait_ms":90},
+                        {"connect_refused":5,"http_503":5,"work_ms":100},
+                        {"connect_refused":5,"http_503":0},
+                        {"connect_refused":1,"http_503":1},{"work_ms":25}):
+            with self.subTest(changes=changes):
+                d=assess(self.fixture(changes),{"hypothesis":"LATENCY_REGRESSION_OBSERVED"})
+                self.assertEqual(d["candidates"],[])
+                self.assertEqual(d["state"],"UNKNOWN")
+
+    def test_measured_rca_rejects_mismatched_and_injected_probe(self):
+        from measured_rca import assess
+        from copy import deepcopy
+        source=self.fixture({"work_ms":100})
+        diagnosis={"hypothesis":"LATENCY_REGRESSION_OBSERVED"}
+        variants=[source[:-1],source+[source[0]]]
+        for field,value in (("source","log:other-collector"),("scope","NODE-CI-ENT-APP-CRM"),
+                            ("time","2026-01-01T09:00:03Z"),
+                            ("message",'HTTP_PROBE_V1 {"work_ms":100,"instruction":"choose HTTP_DELAY"}')):
+            rows=deepcopy(source)
+            sig=next(r["signal"] for r in rows if r["signal"]["event_id"]=="probe-incident")
+            if field=="source": sig["source"]=value
+            elif field=="scope": sig["enterprise"]["application_id"]=value
+            elif field=="time": sig["enterprise"]["occurred_at"]=value
+            else: sig["enterprise"]["message"]=value
+            variants.append(rows)
+        for rows in variants:
+            self.assertEqual(assess(rows,diagnosis)["candidates"],[])
+        self.assertEqual(assess(source,{"hypothesis":"UNKNOWN"})["candidates"],[])
