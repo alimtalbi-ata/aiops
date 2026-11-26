@@ -1,0 +1,86 @@
+name: V3 independent D periodic collection
+on:
+  pull_request:
+    paths:
+      - 'v3-spike/vertical/continuous_collector.py'
+      - 'v3-spike/kit/poc-qa-continuous-collector.py'
+      - '.github/workflows/v3-qa-continuous-collector.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  periodic-collection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      V3_ROOT: /tmp/aiops-v3-rootless-ci
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile v3-spike/vertical/continuous_collector.py v3-spike/kit/poc-qa-continuous-collector.py
+      - name: Start isolated rootless daemon
+        run: |
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
+          sudo apt-get update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          # Disposable runner only: provision dedicated daemon storage before starting Docker.
+          test ! -e "$V3_ROOT"
+          install -m 0700 -d "$V3_ROOT" "$HOME/.config/docker"
+          test ! -e "$HOME/.config/docker/daemon.json"
+          (umask 077; printf '{"data-root":"%s/docker-data"}\n' "$V3_ROOT" > "$HOME/.config/docker/daemon.json")
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Start and seed using actual rootless launcher
+        run: |
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          # The real launcher must refuse the same daemon under a different root, before writes.
+          rejected="$V3_ROOT-rejected"
+          test ! -e "$rejected"
+          if V3_ROOT="$rejected" bash v3-spike/kit/poc-start.sh; then exit 1; fi
+          test ! -e "$rejected"
+          bash v3-spike/kit/poc-start.sh
+      - name: Qualify periodic collector with independent fault injection
+        run: |
+          set -euo pipefail
+          python3 v3-spike/kit/poc-gamma.py > "$RUNNER_TEMP/qa-periodic-gamma.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            url=$(sed -n 's/^POC GAMMA: //p' "$RUNNER_TEMP/qa-periodic-gamma.log")
+            if [[ -n "$url" ]]; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          [[ "$url" =~ ^http://127\.0\.0\.1:[0-9]+$ ]]
+          project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+          compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml)
+          counts() {
+            "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -Atc "select (select count(*) from aiops.incidents),(select count(*) from aiops.runs),(select count(*) from aiops.evidence),(select count(*) from aiops.execution_receipts)"
+          }
+          IFS='|' read -r i r e x <<< "$(counts)"
+          python3 v3-spike/kit/poc-qa-continuous-collector.py "$url" "$V3_ROOT"
+          test "$(counts)" = "$((i+2))|$((r+2))|$((e+6))|$x"
+          echo "Periodic collection exactly two incidents, six evidence, zero additional execution receipts PASS"
+      - name: Upload periodic collection observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-independent-periodic-collection
+          path: |
+            ${{ env.V3_ROOT }}/qa-periodic-truth.json
+            ${{ env.V3_ROOT }}/qa-periodic-report.json
+          if-no-files-found: warn
+      - name: Stop disposable lab
+        if: always()
+        run: |
+          if [[ -f "$V3_ROOT/poc.env" ]]; then
+            project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+            docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml down
+          fi
