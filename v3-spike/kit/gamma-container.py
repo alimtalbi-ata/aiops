@@ -1,7 +1,7 @@
 """Container-only synthetic GAMMA with embedded HITL; no Docker socket."""
 from contextlib import ExitStack,contextmanager
 import hmac
-import http.client
+from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import os
 from pathlib import Path
@@ -51,7 +51,7 @@ class Relay(BaseHTTPRequestHandler):
                 if not 0<n<=65536: raise ValueError("bounded body required")
                 body=self.rfile.read(n)
             stage="upstream"
-            conn=http.client.HTTPConnection(host,port,timeout=5)
+            conn=HTTPConnection(host,port,timeout=5)
             try:
                 conn.request(method,self.path,body=body,headers=headers)
                 response=conn.getresponse()
@@ -85,5 +85,5 @@ if __name__=="__main__":
         for port in PORTS: stack.enter_context(relay(port))
         with server(port=18080,core_config=(18110,TOKEN,"RUN-CI-CONTEXT"),
                     context_config=(18111,18112,"NODE-CI-ROOT","INC-CI-CONTEXT"),
-                    policy_port=18113,enterprise_clock=EnterpriseClock(root),container_lab=True) as http:
-            http.serve_forever()
+                    policy_port=18113,enterprise_clock=EnterpriseClock(root),container_lab=True) as gamma_http:
+            gamma_http.serve_forever()
