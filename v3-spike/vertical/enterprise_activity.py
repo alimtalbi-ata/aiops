@@ -12,7 +12,7 @@ def activity_for(step):
     phase=step["phase"]
     records=[]
     for index,(root,asset,app,users) in enumerate(APPLICATIONS):
-        user,group=users[(tick-1)%len(users)]
+        user,group=users[0 if index==0 and phase=="DEGRADED" else (tick-1)%len(users)]
         # Preserve the actual E2 modeled latency for Payments. CRM alert is
         # a separate modeled observation, not evidence of a shared root cause.
         latency=step["modeled_latency_ms"] if index==0 else 25+((tick*7+index*11)%15)
@@ -43,5 +43,6 @@ def decode_activity(step, raw, checksum):
         linked=publication if row["incident_eligible"] and publication and publication["state"]=="PUBLISHED" else None
         output.append({**row,"run_id":linked["run_id"] if linked else None,
                        "incident_id":linked["incident_id"] if linked else None,
+                       "link_semantics":"SAME_MODELED_SCENARIO_NOT_EVIDENCE" if linked else None,
                        "disposition":"INCIDENT_LINKED" if linked else "PENDING_INCIDENT" if row["incident_eligible"] else "ALERT_ONLY" if row["state"]=="ALERT" else "OBSERVATION_ONLY"})
     return output
