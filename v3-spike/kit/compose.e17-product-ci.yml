@@ -29,4 +29,5 @@ services:
 
 volumes:
   e17-audit:
+    external: true
     name: ${V3_E17_AUDIT_VOLUME:?disposable audit volume required}
