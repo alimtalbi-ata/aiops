@@ -232,3 +232,64 @@ class DurableHITLTest(unittest.TestCase):
             replay = reserve(self.gate)
         self.assertEqual(fence.claim(replay)["status"],"UNKNOWN_BLOCKED")
         self.assertEqual(fence.claim(first)["status"],"UNKNOWN_BLOCKED")
+
+
+    def test_e17_target_real_http_one_shot_recovery(self):
+        import runpy
+        import threading
+        from pathlib import Path
+        from statistics import median
+        from unittest.mock import patch
+        fixture=runpy.run_path(str(Path(__file__).resolve().parents[1]/"kit"/"poc-multiasset-observed.py"))
+        policy={"policy_decision":"SIMULATE","simulation_only":True,"operational_decision":"DENY",
+                "executed_on_host":False,"production_authorized":False}
+        with fixture["LabRecoveryTarget"]() as app:
+            thread=threading.Thread(target=app.serve_forever,daemon=True)
+            thread.start()
+            try:
+                baseline=median(fixture["measure"](app))
+                app.inject_fault()
+                incident=median(fixture["measure"](app))
+                from copy import deepcopy
+                current_refs=deepcopy(self.refs)
+                def read_context(rid):
+                    return ({"run":{"run_id":rid,"incident_id":self.incident,"mode":"DEMO"},
+                             "production_authorized":False},
+                            {"classification":"SYNTHETIC_LAB_CONTEXT","run_id":rid,
+                             "root":fixture["CONFIGS"][0][0],"policy":"DENY",
+                             "production_authorized":False,"evidence":deepcopy(current_refs)})
+                scope=app.bind(self.gate,self.incident,self.run,self.refs,
+                               read_context=read_context,policy_port=18001)
+                key=self.gate.request(self.incident,self.run,self.refs,lab_action=scope)["request_id"]
+                approval=self.gate.decide(key,self.incident,self.run,self.refs,True,lab_action=scope)
+                with patch("policy_demo.simulation_decision",return_value={"policy_decision":"DENY"}):
+                    with self.assertRaises(ValueError):
+                        app.simulate(approval["receipt_id"],approval["receipt_sha256"],workflow_id=self.run)
+                self.assertEqual(app.delay,fixture["CONFIGS"][0][-1])
+                with patch("policy_demo.simulation_decision",return_value=policy):
+                    with self.assertRaises(ValueError):
+                        app.simulate(approval["receipt_id"],approval["receipt_sha256"],workflow_id="RUN-"+"B"*16)
+                    current_refs[0]["payload_hash"]="9"*64
+                    with self.assertRaises(ValueError):
+                        app.simulate(approval["receipt_id"],approval["receipt_sha256"],workflow_id=self.run)
+                    self.assertEqual(app.delay,fixture["CONFIGS"][0][-1])
+                    current_refs[:]=deepcopy(self.refs)
+                    result=app.simulate(approval["receipt_id"],approval["receipt_sha256"],workflow_id=self.run)
+                    self.assertEqual(result["status"],"SIMULATED")
+                    self.assertEqual(result["binding"]["lab_action"],scope)
+                    self.assertFalse(result["executed_on_host"])
+                    self.assertFalse(result["production_authorized"])
+                    self.assertEqual(app.simulate(approval["receipt_id"],approval["receipt_sha256"],workflow_id=self.run)["status"],"UNKNOWN_BLOCKED")
+                recovery=median(fixture["measure"](app))
+                self.assertGreater(incident,2*baseline)
+                self.assertLess(recovery,incident/2)
+                self.assertEqual(len(app.records),15)
+                self.assertEqual(app.read_action_result(result["receipt_id"]),result)
+                result["binding"]["run_id"]="tampered"
+                self.assertEqual(app.read_action_result(result["receipt_id"])["binding"]["run_id"],self.run)
+                with self.assertRaises(ValueError):
+                    app.bind(self.gate,self.incident,self.run,self.refs,
+                             read_context=read_context,policy_port=18001)
+            finally:
+                app.shutdown()
+                thread.join(5)
