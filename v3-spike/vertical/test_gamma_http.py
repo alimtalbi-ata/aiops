@@ -31,6 +31,31 @@ class GammaHttpTests(unittest.TestCase):
                         expect(page.locator("#correlated-result")).to_contain_text("2 alerts")
                         expect(page.locator("#correlated-result")).to_contain_text("synthetic-002")
                         expect(page.locator("#correlated-result")).to_contain_text("RCA: UNKNOWN")
+                        # Exercise the actual browser-to-HTTP dynamic path with mocked services.
+                        run_id="RUN-"+"A"*16
+                        incident_id="INC-CI-INGEST-"+"a"*32
+                        core={**projection,"run":{"run_id":run_id,"incident_id":incident_id,"mode":"DEMO","status":"CREATED"}}
+                        evidence=[{"evidence_id":"E1","payload_hash":"a"*64},{"evidence_id":"E2","payload_hash":"b"*64}]
+                        details={"classification":"SYNTHETIC_LAB_CONTEXT","run_id":run_id,"production_authorized":False,
+                                 "tenant_acl_qualified":False,"policy":"DENY","rca":"UNKNOWN",
+                                 "affected":[{"node_id":"NODE-CI-ROOT","depth":0}],"evidence":evidence}
+                        http.context_config=(1814,1815,"NODE-CI-ROOT","INC-CI-FIXTURE")
+                        with patch("http_demo.create_and_persist",return_value={"core":core,"stored_evidence":evidence,"production_authorized":False}) as create:
+                            page.locator("#create-dynamic").click()
+                            expect(page.locator("#dynamic-result")).to_contain_text(run_id)
+                            self.assertEqual(create.call_args.args[0][0]["resource"],"NODE-CI-ROOT")
+                            self.assertEqual(create.call_args.args[0][1]["observation"]["value"],160)
+                        with patch("http_demo.dynamic_context",return_value=(core,details)) as read:
+                            page.locator("#load-dynamic-context").click()
+                            expect(page.locator("#context-result")).to_contain_text("Verified dynamic lab binding")
+                            expect(page.locator("#context-result")).to_contain_text("Critic evidence: SUPPORTED")
+                            self.assertEqual(read.call_args.args[2],run_id)
+                        with patch("http_demo.dynamic_context",return_value=({**core,"run":{**core["run"],"run_id":"RUN-"+"B"*16}},dict(details,run_id="RUN-"+"B"*16))):
+                            page.locator("#load-dynamic-context").click()
+                            expect(page.locator("#context-result")).to_contain_text("UNKNOWN / DENY")
+                        page.locator("#clear").click()
+                        expect(page.locator("#load-dynamic-context")).to_be_disabled()
+                        expect(page.locator("#dynamic-result")).to_have_text("UNKNOWN / DENY")
                         page.locator("#http-sim").click()
                         expect(page.locator("#policy-value")).to_contain_text("SIMULATE_ONLY")
                         page.locator("#eligibility").click()
