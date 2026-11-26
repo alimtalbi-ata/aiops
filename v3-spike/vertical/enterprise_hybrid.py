@@ -42,6 +42,7 @@ def retrieve(rows,scope,query,tick,limit=5):
             raise ValueError("invalid document identity")
         ids.add(row["id"])
         eligible.append(({**raw,"sha256":h},tokens(row["title"]+" "+row["text"])))
+    eligible.sort(key=lambda item:item[0]["id"])
     query_words=tokens(query)
     result={"classification":"SYNTHETIC_HYBRID_RETRIEVAL_E9","method":METHOD,"logical_tick":tick,
             "candidate_count":len(eligible),"query_sha256":digest(query),"citations":[],
@@ -63,7 +64,7 @@ def retrieve(rows,scope,query,tick,limit=5):
         counts=words[i]
         norm=1.2*(.25+.75*sum(counts.values())/avg)
         bm25=sum(math.log(1+(n-word_df[t]+.5)/(word_df[t]+.5))*counts[t]*2.2/(counts[t]+norm)
-                 for t in set(query_words) if t in counts)
+                 for t in sorted(set(query_words)) if t in counts)
         vector=cosine(qvec,weighted(chars[i]))
         scores.append((row,bm25,vector))
     lexical=sorted((s for s in scores if s[1]>0),key=lambda s:(-s[1],s[0]["id"]))
