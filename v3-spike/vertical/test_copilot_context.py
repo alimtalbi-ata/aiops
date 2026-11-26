@@ -39,3 +39,32 @@ class CopilotTest(unittest.TestCase):
             retrieve(core,ctx,"execute")
         with self.assertRaises(ValueError):
             retrieve(core,ctx,limit=True)
+
+    def test_document_retrieval(self):
+        from document_retrieval import references, load_catalog
+        from rca_preview import preview
+        import hashlib
+        import json
+        core={"production_authorized":False,"run":{"run_id":"RUN-CI-X","incident_id":"INC-CI-X","mode":"DEMO"}}
+        evidence=[{"evidence_id":"E1","payload_hash":"a"*64},{"evidence_id":"E2","payload_hash":"b"*64}]
+        ctx={"classification":"SYNTHETIC_LAB_CONTEXT","production_authorized":False,"run_id":"RUN-CI-X","policy":"DENY","root":"NODE-CI-ROOT","affected":[],"evidence":evidence}
+        self.assertEqual(answer(core,ctx)["document_retrieval"]["state"],"UNKNOWN")
+        ctx["diagnosis"]=preview([{"synthetic":True,"metric":"latency_ms","phase":p,"value":v,"evidence_id":eid} for p,v,eid in (("baseline",40,"E1"),("incident",160,"E2"))])
+        result=answer(core,ctx)
+        docs=result["document_retrieval"]
+        self.assertEqual(docs["state"],"MATCHED")
+        self.assertEqual(docs["citations"][0]["doc_id"],"SYN-LATENCY-001")
+        self.assertEqual(result["sources"],evidence)
+        self.assertFalse(docs["llm_inference_performed"])
+        self.assertFalse(docs["causality_established"])
+        rows,digest=load_catalog()
+        self.assertEqual(docs["catalog_sha256"],digest)
+        for citation in docs["citations"]:
+            row=next(r for r in rows if r["doc_id"]==citation["doc_id"])
+            self.assertEqual(citation["doc_sha256"],hashlib.sha256(json.dumps(row,sort_keys=True,separators=(",",":")).encode()).hexdigest())
+            self.assertFalse(citation["observed_evidence"])
+        self.assertEqual(answer(core,dict(ctx,root="NODE-CI-OTHER"))["document_retrieval"]["state"],"UNKNOWN")
+        self.assertEqual(answer(core,ctx,topic="evidence")["document_retrieval"]["state"],"UNKNOWN")
+        self.assertTrue(references(ctx,result["retrieval"],limit=1)["truncated"])
+        with self.assertRaises(ValueError):
+            references(ctx,dict(result["retrieval"],run_id="FOREIGN"))
