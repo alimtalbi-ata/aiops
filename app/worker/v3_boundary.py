@@ -5,6 +5,7 @@ Never starts the historical generic business-stage workflow.
 import asyncio
 import hmac
 import logging
+import uuid
 from datetime import timedelta
 import os
 import re
@@ -13,13 +14,13 @@ from fastapi import FastAPI, Header, HTTPException
 from temporalio import activity
 from temporalio.client import Client
 from temporalio.common import WorkflowIDReusePolicy
-from temporalio.api.enums.v1 import TaskQueueType
+from temporalio.api.enums.v1 import TaskQueueType, TaskQueueKind
 from temporalio.api.taskqueue.v1 import TaskQueue
 from temporalio.api.workflowservice.v1 import DescribeTaskQueueRequest
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.worker import Worker
 from shared.http import get_json, post_json
-from worker.v3_boundary_workflow import V3BoundaryWorkflow
+from worker.v3_boundary_workflow import V3BoundaryWorkflow, V3ReadinessWorkflow
 
 if os.getenv("AIOPS_V3_BOUNDARY")!="1":
     raise RuntimeError("Explicit V3 boundary profile required")
@@ -31,6 +32,7 @@ if CORE!="http://core:810" or TEMP!="temporal:7233" or len(TOKEN)<32:
 QUEUE="aiops-v3-boundary"
 SCENARIO="CI-TEMPORAL-BOUNDARY"
 client=None
+probe_verified=False
 logger=logging.getLogger('uvicorn.error')
 
 def validate(args):
@@ -68,22 +70,70 @@ async def start_run(args):
 async def block_run(args):
     return await asyncio.to_thread(command,args,"BLOCK",("RUNNING","BLOCKED"))
 
-async def worker_loop():
-    global client
-    while True:
+@activity.defn(name="v3_boundary_probe")
+async def readiness_activity(nonce:str):
+    if not re.fullmatch(r"[a-f0-9]{32}",nonce):
+        raise ValueError("invalid probe")
+    return nonce
+
+async def poller_diagnostics(c):
+    for kind in (TaskQueueType.TASK_QUEUE_TYPE_WORKFLOW,TaskQueueType.TASK_QUEUE_TYPE_ACTIVITY):
         try:
-            connected=await Client.connect(TEMP)
-            async with Worker(connected,task_queue=QUEUE,workflows=[V3BoundaryWorkflow],activities=[start_run,block_run]):
+            response=await asyncio.wait_for(c.workflow_service.describe_task_queue(DescribeTaskQueueRequest(
+                namespace=c.namespace,task_queue=TaskQueue(name=QUEUE,kind=TaskQueueKind.TASK_QUEUE_KIND_NORMAL),
+                task_queue_type=kind)),timeout=3)
+            logger.info("V3 task queue type=%s pollers=%s own_identity=%s",kind,len(response.pollers),any(p.identity==c.identity for p in response.pollers))
+        except Exception as exc:
+            logger.warning("V3 task queue diagnostic type=%s error=%s",kind,type(exc).__name__)
+
+async def worker_loop():
+    global client,probe_verified
+    # Explicit, unique identity for this process. No readiness from registration alone.
+    identity="aiops-v3-"+uuid.uuid4().hex
+    for attempt in range(3):
+        handle=None
+        try:
+            connected=await Client.connect(TEMP,identity=identity)
+            async with Worker(connected,task_queue=QUEUE,identity=identity,
+                              workflows=[V3BoundaryWorkflow,V3ReadinessWorkflow],
+                              activities=[start_run,block_run,readiness_activity],
+                              max_cached_workflows=0):
                 client=connected
-                logger.info('V3 boundary worker registered queue=%s',QUEUE)
+                logger.info("V3 boundary worker registered queue=%s attempt=%s",QUEUE,attempt+1)
+                nonce=uuid.uuid4().hex
+                handle=await connected.start_workflow(V3ReadinessWorkflow.run,nonce,
+                    id="V3-READINESS-"+nonce,task_queue=QUEUE,execution_timeout=timedelta(seconds=30),
+                    id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
+                actual=await asyncio.wait_for(handle.result(),timeout=35)
+                if actual!=nonce:
+                    raise ValueError("readiness result mismatch")
+                probe_verified=True
+                logger.info("V3 readiness workflow and activity PASS")
+                await poller_diagnostics(connected)
                 await asyncio.Event().wait()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error('V3 boundary worker loop failed: %s',type(exc).__name__)
+            logger.error("V3 boundary worker attempt failed: %s",type(exc).__name__)
+            if handle is not None:
+                try:
+                    history=await asyncio.wait_for(handle.fetch_history(),timeout=5)
+                    logger.error("V3 readiness failure events=%s",[e.event_type for e in history.events[-30:]])
+                    for e in history.events[-30:]:
+                        for field in ("workflow_task_failed_event_attributes","activity_task_failed_event_attributes","workflow_execution_failed_event_attributes"):
+                            if e.HasField(field):
+                                attr=getattr(e,field)
+                                if attr.HasField("failure"):
+                                    logger.error("V3 readiness failure: %s",attr.failure.message.replace(TOKEN,"[redacted]")[:300])
+                except Exception as diagnostic_error:
+                    logger.error("V3 readiness history unavailable: %s",type(diagnostic_error).__name__)
+            if client is not None:
+                await poller_diagnostics(client)
         finally:
             client=None
+            probe_verified=False
         await asyncio.sleep(2)
+    logger.error("V3 readiness attempts exhausted; restart required")
 
 @asynccontextmanager
 async def lifespan(app):
@@ -99,20 +149,13 @@ app=FastAPI(title="AIOps V3 isolated orchestration boundary",lifespan=lifespan)
 
 async def ready():
     c=client
-    if c is None:
-        raise HTTPException(503,"Temporal worker not connected")
-    async def pollers(kind):
-        response=await c.workflow_service.describe_task_queue(DescribeTaskQueueRequest(
-            namespace=c.namespace,task_queue=TaskQueue(name=QUEUE),task_queue_type=kind))
-        return any(p.identity==c.identity for p in response.pollers)
+    if c is None or not probe_verified:
+        raise HTTPException(503,"Temporal functional readiness not verified")
     try:
-        healthy,workflow_poller,activity_poller=await asyncio.wait_for(asyncio.gather(
-            c.service_client.check_health(),
-            pollers(TaskQueueType.TASK_QUEUE_TYPE_WORKFLOW),
-            pollers(TaskQueueType.TASK_QUEUE_TYPE_ACTIVITY)),timeout=3)
+        healthy=await asyncio.wait_for(c.service_client.check_health(),timeout=3)
     except Exception:
         raise HTTPException(503,"Temporal service unavailable")
-    if not (healthy and workflow_poller and activity_poller) or c is not client:
+    if not healthy or c is not client or not probe_verified:
         raise HTTPException(503,"Temporal worker not ready")
     return c
 
@@ -120,7 +163,7 @@ async def ready():
 async def health():
     await ready()
     return {"status":"ok","component":"worker","executor":"temporal","task_queue":QUEUE,
-            "workflow_poller":True,"activity_poller":True,"classification":"V3_ORCHESTRATION_BOUNDARY","business_stages_qualified":False,"production_authorized":False}
+            "readiness_workflow_verified":True,"readiness_activity_verified":True,"classification":"V3_ORCHESTRATION_BOUNDARY","business_stages_qualified":False,"production_authorized":False}
 
 @app.post("/api/execution/start")
 async def start(args:dict,authorization:str|None=Header(default=None)):

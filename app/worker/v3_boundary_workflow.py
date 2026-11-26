@@ -13,3 +13,11 @@ class V3BoundaryWorkflow:
         blocked=await workflow.execute_activity("v3_boundary_block",{**args,"version":started["version"]},result_type=dict,start_to_close_timeout=timedelta(seconds=10),schedule_to_close_timeout=timedelta(seconds=30),retry_policy=RETRY)
         return {"run_id":args["run_id"],"status":blocked["status"],"final_version":blocked["version"],
                 "reason":"V3_STAGE_ADAPTERS_NOT_QUALIFIED","executed_on_host":False,"production_authorized":False}
+
+@workflow.defn
+class V3ReadinessWorkflow:
+    @workflow.run
+    async def run(self,nonce:str)->str:
+        return await workflow.execute_activity("v3_boundary_probe",nonce,result_type=str,
+            start_to_close_timeout=timedelta(seconds=5),schedule_to_close_timeout=timedelta(seconds=20),
+            retry_policy=RetryPolicy(maximum_attempts=1))

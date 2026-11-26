@@ -83,7 +83,7 @@ elif len(sys.argv)==3 and sys.argv[1]=="replay":
 else:
     health=call(worker,"/health")
     assert health["classification"]=="V3_ORCHESTRATION_BOUNDARY" and not health["business_stages_qualified"]
-    assert health["workflow_poller"] is True and health["activity_poller"] is True
+    assert health["readiness_workflow_verified"] is True and health["readiness_activity_verified"] is True
     created=call(core,"/api/runs",{"mode":"DEMO","scenario_id":"CI-TEMPORAL-BOUNDARY","incident_id":"INC-CI-CONTEXT","idempotency_key":"ci-v3-temporal-boundary-v1"})
     rid=created["run_id"]
     assert re.fullmatch(r"RUN-[A-F0-9]{16}",rid) and created["status"]=="CREATED"
