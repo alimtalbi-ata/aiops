@@ -32,8 +32,8 @@ class App(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Length","2")
         self.end_headers()
-        self.wfile.write(b"OK")
         self.server.records.append({"at":now(),"status":200})
+        self.wfile.write(b"OK")
 
 def measure(app):
     values=[]
