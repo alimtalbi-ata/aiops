@@ -12,6 +12,7 @@ services:
       - ../../db/migrations/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ../../db/migrations/004_operational_model.sql:/docker-entrypoint-initdb.d/004_operational_model.sql:ro
       - ../../db/migrations/008_event_idempotency.sql:/docker-entrypoint-initdb.d/008_event_idempotency.sql:ro
+      - ./poc-execution-receipts.sql:/docker-entrypoint-initdb.d/009_poc_execution_receipts.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aiops -d aiops"]
       interval: 5s
@@ -26,6 +27,7 @@ services:
       DATABASE_URL: postgresql://aiops:${V3_DB_PASSWORD:?required}@postgres:5432/aiops
       AIOPS_ADMIN_TOKEN: ${V3_LAB_TOKEN:?required}
       AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+      WORKER_URL: http://worker:815
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,6 +102,85 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  # Explicitly opt-in; no host ports, no historical generic stage worker.
+  temporal-postgres:
+    profiles: [orchestration]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${V3_DB_PASSWORD:?required}
+    volumes:
+      - ${V3_ROOT:?required}/data/temporal-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [backend]
+  temporal:
+    profiles: [orchestration]
+    # Published auto-setup GA tag; CI must verify actual pull/runtime.
+    image: temporalio/auto-setup:1.29.7
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${V3_DB_PASSWORD:?required}
+      POSTGRES_SEEDS: temporal-postgres
+      BIND_ON_IP: 0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "temporal operator cluster health --address 127.0.0.1:7233 && temporal operator namespace describe --address 127.0.0.1:7233 --namespace default >/dev/null"]
+      interval: 5s
+      timeout: 8s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    networks: [backend]
+  worker:
+    profiles: [orchestration]
+    build:
+      context: ../../app
+      dockerfile: worker/Dockerfile
+    command: ["uvicorn", "worker.v3_boundary:app", "--host", "0.0.0.0", "--port", "815"]
+    environment:
+      CORE_URL: http://core:810
+      TEMPORAL_ADDRESS: temporal:7233
+      AIOPS_V3_BOUNDARY: "1"
+      AIOPS_INTERNAL_TOKEN: ${V3_LAB_TOKEN:?required}
+    depends_on:
+      core:
+        condition: service_healthy
+      evidence:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health', timeout=5)"]
+      interval: 5s
+      timeout: 6s
+      retries: 50
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  # Optional technical console, not the GAMMA business interface.
+  temporal-ui:
+    profiles: [orchestration]
+    image: temporalio/ui:2.56.4
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_UI_PORT: "8080"
+      TEMPORAL_DISABLE_WRITE_ACTIONS: "true"
+    ports:
+      - "127.0.0.1::8080"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks: [backend, edge]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 networks:
