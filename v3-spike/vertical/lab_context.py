@@ -4,6 +4,7 @@ import http.client
 import json
 import re
 from rca_preview import preview
+from evidence_retrieval import validated_reference
 
 def get(port, path):
     if type(port) is not int or not 1024 <= port <= 65535 or port in (7770,7777,7790):
@@ -40,11 +41,14 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None,
     if not any(x["node_id"]==node_id and x["depth"]==0 for x in affected):
         raise ValueError("missing root")
     verified=[]
+    seen={}
     observations=[]
     signals=[]
-    if dynamic_incident is not None and not 1 <= len(evidence["items"]) <= 20:
-        raise ValueError("dynamic evidence required")
-    for item in evidence["items"]:
+    items=evidence["items"]
+    if not isinstance(items,list) or len(items)>20 or (dynamic_incident is not None and not items):
+        raise ValueError("bounded lab evidence required")
+    for item in items:
+        ref=validated_reference(item)
         provenance=item["provenance"]
         if provenance.get("run_id")!=run_id or provenance.get("synthetic") is not True:
             raise ValueError("non-lab evidence")
@@ -56,7 +60,13 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None,
         digest=hashlib.sha256(json.dumps(item["payload"],sort_keys=True,separators=(",",":")).encode()).hexdigest()
         if digest!=item["payload_hash"]:
             raise ValueError("evidence hash mismatch")
-        verified.append({"evidence_id":item["evidence_id"],"payload_hash":digest})
+        eid=ref["evidence_id"]
+        if eid in seen:
+            if seen[eid]!=item:
+                raise ValueError("conflicting evidence identity")
+            continue
+        seen[eid]=item
+        verified.append(ref)
         payload=item["payload"]
         # Dynamic measurements originate in the hashed normalized signal; legacy fixtures use flat payloads.
         if dynamic_incident is not None:
