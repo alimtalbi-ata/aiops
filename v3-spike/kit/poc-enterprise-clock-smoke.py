@@ -252,6 +252,15 @@ def smoke(origin, restart):
         assert hypothesis["confidence"] is None and hypothesis["root_cause"]=="UNKNOWN"
     assert review["production_authorized"] is False and review["operational_decision"]=="DENY"
     print(json.dumps({"classification":"E18_HISTORICAL_ANALYST_CRITIC","result":"PASS","tick":end["current_tick"],"run_ids":sorted(run_ids),"hypotheses":len(review["analyst"]["hypotheses"]),"correlation_sha256":review["analyst"]["correlation_sha256"],"production_authorized":False}),file=sys.stderr)
+    rag=lambda ids:call("/api/v1/enterprise-correlation/rag-context",{"run_ids":ids,"window_seconds":240})
+    rag_context=rag(run_ids)
+    assert rag_context==rag(list(reversed(run_ids))) and rag_context["correlation_sha256"]==review["analyst"]["correlation_sha256"]
+    assert rag_context["reference_count"]>=1 and rag_context["reference_text_included"] is False and rag_context["operational_decision"]=="DENY"
+    for r in rag_context["runs"]:
+        assert r["logical_tick"] in (1,2,3,4) and r["resource"]==next(x["resource"] for x in selected if x["run_id"]==r["run_id"])
+        assert set(r["evidence_ids"])=={e["evidence_id"] for x in selected if x["run_id"]==r["run_id"] for e in x["evidence"]}
+        assert all(not c["observed_evidence"] and c["valid_from_tick"]<=r["logical_tick"] and "text" not in c for c in r["references"])
+    print(json.dumps({"classification":"E22_HISTORICAL_RAG_CONTEXT","result":"PASS","tick":end["current_tick"],"context_sha256":rag_context["context_sha256"],"reference_count":rag_context["reference_count"],"production_authorized":False}),file=sys.stderr)
     assert end["current_tick"]==(8 if restart else 4)
     assert [x["phase"] for x in end["recent"]]==["NOMINAL","CHANGE","DEGRADED","MODEL_RECOVERY"]*(2 if restart else 1)
     if restart:

@@ -74,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.reply(403,b'{"error":"CHATOPS_UNVERIFIED","policy":"DENY"}')
             return
-        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search","/api/v1/enterprise-parametric/configure","/api/v1/enterprise-correlation/preview","/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment"):
+        if self.path not in ("/api/v1/hitl/dynamic/request","/api/v1/hitl/dynamic/decide","/api/v1/hitl/request","/api/v1/hitl/decide","/api/v1/ingest","/api/v1/ingest/persist","/api/v1/ingest/create","/api/v1/glpi/preview","/api/v1/enterprise-clock/advance","/api/v1/enterprise-clock/capture","/api/v1/enterprise-clock/capture-technical","/api/v1/enterprise-clock/capture-scenarios","/api/v1/enterprise-search","/api/v1/enterprise-parametric/configure","/api/v1/enterprise-correlation/preview","/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context"):
             self.reply(404,b'{"error":"NOT_FOUND"}')
             return
         try:
@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 4096:
                 raise ValueError("Invalid length")
             data=json.loads(self.rfile.read(length))
-            if self.path in ("/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment"):
+            if self.path in ("/api/v1/enterprise-correlation/historical","/api/v1/enterprise-correlation/assessment","/api/v1/enterprise-correlation/rag-context"):
                 from enterprise_historical_correlation import historical_preview
                 if not isinstance(data,dict) or set(data)!={"run_ids","window_seconds"}:
                     raise ValueError("invalid historical correlation request")
@@ -99,6 +99,10 @@ class Handler(BaseHTTPRequestHandler):
                 if self.path.endswith("/assessment"):
                     from historical_analyst_critic import assess
                     result=assess(result)
+                elif self.path.endswith("/rag-context"):
+                    from historical_rag_context import build
+                    if self.server.enterprise_clock is None:raise ValueError("clock not configured")
+                    result=build(result,self.server.enterprise_clock)
                 self.reply(200,json.dumps(result).encode())
                 return
             if self.path=="/api/v1/enterprise-correlation/preview":
