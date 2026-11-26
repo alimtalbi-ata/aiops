@@ -40,7 +40,7 @@ def main():
     ports=(args.analyst_port,args.critic_port)
     providers=[config({"endpoint":"http://127.0.0.1:%d/v1/chat/completions"%port,"model":spec[0]}) for port,spec in zip(ports,SPECS)]
     if len(set(ports))!=2:raise ValueError("distinct endpoints required")
-    report={"classification":"E21_REAL_LOCAL_MODEL_EXPERIMENT","result":"FAIL","source_sha":os.environ.get("GITHUB_SHA"),
+    report={"classification":"E21_REAL_LOCAL_MODEL_EXPERIMENT","result":"FAIL","source_sha":os.environ.get("E21_SOURCE_SHA"),
             "image":IMAGE,"models":[],"cases":[],"production_authorized":False,
             "model_independence_attested":False,"scope":"synthetic E18 history fixture; actual local model inference"}
     def save():
