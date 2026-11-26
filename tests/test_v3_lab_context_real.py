@@ -172,6 +172,16 @@ class LabContextReal(unittest.TestCase):
                         self.assertEqual(details["copilot"]["root_cause"],"UNKNOWN")
                         self.assertEqual(details["copilot"]["operational_decision"],"DENY")
                         self.assertIn("NODE-CI-CHILD",[x["node_id"] for x in details["context"]["affected"]])
+                        decision=requests.get(context_url+"&decision=simulate",timeout=20)
+                        decision.raise_for_status()
+                        simulation=decision.json()["simulation"]
+                        self.assertEqual(decision.json()["core"]["run"],dynamic)
+                        self.assertEqual(simulation["policy_decision"],"SIMULATE")
+                        self.assertTrue(simulation["simulation_only"])
+                        self.assertEqual(simulation["operational_decision"],"DENY")
+                        self.assertFalse(simulation["executed_on_host"])
+                        self.assertFalse(simulation["production_authorized"])
+                        self.assertEqual(requests.get(context_url+"&decision=execute",timeout=20).status_code,503)
                         self.assertEqual(requests.get(context_url.replace(dynamic["run_id"],"RUN-CI-CONTEXT"),timeout=20).status_code,503)
                         http.context_config=(1814,1815,"NODE-CI-CHILD","INC-CI-CONTEXT")
                         try:
@@ -193,6 +203,7 @@ class LabContextReal(unittest.TestCase):
                                 browser.close()
                         with psycopg.connect(os.environ["DATABASE_URL"]) as db:
                             self.assertEqual(db.execute("select count(*) from aiops.evidence where provenance->>'run_id'=%s",(dynamic["run_id"],)).fetchone()[0],2)
+                            self.assertEqual(db.execute("select status from aiops.runs where run_id=%s",(dynamic["run_id"],)).fetchone()[0],"CREATED")
                     finally:
                         with psycopg.connect(os.environ["DATABASE_URL"]) as db:
                             db.execute("delete from aiops.evidence where provenance->>'run_id' in (select run_id from aiops.runs where scenario_id='CI-INGEST')")
