@@ -44,6 +44,15 @@ class DualModelTest(unittest.TestCase):
         d,ar,cr=self.run_review()
         self.assertEqual(d["state"],"CANDIDATE_ONLY")
         self.assertEqual((len(ar),len(cr)),(1,1))
+        branches=ar[0]["response_format"]["json_schema"]["schema"]["anyOf"]
+        self.assertEqual(len(branches),2)
+        select,abstain=branches
+        self.assertEqual(select["properties"]["evidence_ids"]["items"]["enum"],d["analyst"]["evidence_ids"])
+        self.assertEqual(select["properties"]["verdict"]["enum"],["SELECT_CANDIDATE"])
+        self.assertEqual(abstain["properties"]["candidate_id"],{"type":"null"})
+        self.assertEqual(abstain["properties"]["evidence_ids"]["maxItems"],0)
+        self.assertEqual(abstain["properties"]["verdict"]["enum"],["ABSTAIN"])
+        self.assertTrue(all(not branch["additionalProperties"] for branch in branches))
         self.assertEqual(json.loads(cr[0]["messages"][1]["content"])["analyst_selection"],d["analyst"])
         self.assertEqual([x["total_tokens"] for x in d["invocations"]],[15,15])
         self.assertTrue(all(x["latency_ms"]>=0 and x["cost"] is None for x in d["invocations"]))
@@ -54,6 +63,7 @@ class DualModelTest(unittest.TestCase):
         d,ar,cr=self.run_review(a_mut=lambda p,r:change(p,r,evidence_ids=["invented"]))
         self.assertEqual(d["state"],"UNKNOWN")
         self.assertEqual(d["invocations"][0]["status"],"REJECTED")
+        self.assertEqual(d["invocations"][0]["rejection_code"],"CITATION_SET_MISMATCH")
         self.assertEqual(cr,[])
     def test_critic_challenge_and_reverse_order(self):
         d,_,_=self.run_review(c_mut=lambda p,r:change(p,r,verdict="CHALLENGE_CANDIDATE"))
@@ -67,6 +77,21 @@ class DualModelTest(unittest.TestCase):
         self.assertIsNone(usage({"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":99}})["total_tokens"])
         d,_,_=self.run_review(c_mut=lambda p,r:p.pop("usage"))
         self.assertEqual(d["invocations"][1]["usage_source"],"unavailable")
+    def test_abstention_exclusive_and_no_critic(self):
+        d,_,cr=self.run_review(a_mut=lambda p,r:change(p,r,verdict="ABSTAIN"))
+        self.assertEqual(d["invocations"][0]["rejection_code"],"ABSTAIN_WITH_SELECTION")
+        self.assertEqual(d["state"],"UNKNOWN")
+        self.assertEqual(cr,[])
+        d,_,cr=self.run_review(a_mut=lambda p,r:change(p,r,candidate_id=None,evidence_ids=[],verdict="ABSTAIN"))
+        self.assertEqual(d["invocations"][0]["status"],"VALIDATED")
+        self.assertEqual(d["state"],"UNKNOWN")
+        self.assertEqual(cr,[])
+    def test_invalid_schema_diagnostic_is_bounded(self):
+        d,_,cr=self.run_review(a_mut=lambda p,r:change(p,r,unexpected="do not echo this"))
+        self.assertEqual(d["state"],"UNKNOWN")
+        self.assertEqual(d["invocations"][0]["rejection_code"],"SCHEMA_FIELDS_INVALID")
+        self.assertNotIn("do not echo this",json.dumps(d))
+        self.assertEqual(cr,[])
     def test_configuration_fail_closed(self):
         for endpoint in ("https://example.com/v1/chat/completions","http://127.0.0.1:7777/v1/chat/completions","http://localhost:12345/v1/chat/completions"):
             with self.assertRaises(ValueError):config({"endpoint":endpoint,"model":"fixture"})
