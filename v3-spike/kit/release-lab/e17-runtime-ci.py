@@ -29,7 +29,13 @@ def main():
     def call(args, data=None, timeout=600):
         result=subprocess.run(args,input=data,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                               env=env,cwd=ROOT,timeout=timeout)
-        require(result.returncode==0,"command failed: "+" ".join(args[:2]))
+        if result.returncode!=0:
+            # Only fixed diagnostic codes from the readback probe; no raw output.
+            if len(args)>1 and args[1]==str(KIT/"poc-e17-gamma-readback.py"):
+                for line in result.stderr.decode(errors="replace").splitlines():
+                    if re.fullmatch(r"E17_(?:POSITIVE_HTTP_[0-9]{3}|NEGATIVE_STATUS_[0-9]{3}_EXPECTED_[0-9]{3})",line):
+                        print(line,flush=True)
+            raise ValueError("command failed: "+" ".join(args[:2])+" exit="+str(result.returncode))
         return result.stdout
     def docker(*args, **kw):
         return call(["docker",*args],**kw)
@@ -139,7 +145,7 @@ def main():
                     for table in ("runs","run_events","evidence","gates","twin_nodes","twin_edges","command_receipts","execution_receipts")]
         before=snapshot()
         projection=call([sys.executable,str(KIT/"poc-e17-gamma-readback.py"),
-                         "http://127.0.0.1:18080",str(ROOT),"product"])
+                         "http://127.0.0.1:18080",str(ROOT),"product-container"])
         require(json.loads(projection)["result"]=="PASS" and before==snapshot(),"GAMMA readback mutated state")
         (ROOT/"temporal-e17-product-gamma.json").write_bytes(projection)
         print("E17 pinned target activity and GAMMA readback PASS; collector and full business stages NOT_RUN")
