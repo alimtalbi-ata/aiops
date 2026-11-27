@@ -1,4 +1,4 @@
-"""Bounded JSON GET for the isolated loopback LAB, never a remote transport."""
+"""Bounded JSON GET and Core POST for the isolated loopback LAB, never a remote transport."""
 import json
 import math
 import socket
@@ -24,6 +24,20 @@ def _finite(value):
 
 
 def get_json(port, token, path, *, timeout=5, limit=65536):
+    return _request_json(port, token, path, method="GET", body=None, timeout=timeout, limit=limit)
+
+
+def post_core_json(port, token, path, body, *, timeout=5, limit=65536):
+    """Only the two synthetic Core creation routes; never retry a write."""
+    if path not in ("/api/incidents", "/api/runs") or type(body) is not dict:
+        raise ValueError("invalid Core publication")
+    raw = json.dumps(body, allow_nan=False).encode("utf-8")
+    if len(raw) > 65536:
+        raise ValueError("Core request too large")
+    return _request_json(port, token, path, method="POST", body=raw, timeout=timeout, limit=limit)
+
+
+def _request_json(port, token, path, *, method, body, timeout, limit):
     if type(port) is not int or not 1024 <= port <= 65535 or port in {7770, 7777, 7790}:
         raise ValueError("invalid isolated lab port")
     if not isinstance(token, str) or not 32 <= len(token) <= 256 or any(not 33 <= ord(c) <= 126 for c in token):
@@ -50,7 +64,10 @@ def get_json(port, token, path, *, timeout=5, limit=65536):
         timer = threading.Timer(remaining, interrupt)
         timer.daemon = True
         timer.start()
-        conn.request("GET", path, headers={"Authorization": "Bearer " + token, "Accept": "application/json", "Connection": "close"})
+        headers = {"Authorization": "Bearer " + token, "Accept": "application/json", "Connection": "close"}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        conn.request(method, path, body=body, headers=headers)
         response = conn.getresponse()
         if response.status != 200:
             raise ValueError("HTTP read unavailable")
