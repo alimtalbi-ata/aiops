@@ -51,6 +51,23 @@ class TransportTests(unittest.TestCase):
             with self.subTest(headers=headers), self.assertRaises(ValueError):
                 self.request(b"HTTP/1.1 200 OK\r\n"+headers+b"\r\nConnection: close\r\n\r\n{}")
 
+    def test_malformed_headers(self):
+        for headers in (
+            b"Content-Length: 2\r\nmalformed\r\nTransfer-Encoding: chunked",
+            b"Content-Length: 2\r\nmalformed\r\nContent-Length: 99",
+            b"Content-Length: 2\r\nInvalid Header: value\r\nContent-Length: 99",
+            b" continuation\r\nContent-Length: 2",
+        ):
+            with self.subTest(headers=headers), self.assertRaises(ValueError):
+                self.request(b"HTTP/1.1 200 OK\r\n"+headers+b"\r\nConnection: close\r\n\r\n{}")
+
+    def test_close_delimited(self):
+        self.assertEqual(self.request(b"HTTP/1.0 200 OK\r\nConnection: close\r\n\r\n{}"), {})
+
+    def test_folded_length_rejected(self):
+        with self.assertRaises(ValueError):
+            self.request(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n 2\r\nConnection: close\r\n\r\n{}")
+
     def test_deadline(self):
         start = time.monotonic()
         with self.assertRaises(ValueError):
