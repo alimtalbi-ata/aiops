@@ -1,0 +1,99 @@
+name: V3 minimal E17 runtime support (synthetic)
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/**'
+      - 'v3-spike/vertical/tests/gamma_oci_e17_readback.py'
+      - 'db/migrations/**'
+      - '.github/workflows/v3-runtime-payload-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  runtime-support:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exact checkout and synthetic disk contract
+        working-directory: v3-spike/kit/release-lab
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          python3 -m unittest -v test_runtime_payload
+      - name: Stage actual allowlisted runtime files outside checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export PYTHONDONTWRITEBYTECODE=1
+          python3 - <<'PY'
+          import pathlib, subprocess, sys
+          sys.path.insert(0,"v3-spike/kit/release-lab")
+          from runtime_payload import FILES
+          for name in sorted(FILES):
+              subprocess.run(["git","ls-files","--error-unmatch",name],check=True,stdout=subprocess.DEVNULL)
+          PY
+          python3 v3-spike/kit/release-lab/runtime_payload.py stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/e17-support" "$GITHUB_SHA" > "$RUNNER_TEMP/runtime-support.json"
+          expected="sha256:$(sha256sum "$RUNNER_TEMP/e17-support/runtime-manifest.json" | cut -d' ' -f1)"
+          python3 v3-spike/kit/release-lab/runtime_payload.py verify "$RUNNER_TEMP/e17-support" "$expected" "$GITHUB_SHA" > "$RUNNER_TEMP/runtime-support-verify.json"
+          cmp "$RUNNER_TEMP/runtime-support.json" "$RUNNER_TEMP/runtime-support-verify.json"
+          test ! -e "$RUNNER_TEMP/e17-support/.git"
+          echo "RUNTIME_MANIFEST_SHA=$expected" >> "$GITHUB_ENV"
+          cat "$RUNNER_TEMP/runtime-support.json"
+      - name: Assemble from isolated support tree with syntax-only BOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          cd "$RUNNER_TEMP"
+          python3 -I - <<'PY'
+          import json, os, pathlib
+          services="postgres core twin evidence policy temporal-postgres temporal worker gamma".split()
+          images={}
+          for i,name in enumerate(services,1):
+              d="sha256:"+format(i,"064x")
+              images[name]={"reference":"127.0.0.1:15080/aiops-v3/"+name+"@"+d,
+                            "manifest_digest":d,"config_digest":d,"engine_image_id":d,
+                            "os":"linux","architecture":"amd64"}
+          pathlib.Path("syntax-only-bom.json").write_text(json.dumps({
+              "schema_version":1,"classification":"DISPOSABLE_POC_IMAGE_BOM",
+              "source_sha":os.environ["GITHUB_SHA"],"production_authorized":False,"images":images}))
+          PY
+          env -i PATH=/usr/bin:/bin python3 -I -B "$RUNNER_TEMP/e17-support/v3-spike/kit/release-lab/assemble.py" "$RUNNER_TEMP/syntax-only-bom.json" "$RUNNER_TEMP/assembled-bundle"
+          python3 -I - "$RUNNER_TEMP/assembled-bundle" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          root=pathlib.Path(sys.argv[1])
+          manifest=json.loads((root/"manifest.json").read_text())
+          assert manifest["source_sha"]==os.environ["GITHUB_SHA"] and manifest["production_authorized"] is False
+          files={p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+          assert files==set(manifest["files"])|{"manifest.json"} and len(manifest["files"])==12
+          for name,expected in manifest["files"].items():
+              assert hashlib.sha256((root/name).read_bytes()).hexdigest()==expected
+          assert "build:" not in (root/"compose.yml").read_text()
+          for name in ("001_schema.sql","004_operational_model.sql","008_event_idempotency.sql","poc-execution-receipts.sql"):
+              assert (root/"sql"/name).stat().st_mode & 0o777==0o644
+          print("PASS standalone support assembly: 12 files, syntax-only BOM, no containers")
+          PY
+          python3 -I -B "$RUNNER_TEMP/e17-support/v3-spike/kit/release-lab/runtime_payload.py" verify "$RUNNER_TEMP/e17-support" "$RUNTIME_MANIFEST_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/runtime-support-after.json"
+          cmp "$RUNNER_TEMP/runtime-support.json" "$RUNNER_TEMP/runtime-support-after.json"
+      - name: Preserve support inventory and receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-e17-runtime-support-contract
+          path: |
+            ${{ runner.temp }}/e17-support/runtime-manifest.json
+            ${{ runner.temp }}/runtime-support*.json
+            ${{ runner.temp }}/assembled-bundle/manifest.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Scope
+        if: always()
+        run: echo "qualification=runtime_support_static_assembly docker=NOT_RUN production_authorized=false"
