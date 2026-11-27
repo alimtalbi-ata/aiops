@@ -183,5 +183,87 @@ with closing(open_existing(sys.argv[1])) as a, closing(open_existing(sys.argv[2]
     def test_sigkill_after_authority_commit_keeps_busy(self):
         self.assert_sigkill_keeps_busy('after_claim','PENDING')
 
+
+    def attest_fixture(self, daemon, role, key, challenge='c'*64):
+        import hashlib, hmac, json
+        payload = {'daemon_id': daemon, 'role': role, 'challenge': challenge,
+                   'failure_domain_id': 'lab-' + role}
+        raw = json.dumps(payload, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+        return dict(payload, signature=hmac.new(key, raw, hashlib.sha256).hexdigest())
+
+    def assert_attestation_pair(self, authority_id, witness_id, authority_key, witness_key,
+                                allowed=True, challenge='c'*64):
+        from authority_restore_guard_candidate import require_independent_daemon_attestations
+        a = self.attest_fixture(authority_id, 'authority', authority_key, challenge)
+        w = self.attest_fixture(witness_id, 'witness', witness_key, challenge)
+        args = (a, w, challenge, authority_key, witness_key)
+        if allowed:
+            self.assertTrue(require_independent_daemon_attestations(*args))
+        else:
+            with self.assertRaises(RestoreBlocked):
+                require_independent_daemon_attestations(*args)
+
+    def test_canonical_uuid_direct(self):
+        from authority_restore_guard_candidate import require_independent_daemons
+        self.assertTrue(require_independent_daemons('12345678-1234-1234-1234-123456789abc',
+                                                    '87654321-4321-4321-4321-cba987654321'))
+
+    def test_canonical_uuid_signed(self):
+        self.assert_attestation_pair('12345678-1234-1234-1234-123456789abc',
+                                     '87654321-4321-4321-4321-cba987654321', b'A'*32, b'W'*32)
+
+    def test_mixed_uuid_hex_both_roles(self):
+        from authority_restore_guard_candidate import require_independent_daemons
+        uuid = '12345678-1234-1234-1234-123456789abc'
+        for a,w in ((uuid,'b'*64),('a'*64,uuid)):
+            with self.subTest(a=a,w=w):
+                self.assertTrue(require_independent_daemons(a,w))
+                self.assert_attestation_pair(a,w,b'A'*32,b'W'*32)
+
+    def test_noncanonical_uuid_rejected(self):
+        from authority_restore_guard_candidate import require_independent_daemons
+        uuid = '12345678-1234-1234-1234-123456789abc'
+        for invalid in (uuid.upper(), uuid.replace('-',''), uuid+' ', uuid+'\n'):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(RestoreBlocked):
+                    require_independent_daemons(invalid,'b'*64)
+                self.assert_attestation_pair(invalid,'b'*64,b'A'*32,b'W'*32,False)
+
+    def test_identical_uuid_rejected(self):
+        from authority_restore_guard_candidate import require_independent_daemons
+        uuid = '12345678-1234-1234-1234-123456789abc'
+        with self.assertRaises(RestoreBlocked):
+            require_independent_daemons(uuid,uuid)
+        self.assert_attestation_pair(uuid,uuid,b'A'*32,b'W'*32,False)
+
+    def test_hmac_zero_padding_equivalence_rejected(self):
+        import hmac
+        key = b'A'*32
+        for n in (1,16,32):
+            padded = key + b'\x00'*n
+            with self.subTest(n=n):
+                self.assertNotEqual(key,padded)
+                self.assertEqual(hmac.digest(key,b'fixture','sha256'),
+                                 hmac.digest(padded,b'fixture','sha256'))
+                self.assert_attestation_pair('a'*64,'b'*64,key,padded,False)
+
+    def test_hmac_long_key_hash_equivalence_rejected(self):
+        import hashlib, hmac
+        for n in (65,128):
+            key = b'A'*n
+            digest = hashlib.sha256(key).digest()
+            with self.subTest(n=n):
+                self.assertEqual(hmac.digest(key,b'fixture','sha256'),
+                                 hmac.digest(digest,b'fixture','sha256'))
+                self.assert_attestation_pair('a'*64,'b'*64,key,digest,False)
+                self.assert_attestation_pair('a'*64,'b'*64,digest,key,False)
+
+    def test_short_keys_and_nonhex_challenge_rejected(self):
+        for a,w in ((b'A'*31,b'W'*32),(b'A'*32,b'W'*31)):
+            self.assert_attestation_pair('a'*64,'b'*64,a,w,False)
+        self.assert_attestation_pair('a'*64,'b'*64,b'A'*32,b'W'*32,False,
+                                     '12345678-1234-1234-1234-123456789abc')
+
+
 if __name__=='__main__':
     unittest.main(verbosity=2)

@@ -6,6 +6,7 @@ A crash/uncertain result leaves BUSY durably; no automatic unlock.
 from contextlib import contextmanager
 import hashlib
 import json
+import re
 from pathlib import Path
 import secrets
 import sqlite3
@@ -91,8 +92,7 @@ def require_independent_daemons(authority_daemon_id, witness_daemon_id):
     from each daemon's control socket. It does not create that transport or
     make a same-host witness independent.
     """
-    import re
-    pattern = r'[a-f0-9]{64}'
+    pattern = r'[a-f0-9]{64}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}'
     require(isinstance(authority_daemon_id, str) and re.fullmatch(pattern, authority_daemon_id))
     require(isinstance(witness_daemon_id, str) and re.fullmatch(pattern, witness_daemon_id))
     require(authority_daemon_id != witness_daemon_id)
@@ -100,7 +100,8 @@ def require_independent_daemons(authority_daemon_id, witness_daemon_id):
 
 
 def _attestation_payload(daemon_id, challenge, role, failure_domain_id):
-    require(isinstance(daemon_id, str) and __import__('re').fullmatch(r'[a-f0-9]{64}', daemon_id))
+    require(isinstance(daemon_id, str) and re.fullmatch(
+        r'[a-f0-9]{64}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', daemon_id))
     require(isinstance(challenge, str) and __import__('re').fullmatch(r'[a-f0-9]{64}', challenge))
     require(role in ('authority', 'witness'))
     require(isinstance(failure_domain_id, str) and 1 <= len(failure_domain_id) <= 128)
@@ -137,7 +138,12 @@ def require_independent_daemon_attestations(authority_attestation, witness_attes
     """Require authenticated identities and distinct restore failure domains."""
     import hmac
     require(isinstance(authority_key, bytes) and isinstance(witness_key, bytes))
-    require(not hmac.compare_digest(authority_key, witness_key))
+    require(len(authority_key) >= 32 and len(witness_key) >= 32)
+    # HMAC-SHA256 hashes keys longer than its block size, then zero pads.
+    # Compare effective keys, not raw encodings of the same signing key.
+    def effective_key(key):
+        return (hashlib.sha256(key).digest() if len(key) > 64 else key).ljust(64, b'\x00')
+    require(not hmac.compare_digest(effective_key(authority_key), effective_key(witness_key)))
     authority = verify_daemon_attestation(authority_attestation, challenge, 'authority', authority_key)
     witness = verify_daemon_attestation(witness_attestation, challenge, 'witness', witness_key)
     require(authority['daemon_id'] != witness['daemon_id'])
