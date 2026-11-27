@@ -184,6 +184,9 @@ def main():
         if os.getenv("V3_PG_RESTORE_CHECK") == "1":
             from e17_pg_restore import prove
             prove(docker, run, ROOT, bom, PROJECT)
+        if os.getenv("V3_TEMPORAL_RESTORE_CHECK") == "1":
+            from e17_temporal_restore import prove as prove_temporal
+            prove_temporal(docker, run, ROOT, bom, PROJECT, report, history_probe, history_replay)
     finally:
         try:
             run("--profile","e17","down","--volumes","--remove-orphans",timeout=180)
