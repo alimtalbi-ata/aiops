@@ -1,7 +1,7 @@
 name: V3 isolated E17 target OCI BOM
 on:
   pull_request:
-    branches: [v3-spike/central-integration, v3-spike/po-e17-signed-sbom-convergence-20261127]
+    branches: [v3-spike/central-integration, v3-spike/po-e17-product-pg-restore-20261127]
     paths:
       - 'v3-spike/kit/release-lab/distribution_manifest.py'
       - 'v3-spike/kit/release-lab/test_distribution_manifest.py'
@@ -17,6 +17,8 @@ on:
       - 'v3-spike/kit/release-lab/oci_transport.py'
       - 'v3-spike/kit/release-lab/test_oci_transport.py'
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
+      - 'v3-spike/kit/release-lab/e17_temporal_restore.py'
+      - 'v3-spike/kit/release-lab/test_e17_temporal_restore.py'
       - 'v3-spike/kit/release-lab/e17_pg_restore.py'
       - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
       - 'v3-spike/kit/release-lab/e17-history-evidence.py'
@@ -53,7 +55,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify transport against isolated HTTP registry fixture
         working-directory: v3-spike/kit/release-lab
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests test_distribution_manifest.DistributionTests test_sbom_contract.SBOMTests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests test_distribution_manifest.DistributionTests test_sbom_contract.SBOMTests test_e17_temporal_restore.TemporalRestoreSchemaTests
       - name: Start isolated rootless daemon
         run: |
           set -euo pipefail
@@ -598,6 +600,7 @@ jobs:
       - name: Run E17 from support only without checkout or rebuild
         env:
           V3_PG_RESTORE_CHECK: '1'
+          V3_TEMPORAL_RESTORE_CHECK: '1'
         run: |
           set -euo pipefail
           cd "$V3_ROOT/runtime-support"
@@ -619,12 +622,17 @@ jobs:
           assert restored["result"]=="PASS" and restored["source_sha"]==os.environ["GITHUB_SHA"] and restored["tables"]==17
           assert restored["temporal_restore"]=="NOT_RUN" and restored["collector_authority_restore"]=="NOT_RUN"
           assert restored["production_authorized"] is False
+          temporal=json.loads((root/"e17-temporal-restore.json").read_text())
+          assert temporal["result"]=="PASS" and temporal["source_sha"]==os.environ["GITHUB_SHA"]
+          assert temporal["workflow_id"]==report["workflow_id"] and temporal["action_receipt_sha256"]==report["action_receipt_sha256"]
+          assert temporal["history_projection_identical"] is True and temporal["worker_started"] is False
+          assert set(temporal["databases"])=={"temporal","temporal_visibility"} and temporal["production_authorized"] is False
           receipt={"classification":"V3_E17_NO_CHECKOUT_RUNTIME","result":"PASS","source_sha":os.environ["GITHUB_SHA"],
                    "support_manifest_sha256":support["manifest_sha256"],"bom_sha256":pull["bom_sha256"],
                    "archive_sha256":os.environ["EXPECTED_ARCHIVE_SHA"],"checkout_present":False,
                    "product_build":False,"support_unchanged":True,"production_authorized":False,
                    "distribution_signature":"EPHEMERAL_LAB_VERIFIED","sbom_index_sha256":json.loads((root/"cold-signature-verify.json").read_text())["statement"]["sbom_index_sha256"],
-                   "vulnerability_scan":"NOT_RUN","application_pg_restore":"PASS"}
+                   "vulnerability_scan":"NOT_RUN","application_pg_restore":"PASS","temporal_history_restore":"PASS"}
           (root/"cold-no-checkout.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
           print(json.dumps(receipt,sort_keys=True))
           PY
@@ -642,6 +650,7 @@ jobs:
             /tmp/aiops-v3-rootless-ci/distribution-proof/sbom/index.json
             /tmp/aiops-v3-rootless-ci/cold-support-verify.json
             /tmp/aiops-v3-rootless-ci/cold-support-after.json
+            /tmp/aiops-v3-rootless-ci/e17-temporal-restore.json
             /tmp/aiops-v3-rootless-ci/e17-application-pg-restore.json
             /tmp/aiops-v3-rootless-ci/cold-no-checkout.json
             /tmp/aiops-v3-rootless-ci/runtime-support/runtime-manifest.json
