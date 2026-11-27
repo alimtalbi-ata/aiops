@@ -1,6 +1,7 @@
 """Real SQLite, synthetic identities and receipt; no Core/Evidence effects."""
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import secrets
 import sqlite3
@@ -76,9 +77,14 @@ class FenceTests(unittest.TestCase):
 
 
     def test_rearm_history_and_stale_generation(self):
-        def proof(scope, run, receipt):
-            self.assertEqual((scope, run, receipt), (self.scope, self.run, self.receipt))
-            return {'classification': 'SYNTHETIC_LAB_VERIFY', 'status': 'RECOVERED',
+        def proof(scope, generation, episode, batch, run, receipt):
+            self.assertEqual((scope, generation, episode, batch, run, receipt),
+                             (self.scope, 0, self.episode, self.batch, self.run, self.receipt))
+            return {'admission_binding': {'scope': list(scope), 'generation': generation,
+                                          'episode': episode, 'batch': batch, 'run_id': run,
+                                          'receipt_sha256': receipt},
+                    'recovery_observed_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                    'classification': 'SYNTHETIC_LAB_VERIFY', 'status': 'RECOVERED',
                     'original_run_id': run, 'comparison_run_id': 'RUN-0000000000000002',
                     'production_authorized': False, 'operational_decision': 'DENY',
                     'causality_established': False}
@@ -97,6 +103,26 @@ class FenceTests(unittest.TestCase):
                        {'operational_decision': 'ALLOW'}):
             with self.subTest(change=change), self.assertRaises(FenceRejected):
                 advance(lambda *args: proof(*args) | change)
+        for key, value in (('scope', ['synthetic-demo','NODE-CI-OTHER','COLLECTOR-one']),
+                           ('generation', 1), ('generation', False), ('episode', 'd'*32),
+                           ('batch', 'e'*64), ('run_id', 'RUN-0000000000000003'),
+                           ('receipt_sha256', 'f'*64)):
+            with self.subTest(binding=key, value=value), self.assertRaises(FenceRejected):
+                def wrong_binding(*args):
+                    result = proof(*args)
+                    result['admission_binding'][key] = value
+                    return result
+                advance(wrong_binding)
+        for value in (None, '', 'not-a-time', '2026-02-30T00:00:00Z',
+                      (datetime.now(timezone.utc)-timedelta(seconds=180)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                      (datetime.now(timezone.utc)+timedelta(seconds=60)).strftime('%Y-%m-%dT%H:%M:%SZ')):
+            with self.subTest(observed=value), self.assertRaises(FenceRejected):
+                advance(lambda *args: proof(*args) | {'recovery_observed_at': value})
+        for key in ('admission_binding', 'recovery_observed_at'):
+            with self.subTest(missing=key), self.assertRaises(FenceRejected):
+                advance(lambda *args: {k:v for k,v in proof(*args).items() if k != key})
+        self.assertEqual(self.call(reconcile), {'state':'COMMITTED', 'run_id':self.run,
+                                               'receipt_sha256':self.receipt})
         def unavailable(*args):
             raise OSError('Verify unavailable')
         with self.assertRaises(OSError):

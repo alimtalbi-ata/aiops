@@ -158,5 +158,6 @@ def verify_recovery(*, read_context, read_action_receipt, original_run_id,
             "original_run_id": original_run_id, "comparison_run_id": comparison_run_id,
             "action_receipt_id": action_receipt_id, "action_receipt_sha256": action_receipt_sha256,
             "original_evidence": original_refs, "comparison_evidence": comparison_refs,
+            "recovery_observed_at": times["recovery"].strftime("%Y-%m-%dT%H:%M:%SZ"),
             "measurements": comparison, "causality_established": False,
             "operational_decision": "DENY", "production_authorized": False}

@@ -1,4 +1,5 @@
 """Scope exclusivity and cross-role history regression; SQLite, synthetic Verify only."""
+from datetime import datetime, timezone
 import sqlite3
 import tempfile
 import threading
@@ -14,8 +15,11 @@ TOKEN = 'a' * 64
 def episode(n): return f'{n:032x}'
 def batch(n): return f'{n:064x}'
 def run(n): return f'RUN-{n:016X}'
-def proof(original, comparison):
-    return dict(classification='SYNTHETIC_LAB_VERIFY', status='RECOVERED', original_run_id=original,
+def proof(scope, generation, ep, digest, original, receipt, comparison):
+    return dict(admission_binding=dict(scope=list(scope), generation=generation, episode=ep,
+                                      batch=digest, run_id=original, receipt_sha256=receipt),
+                recovery_observed_at=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                classification='SYNTHETIC_LAB_VERIFY', status='RECOVERED', original_run_id=original,
                 comparison_run_id=comparison, production_authorized=False, operational_decision='DENY', causality_established=False)
 
 class ScopeHistoryTests(unittest.TestCase):
@@ -31,7 +35,7 @@ class ScopeHistoryTests(unittest.TestCase):
         complete(self.db, A, TOKEN, generation, episode(n), batch(n), rid, batch(n + 100))
     def recovery(self, generation, n, original, comparison):
         return rearm(self.db, A, TOKEN, generation, episode(n), batch(n),
-                     read_verified_recovery=lambda *_: proof(original, comparison))
+                     read_verified_recovery=lambda scope, gen, ep, digest, rid, receipt: proof(scope, gen, ep, digest, original, receipt, comparison))
     def first(self):
         provision(self.db, A, TOKEN)
         self.commit_episode(0, 1, run(1))

@@ -1,7 +1,10 @@
 name: V3 collector authority contract (synthetic)
 on:
   pull_request:
-    branches: [v3-spike/central-integration]
+    branches:
+      - v3-spike/central-integration
+      - v3-spike/b-rearm-proof-binding-20261127
+      - v3-spike/collector-authority-restore-guard-lab-20261127
     paths:
       - 'v3-spike/vertical/*collector*.py'
       - 'v3-spike/vertical/test_recovery_verify_contract.py'

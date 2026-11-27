@@ -59,6 +59,7 @@ class VerifyContractTests(unittest.TestCase):
                 result = verify_recovery(**args)
                 self.assertEqual(result['status'], expected)
                 self.assertEqual(result['measurements']['recovery_ms'], value)
+                self.assertEqual(result['recovery_observed_at'], '2026-11-27T00:00:05Z')
                 self.assertIs(result['production_authorized'], False)
                 self.assertIs(result['causality_established'], False)
                 self.assertEqual(result['operational_decision'], 'DENY')
