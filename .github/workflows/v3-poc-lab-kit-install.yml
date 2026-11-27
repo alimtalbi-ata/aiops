@@ -54,7 +54,7 @@ jobs:
           out="$V3_ROOT/bom"
           base=v3-spike/kit/compose.poc-source.yml
           compose=(docker compose --env-file "$V3_ROOT/poc.env" -f "$base" -f v3-spike/kit/compose.gamma-ci.yml --profile orchestration)
-          docker run -d --name v3-gamma-bom-registry -p 127.0.0.1:15080:5000 registry:2
+          docker run -d --name v3-lab-kit-registry -p 127.0.0.1:15080:5000 registry:2
           for i in $(seq 1 30); do
             if curl -fsS --max-time 2 http://127.0.0.1:15080/v2/ >/dev/null; then break; fi
             sleep 1
