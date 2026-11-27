@@ -228,3 +228,94 @@ class CorePublicationTests(unittest.TestCase):
                            ('/api/runs', {'x': float('nan')}), ('/api/runs', {'x': 'a'*65536})):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 post_core_json(12345, 'x'*32, path, body)
+
+
+class EvidencePublicationTests(unittest.TestCase):
+    def exercise(self, fault=None, *, status=200, count=2):
+        import hashlib
+        import json
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from ingestion_store import persist
+
+        rows = [{'id': 'ci-'+str(i), 'source': 'monitor', 'kind': 'log',
+                 'tenant': 'synthetic-demo', 'resource': 'NODE-CI-1',
+                 'severity': 'critical', 'synthetic': True} for i in range(count)]
+        calls = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def answer(self, data, code=200):
+                raw = json.dumps(data).encode()
+                self.send_response(code)
+                self.send_header('Content-Length', str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+            def do_POST(self):
+                data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                calls.append(('POST', self.path, self.headers.get('Authorization'), data))
+                digest = hashlib.sha256(json.dumps(data['payload'], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+                self.server.receipt = {'evidence_id': 'EVD-'+str(len(calls)), 'payload_hash': digest}
+                if fault == 'redirect':
+                    self.send_response(302)
+                    self.send_header('Location', '/redirected')
+                    self.send_header('Content-Length', '0')
+                    self.end_headers()
+                elif fault == 'lost_ack':
+                    self.close_connection = True
+                elif fault == 'list':
+                    self.answer([])
+                elif fault == 'hash':
+                    self.answer(dict(self.server.receipt, payload_hash='0'*64))
+                elif fault == 'duplicate':
+                    self.answer(dict(self.server.receipt, evidence_id='EVD-1'))
+                elif fault in ('bad id', 'bad\nid', 'é', 'x'*129):
+                    self.answer(dict(self.server.receipt, evidence_id=fault))
+                else:
+                    self.answer(self.server.receipt, status)
+            def do_GET(self):
+                calls.append(('GET', self.path, self.headers.get('Authorization'), None))
+                self.answer(self.server.receipt)
+            def log_message(self, *args):
+                pass
+        with HTTPServer(('127.0.0.1', 0), Handler) as server:
+            thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01})
+            thread.start()
+            try:
+                if fault:
+                    with self.assertRaises(ValueError):
+                        persist(rows, server.server_port, 'RUN-CI-TEST')
+                else:
+                    result = persist(rows, server.server_port, 'RUN-CI-TEST')
+                    self.assertEqual(len(result['stored_evidence']), count)
+                    self.assertEqual([r['evidence_id'] for r in result['stored_evidence']], ['EVD-'+str(i+1) for i in range(count)])
+            finally:
+                server.shutdown()
+                thread.join()
+        self.assertTrue(all(c[:3] == ('POST', '/api/evidence', None) for c in calls))
+        return calls
+
+    def test_evidence_valid(self):
+        for status in (200, 201):
+            with self.subTest(status=status):
+                calls = self.exercise(status=status)
+                self.assertEqual(len(calls), 2)
+                self.assertEqual([c[3]['external_id'] for c in calls], ['ci-0', 'ci-1'])
+
+    def test_evidence_redirect_never_followed(self):
+        self.assertEqual(len(self.exercise('redirect')), 1)
+
+    def test_evidence_invalid_receipt_stops(self):
+        for fault in ('list', 'hash', 'bad id', 'bad\nid', 'é', 'x'*129):
+            with self.subTest(fault=fault):
+                self.assertEqual(len(self.exercise(fault)), 1)
+
+    def test_evidence_duplicate_reference_stops(self):
+        self.assertEqual(len(self.exercise('duplicate', count=3)), 2)
+
+    def test_evidence_ack_loss_stops(self):
+        self.assertEqual(len(self.exercise('lost_ack')), 1)
+
+    def test_core_token_remains_required(self):
+        from bounded_http_transport import post_core_json
+        for token in (None, '', 'short'):
+            with self.subTest(token=token), self.assertRaises(ValueError):
+                post_core_json(12345, token, '/api/runs', {})
