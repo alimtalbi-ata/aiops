@@ -2,6 +2,7 @@
 Disposable GitHub rootless runner; not a product install or production action.
 """
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -148,7 +149,32 @@ def main():
                          "http://127.0.0.1:18080",str(ROOT),"product-container"])
         require(json.loads(projection)["result"]=="PASS" and before==snapshot(),"GAMMA readback mutated state")
         (ROOT/"temporal-e17-product-gamma.json").write_bytes(projection)
-        print("E17 pinned target activity and GAMMA readback PASS; collector and full business stages NOT_RUN")
+        # A's immutable read-only browser probe is executed before project teardown.
+        probe=ROOT/"a-e17-probe.py"
+        raw=probe.read_bytes()
+        git_blob=hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\x00"+raw).hexdigest()
+        require(git_blob=="771ee628cc515ae316f8699fd26963efa80a9db3","A probe identity changed")
+        browser_env={"PATH":"/usr/bin:/bin","HOME":str(ROOT/"browser-home"),
+                     "V3_ROOT":str(ROOT),"PLAYWRIGHT_BROWSERS_PATH":str(ROOT/"chromium"),
+                     "PYTHONDONTWRITEBYTECODE":"1","NO_PROXY":"127.0.0.1,localhost"}
+        (ROOT/"browser-home").mkdir(mode=0o700,exist_ok=False)
+        # No Docker socket, credentials, or inherited environment in browser process.
+        args=[str(ROOT/"browser-venv/bin/python"),str(probe),str(ROOT/"e17-browser"),
+              parsed["workflow_id"],parsed["verification"]["comparison_run_id"],
+              parsed["action_receipt_sha256"],parsed["verification"]["status"],
+              "--verify-report",str(ROOT/"temporal-e17-product.json"),
+              "--worker-replay",str(ROOT/"temporal-e17-product-worker-replay.json")]
+        result=subprocess.run(args,env=browser_env,cwd=ROOT,stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE,timeout=240)
+        require(result.returncode==0,"A Chromium gate exit="+str(result.returncode))
+        browser=json.loads((ROOT/"e17-browser/e17-browser.json").read_text())
+        require(browser["result"]=="PASS" and browser["production_authorized"] is False
+                and browser["original_run_id"]==parsed["workflow_id"]
+                and browser["comparison_run_id"]==parsed["verification"]["comparison_run_id"]
+                and browser["receipt_sha256"]==parsed["action_receipt_sha256"]
+                and all(browser[k]=="PASS" for k in ("late_response","duplicate_pair","reset"))
+                and before==snapshot(),"browser proof or PostgreSQL snapshot mismatch")
+        print("E17 pinned target activity, GAMMA and Chromium readback PASS; collector and full business stages NOT_RUN")
     finally:
         try:
             run("--profile","e17","down","--volumes","--remove-orphans",timeout=180)
