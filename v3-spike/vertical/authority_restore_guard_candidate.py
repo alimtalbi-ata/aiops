@@ -97,3 +97,49 @@ def require_independent_daemons(authority_daemon_id, witness_daemon_id):
     require(isinstance(witness_daemon_id, str) and re.fullmatch(pattern, witness_daemon_id))
     require(authority_daemon_id != witness_daemon_id)
     return True
+
+
+def _attestation_payload(daemon_id, challenge, role, failure_domain_id):
+    require(isinstance(daemon_id, str) and __import__('re').fullmatch(r'[a-f0-9]{64}', daemon_id))
+    require(isinstance(challenge, str) and __import__('re').fullmatch(r'[a-f0-9]{64}', challenge))
+    require(role in ('authority', 'witness'))
+    require(isinstance(failure_domain_id, str) and 1 <= len(failure_domain_id) <= 128)
+    return json.dumps({'daemon_id': daemon_id, 'challenge': challenge, 'role': role,
+                       'failure_domain_id': failure_domain_id},
+                      sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+
+
+def verify_daemon_attestation(attestation, expected_challenge, expected_role, trust_key):
+    """Verify an externally provisioned per-daemon HMAC trust anchor.
+
+    LAB contract only: callers must obtain attestation over an authenticated,
+    live control channel and provision trust_key outside that daemon's restore
+    domain. This function performs no network I/O or key provisioning.
+    """
+    import hmac
+    require(isinstance(attestation, dict))
+    require(isinstance(trust_key, bytes) and len(trust_key) >= 32)
+    payload = _attestation_payload(attestation.get('daemon_id'),
+                                   attestation.get('challenge'),
+                                   attestation.get('role'),
+                                   attestation.get('failure_domain_id'))
+    require(attestation.get('challenge') == expected_challenge)
+    require(attestation.get('role') == expected_role)
+    signature = attestation.get('signature')
+    require(isinstance(signature, str) and len(signature) == 64)
+    expected = hmac.new(trust_key, payload, hashlib.sha256).hexdigest()
+    require(hmac.compare_digest(signature, expected))
+    return {key: attestation[key] for key in ('daemon_id', 'role', 'failure_domain_id')}
+
+
+def require_independent_daemon_attestations(authority_attestation, witness_attestation,
+                                             challenge, authority_key, witness_key):
+    """Require authenticated identities and distinct restore failure domains."""
+    import hmac
+    require(isinstance(authority_key, bytes) and isinstance(witness_key, bytes))
+    require(not hmac.compare_digest(authority_key, witness_key))
+    authority = verify_daemon_attestation(authority_attestation, challenge, 'authority', authority_key)
+    witness = verify_daemon_attestation(witness_attestation, challenge, 'witness', witness_key)
+    require(authority['daemon_id'] != witness['daemon_id'])
+    require(authority['failure_domain_id'] != witness['failure_domain_id'])
+    return True
