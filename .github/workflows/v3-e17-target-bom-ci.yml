@@ -5,6 +5,7 @@ on:
     paths:
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
       - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
+      - 'v3-spike/kit/release-lab/e17-history-evidence.py'
       - 'v3-spike/kit/poc-image-bom.py'
       - '.github/workflows/v3-e17-target-bom-ci.yml'
 permissions:
@@ -127,6 +128,8 @@ jobs:
             /tmp/aiops-v3-rootless-ci/temporal-e17-product.json
             /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker.json
             /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker-replay.json
+            /tmp/aiops-v3-rootless-ci/e17-history-before.json
+            /tmp/aiops-v3-rootless-ci/e17-history-after.json
             /tmp/aiops-v3-rootless-ci/temporal-e17-recreated-target.json
             /tmp/aiops-v3-rootless-ci/temporal-e17-product-gamma.json
             /tmp/aiops-v3-rootless-ci/e17-browser/e17-browser.json
