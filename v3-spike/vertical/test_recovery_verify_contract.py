@@ -114,27 +114,29 @@ class VerifyContractTests(unittest.TestCase):
             verify_recovery(**(args | {'read_context': changed}))
 
 
-    def test_comparison_readback_changed(self):
-        for mutation in ('run', 'signal', 'evidence'):
-            with self.subTest(mutation=mutation):
-                args, contexts, _ = fixture()
-                reads = 0
-                def changed(rid):
-                    nonlocal reads
-                    result = deepcopy(contexts[rid])
-                    if rid == COMPARISON:
-                        reads += 1
-                        if reads == 2:
-                            if mutation == 'run':
-                                result[0]['run']['status'] = 'CHANGED'
-                            elif mutation == 'signal':
-                                result[1]['verified_signals'][3]['signal']['observation']['value'] = 999
-                            else:
-                                result[1]['evidence'].pop()
-                    return result
-                with self.assertRaises(ValueError):
-                    verify_recovery(**(args | {'read_context': changed}))
-                self.assertEqual(reads, 2)
+    def test_original_and_comparison_readback_changed(self):
+        for target in (ORIGINAL, COMPARISON):
+            for mutation in ('run', 'signal', 'evidence'):
+                with self.subTest(target=target, mutation=mutation):
+                    args, contexts, _ = fixture()
+                    reads = 0
+                    def changed(rid):
+                        nonlocal reads
+                        result = deepcopy(contexts[rid])
+                        if rid == target:
+                            reads += 1
+                            if reads == 2:
+                                if mutation == 'run':
+                                    result[0]['run']['status'] = 'CHANGED'
+                                elif mutation == 'signal':
+                                    index = 3 if target == COMPARISON else 0
+                                    result[1]['verified_signals'][index]['signal']['observation']['value'] = 999
+                                else:
+                                    result[1]['evidence'].pop()
+                        return result
+                    with self.assertRaises(ValueError):
+                        verify_recovery(**(args | {'read_context': changed}))
+                    self.assertEqual(reads, 2)
 
     def test_mutable_context_cache_cannot_rewrite_baseline(self):
         for target in (ORIGINAL, COMPARISON):
