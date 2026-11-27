@@ -6,7 +6,8 @@ this DB remains mandatory before service activation after authority restore.
 """
 import re
 from collector_admission_fence import authenticated, claim, complete, reconcile, archived_receipt, require, transaction
-from collector_receipt import digest, validate_receipt
+from collector_receipt import digest
+from collector_persisted_receipt import verify_persisted_receipt
 from ingestion_demo import ingest
 from incident_admission import admit
 
@@ -16,11 +17,12 @@ def bearer(authorization):
     return authorization[7:]
 
 
-def publish(db, *, scope, authorization, generation, rows, graph, publish_records):
+def publish(db, *, scope, authorization, generation, rows, graph, publish_records, read_context):
     """Publish once; on any exception after claim, leave PENDING, never retry.
 
     Scope is server configuration, not a request assertion. publish_records
     must be bound to the existing create_and_persist with server credentials.
+    read_context must independently read persisted Core/Evidence, never the response.
     """
     token = bearer(authorization)
     with transaction(db):
@@ -47,7 +49,7 @@ def publish(db, *, scope, authorization, generation, rows, graph, publish_record
     require(batch == decision['batch_sha256'])
     claim(db, scope, token, generation, episode, batch)
     response = {'admission': decision, 'publication': publish_records(rows), 'production_authorized': False}
-    run = validate_receipt(correlation, response)
+    run = verify_persisted_receipt(correlation, response, read_context=read_context)
     complete(db, scope, token, generation, episode, batch, run, digest(response))
     return response
 
