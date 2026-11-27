@@ -36,6 +36,11 @@ def main(bom_path,out):
         shutil.copyfile(REPO/"db"/"migrations"/name,out/"sql"/name)
     for name in ("poc-execution-receipts.sql","poc-seed.sql"):
         shutil.copyfile(KIT/name,out/"sql"/name)
+    # Public synthetic init SQL must remain readable after PostgreSQL drops privileges.
+    for name in ("001_schema.sql","004_operational_model.sql","008_event_idempotency.sql","poc-execution-receipts.sql"):
+        sql=out/"sql"/name
+        sql.chmod(0o644)
+        require(sql.stat().st_mode & 0o777 == 0o644,"invalid init SQL mode")
     for name in ("poc-temporal-boundary-smoke.py","poc-gamma-container-smoke.py","poc-image-bom.py"):
         shutil.copyfile(KIT/name,out/name)
     shutil.copyfile(HERE/"install-ci.py",out/"install-ci.py")
