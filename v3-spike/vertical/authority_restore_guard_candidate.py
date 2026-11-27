@@ -82,3 +82,18 @@ def guarded(authority, witness):
         row = witness.execute('SELECT state,lease FROM guard WHERE id=1').fetchone()
         require(row == ('BUSY', lease))
         witness.execute("UPDATE guard SET state='READY',digest=?,lease=NULL WHERE id=1", (value,))
+
+
+def require_independent_daemons(authority_daemon_id, witness_daemon_id):
+    """Fail closed unless IDs come from authenticated, live daemon-info calls.
+
+    This is a contract primitive only: callers must obtain IDs independently
+    from each daemon's control socket. It does not create that transport or
+    make a same-host witness independent.
+    """
+    import re
+    pattern = r'[a-f0-9]{64}'
+    require(isinstance(authority_daemon_id, str) and re.fullmatch(pattern, authority_daemon_id))
+    require(isinstance(witness_daemon_id, str) and re.fullmatch(pattern, witness_daemon_id))
+    require(authority_daemon_id != witness_daemon_id)
+    return True
