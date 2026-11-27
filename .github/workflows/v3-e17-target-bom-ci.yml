@@ -18,6 +18,7 @@ on:
       - 'v3-spike/kit/release-lab/test_oci_transport.py'
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
       - 'v3-spike/kit/release-lab/e17_temporal_restore.py'
+      - 'v3-spike/kit/release-lab/test_e17_temporal_restore.py'
       - 'v3-spike/kit/release-lab/e17_pg_restore.py'
       - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
       - 'v3-spike/kit/release-lab/e17-history-evidence.py'
@@ -54,7 +55,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify transport against isolated HTTP registry fixture
         working-directory: v3-spike/kit/release-lab
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests test_distribution_manifest.DistributionTests test_sbom_contract.SBOMTests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests test_distribution_manifest.DistributionTests test_sbom_contract.SBOMTests test_e17_temporal_restore.TemporalRestoreSchemaTests
       - name: Start isolated rootless daemon
         run: |
           set -euo pipefail
