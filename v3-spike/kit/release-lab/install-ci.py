@@ -41,7 +41,7 @@ def main(bundle,slot):
             and bom["production_authorized"] is False,"invalid BOM")
     project="v3-lab-install-"+slot
     for kind in ("container","volume","network"):
-        require(not docker(kind,"ls","-q","--filter","label=com.docker.compose.project="+project),"existing project resource")
+        require(not docker(kind,"ls","-aq" if kind=="container" else "-q","--filter","label=com.docker.compose.project="+project),"existing project resource")
     for name in VOLUMES:
         require(subprocess.run(["docker","volume","inspect",project+"_"+name],env=env,stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL).returncode!=0,"existing volume")
