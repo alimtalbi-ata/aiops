@@ -17,7 +17,7 @@ from collector_admission_service import publish, lookup
 from collector_receipt import digest
 from continuous_collector import batch, NoRedirect, SCOPE
 from ingestion_demo import ingest
-from test_collector_transition import response_for
+from test_collector_transition import response_for, persisted_fixture
 
 
 class GraphFixture:
@@ -31,7 +31,8 @@ class GraphFixture:
 
 class ServiceTests(unittest.TestCase):
     def test_http_claim_and_reconciliation(self):
-        for fault in ('none', 'lost_ack', 'invalid_receipt', 'publisher_failure'):
+        for fault in ('none', 'lost_ack', 'invalid_receipt', 'publisher_failure', 'swap_ids',
+                      'foreign_ids', 'rehashed_run', 'reader_failure'):
             with self.subTest(fault=fault), tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / 'authority.db'
                 scope = ('synthetic-demo', 'NODE-CI-ROOT', 'COLLECTOR-one')
@@ -46,6 +47,8 @@ class ServiceTests(unittest.TestCase):
                 episode = rows[0]['id'][:32]
                 batch_hash = digest(ingest(rows)['incidents'][0])
                 publications = []
+                readbacks = {}
+                reads = []
 
                 def publisher(records):
                     # Confirm the claim is committed before any external publication.
@@ -55,9 +58,32 @@ class ServiceTests(unittest.TestCase):
                     if fault == 'publisher_failure':
                         raise OSError('synthetic failure')
                     result = response_for(records)['publication']
+                    core, context = persisted_fixture(records)
+                    readbacks[core['run']['run_id']] = (core, context)
                     if fault == 'invalid_receipt':
                         result['stored_evidence'][0]['payload_hash'] = '0' * 64
+                    elif fault == 'swap_ids':
+                        refs = result['stored_evidence']
+                        refs[0]['evidence_id'], refs[1]['evidence_id'] = refs[1]['evidence_id'], refs[0]['evidence_id']
+                    elif fault == 'foreign_ids':
+                        for i, ref in enumerate(result['stored_evidence']):
+                            ref['evidence_id'] = 'FOREIGN-' + str(i)
+                    elif fault == 'rehashed_run':
+                        run = result['core']['run']
+                        run['run_id'] = 'RUN-0000000000000002'
+                        incident = result['correlation']['incidents'][0]
+                        for ref, signal in zip(result['stored_evidence'], incident['evidence']):
+                            ref['payload_hash'] = digest({'run_id': run['run_id'], 'incident_id': run['incident_id'],
+                                'signal': signal, 'correlation_id': incident['id'], 'resource': incident['resource']})
                     return result
+
+                def read_context(rid):
+                    reads.append(rid)
+                    with closing(sqlite3.connect(path)) as db:
+                        self.assertEqual(db.execute('SELECT state FROM collector_fence').fetchone()[0], 'PENDING')
+                    if fault == 'reader_failure':
+                        raise OSError('synthetic readback unavailable')
+                    return readbacks[rid]
 
                 class Handler(BaseHTTPRequestHandler):
                     def log_message(self, *args):
@@ -69,7 +95,7 @@ class ServiceTests(unittest.TestCase):
                             with closing(sqlite3.connect(path)) as db:
                                 args = dict(scope=scope, authorization=self.headers.get('Authorization'), generation=body['generation'])
                                 if self.path == '/publish':
-                                    result = publish(db, **args, rows=body['rows'], graph=GraphFixture(), publish_records=publisher)
+                                    result = publish(db, **args, rows=body['rows'], graph=GraphFixture(), publish_records=publisher, read_context=read_context)
                                     if fault == 'lost_ack':
                                         self.close_connection = True
                                         return
@@ -122,6 +148,10 @@ class ServiceTests(unittest.TestCase):
                         with self.assertRaises(HTTPError):
                             call('/lookup', query | {'batch': '0' * 64})
                         self.assertEqual(len(publications), 1)
+                        self.assertEqual(len(reads), 0 if fault in ('publisher_failure', 'invalid_receipt') else 1)
+                        with closing(sqlite3.connect(path)) as db:
+                            self.assertEqual(db.execute('SELECT state FROM collector_fence').fetchone()[0],
+                                             'COMMITTED' if fault in ('none', 'lost_ack') else 'PENDING')
                     finally:
                         server.shutdown()
                         thread.join()
