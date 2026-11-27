@@ -86,6 +86,12 @@ class Collector:
     def checkpoint(self):
         """Optional durable subclass hook; default remains process-local."""
 
+    def publish(self, rows, correlation):
+        return admission(self.gamma_port, rows)
+
+    def allow_local_rearm(self):
+        return True
+
     def observe(self):
         try:
             window=sample(self.target_port)
@@ -120,7 +126,7 @@ class Collector:
                     try:
                         rows=batch(self.baseline,window)
                         correlation=ingest(rows)
-                        response=admission(self.gamma_port,rows)
+                        response=self.publish(rows,correlation)
                         self.run_id=validate_receipt(correlation,response)
                         self.state="LATCHED"
                         result["published"]=True
@@ -130,7 +136,7 @@ class Collector:
                 self.degraded=0
                 if value<=1.5*self.baseline["median"] and value<=40:
                     self.baseline=window
-        elif self.state=="LATCHED":
+        elif self.state=="LATCHED" and self.allow_local_rearm():
             if value<=1.5*self.baseline["median"] and value<=40:
                 self.nominal+=1
                 if self.nominal>=2:
