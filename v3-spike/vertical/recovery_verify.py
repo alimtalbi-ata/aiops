@@ -9,6 +9,7 @@ collector must publish fresh measured samples using existing ingestion.
 import hashlib
 import json
 import re
+from copy import deepcopy
 from datetime import datetime
 from statistics import median
 
@@ -31,7 +32,7 @@ def stamp(value):
 def _snapshot(read_context, run_id, refs, scope):
     if not isinstance(run_id, str) or not re.fullmatch(r"RUN-[A-F0-9]{16}", run_id):
         raise ValueError("invalid run")
-    core, context = read_context(run_id)
+    core, context = deepcopy(read_context(run_id))
     run = core["run"]
     expected = index_references(refs)
     if (run["run_id"] != run_id or run["mode"] != "DEMO"
@@ -82,6 +83,10 @@ def verify_recovery(*, read_context, read_action_receipt, original_run_id,
         or len(scope) != 3 or not all(isinstance(s, str) and
                                       re.fullmatch(r"NODE-CI-[A-Z0-9-]{1,80}", s) for s in scope)):
         raise ValueError("distinct runs and lab scope required")
+    # Detach caller-owned inputs before invoking any reader callback.
+    scope = list(scope)
+    original_refs = list(index_references(original_refs).values())
+    comparison_refs = list(index_references(comparison_refs).values())
     before, old = _snapshot(read_context, original_run_id, original_refs, scope)
     after, new = _snapshot(read_context, comparison_run_id, comparison_refs, scope)
     if before["incident_id"] == after["incident_id"]:
@@ -96,7 +101,7 @@ def verify_recovery(*, read_context, read_action_receipt, original_run_id,
         or not isinstance(action_receipt_sha256, str)
         or not re.fullmatch(r"[a-f0-9]{64}", action_receipt_sha256)):
         raise ValueError("invalid receipt reference")
-    receipt = read_action_receipt(action_receipt_id)
+    receipt = deepcopy(read_action_receipt(action_receipt_id))
     binding = receipt["binding"]
     action = binding["lab_action"]
     refs = index_references(original_refs)
@@ -149,10 +154,17 @@ def verify_recovery(*, read_context, read_action_receipt, original_run_id,
         or not times["incident"] < completed <= stamp(event["enterprise"]["occurred_at"]) < times["recovery"]):
         raise ValueError("unbound or out-of-order action and recovery")
     comparison = preview(observations)["recovery"]
-    # Re-read original after the comparison to reject changes during verification.
+    # Re-read both projections and the persisted receipt. Detached snapshots
+    # prevent a mutable reader cache from rewriting our comparison baseline.
+    # This detects observed changes; it is not an atomic multi-store snapshot.
     final_run, final_old = _snapshot(read_context, original_run_id, original_refs, scope)
     if final_run != before or final_old != old:
         raise ValueError("original run changed during verification")
+    final_comparison, final_new = _snapshot(read_context, comparison_run_id, comparison_refs, scope)
+    if final_comparison != after or final_new != new:
+        raise ValueError("comparison run changed during verification")
+    if deepcopy(read_action_receipt(action_receipt_id)) != receipt:
+        raise ValueError("action receipt changed during verification")
     return {"classification": "SYNTHETIC_LAB_VERIFY",
             "status": "RECOVERED" if comparison["within_baseline_tolerance"] else "NOT_RECOVERED",
             "original_run_id": original_run_id, "comparison_run_id": comparison_run_id,
