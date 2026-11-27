@@ -45,7 +45,8 @@ def expected_projection(report, worker, a):
             and report["workflow_id"] == worker["run_id"] == v["original_run_id"] == a.original
             and v["comparison_run_id"] == a.comparison and v["status"] == a.status
             and report["action_receipt_sha256"] == worker["action_receipt_sha256"] == v["action_receipt_sha256"] == a.receipt_sha256
-            and report["action_receipt"] == worker["action_receipt"]
+            and canonical_json(report["action_receipt"]) == canonical_json(worker["action_receipt"])
+            and projection_digest(worker["action_receipt"]) == a.receipt_sha256
             and worker["action_receipt"]["receipt_id"] == v["action_receipt_id"]
             and worker["production_authorized"] is False and worker["operational_decision"] == "DENY"
             and v["production_authorized"] is False and v["operational_decision"] == "DENY"):
@@ -57,12 +58,17 @@ def expected_projection(report, worker, a):
 
 
 def require_projection(value, expected):
-    if canonical_projection(value) != expected:
+    if canonical_json(canonical_projection(value)) != canonical_json(expected):
         raise ValueError("GAMMA projection differs from independent Worker/Verify receipts")
 
 
+def canonical_json(value):
+    # Python equality conflates booleans and numbers; compare canonical JSON.
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+
+
 def projection_digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha256(canonical_json(value)).hexdigest()
 
 
 def arguments():
