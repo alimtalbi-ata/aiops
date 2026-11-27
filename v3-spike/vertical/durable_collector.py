@@ -67,7 +67,7 @@ class DurableCollector(Collector):
                 "state":self.state,"baseline":self.baseline,"run_id":self.run_id}
 
     def restore(self,payload):
-        require(isinstance(payload,dict) and set(payload)==set(self.snapshot())
+        require(isinstance(payload,dict) and set(payload)==set(DurableCollector.snapshot(self))
                 and payload["version"]==1 and payload["target_port"]==self.target_port
                 and payload["gamma_port"]==self.gamma_port and payload["state"] in STATES,
                 "journal scope mismatch")
