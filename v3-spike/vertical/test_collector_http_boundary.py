@@ -14,7 +14,7 @@ from collector_http_boundary import dispatch, ADMIT, RECEIPT
 from collector_receipt import digest
 from continuous_collector import batch
 from ingestion_demo import ingest
-from test_collector_transition import response_for
+from test_collector_transition import response_for, persisted_fixture
 from test_collector_admission_service import GraphFixture
 from test_fenced_durable_collector import serve
 
@@ -35,9 +35,12 @@ class BoundaryTests(unittest.TestCase):
             data = {'generation': 0, 'rows': rows}
             calls, delegated = [], []
             guard = False
+            readbacks = {}
 
             def publisher(records):
                 calls.append(records)
+                core, context = persisted_fixture(records)
+                readbacks[core['run']['run_id']] = (core, context)
                 return response_for(records)['publication']
 
             class Handler(BaseHTTPRequestHandler):
@@ -54,7 +57,7 @@ class BoundaryTests(unittest.TestCase):
                 def do_POST(self):
                     if not dispatch(self, scope=scope, authority=lambda: closing(sqlite3.connect(path)),
                                     restore_permitted=lambda: guard, graph_reader=GraphFixture,
-                                    publish_records=publisher):
+                                    publish_records=publisher, read_context=readbacks.__getitem__):
                         delegated.append(self.path)
                         self.reply(204, b'')
 
