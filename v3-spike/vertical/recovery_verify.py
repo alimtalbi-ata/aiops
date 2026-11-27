@@ -83,6 +83,10 @@ def verify_recovery(*, read_context, read_action_receipt, original_run_id,
         or len(scope) != 3 or not all(isinstance(s, str) and
                                       re.fullmatch(r"NODE-CI-[A-Z0-9-]{1,80}", s) for s in scope)):
         raise ValueError("distinct runs and lab scope required")
+    # Detach caller-owned inputs before invoking any reader callback.
+    scope = list(scope)
+    original_refs = list(index_references(original_refs).values())
+    comparison_refs = list(index_references(comparison_refs).values())
     before, old = _snapshot(read_context, original_run_id, original_refs, scope)
     after, new = _snapshot(read_context, comparison_run_id, comparison_refs, scope)
     if before["incident_id"] == after["incident_id"]:
