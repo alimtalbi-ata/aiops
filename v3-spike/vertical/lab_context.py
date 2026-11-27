@@ -62,6 +62,8 @@ def context(twin_port, evidence_port, run_id, node_id, *, dynamic_incident=None,
             raise ValueError("evidence hash mismatch")
         eid=ref["evidence_id"]
         if eid in seen:
+            if dynamic_incident is not None:
+                raise ValueError("duplicate dynamic evidence identity")
             if seen[eid]!=item:
                 raise ValueError("conflicting evidence identity")
             continue
