@@ -23,7 +23,7 @@ def read_report(path):
             and doc.get("SPDXID") == "SPDXRef-DOCUMENT"
             and doc.get("dataLicense") == "CC0-1.0", "not SPDX JSON")
     creators = doc.get("creationInfo", {}).get("creators", [])
-    require(any(isinstance(c, str) and c.startswith("Tool: syft-" + SYFT_VERSION) for c in creators),
+    require(any(isinstance(c, str) and c == "Tool: syft-" + SYFT_VERSION for c in creators),
             "unexpected scanner version")
     packages = doc.get("packages")
     require(isinstance(packages, list) and 0 < len(packages) <= 100000, "empty or excessive inventory")
