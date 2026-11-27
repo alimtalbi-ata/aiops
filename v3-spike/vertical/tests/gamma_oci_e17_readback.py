@@ -1,11 +1,14 @@
 """Read-only Chromium check of persisted E17 runs on an isolated GAMMA lab.
 
-The caller supplies independently observed run IDs, receipt digest and outcome.
+The caller supplies independently observed run IDs, receipt digest and outcome
+plus the original Verify report and Worker replay receipt from the same lab run.
 No target mutation or fabricated API response. The late-response subtest holds
 an unchanged upstream response; it is browser fault injection, not recovery proof.
 """
 import argparse
 import asyncio
+from copy import deepcopy
+import hashlib
 import json
 import os
 import re
@@ -19,6 +22,49 @@ RUN = r"RUN-[A-F0-9]{16}"
 SHA = r"[a-f0-9]{64}"
 
 
+def canonical_projection(value):
+    # Same unordered Evidence contract as kit/poc-e17-gamma-readback.py.
+    result = deepcopy(value)
+    for key in ("original_evidence", "comparison_evidence"):
+        refs = result["verification"][key]
+        if not isinstance(refs, list) or not 1 <= len(refs) <= 20:
+            raise ValueError("invalid Evidence collection")
+        if not all(isinstance(r, dict) and set(r) == {"evidence_id", "payload_hash"}
+                   and isinstance(r["evidence_id"], str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", r["evidence_id"])
+                   and isinstance(r["payload_hash"], str) and re.fullmatch(SHA, r["payload_hash"]) for r in refs):
+            raise ValueError("invalid Evidence reference")
+        if len({r["evidence_id"] for r in refs}) != len(refs):
+            raise ValueError("duplicate Evidence identity")
+        result["verification"][key] = sorted(refs, key=lambda r: r["evidence_id"])
+    return result
+
+
+def expected_projection(report, worker, a):
+    v = report["verification"]
+    if not (report["result"] == "PASS" and report["production_authorized"] is False
+            and report["workflow_id"] == worker["run_id"] == v["original_run_id"] == a.original
+            and v["comparison_run_id"] == a.comparison and v["status"] == a.status
+            and report["action_receipt_sha256"] == worker["action_receipt_sha256"] == v["action_receipt_sha256"] == a.receipt_sha256
+            and report["action_receipt"] == worker["action_receipt"]
+            and worker["action_receipt"]["receipt_id"] == v["action_receipt_id"]
+            and worker["production_authorized"] is False and worker["operational_decision"] == "DENY"
+            and v["production_authorized"] is False and v["operational_decision"] == "DENY"):
+        raise ValueError("independent receipts do not bind to requested run")
+    return canonical_projection({"classification": "SYNTHETIC_GAMMA_E17_VERIFIED_READBACK",
+                                 "worker": worker, "verification": v, "operational_decision": "DENY",
+                                 "production_authorized": False, "tenant_acl_qualified": False,
+                                 "core_business_stages_qualified": False})
+
+
+def require_projection(value, expected):
+    if canonical_projection(value) != expected:
+        raise ValueError("GAMMA projection differs from independent Worker/Verify receipts")
+
+
+def projection_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def arguments():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("out", type=Path)
@@ -26,6 +72,8 @@ def arguments():
     p.add_argument("comparison")
     p.add_argument("receipt_sha256")
     p.add_argument("status", choices=("RECOVERED", "NOT_RECOVERED"))
+    p.add_argument("--verify-report", required=True, type=Path)
+    p.add_argument("--worker-replay", required=True, type=Path)
     a = p.parse_args()
     if a.original == a.comparison or not all(re.fullmatch(RUN, x) for x in (a.original, a.comparison)):
         p.error("two distinct E17 run IDs required")
@@ -35,6 +83,13 @@ def arguments():
     a.out = a.out.resolve()
     if not a.out.is_relative_to(root) or a.out == root or a.out.exists():
         p.error("new output directory below V3_ROOT required")
+    inputs = [a.verify_report.resolve(), a.worker_replay.resolve()]
+    if inputs[0] == inputs[1] or not all(p.is_relative_to(root) and p.is_file() for p in inputs):
+        p.error("two distinct receipt files below V3_ROOT required")
+    try:
+        a.expected = expected_projection(*(json.loads(p.read_text()) for p in inputs), a)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        p.error(str(e))
     return a
 
 
@@ -65,6 +120,7 @@ async def main(a):
             await expect(proof).to_have_text("")
 
         async def verify_projection(d):
+            require_projection(d, a.expected)
             w, v = d["worker"], d["verification"]
             r, m = w["action_receipt"], v["measurements"]
             assert d["classification"] == "SYNTHETIC_GAMMA_E17_VERIFIED_READBACK"
@@ -105,6 +161,7 @@ async def main(a):
             async def delay(route):
                 upstream = await route.fetch(timeout=30000, max_redirects=0)
                 assert upstream.ok, upstream.status
+                require_projection(await upstream.json(), a.expected)
                 held.set()
                 await release.wait()
                 await route.fulfill(response=upstream)
@@ -143,6 +200,7 @@ async def main(a):
             assert not errors, errors
             report = {"classification": "PACKAGED_GAMMA_E17_READBACK", "result": "PASS", "original_run_id": a.original,
                       "comparison_run_id": a.comparison, "receipt_sha256": a.receipt_sha256, "status": a.status,
+                      "projection_sha256": projection_digest(a.expected),
                       "measurements": v["measurements"], "late_response": "PASS", "duplicate_pair": "PASS", "reset": "PASS",
                       "production_authorized": False, "limitations": "Readback only; independent workflow history and target effects must be qualified by B/C/D."}
             (a.out / "e17-browser.json").write_text(json.dumps(report, sort_keys=True) + "\n")
