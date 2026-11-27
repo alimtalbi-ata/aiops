@@ -181,6 +181,9 @@ def main():
                 and all(browser[k]=="PASS" for k in ("late_response","duplicate_pair","reset"))
                 and before==snapshot(),"browser proof or PostgreSQL snapshot mismatch")
         print("E17 pinned target activity, GAMMA and Chromium readback PASS; collector and full business stages NOT_RUN")
+        if os.getenv("V3_PG_RESTORE_CHECK") == "1":
+            from e17_pg_restore import prove
+            prove(docker, run, ROOT, bom, PROJECT)
     finally:
         try:
             run("--profile","e17","down","--volumes","--remove-orphans",timeout=180)

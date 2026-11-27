@@ -1,7 +1,7 @@
 name: V3 isolated E17 target OCI BOM
 on:
   pull_request:
-    branches: [v3-spike/central-integration]
+    branches: [v3-spike/central-integration, v3-spike/po-e17-signed-sbom-convergence-20261127]
     paths:
       - 'v3-spike/kit/release-lab/distribution_manifest.py'
       - 'v3-spike/kit/release-lab/test_distribution_manifest.py'
@@ -17,6 +17,7 @@ on:
       - 'v3-spike/kit/release-lab/oci_transport.py'
       - 'v3-spike/kit/release-lab/test_oci_transport.py'
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
+      - 'v3-spike/kit/release-lab/e17_pg_restore.py'
       - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
       - 'v3-spike/kit/release-lab/e17-history-evidence.py'
       - 'v3-spike/kit/poc-image-bom.py'
@@ -595,6 +596,8 @@ jobs:
           "$V3_ROOT/browser-venv/bin/python" -m pip install --no-cache-dir playwright==1.51.0
           PLAYWRIGHT_BROWSERS_PATH="$V3_ROOT/chromium" "$V3_ROOT/browser-venv/bin/python" -m playwright install --with-deps chromium
       - name: Run E17 from support only without checkout or rebuild
+        env:
+          V3_PG_RESTORE_CHECK: '1'
         run: |
           set -euo pipefail
           cd "$V3_ROOT/runtime-support"
@@ -612,12 +615,16 @@ jobs:
           assert support["result"]==pull["result"]==report["result"]==browser["result"]=="PASS"
           assert support["source_sha"]==pull["source_sha"]==os.environ["GITHUB_SHA"]
           assert report["production_authorized"] is False and browser["production_authorized"] is False
+          restored=json.loads((root/"e17-application-pg-restore.json").read_text())
+          assert restored["result"]=="PASS" and restored["source_sha"]==os.environ["GITHUB_SHA"] and restored["tables"]==17
+          assert restored["temporal_restore"]=="NOT_RUN" and restored["collector_authority_restore"]=="NOT_RUN"
+          assert restored["production_authorized"] is False
           receipt={"classification":"V3_E17_NO_CHECKOUT_RUNTIME","result":"PASS","source_sha":os.environ["GITHUB_SHA"],
                    "support_manifest_sha256":support["manifest_sha256"],"bom_sha256":pull["bom_sha256"],
                    "archive_sha256":os.environ["EXPECTED_ARCHIVE_SHA"],"checkout_present":False,
                    "product_build":False,"support_unchanged":True,"production_authorized":False,
                    "distribution_signature":"EPHEMERAL_LAB_VERIFIED","sbom_index_sha256":json.loads((root/"cold-signature-verify.json").read_text())["statement"]["sbom_index_sha256"],
-                   "vulnerability_scan":"NOT_RUN"}
+                   "vulnerability_scan":"NOT_RUN","application_pg_restore":"PASS"}
           (root/"cold-no-checkout.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
           print(json.dumps(receipt,sort_keys=True))
           PY
@@ -635,6 +642,7 @@ jobs:
             /tmp/aiops-v3-rootless-ci/distribution-proof/sbom/index.json
             /tmp/aiops-v3-rootless-ci/cold-support-verify.json
             /tmp/aiops-v3-rootless-ci/cold-support-after.json
+            /tmp/aiops-v3-rootless-ci/e17-application-pg-restore.json
             /tmp/aiops-v3-rootless-ci/cold-no-checkout.json
             /tmp/aiops-v3-rootless-ci/runtime-support/runtime-manifest.json
             /tmp/aiops-v3-rootless-ci/cold-envelope-unpack.json
