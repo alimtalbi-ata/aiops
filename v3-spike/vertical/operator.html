@@ -242,8 +242,10 @@ $("enterprise-open-run").addEventListener("click",()=>{
  $("load-enterprise").disabled=false;$("load-enterprise").click();
 });
 $("load-enterprise").addEventListener("click",async()=>{
- const run=selectedDynamicRun,generation=dynamicGeneration,target=$("enterprise-result");
+ const run=selectedDynamicRun,target=$("enterprise-result");
  if(!run)return;
+ const generation=++dynamicGeneration;
+ ++contextGeneration;resetDynamicApproval();$("dynamic-hitl-request").disabled=true;$("context-result").textContent="UNKNOWN / DENY — not loaded";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
  target.textContent="Loading enterprise context";
  try{
   const response=await fetch("/api/v1/enterprise-context?run_id="+encodeURIComponent(run),{cache:"no-store"});
@@ -261,7 +263,7 @@ $("load-enterprise").addEventListener("click",async()=>{
   if(d.case_retrieval)lines.push("Historical case retrieval: "+d.case_retrieval.state,...d.case_retrieval.citations.map(x=>[x.id,x.family,x.source.run_id,x.sha256].join(" | ")));
   target.textContent=lines.join("\n");
   $("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;resetDynamicApproval();
- }catch(_err){if(generation===dynamicGeneration){target.textContent="UNKNOWN / DENY — enterprise context unavailable";selectDynamicRun(null);resetDynamicApproval();$("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;}}
+ }catch(_err){if(generation===dynamicGeneration&&run===selectedDynamicRun){target.textContent="UNKNOWN / DENY — enterprise context unavailable";selectDynamicRun(null);resetDynamicApproval();$("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;}}
 });
 let clockState=null,clockBusy=false;
 async function readClock(){
