@@ -140,3 +140,91 @@ class CoreReadbackTests(unittest.TestCase):
         payload['run']['run_id'] = 'RUN-OTHER'
         with self.assertRaises(ValueError):
             self.read(payload)
+
+
+
+class CorePublicationTests(unittest.TestCase):
+    def exercise(self, *, fault=None, repetitions=1):
+        import hashlib
+        import json
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from core_ingest import create_run
+        from ingestion_demo import ingest
+
+        rows = [{'id': 'ci-1', 'source': 'monitor', 'kind': 'log',
+                 'tenant': 'synthetic-demo', 'resource': 'NODE-CI-1',
+                 'severity': 'critical', 'synthetic': True}]
+        correlation = ingest(rows)
+        digest = hashlib.sha256(json.dumps(correlation['incidents'][0], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        incident = 'INC-CI-INGEST-' + digest[:32]
+        calls = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def answer(self, data, status=200):
+                raw = json.dumps(data).encode()
+                self.send_response(status)
+                self.send_header('Content-Length', str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+            def do_POST(self):
+                data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                calls.append((self.path, self.headers.get('Authorization'), data))
+                if self.path == '/api/incidents':
+                    self.answer({'incident_id': incident, 'synthetic': True}, 503 if fault == 'incident' else 200)
+                elif fault == 'lost_ack':
+                    self.close_connection = True
+                elif fault == 'missing_run':
+                    self.answer({})
+                else:
+                    self.answer({'run_id': 'RUN-CI-1'})
+            def do_GET(self):
+                calls.append((self.path, self.headers.get('Authorization'), None))
+                self.answer({'data_classification': 'SYNTHETIC_CANONICAL_RUN',
+                             'live_remediation_authorized': False, 'tenant_acl_qualified': False,
+                             'runtime_authenticated': False,
+                             'run': {'run_id': 'RUN-CI-1', 'incident_id': incident,
+                                     'mode': 'DEMO', 'status': 'OPEN'}})
+            def log_message(self, *args):
+                pass
+        with HTTPServer(('127.0.0.1', 0), Handler) as server:
+            thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01})
+            thread.start()
+            try:
+                for _ in range(repetitions):
+                    if fault:
+                        with self.assertRaises(ValueError):
+                            create_run(rows, server.server_port, 'x'*32)
+                    else:
+                        result = create_run(rows, server.server_port, 'x'*32)
+                        self.assertEqual(result['core']['policy'], 'DENY')
+                        self.assertIs(result['production_authorized'], False)
+                        self.assertEqual(result['correlation'], correlation)
+            finally:
+                server.shutdown()
+                thread.join()
+        self.assertTrue(all(call[1] == 'Bearer '+'x'*32 for call in calls))
+        self.assertEqual(calls[0][2]['payload']['batch_sha256'], digest)
+        return calls, digest
+
+    def test_core_publication_stable_identity(self):
+        calls, digest = self.exercise(repetitions=2)
+        self.assertEqual([c[0] for c in calls], ['/api/incidents', '/api/runs', '/api/noc/runs/RUN-CI-1']*2)
+        self.assertEqual(calls[:3], calls[3:])
+        self.assertEqual(calls[1][2]['idempotency_key'], 'v3-ingest-'+digest)
+
+    def test_incident_failure_stops(self):
+        calls, _ = self.exercise(fault='incident')
+        self.assertEqual([c[0] for c in calls], ['/api/incidents'])
+
+    def test_uncertain_run_never_retried(self):
+        for fault in ('lost_ack', 'missing_run'):
+            with self.subTest(fault=fault):
+                calls, _ = self.exercise(fault=fault)
+                self.assertEqual([c[0] for c in calls], ['/api/incidents', '/api/runs'])
+
+    def test_post_restricts_routes_and_body(self):
+        from bounded_http_transport import post_core_json
+        for path, body in (('/api/evidence', {}), ('/api/incidents', []),
+                           ('/api/runs', {'x': float('nan')}), ('/api/runs', {'x': 'a'*65536})):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                post_core_json(12345, 'x'*32, path, body)
