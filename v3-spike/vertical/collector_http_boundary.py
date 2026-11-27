@@ -29,7 +29,7 @@ def unique_object(pairs):
     return result
 
 
-def dispatch(handler, *, scope, authority, restore_permitted, graph_reader, publish_records):
+def dispatch(handler, *, scope, authority, restore_permitted, graph_reader, publish_records, read_context):
     """Return True if handled. Never fall back on any admission error."""
     if handler.path in DELEGATE:
         return False
@@ -54,7 +54,8 @@ def dispatch(handler, *, scope, authority, restore_permitted, graph_reader, publ
         with authority() as db:
             args = dict(scope=scope, authorization=auth[0], generation=body['generation'])
             if handler.path == ADMIT:
-                result = publish(db, **args, rows=body['rows'], graph=graph_reader(), publish_records=publish_records)
+                result = publish(db, **args, rows=body['rows'], graph=graph_reader(), publish_records=publish_records,
+                                 read_context=read_context)
             else:
                 result = lookup(db, **args, episode=body['episode'], batch=body['batch'])
         handler.reply(200, json.dumps(result, allow_nan=False).encode())
