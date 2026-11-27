@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 from test_product_preflight import valid
-from verify_product_compose import verify as verify_compose
+from verify_product_compose import verify as verify_compose, verify_draft_volumes, DRAFT_VOLUMES
 from verify_product_provenance import verify as verify_provenance
 
 class ProductAlignmentTests(unittest.TestCase):
@@ -312,6 +312,61 @@ class ProductAlignmentTests(unittest.TestCase):
             verify_compose(b,c)
         with self.assertRaises(ValueError):
             verify_provenance(b,p)
+
+
+class DraftVolumeTests(unittest.TestCase):
+    def setUp(self):
+        self.doc = {"name": "aiops-v3", "services": {"gamma": {}}, "volumes": {}}
+        for service, (key, target) in DRAFT_VOLUMES.items():
+            self.doc["volumes"][key] = {"name": "aiops-v3_" + key}
+            self.doc["services"][service] = {"volumes": [
+                {"type": "volume", "source": key, "target": target, "volume": {}}]}
+    def check(self):
+        verify_draft_volumes(self.doc, normalized=True)
+    def mount(self):
+        return self.doc["services"]["core"]["volumes"][0]
+    def test_default_logical(self):
+        self.check()
+    def test_demo_logical(self):
+        self.doc["services"]["demo"] = {}
+        self.check()
+    def test_default_effective(self):
+        self.mount()["source"] = "aiops-v3_core_data"
+        self.check()
+    def test_demo_effective(self):
+        self.doc["services"]["demo"] = {}
+        self.mount()["source"] = "aiops-v3_core_data"
+        self.check()
+    def test_bind(self):
+        self.mount()["type"] = "bind"
+        with self.assertRaises(ValueError): self.check()
+    def test_unknown(self):
+        self.mount()["source"] = "unknown"
+        with self.assertRaises(ValueError): self.check()
+    def test_other_owner(self):
+        self.mount()["source"] = "evidence_data"
+        with self.assertRaises(ValueError): self.check()
+    def test_external(self):
+        self.doc["volumes"]["core_data"]["external"] = True
+        with self.assertRaises(ValueError): self.check()
+    def test_driver_opts(self):
+        self.doc["volumes"]["core_data"]["driver_opts"] = {"device": "/"}
+        with self.assertRaises(ValueError): self.check()
+    def test_wrong_effective_name(self):
+        self.doc["volumes"]["core_data"]["name"] = "foreign"
+        with self.assertRaises(ValueError): self.check()
+    def test_wrong_target(self):
+        self.mount()["target"] = "/wrong"
+        with self.assertRaises(ValueError): self.check()
+    def test_extra_mount(self):
+        self.doc["services"]["core"]["volumes"].append(dict(self.mount()))
+        with self.assertRaises(ValueError): self.check()
+    def test_subpath(self):
+        self.mount()["volume"]["subpath"] = "other"
+        with self.assertRaises(ValueError): self.check()
+    def test_missing_mount(self):
+        self.doc["services"]["core"]["volumes"] = []
+        with self.assertRaises(ValueError): self.check()
 
 if __name__ == "__main__":
     unittest.main()
