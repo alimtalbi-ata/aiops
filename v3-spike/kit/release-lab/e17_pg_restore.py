@@ -75,8 +75,36 @@ def prove(docker, compose, root, bom, project):
     def source_query(sql):
         return compose("exec","-T","postgres",*psql_args,data=("SET TIME ZONE 'UTC';\n"+sql).encode())
     before = snapshot(source_query)
-    require(all(before["tables"][t]["rows"]>0 for t in ("runs","run_events","evidence","gates")),
-            "missing actual E17 application evidence")
+    # E17 explicitly does not qualify the full business stages. In particular,
+    # an empty gates table is legitimate and must be preserved, not populated
+    # artificially. Bind the actual E17 runs and evidence instead of assuming
+    # every stage table contains a row.
+    print(json.dumps({"classification":"V3_E17_PG_SOURCE_CARDINALITY",
+                      "rows":{t:r["rows"] for t,r in before["tables"].items()},
+                      "production_authorized":False},sort_keys=True),flush=True)
+    report=json.loads((root/"temporal-e17-product.json").read_text())
+    require(report["result"]=="PASS" and report["production_authorized"] is False,
+            "invalid E17 proof")
+    original=report["workflow_id"]
+    comparison=report["verification"]["comparison_run_id"]
+    require(original!=comparison and all(re.fullmatch(r"RUN-[A-F0-9]{16}",rid)
+            for rid in (original,comparison)), "invalid run identities")
+    refs={}
+    for role in ("original_evidence","comparison_evidence"):
+        group=report["verification"][role]
+        require(isinstance(group,list) and 1<=len(group)<=20,"missing verified evidence")
+        for item in group:
+            eid,h=item["evidence_id"],item["payload_hash"]
+            require(re.fullmatch(r"[A-Za-z0-9_.-]{1,128}",eid) and re.fullmatch(r"[a-f0-9]{64}",h)
+                    and eid not in refs,"invalid or duplicate evidence identity")
+            refs[eid]=h
+    def verify_e17(query):
+        ids=json.loads(query("SELECT coalesce(json_agg(run_id ORDER BY run_id),'[]')::text FROM aiops.runs WHERE run_id IN ('"+original+"','"+comparison+"');"))
+        require(ids==sorted((original,comparison)),"missing E17 run identity")
+        evidence=json.loads(query("SELECT coalesce(json_object_agg(evidence_id,payload_hash),'{}')::text FROM aiops.evidence WHERE evidence_id IN ("+
+                                  ",".join("'"+eid+"'" for eid in sorted(refs))+");"))
+        require(evidence==refs,"E17 evidence identity or digest mismatch")
+    verify_e17(source_query)
     dump = compose("exec","-T","postgres","pg_dump","-Fc","--schema=aiops",
                    "--no-owner","--no-privileges","-U","aiops","-d","aiops")
     require(0<len(dump)<=MAX_BYTES,"invalid application dump")
@@ -129,6 +157,7 @@ def prove(docker, compose, root, bom, project):
             raise ValueError("wrong digest accepted")
         restore(dump,expected)
         after=snapshot(dest_query)
+        verify_e17(dest_query)
         require(before==after,"application schema or rows differ")
         try:
             restore(dump,expected)
@@ -140,7 +169,8 @@ def prove(docker, compose, root, bom, project):
         receipt={"classification":"V3_E17_APPLICATION_PG_RESTORE","result":"PASS",
                  "source_sha":bom["source_sha"],"backup_sha256":expected,"backup_bytes":len(dump),
                  "source_stopped":True,"writers_stopped":True,"distinct_volume":True,
-                 "wrong_digest_refused":True,"overwrite_refused":True,"snapshot":after,
+                 "wrong_digest_refused":True,"overwrite_refused":True,"e17_runs_verified":2,
+                 "e17_evidence_refs_verified":len(refs),"snapshot":after,
                  "tables":len(TABLES),"rows":sum(x["rows"] for x in after["tables"].values()),
                  "temporal_restore":"NOT_RUN","collector_authority_restore":"NOT_RUN",
                  "same_daemon":True,"production_authorized":False}
