@@ -217,5 +217,70 @@ class GammaGuardedIntegrationTests(unittest.TestCase):
 
 
 
+class LabCollectorConfigurationTests(unittest.TestCase):
+    def test_explicit_provision_and_exclusive_lifetime(self):
+        from collector_lab_config import provision_new, activation, maintenance_lock, paths, SCOPE
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            with self.assertRaises((OSError, ValueError)):
+                with activation(root):
+                    self.fail('missing files activated')
+            self.assertEqual(list(root.iterdir()), [])
+            provision_new(root)
+            with self.assertRaises(ValueError):
+                provision_new(root)
+            control, authority_dir, witness_dir = paths(root)
+            with activation(root) as config:
+                self.assertEqual(config['scope'], SCOPE)
+                self.assertTrue(config['restore_permitted']())
+                with self.assertRaises(BlockingIOError):
+                    with maintenance_lock(control):
+                        self.fail('maintenance lock acquired twice')
+                with config['authority']() as db, config['witness']() as guard:
+                    self.assertEqual(guard.execute('SELECT state,digest FROM guard').fetchone(), ('READY', snapshot(db)))
+                with self.assertRaises(BlockingIOError):
+                    with activation(root):
+                        self.fail('second server acquired lock')
+            self.assertFalse(config['restore_permitted']())
+            with self.assertRaises(ValueError):
+                with config['authority']():
+                    self.fail('expired activation opened authority')
+            with activation(root) as restarted:
+                self.assertTrue(restarted['restore_permitted']())
+            self.assertEqual((control / 'collector.token').stat().st_mode & 0o077, 0)
+            self.assertNotEqual(authority_dir, witness_dir)
+
+    def test_missing_or_untrusted_database_never_recreated(self):
+        from collector_lab_config import provision_new, activation, paths
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            provision_new(root)
+            _, authority_dir, witness_dir = paths(root)
+            authority = authority_dir / 'authority.db'
+            witness = witness_dir / 'witness.db'
+            with activation(root) as config:
+                authority.rename(authority_dir / 'moved.db')
+                self.assertFalse(config['restore_permitted']())
+                with self.assertRaises(ValueError):
+                    with config['authority']():
+                        self.fail('missing authority recreated')
+            self.assertFalse(authority.exists())
+            (authority_dir / 'moved.db').rename(authority)
+            witness.chmod(0o644)
+            with self.assertRaises(ValueError):
+                with activation(root):
+                    self.fail('public witness accepted')
+            witness.chmod(0o600)
+            with closing(sqlite3.connect(witness)) as db:
+                db.execute("UPDATE guard SET state='BUSY'")
+                db.commit()
+            with self.assertRaises(ValueError):
+                with activation(root):
+                    self.fail('BUSY witness unlocked')
+            with closing(sqlite3.connect(witness)) as db:
+                self.assertEqual(db.execute('SELECT state FROM guard').fetchone()[0], 'BUSY')
+
+
+
 if __name__ == '__main__':
     unittest.main()
