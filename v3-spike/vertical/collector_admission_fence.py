@@ -48,12 +48,29 @@ def transaction(db):
         raise
 
 
+# Scope components are validated by scope_key; split only on the final collector
+# delimiter, which cannot occur inside a canonical target name.
+TARGET_SQL = "substr(scope,1,instr(scope,'/COLLECTOR-')-1)"
+
+
+def require_single_owner(db, scope):
+    target = '/'.join(scope[:2])
+    require(db.execute('SELECT COUNT(*) FROM collector_fence WHERE ' + TARGET_SQL + '=?',
+                       (target,)).fetchone()[0] == 1)
+
+
+def historical_run_unused(db, key, run_id):
+    return db.execute('SELECT 1 FROM collector_history WHERE scope=? AND (run_id=? OR comparison_run_id=?)',
+                      (key, run_id, run_id)).fetchone() is None
+
+
 def initialize(db):
     """Explicit provisioning only; never call on missing runtime authority."""
     with transaction(db):
         db.execute('CREATE TABLE collector_fence (scope TEXT PRIMARY KEY, credential TEXT NOT NULL, '
                    'generation INTEGER NOT NULL, state TEXT NOT NULL, episode TEXT, batch TEXT, '
                    'run_id TEXT, receipt TEXT)')
+        db.execute('CREATE UNIQUE INDEX one_collector_per_target ON collector_fence(' + TARGET_SQL + ')')
         db.execute('CREATE TABLE collector_history (scope TEXT NOT NULL, generation INTEGER NOT NULL, '
                    'episode TEXT NOT NULL, batch TEXT NOT NULL, run_id TEXT NOT NULL, receipt TEXT NOT NULL, '
                    'verify_sha256 TEXT NOT NULL, comparison_run_id TEXT NOT NULL, PRIMARY KEY(scope,generation), '
@@ -62,6 +79,9 @@ def initialize(db):
 
 def provision(db, scope, token):
     with transaction(db):
+        scope_key(scope)
+        require(db.execute('SELECT 1 FROM collector_fence WHERE ' + TARGET_SQL + '=?',
+                           ('/'.join(scope[:2]),)).fetchone() is None)
         db.execute('INSERT INTO collector_fence VALUES (?,?,0,\'ARMED\',NULL,NULL,NULL,NULL)',
                    (scope_key(scope), token_hash(token)))
 
@@ -69,6 +89,7 @@ def provision(db, scope, token):
 def authenticated(db, scope, token, generation):
     require(type(generation) is int and generation >= 0)
     key = scope_key(scope)
+    require_single_owner(db, scope)
     row = db.execute('SELECT credential,generation,state,episode,batch,run_id,receipt '
                      'FROM collector_fence WHERE scope=?', (key,)).fetchone()
     require(row is not None and hmac.compare_digest(row[0], token_hash(token)) and row[1] == generation)
@@ -103,8 +124,7 @@ def complete(db, scope, token, generation, episode, batch, run_id, receipt):
             require(row[3:] == (run_id, receipt))
         else:
             require(row[0] == 'PENDING')
-            require(db.execute('SELECT 1 FROM collector_history WHERE scope=? AND run_id=?',
-                               (key, run_id)).fetchone() is None)
+            require(historical_run_unused(db, key, run_id))
             db.execute("UPDATE collector_fence SET state='COMMITTED',run_id=?,receipt=? WHERE scope=?",
                        (run_id, receipt, key))
 
@@ -146,6 +166,8 @@ def rearm(db, scope, token, generation, episode, batch, *, read_verified_recover
     with transaction(db):
         key, current = authenticated(db, scope, token, generation)
         require(current == row)
+        require(historical_run_unused(db, key, run_id)
+                and historical_run_unused(db, key, proof['comparison_run_id']))
         db.execute('INSERT INTO collector_history VALUES (?,?,?,?,?,?,?,?)',
                    (key, generation, episode, batch, run_id, receipt, proof_hash, proof['comparison_run_id']))
         db.execute("UPDATE collector_fence SET generation=generation+1,state='ARMED',episode=NULL,"
@@ -159,6 +181,7 @@ def archived_receipt(db, scope, token, generation, episode, batch):
     require(type(generation) is int and generation >= 0)
     with transaction(db):
         key = scope_key(scope)
+        require_single_owner(db, scope)
         current = db.execute('SELECT credential,generation FROM collector_fence WHERE scope=?', (key,)).fetchone()
         require(current is not None and hmac.compare_digest(current[0], token_hash(token))
                 and generation < current[1])
