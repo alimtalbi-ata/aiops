@@ -5,6 +5,7 @@ permission for host action. Pending claims never retry publication. Rearm requir
 reader; simultaneous authority rollback still requires an external operator lock.
 """
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
@@ -140,11 +141,28 @@ def reconcile(db, scope, token, generation, episode, batch):
         return {'state': 'COMMITTED', 'run_id': row[3], 'receipt_sha256': row[4]}
 
 
+# Proposed bounded LAB freshness window. The trusted reader must return the
+# persisted observation time, never substitute a current verification time.
+RECOVERY_MAX_AGE_SECONDS = 120
+
+
+def require_fresh_recovery(proof):
+    value = proof.get('recovery_observed_at')
+    require(identity(value, r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z'))
+    try:
+        observed = datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise FenceRejected('collector authority rejected') from exc
+    age = (datetime.now(timezone.utc) - observed).total_seconds()
+    require(0 <= age <= RECOVERY_MAX_AGE_SECONDS)
+
+
 def rearm(db, scope, token, generation, episode, batch, *, read_verified_recovery):
     """Server-only: caller supplies trusted E17 reader, not client JSON.
 
-    Reader resolves persisted Verify using scope, original run and admission
-    receipt digest. This checks the returned binding, not reader authentication.
+    Reader resolves persisted Verify using the exact admission identity and
+    returns its stored binding plus the independently observed recovery time.
+    This checks returned binding and age, not reader authentication or clock trust.
     No rearm from PENDING. A deployment must independently fence authority
     restores before allowing any claims; this SQLite history cannot do that.
     """
@@ -153,8 +171,16 @@ def rearm(db, scope, token, generation, episode, batch, *, read_verified_recover
         _, row = authenticated(db, scope, token, generation)
         require(row[0] == 'COMMITTED' and row[1:3] == (episode, batch))
         run_id, receipt = row[3:]
-    proof = read_verified_recovery(scope, run_id, receipt)
-    require(isinstance(proof, dict) and proof.get('classification') == 'SYNTHETIC_LAB_VERIFY'
+    proof = read_verified_recovery(scope, generation, episode, batch, run_id, receipt)
+    require(isinstance(proof, dict))
+    # Freeze the reader result before checking and hashing it.
+    proof = json.loads(json.dumps(proof, sort_keys=True, separators=(',', ':'), allow_nan=False))
+    binding = proof.get('admission_binding')
+    require(isinstance(binding, dict) and type(binding.get('generation')) is int
+            and binding == {'scope': list(scope), 'generation': generation, 'episode': episode,
+                            'batch': batch, 'run_id': run_id, 'receipt_sha256': receipt})
+    require_fresh_recovery(proof)
+    require(proof.get('classification') == 'SYNTHETIC_LAB_VERIFY'
             and proof.get('status') == 'RECOVERED' and proof.get('original_run_id') == run_id
             and identity(proof.get('comparison_run_id'), r'RUN-[A-F0-9]{16}')
             and proof['comparison_run_id'] != run_id
@@ -166,6 +192,7 @@ def rearm(db, scope, token, generation, episode, batch, *, read_verified_recover
     with transaction(db):
         key, current = authenticated(db, scope, token, generation)
         require(current == row)
+        require_fresh_recovery(proof)
         require(historical_run_unused(db, key, run_id)
                 and historical_run_unused(db, key, proof['comparison_run_id']))
         db.execute('INSERT INTO collector_history VALUES (?,?,?,?,?,?,?,?)',
