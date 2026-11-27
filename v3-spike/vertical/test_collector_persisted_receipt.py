@@ -84,5 +84,50 @@ class PersistedReceiptTests(unittest.TestCase):
             verify_persisted_receipt(c, r, read_context=unavailable)
 
 
+    def test_callback_cannot_substitute_references(self):
+        c, r, core, context = fixture()
+        def readback(_):
+            for i, ref in enumerate(r['publication']['stored_evidence']):
+                replacement = 'FOREIGN-' + str(i)
+                ref['evidence_id'] = replacement
+                context['evidence'][i]['evidence_id'] = replacement
+                context['verified_signals'][i]['evidence_id'] = replacement
+            return core, context
+        with self.assertRaises(ValueError):
+            verify_persisted_receipt(c, r, read_context=readback)
+
+    def test_callback_cannot_change_validated_run(self):
+        c, r, core, context = fixture()
+        def readback(_):
+            r['publication']['core']['run']['status'] = 'OTHER'
+            core['run']['status'] = 'OTHER'
+            return core, context
+        with self.assertRaises(ValueError):
+            verify_persisted_receipt(c, r, read_context=readback)
+
+    def test_callback_cannot_rehash_signal(self):
+        c, r, core, context = fixture()
+        def readback(run_id):
+            incident = c['incidents'][0]
+            signal = incident['evidence'][0]
+            signal['sha256'] = '0' * 64
+            payload_hash = digest({'run_id': run_id, 'incident_id': core['run']['incident_id'],
+                'signal': signal, 'correlation_id': incident['id'], 'resource': incident['resource']})
+            r['publication']['stored_evidence'][0]['payload_hash'] = payload_hash
+            context['evidence'][0]['payload_hash'] = payload_hash
+            context['verified_signals'][0].update(signal=deepcopy(signal), payload_hash=payload_hash)
+            return core, context
+        with self.assertRaises(ValueError):
+            verify_persisted_receipt(c, r, read_context=readback)
+
+    def test_callback_cannot_change_returned_admission(self):
+        c, r, core, context = fixture()
+        def readback(_):
+            r['admission']['operational_decision'] = 'ALLOW'
+            return core, context
+        with self.assertRaises(ValueError):
+            verify_persisted_receipt(c, r, read_context=readback)
+
+
 if __name__ == '__main__':
     unittest.main()
