@@ -2,7 +2,6 @@
 Disposable GitHub rootless runner; not a product install or production action.
 """
 import json
-import hashlib
 import os
 from pathlib import Path
 import re
@@ -157,11 +156,10 @@ def main():
                          "http://127.0.0.1:18080",str(ROOT),"product-container"])
         require(json.loads(projection)["result"]=="PASS" and before==snapshot(),"GAMMA readback mutated state")
         (ROOT/"temporal-e17-product-gamma.json").write_bytes(projection)
-        # A's immutable read-only browser probe is executed before project teardown.
+        # The tracked probe from the exact integration checkout is executed before teardown.
         probe=ROOT/"a-e17-probe.py"
-        raw=probe.read_bytes()
-        git_blob=hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\x00"+raw).hexdigest()
-        require(git_blob=="771ee628cc515ae316f8699fd26963efa80a9db3","A probe identity changed")
+        tracked=KIT.parent/"vertical/tests/gamma_oci_e17_readback.py"
+        require(probe.read_bytes()==tracked.read_bytes(),"integrated A probe changed during staging")
         browser_env={"PATH":"/usr/bin:/bin","HOME":str(ROOT/"browser-home"),
                      "V3_ROOT":str(ROOT),"PLAYWRIGHT_BROWSERS_PATH":str(ROOT/"chromium"),
                      "PYTHONDONTWRITEBYTECODE":"1","NO_PROXY":"127.0.0.1,localhost"}
