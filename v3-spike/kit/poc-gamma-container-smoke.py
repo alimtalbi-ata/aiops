@@ -29,7 +29,12 @@ def main(mode):
     reject("/api/v1/incident-context",{"Host":"foreign.invalid"},403)
     reject("/api/v1/incident-context",{"Origin":"http://foreign.invalid"},403)
     seeded=call("/api/v1/incident-context?decision=simulate")
-    require(seeded["core"]["run"]["run_id"]=="RUN-CI-CONTEXT" and seeded["context"]["policy"]=="DENY" and seeded["simulation"]["policy_decision"]=="SIMULATE","seeded functional readiness failed")
+    require(seeded["core"]["run"]["run_id"]=="RUN-CI-CONTEXT","seeded run binding failed")
+    require(seeded["context"]["policy"]=="DENY","seeded operational policy failed")
+    require(seeded["context"]["evidence"]==[],"seeded run unexpectedly has evidence")
+    require(seeded["simulation"]=={"policy_decision":"HUMAN_APPROVAL","simulation_only":False,
+            "operational_decision":"DENY","executed_on_host":False,"production_authorized":False},
+            "seeded no-evidence policy contract failed")
     if mode=="initial":
         common={"kind":"metric","source":"gamma-oci-ci","resource":"NODE-CI-ROOT","severity":"critical","tenant":"synthetic-demo","synthetic":True}
         rows=[dict(common,id="gamma-oci-"+p,observation={"metric":"latency_ms","phase":p,"value":v}) for p,v in (("baseline",40),("incident",160))]
@@ -37,6 +42,12 @@ def main(mode):
         require(publication==call("/api/v1/ingest/create",rows),"publication replay changed")
         rid=publication["core"]["run"]["run_id"]
         require(re.fullmatch(r"RUN-[A-F0-9]{16}",rid),"bad run")
+        verified=call("/api/v1/incident-context/dynamic?run_id="+rid+"&decision=simulate")
+        require(verified["core"]["run"]["run_id"]==rid,"published run binding failed")
+        require(verified["context"]["policy"]=="DENY","published operational policy failed")
+        require(verified["simulation"]=={"policy_decision":"SIMULATE","simulation_only":True,
+                "operational_decision":"DENY","executed_on_host":False,"production_authorized":False},
+                "published evidence simulation contract failed")
         decisions=[]
         for approved,expected in ((True,"SIMULATE_ONLY"),(False,"DENY")):
             pending=call("/api/v1/hitl/dynamic/request",{"run_id":rid})
