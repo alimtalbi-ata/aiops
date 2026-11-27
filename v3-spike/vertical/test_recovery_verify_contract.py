@@ -114,5 +114,74 @@ class VerifyContractTests(unittest.TestCase):
             verify_recovery(**(args | {'read_context': changed}))
 
 
+    def test_comparison_readback_changed(self):
+        for mutation in ('run', 'signal', 'evidence'):
+            with self.subTest(mutation=mutation):
+                args, contexts, _ = fixture()
+                reads = 0
+                def changed(rid):
+                    nonlocal reads
+                    result = deepcopy(contexts[rid])
+                    if rid == COMPARISON:
+                        reads += 1
+                        if reads == 2:
+                            if mutation == 'run':
+                                result[0]['run']['status'] = 'CHANGED'
+                            elif mutation == 'signal':
+                                result[1]['verified_signals'][3]['signal']['observation']['value'] = 999
+                            else:
+                                result[1]['evidence'].pop()
+                    return result
+                with self.assertRaises(ValueError):
+                    verify_recovery(**(args | {'read_context': changed}))
+                self.assertEqual(reads, 2)
+
+    def test_mutable_context_cache_cannot_rewrite_baseline(self):
+        for target in (ORIGINAL, COMPARISON):
+            with self.subTest(target=target):
+                args, contexts, _ = fixture()
+                reads = 0
+                def shared(rid):
+                    nonlocal reads
+                    if rid == target:
+                        reads += 1
+                        if reads == 2:
+                            contexts[rid][0]['run']['status'] = 'CHANGED'
+                    return contexts[rid]
+                with self.assertRaisesRegex(ValueError, 'run changed during verification'):
+                    verify_recovery(**(args | {'read_context': shared}))
+
+    def test_receipt_readback_changed_or_unavailable(self):
+        for mode in ('changed', 'shared', 'unavailable'):
+            with self.subTest(mode=mode):
+                args, _, receipt = fixture()
+                reads = 0
+                def readback(rid):
+                    nonlocal reads
+                    reads += 1
+                    if reads == 2:
+                        if mode == 'unavailable':
+                            raise OSError('synthetic readback unavailable')
+                        receipt['status'] = 'CHANGED'
+                    return receipt if mode == 'shared' else deepcopy(receipt)
+                with self.assertRaises(OSError if mode == 'unavailable' else ValueError):
+                    verify_recovery(**(args | {'read_action_receipt': readback}))
+                self.assertEqual(reads, 2)
+
+    def test_stable_shared_reader_positive(self):
+        args, contexts, receipt = fixture()
+        reads = {ORIGINAL: 0, COMPARISON: 0, 'receipt': 0}
+        def context_reader(rid):
+            reads[rid] += 1
+            return contexts[rid]
+        def receipt_reader(rid):
+            reads['receipt'] += 1
+            return receipt
+        result = verify_recovery(**(args | {'read_context': context_reader, 'read_action_receipt': receipt_reader}))
+        self.assertEqual(result['status'], 'RECOVERED')
+        self.assertEqual(result['operational_decision'], 'DENY')
+        self.assertEqual(reads, {ORIGINAL: 2, COMPARISON: 2, 'receipt': 2})
+
+
 if __name__ == '__main__':
     unittest.main()
