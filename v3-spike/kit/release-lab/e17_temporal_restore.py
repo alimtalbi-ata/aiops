@@ -24,6 +24,35 @@ def sha(raw):
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def canonical_schema(metadata):
+    """Preserve visible column order, not physical attnum gaps left by DROP COLUMN."""
+    schema = json.loads(metadata)
+    require(set(schema) == {"columns", "constraints", "indexes"}, "unexpected Temporal schema projection")
+    columns = schema["columns"]
+    fields = {"table_name", "column_name", "ordinal_position", "data_type", "udt_name",
+              "is_nullable", "column_default"}
+    require(isinstance(columns, list) and 0 < len(columns) <= 4096, "invalid columns projection")
+    ranks, last, seen, physical = {}, {}, set(), []
+    logical = []
+    for col in columns:
+        require(isinstance(col, dict) and set(col) == fields, "invalid column projection")
+        table, name, pos = col["table_name"], col["column_name"], col["ordinal_position"]
+        require(isinstance(table, str) and isinstance(name, str) and type(pos) is int
+                and pos > last.get(table, 0) and (table, name) not in seen, "invalid physical column order")
+        seen.add((table, name))
+        last[table] = pos
+        ranks[table] = ranks.get(table, 0) + 1
+        physical.append([table, name, pos])
+        logical.append(dict(col, ordinal_position=ranks[table]))
+    normalized = dict(schema, columns=logical)
+    def digest(value):
+        return sha(json.dumps(value, sort_keys=True, separators=(",", ":")).encode())
+    return {"schema_sha256": digest(normalized),
+            "schema_components": {name: digest(value) for name, value in normalized.items()},
+            "column_fields": {field: digest([col[field] for col in logical]) for field in sorted(fields)},
+            "physical_ordinal_sha256": digest(physical)}
+
+
 def snapshot(query, db):
     names = query(db, "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename COLLATE \"C\";").decode().splitlines()
     require(0 < len(names) <= 128 and len(set(names)) == len(names), "unexpected Temporal schema")
@@ -50,16 +79,23 @@ SELECT jsonb_build_object(
 )::text;
 """)
     require(bool(metadata) and len(metadata) <= MAX_BYTES, "invalid Temporal schema projection")
-    schema = json.loads(metadata)
-    require(set(schema) == {"columns", "constraints", "indexes"}, "unexpected Temporal schema projection")
-    return {"tables": rows, "schema_sha256": sha(metadata),
-            "schema_components": {name: sha(json.dumps(value, sort_keys=True, separators=(",", ":")).encode())
-                                  for name, value in schema.items()}}
+    return {"tables": rows, **canonical_schema(metadata)}
 
 
 def require_equal_snapshots(before, after, phase):
     """Report bounded structural differences, never row payloads or SQL definitions."""
     if before == after:
+        return
+    # pg_dump/restore may compact dropped-column attnum gaps. Allow only that
+    # physical difference, only on the fresh restore, and record it explicitly.
+    def logical(value):
+        return {key: item for key, item in value.items() if key != "physical_ordinal_sha256"}
+    if phase == "after_restore_before_server_start" and all(
+            logical(before[db]) == logical(after[db]) for db in DATABASES):
+        print(json.dumps({"classification": "V3_E17_TEMPORAL_PHYSICAL_ORDINAL_NORMALIZATION",
+                          "phase": phase, "result": "PASS_LOGICAL_SCHEMA",
+                          "databases": [db for db in DATABASES if before[db] != after[db]]},
+                         sort_keys=True), flush=True)
         return
     differences = []
     for db in DATABASES:
@@ -76,7 +112,10 @@ def require_equal_snapshots(before, after, phase):
         if left != right:
             differences.append({"database": db, "tables": tables,
                                 "schema_digest_changed": left["schema_sha256"] != right["schema_sha256"],
-                                "schema_components_changed": components})
+                                "schema_components_changed": components,
+                                "column_fields_changed": sorted(name for name in left["column_fields"]
+                                    if left["column_fields"][name] != right["column_fields"][name]),
+                                "physical_ordinals_changed": left["physical_ordinal_sha256"] != right["physical_ordinal_sha256"]})
     print(json.dumps({"classification": "V3_E17_TEMPORAL_SNAPSHOT_DIFFERENCE",
                       "phase": phase, "result": "FAIL", "differences": differences}, sort_keys=True), flush=True)
     raise ValueError("Temporal snapshot mismatch: " + phase)
@@ -216,6 +255,9 @@ def prove(docker, compose, root, bom, project, report, history_probe, history):
                  "databases":{db:{"backup_sha256":expected[db],"backup_bytes":len(dumps[db]),
                                   "tables":len(after[db]["tables"]),"rows":sum(v["rows"] for v in after[db]["tables"].values()),
                                   "schema_sha256":after[db]["schema_sha256"],
+                                  "source_physical_ordinal_sha256":before[db]["physical_ordinal_sha256"],
+                                  "restored_physical_ordinal_sha256":after[db]["physical_ordinal_sha256"],
+                                  "physical_ordinals_changed":before[db]["physical_ordinal_sha256"] != after[db]["physical_ordinal_sha256"],
                                   "snapshot_sha256":sha(json.dumps(after[db],sort_keys=True).encode())} for db in DATABASES},
                  "source_stopped":True,"fresh_volume":True,"same_daemon":True,"worker_started":False,
                  "wrong_digest_refused":True,"overwrite_refused":True,"history_projection_identical":True,
