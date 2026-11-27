@@ -18,7 +18,7 @@ VERTICAL = ("core_ingest", "enterprise_clock", "hitl_demo", "lab_context",
             "enterprise_case_knowledge", "enterprise_episodes", "enterprise_triage",
             "enterprise_parametric", "enterprise_scenarios", "evidence_retrieval",
             "policy_demo", "rca_preview", "measured_rca", "correlation_demo",
-            "vertical_demo")
+            "vertical_demo", "bounded_http_transport")
 def stage(source, out, worker):
     if not re.fullmatch(r"127\.0\.0\.1:15080/aiops-v3/worker@sha256:[a-f0-9]{64}", worker):
         raise ValueError("verified disposable Worker digest reference required")

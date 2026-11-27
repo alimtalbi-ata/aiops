@@ -146,7 +146,7 @@ jobs:
           python3 v3-spike/kit/poc-image-bom.py create-e17-target "$V3_ROOT/target-bom" "$GITHUB_SHA"
           python3 v3-spike/kit/poc-image-bom.py extend-e17 "$V3_ROOT/bom" "$V3_ROOT/target-bom" "$V3_ROOT/e17-bom" "$GITHUB_SHA"
           target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"]["e17-target"]["reference"])' "$V3_ROOT/e17-bom/image-bom.json")
-          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint python "$target" -c 'import os,sys,ast,pathlib; assert os.getuid()==1000; p=pathlib.Path("/lab"); files=list(p.rglob("*.py")); assert len(files)==29; [ast.parse(f.read_bytes()) for f in files]; import temporalio; print("E17_TARGET_IMAGE_STATIC_ONLY")'
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint python "$target" -c 'import os,sys,ast,pathlib; assert os.getuid()==1000; p=pathlib.Path("/lab"); files=list(p.rglob("*.py")); assert len(files)==30; assert (p/"vertical/bounded_http_transport.py").is_file(); [ast.parse(f.read_bytes()) for f in files]; import temporalio; print("E17_TARGET_IMAGE_STATIC_ONLY")'
       - name: Prepare isolated Chromium from integrated checkout
         run: |
           set -euo pipefail

@@ -15,6 +15,7 @@ jobs:
       - run: bash -n .github/scripts/retry-rootless-compose-port.sh .github/scripts/test_retry_rootless_compose_port.sh
       - run: bash .github/scripts/test_retry_rootless_compose_port.sh
       - run: python3 -m unittest discover -s v3-spike/kit -p test_rootless_preflight.py -v
+      - run: python3 -m unittest discover -s v3-spike/kit -p test_pocctl.py -v
       - run: python3 -m py_compile app/worker/v3_boundary.py app/worker/v3_boundary_workflow.py v3-spike/kit/poc-temporal-boundary-smoke.py v3-spike/kit/poc-temporal-ui-smoke.py
       - name: Validate Workbench JavaScript syntax before service tests
         run: |
@@ -350,7 +351,36 @@ jobs:
           test ! -e "$rejected"
           if V3_ROOT="$rejected" bash v3-spike/kit/poc-start.sh; then exit 1; fi
           test ! -e "$rejected"
-          bash v3-spike/kit/poc-start.sh
+          python3 v3-spike/kit/pocctl.py install
+      - name: Qualify executable POC lifecycle and PostgreSQL backup
+        run: |
+          set -euo pipefail
+          project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+          compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml)
+          snapshot() {
+            for table in incidents runs run_events evidence gates command_receipts execution_receipts; do
+              "${compose[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -Atc "select count(*), md5(coalesce(string_agg(to_jsonb(t)::text, '|' order by to_jsonb(t)::text), '')) from aiops.$table t"
+            done
+          }
+          before=$(snapshot)
+          python3 v3-spike/kit/pocctl.py health
+          python3 v3-spike/kit/pocctl.py backup > "$V3_ROOT/poc-lifecycle-backup.json"
+          python3 - "$V3_ROOT/poc-lifecycle-backup.json" <<'PY'
+          import hashlib,json,pathlib,sys
+          report=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          archive=pathlib.Path(report['archive'])
+          assert report['result']=='PASS' and report['restore_tested'] is False
+          assert archive.stat().st_size==report['bytes']>0
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==report['sha256']
+          assert archive.stat().st_mode & 0o077 == 0
+          PY
+          test "$before" = "$(snapshot)"
+          python3 v3-spike/kit/pocctl.py stop
+          if python3 v3-spike/kit/pocctl.py health; then exit 1; fi
+          python3 v3-spike/kit/pocctl.py start
+          python3 v3-spike/kit/pocctl.py health
+          test "$before" = "$(snapshot)"
+          echo 'POC lifecycle stop/start and backup preserve PostgreSQL snapshots PASS'
       - name: Qualify upgrade from pre-008 schema on disposable runner
         run: |
           set -euo pipefail
@@ -922,6 +952,7 @@ jobs:
             ${{ env.V3_ROOT }}/admission-controls.json
             ${{ env.V3_ROOT }}/admission-fault.json
             ${{ env.V3_ROOT }}/guarded-collector-report.json
+            ${{ env.V3_ROOT }}/poc-lifecycle-backup.json
           if-no-files-found: warn
       - if: always()
         run: |
