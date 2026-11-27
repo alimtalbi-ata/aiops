@@ -81,7 +81,9 @@ def main(bundle,slot):
                     and row["Config"]["Labels"]["com.docker.compose.project"]==project
                     and row["State"]["Health"]["Status"]=="healthy","container identity/readiness mismatch")
             require(config_reader(expected["reference"],state)==expected["config_digest"],"platform config mismatch")
-            ids[service]=cid
+            full_id=row["Id"]
+            require(re.fullmatch(r"[a-f0-9]{64}",full_id) and full_id.startswith(cid),"invalid full container identity")
+            ids[service]=full_id
         for name in VOLUMES:
             row=json.loads(docker("volume","inspect",project+"_"+name))[0]
             require(row["Labels"]["com.docker.compose.project"]==project,"wrong volume owner")
