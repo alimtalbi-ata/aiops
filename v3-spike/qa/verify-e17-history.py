@@ -1,5 +1,7 @@
 """Offline consistency of E17 history projections; not raw Temporal attestation."""
+import calendar
 import copy
+from datetime import datetime
 import hashlib
 import json
 import re
@@ -25,6 +27,16 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
 
 
+def timestamp_ns(value, *, fractional=True):
+    """Validate the calendar and preserve all nine fractional digits."""
+    suffix = r'\.([0-9]{9})Z' if fractional else 'Z'
+    match = re.fullmatch(r'([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})' + suffix, value) if isinstance(value, str) else None
+    if match is None:
+        raise ValueError('invalid timestamp format')
+    instant = datetime.strptime(match[1], '%Y-%m-%dT%H:%M:%S')
+    return calendar.timegm(instant.timetuple()) * 1_000_000_000 + (int(match[2]) if fractional else 0)
+
+
 def verify(docs):
     h, after, report, worker, replay, recreated, browser = docs
     checks = []
@@ -40,8 +52,10 @@ def verify(docs):
     check('restart consistency', canonical(h) == canonical(after))
     check('event IDs', [e['event_id'] for e in events] == list(range(1, 12)))
     check('event types', tuple(e['event_type'] for e in events) == TYPES)
-    times = [e['event_time'] for e in events]
-    check('event timestamps', all(re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{9}Z', t) for t in times) and times == sorted(times))
+    times = [timestamp_ns(e['event_time']) for e in events]
+    check('event timestamps', times == sorted(times))
+    receipt_second = timestamp_ns(receipt['completed_at'], fractional=False)
+    check('receipt second overlaps activity', receipt_second <= times[6] and times[5] < receipt_second + 1_000_000_000)
     check('activity links', [h[k] for k in ('scheduled_event_id', 'started_event_id', 'completed_event_id')] == [5, 6, 7])
     check('activity attempt', type(h['activity_attempt']) is int and h['activity_attempt'] == 1 and bool(h['activity_identity']))
     check('workflow and activity type', h['workflow_type'] == 'E17ProductRecoveryWorkflow' and h['activity_type'] == 'v3_e17_reset_lab_http_delay')
@@ -68,7 +82,21 @@ def main(path, expected):
             raise ValueError('invalid ZIP')
         docs = [json.loads(archive.read(name)) for name in FILES]
     checks = verify(docs)
+    def mutate_times(d, transform):
+        for history in d[:2]:
+            for event in history['events']:
+                event['event_time'] = transform(event['event_time'])
+
+    # Equal timestamps can be legitimate at the available clock resolution.
+    positive = copy.deepcopy(docs)
+    for history in positive[:2]:
+        history['events'][1]['event_time'] = history['events'][0]['event_time']
+    verify(positive)
     mutations = [
+        ('invalid month', lambda d: mutate_times(d, lambda t: t[:5] + '99' + t[7:])),
+        ('invalid day', lambda d: mutate_times(d, lambda t: t[:8] + '99' + t[10:])),
+        ('invalid hour', lambda d: mutate_times(d, lambda t: t[:11] + '99' + t[13:])),
+        ('receipt outside activity', lambda d: mutate_times(d, lambda t: '2025' + t[4:])),
         ('restart', lambda d: d[1].update(activity_attempt=2)),
         ('event ID', lambda d: [x['events'][4].update(event_id=4) for x in d[:2]]),
         ('event order', lambda d: [x['events'][6].update(event_time=x['events'][0]['event_time']) for x in d[:2]]),
@@ -87,7 +115,7 @@ def main(path, expected):
         except ValueError:
             continue
         raise AssertionError('accepted mutation: ' + name)
-    print(json.dumps({'result': 'PASS', 'checks': checks, 'negative': [name for name, _ in mutations], 'archive_sha256': expected, 'production_authorized': False, 'limitations': 'Offline projected history consistency only; not raw history, authentication, causality or runtime.'}, sort_keys=True))
+    print(json.dumps({'result': 'PASS', 'checks': checks, 'negative': [name for name, _ in mutations], 'positive_mutations': ['equal adjacent event times'], 'archive_sha256': expected, 'production_authorized': False, 'limitations': 'Offline projected history consistency only; not raw history, authentication, causality or runtime.'}, sort_keys=True))
 
 
 if __name__ == '__main__':
