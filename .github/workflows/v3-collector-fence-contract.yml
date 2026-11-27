@@ -1,0 +1,45 @@
+name: V3 collector authority contract (synthetic)
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/vertical/*collector*.py'
+      - 'v3-spike/vertical/test_recovery_verify_contract.py'
+      - 'v3-spike/vertical/recovery_verify.py'
+      - 'v3-spike/vertical/ingestion_demo.py'
+      - 'v3-spike/vertical/incident_admission.py'
+      - 'v3-spike/vertical/enterprise_context.py'
+      - 'v3-spike/vertical/evidence_retrieval.py'
+      - 'v3-spike/vertical/rca_preview.py'
+      - '.github/workflows/v3-collector-fence-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collector-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify checkout and run real SQLite and loopback HTTP contract tests
+        working-directory: v3-spike/vertical
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 --version
+          python3 -c 'import sqlite3; print("SQLite", sqlite3.sqlite_version)'
+          python3 -m unittest -v \
+            test_collector_receipt test_collector_transition \
+            test_collector_admission_fence test_collector_scope_history \
+            test_collector_persisted_receipt test_collector_admission_service \
+            test_collector_http_boundary test_fenced_durable_collector \
+            test_recovery_verify_contract
+      - name: Qualification boundary
+        if: always()
+        run: |
+          echo "sha=$GITHUB_SHA run=$GITHUB_RUN_ID job=$GITHUB_JOB"
+          echo "qualification=synthetic_contract reader_fixtures=true gamma_pg_runtime=NOT_RUN production_authorized=false"
