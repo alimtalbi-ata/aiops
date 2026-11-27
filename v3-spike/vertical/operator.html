@@ -245,6 +245,7 @@ $("load-enterprise").addEventListener("click",async()=>{
  const run=selectedDynamicRun,target=$("enterprise-result");
  if(!run)return;
  const generation=++dynamicGeneration;
+ ++hybridGeneration;$("hybrid-result").textContent="UNKNOWN / DENY — context refresh";
  ++contextGeneration;resetDynamicApproval();$("dynamic-hitl-request").disabled=true;$("context-result").textContent="UNKNOWN / DENY — not loaded";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
  target.textContent="Loading enterprise context";
  try{
@@ -407,6 +408,7 @@ $("knowledge-read").addEventListener("click",async()=>{
 });
 let hybridGeneration=0;
 $("hybrid-search").addEventListener("click",async()=>{
+ if($("load-dynamic-context").disabled)return; // Context not yet verified.
  const generation=++hybridGeneration,run=selectedDynamicRun,contextGeneration=dynamicGeneration,query=$("hybrid-query").value.trim(),target=$("hybrid-result");
  target.textContent="UNKNOWN / DENY";
  if(!/^RUN-[A-F0-9]{16}$/.test(run||"")||!query||query.length>512)return;
