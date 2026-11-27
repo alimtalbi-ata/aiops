@@ -9,11 +9,12 @@ from datetime import datetime,timezone
 import http.client
 import json
 import math
-import re
 import statistics
 import time
 import uuid
 from urllib.request import build_opener,ProxyHandler,HTTPRedirectHandler,Request
+from ingestion_demo import ingest
+from collector_receipt import validate_receipt
 
 ROOT="NODE-CI-ROOT"
 SCOPE={"asset_id":"NODE-CI-ENT-ASSET-PAR","application_id":"NODE-CI-ENT-APP-PAY"}
@@ -117,16 +118,10 @@ class Collector:
                     self.state="UNKNOWN_BLOCKED"
                     self.checkpoint()
                     try:
-                        response=admission(self.gamma_port,batch(self.baseline,window))
-                        d=response["admission"]
-                        pub=response["publication"]
-                        require(d["classification"]=="SYNTHETIC_MEASURED_INCIDENT_ADMISSION_V1" and d["admitted"] is True
-                                and d["operational_decision"]=="DENY" and d["production_authorized"] is False
-                                and response["production_authorized"] is False,"unverified publication")
-                        run=pub["core"]["run"]
-                        require(re.fullmatch(r"RUN-[A-F0-9]{16}",run["run_id"]) and run["mode"]=="DEMO" and run["status"]=="CREATED"
-                                and len(pub["stored_evidence"])==3,"unverified run or evidence")
-                        self.run_id=run["run_id"]
+                        rows=batch(self.baseline,window)
+                        correlation=ingest(rows)
+                        response=admission(self.gamma_port,rows)
+                        self.run_id=validate_receipt(correlation,response)
                         self.state="LATCHED"
                         result["published"]=True
                     except Exception:
