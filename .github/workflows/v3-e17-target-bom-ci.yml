@@ -3,6 +3,10 @@ on:
   pull_request:
     branches: [v3-spike/central-integration]
     paths:
+      - 'v3-spike/kit/release-lab/distribution_manifest.py'
+      - 'v3-spike/kit/release-lab/test_distribution_manifest.py'
+      - 'v3-spike/kit/release-lab/sbom_contract.py'
+      - 'v3-spike/kit/release-lab/test_sbom_contract.py'
       - 'v3-spike/kit/release-lab/runtime_payload.py'
       - 'v3-spike/kit/release-lab/test_runtime_payload.py'
       - 'db/migrations/**'
@@ -34,8 +38,9 @@ jobs:
       daemon_id: ${{ steps.transport_identity.outputs.daemon_id }}
       support_manifest: ${{ steps.runtime_support.outputs.manifest }}
       support_verifier: ${{ steps.runtime_support.outputs.verifier }}
+      signing_key_sha: ${{ steps.sign_distribution.outputs.key_sha }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       V3_ROOT: /tmp/aiops-v3-rootless-ci
       COMPOSE_PROJECT_NAME: v3-e17-target-build-ci
@@ -47,7 +52,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify transport against isolated HTTP registry fixture
         working-directory: v3-spike/kit/release-lab
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests test_distribution_manifest.DistributionTests test_sbom_contract.SBOMTests
       - name: Start isolated rootless daemon
         run: |
           set -euo pipefail
@@ -210,6 +215,49 @@ jobs:
           python3 v3-spike/kit/release-lab/runtime_payload.py verify "$V3_ROOT/runtime-support" "$manifest" "$GITHUB_SHA" > "$V3_ROOT/runtime-support-verify.json"
           cmp "$V3_ROOT/runtime-support-stage.json" "$V3_ROOT/runtime-support-verify.json"
           printf 'manifest=%s\nverifier=%s\n' "$manifest" "$verifier" >> "$GITHUB_OUTPUT"
+      - name: Scan actual ten pinned OCI references with checksum-verified Syft
+        run: |
+          set -euo pipefail
+          umask 077
+          dir="$RUNNER_TEMP/v3-syft"
+          mkdir "$dir"
+          curl --fail --location --proto '=https' --proto-redir '=https' --retry 2 --max-time 120 https://github.com/anchore/syft/releases/download/v1.38.0/syft_1.38.0_linux_amd64.tar.gz -o "$dir/syft.tar.gz"
+          printf '%s  %s\n' bc664debb00db1b9b4b9dae4ba1a29d99621e33b641b94b78b9048374b812a3d "$dir/syft.tar.gz" | sha256sum -c -
+          tar -xzf "$dir/syft.tar.gz" -C "$dir" syft
+          install -m 0700 -d "$V3_ROOT/distribution-proof" "$V3_ROOT/distribution-proof/auth"
+          PYTHONDONTWRITEBYTECODE=1 python3 v3-spike/kit/release-lab/sbom_contract.py scan "$V3_ROOT/e17-content-export/image-bom.json" "$V3_ROOT/distribution-proof/sbom" "$dir/syft" > "$V3_ROOT/sbom-scan.json"
+          PYTHONDONTWRITEBYTECODE=1 python3 v3-spike/kit/release-lab/sbom_contract.py verify "$V3_ROOT/e17-content-export/image-bom.json" "$V3_ROOT/distribution-proof/sbom" > "$V3_ROOT/sbom-verify.json"
+          cmp "$V3_ROOT/sbom-scan.json" "$V3_ROOT/sbom-verify.json"
+      - name: Sign exact distribution statement with ephemeral LAB key
+        id: sign_distribution
+        env:
+          BOM_SHA: ${{ steps.transport_identity.outputs.bom_sha256 }}
+          ARCHIVE_SHA: ${{ steps.transport_identity.outputs.archive_sha256 }}
+          SUPPORT_SHA: ${{ steps.runtime_support.outputs.manifest }}
+          VERIFIER_SHA: ${{ steps.runtime_support.outputs.verifier }}
+          REGISTRY_REF: ${{ steps.transport_identity.outputs.registry_ref }}
+        run: |
+          set -euo pipefail
+          umask 077
+          keydir=$(mktemp -d "$RUNNER_TEMP/v3-lab-sign.XXXXXXXX")
+          trap 'rm -f "$keydir/private.pem"; rmdir "$keydir"' EXIT
+          auth="$V3_ROOT/distribution-proof/auth"
+          sbom="sha256:$(sha256sum "$V3_ROOT/distribution-proof/sbom/index.json" | cut -d' ' -f1)"
+          python3 v3-spike/kit/release-lab/distribution_manifest.py create "$auth/manifest.json" "$GITHUB_SHA" "$BOM_SHA" "$ARCHIVE_SHA" "$SUPPORT_SHA" "sha256:$VERIFIER_SHA" "$sbom" "$REGISTRY_REF"
+          openssl genpkey -algorithm ED25519 -out "$keydir/private.pem"
+          openssl pkey -in "$keydir/private.pem" -pubout -outform DER -out "$auth/public.der"
+          openssl pkeyutl -sign -rawin -inkey "$keydir/private.pem" -in "$auth/manifest.json" -out "$auth/manifest.sig"
+          key_sha="sha256:$(sha256sum "$auth/public.der" | cut -d' ' -f1)"
+          python3 v3-spike/kit/release-lab/distribution_manifest.py verify "$auth/manifest.json" "$auth/manifest.sig" "$auth/public.der" "$key_sha" "$GITHUB_SHA" > "$V3_ROOT/distribution-signature-verify.json"
+          printf 'key_sha=%s\n' "$key_sha" >> "$GITHUB_OUTPUT"
+          cat "$V3_ROOT/distribution-signature-verify.json"
+      - name: Transfer signed statement and bound SPDX reports only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-e17-signed-distribution
+          path: /tmp/aiops-v3-rootless-ci/distribution-proof/
+          if-no-files-found: error
+          retention-days: 1
       - name: Transfer only allowlisted runtime support
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -276,6 +324,9 @@ jobs:
         with:
           name: v3-e17-target-bom
           path: |
+            /tmp/aiops-v3-rootless-ci/sbom-scan.json
+            /tmp/aiops-v3-rootless-ci/sbom-verify.json
+            /tmp/aiops-v3-rootless-ci/distribution-signature-verify.json
             /tmp/aiops-v3-rootless-ci/runtime-support-stage.json
             /tmp/aiops-v3-rootless-ci/runtime-support-verify.json
             /tmp/aiops-v3-rootless-ci/runtime-support/runtime-manifest.json
@@ -329,6 +380,7 @@ jobs:
       PRODUCER_DAEMON: ${{ needs.target-bom.outputs.daemon_id }}
       EXPECTED_SUPPORT_MANIFEST: ${{ needs.target-bom.outputs.support_manifest }}
       EXPECTED_SUPPORT_VERIFIER: ${{ needs.target-bom.outputs.support_verifier }}
+      EXPECTED_SIGNING_KEY_SHA: ${{ needs.target-bom.outputs.signing_key_sha }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Assert no source checkout
@@ -416,6 +468,36 @@ jobs:
           python3 -I -B "$verifier" verify "$support" "$EXPECTED_SUPPORT_MANIFEST" "$GITHUB_SHA" > "$V3_ROOT/cold-support-verify.json"
           cat "$V3_ROOT/cold-support-verify.json"
           test ! -e "$support/.git"
+      - name: Receive signed distribution and SPDX inventories
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: v3-e17-signed-distribution
+          path: /tmp/aiops-v3-rootless-ci/distribution-proof
+      - name: Verify signature against producer trust output and all transport identities
+        run: |
+          set -euo pipefail
+          umask 077
+          auth="$V3_ROOT/distribution-proof/auth"
+          python3 -I -B "$V3_ROOT/runtime-support/v3-spike/kit/release-lab/distribution_manifest.py" verify "$auth/manifest.json" "$auth/manifest.sig" "$auth/public.der" "$EXPECTED_SIGNING_KEY_SHA" "$GITHUB_SHA" > "$V3_ROOT/cold-signature-verify.json"
+          python3 -I - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["V3_ROOT"])
+          proof=root/"distribution-proof"
+          assert {p.name for p in proof.iterdir()}=={"auth","sbom"}
+          assert {p.name for p in (proof/"auth").iterdir()}=={"manifest.json","manifest.sig","public.der"}
+          assert all(not p.is_symlink() for p in proof.rglob("*"))
+          index=proof/"sbom/index.json"
+          assert index.is_file() and 0<index.stat().st_size<=64*1024**2
+          receipt=json.loads((root/"cold-signature-verify.json").read_text())
+          doc=receipt["statement"]
+          assert receipt["result"]=="PASS" and receipt["production_authorized"] is False
+          assert doc["schema_version"]==2
+          for key,env in (("bom_sha256","EXPECTED_BOM_SHA"),("archive_sha256","EXPECTED_ARCHIVE_SHA"),("support_manifest_sha256","EXPECTED_SUPPORT_MANIFEST"),("registry_reference","REGISTRY_REF")):
+              assert doc[key]==os.environ[env]
+          assert doc["support_verifier_sha256"]=="sha256:"+os.environ["EXPECTED_SUPPORT_VERIFIER"]
+          assert doc["sbom_index_sha256"]=="sha256:"+hashlib.sha256(index.read_bytes()).hexdigest()
+          print("PASS signed transport identities and SBOM index bound to ephemeral LAB key")
+          PY
       - name: Receive exact OCI payload from producer job
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -431,6 +513,22 @@ jobs:
           python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$EXPECTED_BOM_SHA" > "$V3_ROOT/cold-content-verify.json"
           cat "$V3_ROOT/cold-envelope-unpack.json"
           python3 -c 'import json,os,sys; r=json.load(open(sys.argv[1])); assert r["source_sha"]==os.environ["GITHUB_SHA"] and r["production_authorized"] is False' "$V3_ROOT/cold-content-verify.json"
+      - name: Verify signed SPDX report closure before registry writes
+        run: |
+          set -euo pipefail
+          umask 077
+          cd "$V3_ROOT/runtime-support"
+          python3 v3-spike/kit/release-lab/sbom_contract.py verify "$V3_ROOT/e17-content-export/image-bom.json" "$V3_ROOT/distribution-proof/sbom" > "$V3_ROOT/cold-sbom-verify.json"
+          python3 -I - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["V3_ROOT"])
+          index=root/"distribution-proof/sbom/index.json"
+          receipt=json.loads((root/"cold-signature-verify.json").read_text())
+          assert receipt["statement"]["sbom_index_sha256"]=="sha256:"+hashlib.sha256(index.read_bytes()).hexdigest()
+          report=json.loads((root/"cold-sbom-verify.json").read_text())
+          assert report["result"]=="PASS" and report["vulnerability_scan"]=="NOT_RUN" and len(report["images"])==10
+          print("PASS verified ten SPDX reports against signed index and original BOM")
+          PY
       - name: Bootstrap only the pinned registry
         shell: bash
         run: |
@@ -517,7 +615,9 @@ jobs:
           receipt={"classification":"V3_E17_NO_CHECKOUT_RUNTIME","result":"PASS","source_sha":os.environ["GITHUB_SHA"],
                    "support_manifest_sha256":support["manifest_sha256"],"bom_sha256":pull["bom_sha256"],
                    "archive_sha256":os.environ["EXPECTED_ARCHIVE_SHA"],"checkout_present":False,
-                   "product_build":False,"support_unchanged":True,"production_authorized":False}
+                   "product_build":False,"support_unchanged":True,"production_authorized":False,
+                   "distribution_signature":"EPHEMERAL_LAB_VERIFIED","sbom_index_sha256":json.loads((root/"cold-signature-verify.json").read_text())["statement"]["sbom_index_sha256"],
+                   "vulnerability_scan":"NOT_RUN"}
           (root/"cold-no-checkout.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
           print(json.dumps(receipt,sort_keys=True))
           PY
@@ -527,6 +627,12 @@ jobs:
         with:
           name: v3-e17-cold-runner
           path: |
+            /tmp/aiops-v3-rootless-ci/cold-signature-verify.json
+            /tmp/aiops-v3-rootless-ci/cold-sbom-verify.json
+            /tmp/aiops-v3-rootless-ci/distribution-proof/auth/manifest.json
+            /tmp/aiops-v3-rootless-ci/distribution-proof/auth/manifest.sig
+            /tmp/aiops-v3-rootless-ci/distribution-proof/auth/public.der
+            /tmp/aiops-v3-rootless-ci/distribution-proof/sbom/index.json
             /tmp/aiops-v3-rootless-ci/cold-support-verify.json
             /tmp/aiops-v3-rootless-ci/cold-support-after.json
             /tmp/aiops-v3-rootless-ci/cold-no-checkout.json

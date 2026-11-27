@@ -7,8 +7,8 @@ import unittest
 from distribution_manifest import canonical, create, sha, verify
 
 SOURCE = "a" * 40
-D = ["sha256:" + str(i) * 64 for i in range(1, 5)]
-REGISTRY = "docker.io/library/registry@sha256:" + "5" * 64
+D = ["sha256:" + str(i) * 64 for i in range(1, 6)]
+REGISTRY = "docker.io/library/registry@sha256:" + "6" * 64
 
 
 class DistributionTests(unittest.TestCase):
@@ -52,6 +52,8 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual(receipt["result"], "PASS")
         self.assertEqual(receipt["statement"]["archive_sha256"], D[1])
         self.assertFalse(receipt["production_authorized"])
+        self.assertEqual(receipt["statement"]["sbom_index_sha256"], D[4])
+        self.assertEqual(receipt["statement"]["schema_version"], 2)
 
     def test_tampered_archive(self):
         self.mutate("archive_sha256", D[0])
@@ -59,6 +61,18 @@ class DistributionTests(unittest.TestCase):
 
     def test_tampered_support(self):
         self.mutate("support_manifest_sha256", D[0])
+        with self.assertRaises(ValueError): self.check()
+
+    def test_tampered_sbom_index(self):
+        self.mutate("sbom_index_sha256", D[0])
+        with self.assertRaises(ValueError): self.check()
+
+    def test_signed_legacy_schema_refused(self):
+        doc = json.loads(self.manifest.read_bytes())
+        doc.pop("sbom_index_sha256")
+        doc["schema_version"] = 1
+        self.manifest.write_bytes(canonical(doc))
+        self.sign()
         with self.assertRaises(ValueError): self.check()
 
     def test_tampered_signature(self):

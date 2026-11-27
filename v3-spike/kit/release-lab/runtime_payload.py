@@ -19,7 +19,7 @@ FILES = frozenset([
     *(LAB + n for n in ('assemble.py', 'compose.template.yml', 'install-ci.py', 'README.md',
                         'e17-runtime-ci.py', 'e17-history-evidence.py',
                         'oci_transport.py', 'oci_import.py', 'oci_envelope.py',
-                        'runtime_payload.py')),
+                        'runtime_payload.py', 'distribution_manifest.py', 'sbom_contract.py')),
     'v3-spike/vertical/tests/gamma_oci_e17_readback.py',
 ])
 MANIFEST = 'runtime-manifest.json'
