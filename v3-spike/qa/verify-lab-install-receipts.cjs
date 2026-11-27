@@ -11,6 +11,9 @@ function verify(rows, source, manifest) {
   fail(typeof source === "string" && /^[a-f0-9]{40}$/.test(source) && sha(manifest), "expected identities");
   fail(Array.isArray(rows) && rows.length === 3, "three receipts required");
   const containers = new Set(), volumeNames = new Set(), runs = new Set();
+  // In this prepared campaign, distinct GAMMA runs generate distinct evidence/decision IDs.
+  // This is a consistency check, not an authenticated proof of provenance.
+  const evidenceIds = new Set(), receiptIds = new Set();
   for (let i=0;i<3;i++) {
     const r=rows[i], slot=i+1, project="v3-lab-install-"+slot;
     fail(obj(r) && r.classification==="V3_PREPARED_CLEAN_LAB_INSTALL" && r.result==="PASS" && r.production_authorized===false,"receipt status");
@@ -35,6 +38,8 @@ function verify(rows, source, manifest) {
     fail(Array.isArray(g.decisions) && same(g.decisions.map(d=>d?.decision),["SIMULATE_ONLY","DENY"]) &&
       g.decisions.every(d=>obj(d)&&typeof d.receipt_id==="string"&&d.receipt_id.length>0&&sha(d.receipt_sha256)) &&
       new Set(g.decisions.map(d=>d.receipt_id)).size===2,"gamma decisions");
+    for (const e of g.evidence) { fail(!evidenceIds.has(e.evidence_id),"cross-slot duplicate evidence identity"); evidenceIds.add(e.evidence_id); }
+    for (const d of g.decisions) { fail(!receiptIds.has(d.receipt_id),"cross-slot duplicate HITL identity"); receiptIds.add(d.receipt_id); }
     for (const id of [b.run_id,g.run_id]) { fail(!runs.has(id),"duplicate run"); runs.add(id); }
   }
   return {classification:"V3_INDEPENDENT_LAB_RECEIPT_CONTRACT",result:"PASS",source_sha:source,manifest_sha256:manifest,receipts:3,container_ids:containers.size,volume_names:volumeNames.size,run_ids:runs.size,production_authorized:false,limitations:["Receipt consistency only; no runtime, signature, independent host, physical volume or secret uniqueness attestation."]};
@@ -47,7 +52,7 @@ function selfTest() {
   const rid=n=>"RUN-"+n.toString(16).toUpperCase().padStart(16,"0");
   const fixture=()=>[1,2,3].map(slot=>{
     const project="v3-lab-install-"+slot;
-    return {classification:"V3_PREPARED_CLEAN_LAB_INSTALL",result:"PASS",slot,project,source_sha:source,manifest_sha256:manifest,elapsed_seconds:12,production_authorized:false,container_ids:Object.fromEntries(services.map((s,i)=>[s,id(slot*100+i)])),volumes:["postgres-data","temporal-data","gamma-audit"].map(v=>project+"_"+v),db_delta:[1,2,2,1],boundary:{classification:"V3_TEMPORAL_BOUNDARY_RUNTIME",result:"PASS",production_authorized:false,core_status:"BLOCKED",business_stages_passed:0,activities_completed:2,history_events:12,run_id:rid(slot*2),workflow_id:rid(slot*2)},gamma:{classification:"V3_PINNED_GAMMA_HITL_RUNTIME",result:"PASS",production_authorized:false,run_id:rid(slot*2+1),evidence:[{evidence_id:"E1",payload_hash:manifest},{evidence_id:"E2",payload_hash:manifest}],decisions:[{decision:"SIMULATE_ONLY",receipt_id:"D1",receipt_sha256:manifest},{decision:"DENY",receipt_id:"D2",receipt_sha256:manifest}]}};
+    return {classification:"V3_PREPARED_CLEAN_LAB_INSTALL",result:"PASS",slot,project,source_sha:source,manifest_sha256:manifest,elapsed_seconds:12,production_authorized:false,container_ids:Object.fromEntries(services.map((s,i)=>[s,id(slot*100+i)])),volumes:["postgres-data","temporal-data","gamma-audit"].map(v=>project+"_"+v),db_delta:[1,2,2,1],boundary:{classification:"V3_TEMPORAL_BOUNDARY_RUNTIME",result:"PASS",production_authorized:false,core_status:"BLOCKED",business_stages_passed:0,activities_completed:2,history_events:12,run_id:rid(slot*2),workflow_id:rid(slot*2)},gamma:{classification:"V3_PINNED_GAMMA_HITL_RUNTIME",result:"PASS",production_authorized:false,run_id:rid(slot*2+1),evidence:[{evidence_id:"E"+slot+"-1",payload_hash:manifest},{evidence_id:"E"+slot+"-2",payload_hash:manifest}],decisions:[{decision:"SIMULATE_ONLY",receipt_id:"D"+slot+"-1",receipt_sha256:manifest},{decision:"DENY",receipt_id:"D"+slot+"-2",receipt_sha256:manifest}]}};
   });
   const cases=[
     ["missing slot",r=>r.pop()],
@@ -66,6 +71,9 @@ function selfTest() {
     ["gamma failure",r=>r[0].gamma.result="FAIL"],
     ["missing evidence",r=>r[0].gamma.evidence.pop()],
     ["unsafe decision",r=>r[0].gamma.decisions[0].decision="LIVE"],
+    ["cross-slot evidence",r=>r[1].gamma.evidence=JSON.parse(JSON.stringify(r[0].gamma.evidence))],
+    ["cross-slot HITL",r=>r[1].gamma.decisions=JSON.parse(JSON.stringify(r[0].gamma.decisions))],
+    ["cross-slot both",r=>{r[1].gamma.evidence=JSON.parse(JSON.stringify(r[0].gamma.evidence));r[1].gamma.decisions=JSON.parse(JSON.stringify(r[0].gamma.decisions));}],
     ["duplicate run",r=>r[1].gamma.run_id=r[0].gamma.run_id],
     ["production flag",r=>r[0].production_authorized=true],
     ["nested production flag",r=>r[0].gamma.production_authorized=true]
