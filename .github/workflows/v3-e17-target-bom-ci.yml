@@ -1,7 +1,7 @@
 name: V3 isolated E17 target OCI BOM
 on:
   pull_request:
-    branches: [v3-spike/central-integration, v3-spike/po-e17-content-transport-20261127]
+    branches: [v3-spike/central-integration]
     paths:
       - 'v3-spike/kit/release-lab/oci_import.py'
       - 'v3-spike/kit/release-lab/test_oci_import.py'
