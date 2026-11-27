@@ -15,6 +15,7 @@ on:
       - 'v3-spike/vertical/authority_guard_operations_candidate.py'
       - 'v3-spike/vertical/test_authority_guard_preflight_candidate.py'
       - 'v3-spike/vertical/test_authority_guard_operations_candidate.py'
+      - 'v3-spike/vertical/test_authority_guard_process_integration.py'
       - 'v3-spike/vertical/ingestion_demo.py'
       - 'v3-spike/vertical/incident_admission.py'
       - 'v3-spike/vertical/enterprise_context.py'
@@ -47,7 +48,8 @@ jobs:
             test_collector_persisted_receipt test_collector_admission_service \
             test_collector_http_boundary test_fenced_durable_collector \
             test_recovery_verify_contract test_authority_restore_guard_candidate \
-            test_authority_guard_preflight_candidate test_authority_guard_operations_candidate
+            test_authority_guard_preflight_candidate test_authority_guard_operations_candidate \
+            test_authority_guard_process_integration
       - name: Qualification boundary
         if: always()
         run: |
