@@ -1,0 +1,30 @@
+name: V3 LAB distribution signature contract
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/release-lab/distribution_manifest.py'
+      - 'v3-spike/kit/release-lab/test_distribution_manifest.py'
+      - '.github/workflows/v3-distribution-signature-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  signature-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Test real Ed25519 signatures with ephemeral LAB keys
+        working-directory: v3-spike/kit/release-lab
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -eu
+          umask 077
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          openssl version
+          python3 -m unittest -v test_distribution_manifest
+          echo "qualification=ephemeral_lab_signature_contract release_key=NOT_USED real_payload_signature=NOT_RUN production_authorized=false"
