@@ -1,0 +1,151 @@
+name: V3 A packaged GAMMA Chromium
+on:
+  pull_request:
+    paths:
+      - 'v3-spike/vertical/tests/gamma_oci_browser.py'
+      - '.github/workflows/v3-a-gamma-oci-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gamma-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      V3_ROOT: /tmp/aiops-v3-rootless-ci
+      COMPOSE_PROJECT_NAME: v3-gamma-bom-ci
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Start isolated rootless daemon
+        run: |
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
+          sudo apt-get update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          # Disposable runner only: provision dedicated daemon storage before starting Docker.
+          test ! -e "$V3_ROOT"
+          install -m 0700 -d "$V3_ROOT" "$HOME/.config/docker"
+          test ! -e "$HOME/.config/docker/daemon.json"
+          (umask 077; printf '{"data-root":"%s/docker-data"}\n' "$V3_ROOT" > "$HOME/.config/docker/daemon.json")
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Install pinned browser test runtime
+        run: |
+          python3 -m venv "$V3_ROOT/browser-venv"
+          "$V3_ROOT/browser-venv/bin/pip" install playwright==1.51.0
+          PLAYWRIGHT_BROWSERS_PATH="$V3_ROOT/browsers" "$V3_ROOT/browser-venv/bin/python" -m playwright install --with-deps chromium
+      - name: Build and verify nine immutable image references
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          test "$(id -u)" != 0
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          export V3_DB_PASSWORD="$(openssl rand -hex 24)"
+          export V3_LAB_TOKEN="$(openssl rand -hex 32)"
+          echo "::add-mask::$V3_DB_PASSWORD"
+          echo "::add-mask::$V3_LAB_TOKEN"
+          mkdir -p "$V3_ROOT/data/postgres" "$V3_ROOT/data/temporal-postgres" "$V3_ROOT/bom"
+          printf 'V3_DB_PASSWORD=%s\nV3_LAB_TOKEN=%s\n' "$V3_DB_PASSWORD" "$V3_LAB_TOKEN" > "$V3_ROOT/poc.env"
+          out="$V3_ROOT/bom"
+          base=v3-spike/kit/compose.poc-source.yml
+          compose=(docker compose --env-file "$V3_ROOT/poc.env" -f "$base" -f v3-spike/kit/compose.gamma-ci.yml --profile orchestration)
+          cleanup() {
+            status=$?
+            if [[ "$status" != 0 ]]; then
+              # Only enumerated diagnostics from synthetic GAMMA, no env dump,
+              # request contents, credentials or arbitrary upstream logs.
+              "${compose[@]}" logs --no-color --tail=100 gamma 2>/dev/null | grep -E 'GAMMA_RELAY(_FAILURE)? |GAMMA_REQUEST_UNVERIFIED ' || true
+            fi
+            "${compose[@]}" down --remove-orphans || true
+            docker rm -f v3-gamma-bom-registry || true
+          }
+          trap cleanup EXIT
+          docker run -d --name v3-gamma-bom-registry -p 127.0.0.1:15080:5000 registry:2
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:15080/v2/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:15080/v2/ >/dev/null
+          python3 -m py_compile v3-spike/kit/poc-image-bom.py
+          python3 - "$V3_ROOT/build.json" <<'PY'
+          import json,sys
+          names=("core","twin","evidence","policy","worker","gamma")
+          with open(sys.argv[1],"x") as f:
+              json.dump({"services":{s:{"image":"127.0.0.1:15080/aiops-v3/"+s+":ci"} for s in names}},f)
+          PY
+          "${compose[@]}" -f "$V3_ROOT/build.json" build core twin evidence policy worker gamma
+          "${compose[@]}" pull postgres temporal
+          docker tag postgres:16-alpine 127.0.0.1:15080/aiops-v3/postgres:ci
+          docker tag postgres:16-alpine 127.0.0.1:15080/aiops-v3/temporal-postgres:ci
+          docker tag temporalio/auto-setup:1.29.7 127.0.0.1:15080/aiops-v3/temporal:ci
+          python3 v3-spike/kit/poc-image-bom.py create-gamma "$out" "$(git rev-parse HEAD)"
+          pinned=("${compose[@]}" -f "$out/compose.pinned.json")
+          "${pinned[@]}" config --quiet
+          services=(postgres core twin evidence policy temporal-postgres temporal worker gamma)
+          # Only the disposable project, never a published Temporal/Worker port.
+          # Retry solely a confirmed rootless loopback collision before any run.
+          log="$out/start.log"
+          for attempt in 1 2 3; do
+            if "${pinned[@]}" up -d --no-build --pull always --wait --wait-timeout 300 "${services[@]}" >"$log" 2>&1; then
+              cat "$log"
+              break
+            else
+              status=$?
+            fi
+            cat "$log" >&2
+            if [[ "$attempt" == 3 ]] || ! grep -Eqi 'address already in use|port is already allocated' "$log"; then exit "$status"; fi
+            "${pinned[@]}" rm -sf gamma core twin evidence policy
+            sleep "$attempt"
+          done
+          ids=()
+          for service in "${services[@]}"; do ids+=("$("${pinned[@]}" ps -q "$service")"); done
+          python3 v3-spike/kit/poc-image-bom.py verify-gamma "$out" "${ids[@]}"
+          "${pinned[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops < v3-spike/kit/poc-seed.sql
+          "${pinned[@]}" exec -T worker python - < v3-spike/kit/poc-temporal-boundary-smoke.py > "$out/boundary.json"
+          cat "$out/boundary.json"
+          run=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_id"])' "$out/boundary.json")
+          [[ "$run" =~ ^RUN-[A-F0-9]{16}$ ]]
+          check_receipt() {
+            test "$("${pinned[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U aiops -d aiops -Atc "select count(*) from aiops.execution_receipts where run_id='$run' and workflow_id='$run'")" = 1
+          }
+          check_receipt
+          "${pinned[@]}" stop temporal
+          "${pinned[@]}" exec -T worker python - unavailable < v3-spike/kit/poc-temporal-boundary-smoke.py
+          "${pinned[@]}" stop worker
+          "${pinned[@]}" up -d --no-deps --no-recreate --no-build --pull never --wait --wait-timeout 300 temporal
+          "${pinned[@]}" up -d --no-deps --no-recreate --no-build --pull never --wait --wait-timeout 300 worker
+          ids_after=()
+          for service in "${services[@]}"; do ids_after+=("$("${pinned[@]}" ps -q "$service")"); done
+          test "${ids[*]}" = "${ids_after[*]}"
+          mkdir "$out/replay"
+          cp "$out/image-bom.json" "$out/compose.pinned.json" "$out/replay/"
+          python3 v3-spike/kit/poc-image-bom.py verify-gamma "$out/replay" "${ids_after[@]}"
+          cmp "$out/pinned-start.json" "$out/replay/pinned-start.json"
+          "${pinned[@]}" exec -T worker python - replay "$run" < v3-spike/kit/poc-temporal-boundary-smoke.py > "$out/boundary-replay.json"
+          cmp "$out/boundary.json" "$out/boundary-replay.json"
+          check_receipt
+          echo "Nine pinned images and persisted boundary restart PASS"
+          export PLAYWRIGHT_BROWSERS_PATH="$V3_ROOT/browsers"
+          "$V3_ROOT/browser-venv/bin/python" v3-spike/vertical/tests/gamma_oci_browser.py "$out/browser"
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-a-gamma-oci-browser
+          path: |
+            /tmp/aiops-v3-rootless-ci/bom/browser/
+            /tmp/aiops-v3-rootless-ci/bom/image-bom.json
+            /tmp/aiops-v3-rootless-ci/bom/pinned-start.json
+            /tmp/aiops-v3-rootless-ci/bom/boundary.json
+          if-no-files-found: warn
+          retention-days: 14
