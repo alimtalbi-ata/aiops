@@ -110,6 +110,7 @@ jobs:
             /tmp/aiops-v3-rootless-ci/lab-kit.tar.gz
             /tmp/aiops-v3-rootless-ci/three-install-report.json
             /tmp/aiops-v3-rootless-ci/install-*/install-report.json
+            /tmp/aiops-v3-rootless-ci/install-*/failure-diagnostics.json
           if-no-files-found: warn
           retention-days: 14
       - name: Remove disposable registry only
