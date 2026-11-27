@@ -12,6 +12,8 @@ import tempfile
 CLASSIFICATION = "V3_E17_LAB_DISTRIBUTION"
 DIGEST = re.compile(r"sha256:[a-f0-9]{64}")
 SOURCE = re.compile(r"[a-f0-9]{40}")
+# Docker Engine may report a canonical UUID or a 64-character hex identity.
+DAEMON = re.compile(r"[a-f0-9]{64}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")
 REGISTRY = re.compile(r"docker\.io/library/registry@sha256:[a-f0-9]{64}")
 SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 MAX_STATEMENT = 8192
@@ -41,7 +43,7 @@ def statement(source, bom, archive, support, verifier, sbom, registry, producer_
     for value in (bom, archive, support, verifier, sbom):
         require(isinstance(value, str) and DIGEST.fullmatch(value), "invalid content digest")
     require(isinstance(registry, str) and REGISTRY.fullmatch(registry), "invalid registry bootstrap")
-    require(isinstance(producer_daemon, str) and re.fullmatch(r"[a-f0-9]{64}", producer_daemon),
+    require(isinstance(producer_daemon, str) and DAEMON.fullmatch(producer_daemon),
             "invalid producer daemon identity")
     return {"schema_version": 3, "classification": CLASSIFICATION,
             "source_sha": source, "bom_sha256": bom, "archive_sha256": archive,
@@ -71,7 +73,7 @@ def verify(path, signature, public_key, expected_key_sha, expected_source, expec
             "independently trusted key digest required")
     require(isinstance(expected_source, str) and SOURCE.fullmatch(expected_source),
             "expected source required")
-    require(isinstance(expected_producer_daemon, str) and re.fullmatch(r"[a-f0-9]{64}", expected_producer_daemon),
+    require(isinstance(expected_producer_daemon, str) and DAEMON.fullmatch(expected_producer_daemon),
             "expected producer daemon required")
     raw = read_regular(path, MAX_STATEMENT)
     sig = read_regular(signature, 64)

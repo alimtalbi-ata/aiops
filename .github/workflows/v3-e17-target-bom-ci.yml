@@ -500,7 +500,7 @@ jobs:
               assert doc[key]==os.environ[env]
           assert doc["producer_daemon_id"]==os.environ["PRODUCER_DAEMON"]
           destination=subprocess.check_output(["docker","info","--format","{{.ID}}"],text=True).strip()
-          assert re.fullmatch(r"[a-f0-9]{64}",destination) and destination!=doc["producer_daemon_id"]
+          assert re.fullmatch(r"[a-f0-9]{64}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}",destination) and destination!=doc["producer_daemon_id"]
           assert doc["support_verifier_sha256"]=="sha256:"+os.environ["EXPECTED_SUPPORT_VERIFIER"]
           assert doc["sbom_index_sha256"]=="sha256:"+hashlib.sha256(index.read_bytes()).hexdigest()
           print("PASS signed producer daemon identity, distinct cold daemon, transport identities and SBOM index")
