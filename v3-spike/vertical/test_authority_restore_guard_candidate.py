@@ -1,4 +1,7 @@
 import sqlite3
+import signal
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -102,6 +105,39 @@ class GuardTests(unittest.TestCase):
         # Demonstrates why witness requires separate non-rollback trust domain.
         with guarded(old_a,old_w):
             self.assertEqual(claim(old_a,SCOPE,TOKEN,0,EP,BATCH),'CLAIMED_NO_EXECUTION')
+
+    def assert_sigkill_keeps_busy(self, phase, expected_state):
+        child = '''
+import os
+import signal
+import sys
+from contextlib import closing
+from authority_restore_guard_candidate import open_existing, guarded
+from collector_admission_fence import claim
+from test_authority_restore_guard_candidate import SCOPE, TOKEN, EP, BATCH
+with closing(open_existing(sys.argv[1])) as a, closing(open_existing(sys.argv[2])) as w:
+    with guarded(a,w):
+        if sys.argv[3] == 'after_claim':
+            claim(a,SCOPE,TOKEN,0,EP,BATCH)
+        os.kill(os.getpid(),signal.SIGKILL)
+'''
+        self.a.close()
+        self.w.close()
+        result=subprocess.run([sys.executable,'-B','-c',child,
+                               str(self.root/'authority.db'),str(self.root/'witness.db'),phase],
+                              cwd=Path(__file__).resolve().parent,capture_output=True,timeout=10)
+        self.assertEqual(result.returncode,-signal.SIGKILL,result.stderr.decode(errors='replace'))
+        with closing(open_existing(self.root/'authority.db')) as a, closing(open_existing(self.root/'witness.db')) as w:
+            self.assertEqual(w.execute('SELECT state FROM guard').fetchone()[0],'BUSY')
+            self.assertEqual(a.execute('SELECT state FROM collector_fence').fetchone()[0],expected_state)
+            self.assert_blocked(a=a,w=w)
+            self.assertEqual(w.execute('SELECT state FROM guard').fetchone()[0],'BUSY')
+
+    def test_sigkill_before_authority_mutation_keeps_busy(self):
+        self.assert_sigkill_keeps_busy('before_claim','ARMED')
+
+    def test_sigkill_after_authority_commit_keeps_busy(self):
+        self.assert_sigkill_keeps_busy('after_claim','PENDING')
 
 if __name__=='__main__':
     unittest.main(verbosity=2)
