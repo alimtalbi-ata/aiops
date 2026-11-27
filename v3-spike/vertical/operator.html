@@ -239,13 +239,13 @@ $("enterprise-open-run").addEventListener("click",()=>{
  if(!/^RUN-[A-F0-9]{16}$/.test(run))return;
  selectDynamicRun(run);
  // The server resolves the root from verified evidence; no caller-supplied asset.
- $("load-enterprise").disabled=false;$("load-enterprise").click();
+ $("load-enterprise").disabled=false;loadEnterpriseContext("selection changed");
 });
-$("load-enterprise").addEventListener("click",async()=>{
+async function loadEnterpriseContext(reason="context refresh"){
  const run=selectedDynamicRun,target=$("enterprise-result");
  if(!run)return;
  const generation=++dynamicGeneration;
- ++hybridGeneration;$("hybrid-result").textContent="UNKNOWN / DENY — context refresh";
+ ++hybridGeneration;$("hybrid-result").textContent="UNKNOWN / DENY — "+reason;
  ++contextGeneration;resetDynamicApproval();$("dynamic-hitl-request").disabled=true;$("context-result").textContent="UNKNOWN / DENY — not loaded";$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;
  target.textContent="Loading enterprise context";
  try{
@@ -265,7 +265,8 @@ $("load-enterprise").addEventListener("click",async()=>{
   target.textContent=lines.join("\n");
   $("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;resetDynamicApproval();
  }catch(_err){if(generation===dynamicGeneration&&run===selectedDynamicRun){target.textContent="UNKNOWN / DENY — enterprise context unavailable";selectDynamicRun(null);resetDynamicApproval();$("load-enterprise").disabled=true;$("load-dynamic-context").disabled=true;$("simulate-dynamic-context").disabled=true;}}
-});
+}
+$("load-enterprise").addEventListener("click",()=>loadEnterpriseContext());
 let clockState=null,clockBusy=false;
 async function readClock(){
  const response=await fetch("/api/v1/enterprise-clock",{cache:"no-store"});
@@ -320,7 +321,7 @@ $("clock-open").addEventListener("click",()=>{
  $("load-enterprise").disabled=false;$("load-dynamic-context").disabled=false;$("simulate-dynamic-context").disabled=false;
  $("context-result").textContent="UNKNOWN / DENY — not loaded";
  $("dynamic-result").textContent="Selected persistent enterprise run: "+run;
- $("load-enterprise").click();
+ loadEnterpriseContext("selection changed");
 });
 let inventoryGeneration=0,impactGeneration=0;
 $("inventory-load").addEventListener("click",async()=>{
