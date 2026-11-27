@@ -139,7 +139,7 @@ class DistributionTests(unittest.TestCase):
     def test_exclusive_create(self):
         before = self.manifest.read_bytes()
         with self.assertRaises(FileExistsError):
-            create(self.manifest, SOURCE, *D, REGISTRY)
+            create(self.manifest, SOURCE, *D, REGISTRY, PRODUCER_DAEMON)
         self.assertEqual(self.manifest.read_bytes(), before)
 
 
