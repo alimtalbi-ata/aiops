@@ -10,6 +10,7 @@ import sqlite3
 import tempfile
 import unittest
 from collector_admission_fence import initialize, provision
+from authority_restore_guard_candidate import provision_witness, snapshot
 from collector_http_boundary import dispatch, ADMIT, RECEIPT
 from collector_receipt import digest
 from continuous_collector import batch
@@ -21,13 +22,24 @@ from test_fenced_durable_collector import serve
 
 class BoundaryTests(unittest.TestCase):
     def test_strict_fenced_ingress(self):
+        self.exercise()
+
+    def test_guarded_publication_failure(self):
+        self.exercise(fail_publish=True)
+
+    def exercise(self, *, fail_publish=False):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'authority.db'
+            witness_path = Path(tmp) / 'witness.db'
+            old_path = Path(tmp) / 'old.db'
             scope = ('synthetic-demo', 'NODE-CI-ROOT', 'COLLECTOR-one')
             token = secrets.token_hex(32)
             with closing(sqlite3.connect(path)) as db:
                 initialize(db)
                 provision(db, scope, token)
+                with closing(sqlite3.connect(witness_path)) as witness, closing(sqlite3.connect(old_path)) as old:
+                    provision_witness(db, witness)
+                    db.backup(old)
             now = datetime.now(timezone.utc)
             windows = [{'at': (now - timedelta(seconds=age)).strftime('%Y-%m-%dT%H:%M:%SZ'),
                         'median': value, 'samples': [value] * 5} for age, value in ((10, 10), (2, 100))]
@@ -35,10 +47,17 @@ class BoundaryTests(unittest.TestCase):
             data = {'generation': 0, 'rows': rows}
             calls, delegated = [], []
             guard = False
+            active_path = path
+            active_witness = witness_path
             readbacks = {}
 
             def publisher(records):
                 calls.append(records)
+                with closing(sqlite3.connect(path)) as db, closing(sqlite3.connect(witness_path)) as witness:
+                    self.assertEqual(db.execute('SELECT state FROM collector_fence').fetchone()[0], 'PENDING')
+                    self.assertEqual(witness.execute('SELECT state FROM guard').fetchone()[0], 'BUSY')
+                if fail_publish:
+                    raise OSError('synthetic publication uncertainty')
                 core, context = persisted_fixture(records)
                 readbacks[core['run']['run_id']] = (core, context)
                 return response_for(records)['publication']
@@ -55,7 +74,8 @@ class BoundaryTests(unittest.TestCase):
                     self.wfile.write(data)
 
                 def do_POST(self):
-                    if not dispatch(self, scope=scope, authority=lambda: closing(sqlite3.connect(path)),
+                    if not dispatch(self, scope=scope, authority=lambda: closing(sqlite3.connect(active_path)),
+                                    witness=lambda: closing(sqlite3.connect(active_witness)),
                                     restore_permitted=lambda: guard, graph_reader=GraphFixture,
                                     publish_records=publisher, read_context=readbacks.__getitem__):
                         delegated.append(self.path)
@@ -94,6 +114,20 @@ class BoundaryTests(unittest.TestCase):
                 self.assertEqual(post('/api/v1/hitl/dynamic/request')[0], 204)
                 self.assertEqual(delegated, ['/api/v1/hitl/dynamic/request'])
                 self.assertEqual(calls, [])
+                active_witness = path  # witness cannot be the authority itself
+                self.assertEqual(post(ADMIT)[0], 403)
+                active_witness = witness_path
+                self.assertEqual(calls, [])
+                if fail_publish:
+                    self.assertEqual(post(ADMIT)[0], 403)
+                    self.assertEqual(post(ADMIT)[0], 403)
+                    query = {'generation': 0, 'episode': rows[0]['id'][:32], 'batch': digest(ingest(rows)['incidents'][0])}
+                    self.assertEqual(post(RECEIPT, query)[0], 403)
+                    with closing(sqlite3.connect(path)) as db, closing(sqlite3.connect(witness_path)) as witness:
+                        self.assertEqual(db.execute('SELECT state FROM collector_fence').fetchone()[0], 'PENDING')
+                        self.assertEqual(witness.execute('SELECT state FROM guard').fetchone()[0], 'BUSY')
+                    self.assertEqual(len(calls), 1)
+                    return
                 status, raw = post(ADMIT)
                 self.assertEqual(status, 200)
                 self.assertEqual(json.loads(raw)['publication']['core']['run']['run_id'], 'RUN-0000000000000001')
@@ -102,6 +136,12 @@ class BoundaryTests(unittest.TestCase):
                 status, raw = post(RECEIPT, query)
                 self.assertEqual(status, 200)
                 self.assertEqual(json.loads(raw)['state'], 'COMMITTED')
+                with closing(sqlite3.connect(path)) as db, closing(sqlite3.connect(witness_path)) as witness:
+                    self.assertEqual(witness.execute('SELECT state,digest FROM guard').fetchone(), ('READY', snapshot(db)))
+                active_path = old_path
+                self.assertEqual(post(ADMIT)[0], 403)
+                self.assertEqual(post(RECEIPT, query)[0], 403)
+                active_path = path
                 guard = False
                 self.assertEqual(post(RECEIPT, query)[0], 403)
                 self.assertEqual(len(calls), 1)
