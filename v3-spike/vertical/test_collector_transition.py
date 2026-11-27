@@ -1,5 +1,6 @@
 """HTTP receipt boundary; real Collector, synthetic admission and measurements."""
 import json
+from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 import unittest
@@ -27,6 +28,19 @@ def response_for(rows):
             'publication': {'production_authorized': False, 'correlation': correlation,
             'core': {'classification': 'SYNTHETIC_CANONICAL_RUN', 'production_authorized': False,
                      'policy': 'DENY', 'run': run}, 'stored_evidence': receipts}}
+
+
+def persisted_fixture(records):
+    """Independent synthetic readback of the unmodified publication."""
+    publication = response_for(records)['publication']
+    core = publication['core']
+    incident = publication['correlation']['incidents'][0]
+    refs = publication['stored_evidence']
+    context = {'classification': 'SYNTHETIC_LAB_CONTEXT', 'policy': 'DENY',
+               'production_authorized': False, 'run_id': core['run']['run_id'],
+               'root': incident['resource'], 'evidence': refs,
+               'verified_signals': [dict(ref, signal=signal) for ref, signal in zip(refs, incident['evidence'])]}
+    return deepcopy((core, context))
 
 
 class TransitionTests(unittest.TestCase):
