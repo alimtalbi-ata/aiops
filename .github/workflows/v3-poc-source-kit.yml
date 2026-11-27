@@ -5,12 +5,15 @@ on:
       - 'v3-spike/kit/**'
       - 'v3-spike/vertical/**'
       - '.github/workflows/v3-poc-source-kit.yml'
+      - '.github/scripts/**'
 jobs:
   config:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - run: bash -n v3-spike/kit/poc-start.sh
+      - run: bash -n .github/scripts/retry-rootless-compose-port.sh .github/scripts/test_retry_rootless_compose_port.sh
+      - run: bash .github/scripts/test_retry_rootless_compose_port.sh
       - run: python3 -m unittest discover -s v3-spike/kit -p test_rootless_preflight.py -v
       - run: python3 -m py_compile app/worker/v3_boundary.py app/worker/v3_boundary_workflow.py v3-spike/kit/poc-temporal-boundary-smoke.py v3-spike/kit/poc-temporal-ui-smoke.py
       - name: Validate Workbench JavaScript syntax before service tests
@@ -712,7 +715,10 @@ jobs:
           test "$evidence_initial" = "$("${compose[@]}" ps -q evidence)"
           test "$(docker inspect -f '{{.State.Health.Status}}' "$core_initial")" = healthy
           test "$(docker inspect -f '{{.State.Health.Status}}' "$evidence_initial")" = healthy
-          "${compose[@]}" up -d --no-deps temporal-ui
+          # RootlessKit can race a host process for a dynamically allocated
+          # loopback port. Retry only an explicit bind collision, and only the
+          # disposable UI container; never restart the Temporal DB or app stack.
+          bash .github/scripts/retry-rootless-compose-port.sh "$V3_ROOT" temporal-ui "${compose[@]}"
           ui=$("${compose[@]}" port temporal-ui 8080)
           [[ "$ui" =~ ^127\.0\.0\.1:[0-9]+$ ]]
           case "${ui##*:}" in 7770|7777|7790) exit 1 ;; esac
