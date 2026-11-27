@@ -1,0 +1,23 @@
+name: V3 independent LAB receipt verifier
+on:
+  pull_request:
+    paths:
+      - 'v3-spike/qa/verify-lab-install-receipts.cjs'
+      - 'v3-spike/qa/test-verify-lab-install-receipts.cjs'
+      - '.github/workflows/v3-lab-receipt-verifier.yml'
+permissions:
+  contents: read
+jobs:
+  receipt-verifier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify static receipt contract
+        run: |
+          node --version
+          node --check v3-spike/qa/verify-lab-install-receipts.cjs
+          node v3-spike/qa/verify-lab-install-receipts.cjs --self-test
+          node v3-spike/qa/test-verify-lab-install-receipts.cjs
