@@ -215,5 +215,67 @@ class DynamicReadbackTests(unittest.TestCase):
         self.exercise(fault='duplicate', legacy=True)
 
 
+class ConvergedReceiptTests(unittest.TestCase):
+    def sized(self, count):
+        c, r, core, context = fixture()
+        incident = c['incidents'][0]
+        signals = [{'event_id': 'synthetic-' + str(i), 'sha256': digest(i)} for i in range(count)]
+        incident['evidence'] = signals
+        run = core['run']
+        run['incident_id'] = 'INC-CI-INGEST-' + digest(incident)[:32]
+        refs = [{'evidence_id': 'EVID-' + str(i), 'payload_hash': digest({
+            'run_id': run['run_id'], 'incident_id': run['incident_id'], 'signal': s,
+            'correlation_id': incident['id'], 'resource': incident['resource']})}
+            for i, s in enumerate(signals)]
+        r['admission'].update(batch_sha256=digest(incident), references=deepcopy(signals))
+        r['publication'].update(correlation=deepcopy(c), core=deepcopy(core), stored_evidence=deepcopy(refs))
+        context.update(evidence=deepcopy(refs), verified_signals=[dict(ref, signal=deepcopy(s)) for ref, s in zip(refs, signals)])
+        return c, r, core, context
+
+    def test_supported_cardinality(self):
+        for count in range(3, 21):
+            with self.subTest(count=count):
+                c, r, core, context = self.sized(count)
+                self.assertEqual(verify_persisted_receipt(c, r, read_context=lambda _: (core, context)), core['run']['run_id'])
+
+    def test_reject_outside_cardinality(self):
+        for count in (0, 1, 2, 21, 30):
+            with self.subTest(count=count):
+                c, r, _, _ = self.sized(count)
+                with self.assertRaises(ValueError):
+                    validate_receipt(c, r)
+
+    def test_five_receipts_exact(self):
+        for fault in ('missing', 'extra', 'duplicate', 'invalid_id'):
+            with self.subTest(fault=fault):
+                c, r, _, _ = self.sized(5)
+                refs = r['publication']['stored_evidence']
+                if fault == 'missing': refs.pop()
+                elif fault == 'extra': refs.append({'evidence_id': 'EXTRA', 'payload_hash': '0' * 64})
+                elif fault == 'duplicate': refs[1]['evidence_id'] = refs[0]['evidence_id']
+                else: refs[0]['evidence_id'] = 'bad/id'
+                with self.assertRaises(ValueError):
+                    validate_receipt(c, r)
+
+    def test_json_type_alias_rejected_before_readback(self):
+        c, r, core, context = self.sized(5)
+        r['publication']['correlation']['incidents'][0]['production_authorized'] = 0
+        self.assertEqual(c, r['publication']['correlation'])
+        self.assertNotEqual(digest(c), digest(r['publication']['correlation']))
+        calls = []
+        with self.assertRaises(ValueError):
+            verify_persisted_receipt(c, r, read_context=lambda run: (calls.append(run) or core, context))
+        self.assertEqual(calls, [])
+
+    def test_five_readback_requires_complete_reference_set(self):
+        for fault in ('missing', 'duplicate'):
+            with self.subTest(fault=fault):
+                c, r, core, context = self.sized(5)
+                if fault == 'missing': context['verified_signals'].pop()
+                else: context['verified_signals'].append(deepcopy(context['verified_signals'][0]))
+                with self.assertRaises(ValueError):
+                    verify_persisted_receipt(c, r, read_context=lambda _: (core, context))
+
+
 if __name__ == '__main__':
     unittest.main()
