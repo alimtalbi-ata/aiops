@@ -16,7 +16,7 @@ from collector_admission_service import publish, lookup
 from durable_collector import DurableCollector
 from fenced_durable_collector import FencedDurableCollector
 from test_collector_admission_service import GraphFixture
-from test_collector_transition import response_for
+from test_collector_transition import response_for, persisted_fixture
 
 
 @contextmanager
@@ -53,6 +53,7 @@ class FencedCollectorTests(unittest.TestCase):
                     provision(db, scope, token)
                 counts = {'health': 0, 'admit': 0, 'lookup': 0, 'publisher': 0}
                 delay = .01
+                readbacks = {}
 
                 class Quiet(BaseHTTPRequestHandler):
                     def log_message(self, *args):
@@ -76,6 +77,8 @@ class FencedCollectorTests(unittest.TestCase):
                     self.assertNotIn(token, json.dumps(saved))
                     if fault == 'publisher_failure':
                         raise OSError('synthetic publisher unavailable')
+                    core, context = persisted_fixture(rows)
+                    readbacks[core['run']['run_id']] = (core, context)
                     return response_for(rows)['publication']
 
                 class Admission(Quiet):
@@ -86,7 +89,7 @@ class FencedCollectorTests(unittest.TestCase):
                                 args = dict(scope=scope, authorization=self.headers.get('Authorization'), generation=data['generation'])
                                 if self.path == '/api/v1/collector/admit':
                                     counts['admit'] += 1
-                                    result = publish(db, **args, rows=data['rows'], graph=GraphFixture(), publish_records=publisher)
+                                    result = publish(db, **args, rows=data['rows'], graph=GraphFixture(), publish_records=publisher, read_context=readbacks.__getitem__ )
                                     if fault == 'lost_ack':
                                         self.close_connection = True
                                         return
