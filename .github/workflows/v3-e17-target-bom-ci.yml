@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [v3-spike/central-integration]
     paths:
+      - 'v3-spike/kit/release-lab/oci_import.py'
+      - 'v3-spike/kit/release-lab/test_oci_import.py'
       - 'v3-spike/kit/release-lab/oci_transport.py'
       - 'v3-spike/kit/release-lab/test_oci_transport.py'
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
@@ -33,7 +35,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify transport against isolated HTTP registry fixture
         working-directory: v3-spike/kit/release-lab
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests
       - name: Start isolated rootless daemon
         run: |
           sudo install -m 0755 -d /etc/apt/keyrings
@@ -138,12 +140,59 @@ jobs:
           python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$expected" > "$V3_ROOT/e17-content-verify.json"
           cmp "$V3_ROOT/e17-content-export.json" "$V3_ROOT/e17-content-verify.json"
           cat "$V3_ROOT/e17-content-verify.json"
+      - name: Restore exact content to a fresh registry with source stopped
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          test "$(id -u)" != 0
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          registry_id=$(docker inspect --type container --format '{{.Image}}' v3-lab-kit-registry)
+          [[ "$registry_id" =~ ^sha256:[a-f0-9]{64}$ ]]
+          if docker container inspect v3-e17-import-registry >/dev/null 2>&1; then exit 1; fi
+          docker stop v3-lab-kit-registry >/dev/null
+          cid=$(docker run -d --pull never --name v3-e17-import-registry -p 127.0.0.1:15081:5000 "$registry_id")
+          [[ "$cid" =~ ^[a-f0-9]{64}$ ]]
+          trap 'docker rm -fv "$cid" >/dev/null' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:15081/v2/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:15081/v2/ >/dev/null
+          if curl -fsS --max-time 2 http://127.0.0.1:15080/v2/ >/dev/null; then exit 1; fi
+          expected="sha256:$(sha256sum "$V3_ROOT/e17-bom/image-bom.json" | cut -d' ' -f1)"
+          python3 v3-spike/kit/release-lab/oci_import.py "$V3_ROOT/e17-content-export" "$expected" > "$V3_ROOT/e17-content-restore.json"
+          python3 - "$V3_ROOT" <<'PY'
+          import json, pathlib, runpy, subprocess, sys
+          root = pathlib.Path(sys.argv[1])
+          bom = json.loads((root / "e17-bom/image-bom.json").read_text())
+          restore = json.loads((root / "e17-content-restore.json").read_text())
+          reader = runpy.run_path("v3-spike/kit/poc-image-bom.py")["platform_config"]
+          if restore["result"] != "PASS" or restore["manifests"] != {s:r["manifest_digest"] for s,r in bom["images"].items()}:
+              raise SystemExit("restore receipt mismatch")
+          for service, row in sorted(bom["images"].items()):
+              ref = "127.0.0.1:15081/aiops-v3/" + service + "@" + row["manifest_digest"]
+              subprocess.run(["docker", "pull", "--platform", "linux/amd64", ref], check=True)
+              if reader(ref, root) != row["config_digest"]:
+                  raise SystemExit("restored engine config mismatch")
+          receipt = {"classification":"V3_E17_RESTORED_REGISTRY_PULL", "result":"PASS",
+                     "source_sha":bom["source_sha"], "images":len(bom["images"]),
+                     "source_registry_stopped":True, "same_prepared_daemon":True,
+                     "production_authorized":False}
+          (root / "e17-content-pull.json").write_text(json.dumps(receipt, sort_keys=True) + "\n")
+          print(json.dumps(receipt, sort_keys=True))
+          PY
       - name: Preserve OCI identity and build context receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: v3-e17-target-bom
           path: |
+            /tmp/aiops-v3-rootless-ci/e17-content-restore.json
+            /tmp/aiops-v3-rootless-ci/e17-content-pull.json
             /tmp/aiops-v3-rootless-ci/e17-content-export.json
             /tmp/aiops-v3-rootless-ci/e17-content-verify.json
             /tmp/aiops-v3-rootless-ci/e17-context-report.json
