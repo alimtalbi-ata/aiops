@@ -1,8 +1,10 @@
 name: V3 isolated E17 target OCI BOM
 on:
   pull_request:
-    branches: [v3-spike/central-integration, v3-spike/po-e17-content-import-20261127]
+    branches: [v3-spike/central-integration]
     paths:
+      - 'v3-spike/kit/release-lab/oci_envelope.py'
+      - 'v3-spike/kit/release-lab/test_oci_envelope.py'
       - 'v3-spike/kit/release-lab/oci_import.py'
       - 'v3-spike/kit/release-lab/test_oci_import.py'
       - 'v3-spike/kit/release-lab/oci_transport.py'
@@ -24,6 +26,7 @@ jobs:
   target-bom:
     outputs:
       bom_sha256: ${{ steps.transport_identity.outputs.bom_sha256 }}
+      archive_sha256: ${{ steps.transport_identity.outputs.archive_sha256 }}
       registry_ref: ${{ steps.transport_identity.outputs.registry_ref }}
       daemon_id: ${{ steps.transport_identity.outputs.daemon_id }}
     runs-on: ubuntu-24.04
@@ -39,7 +42,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify transport against isolated HTTP registry fixture
         working-directory: v3-spike/kit/release-lab
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests
       - name: Start isolated rootless daemon
         run: |
           sudo install -m 0755 -d /etc/apt/keyrings
@@ -144,6 +147,13 @@ jobs:
           python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$expected" > "$V3_ROOT/e17-content-verify.json"
           cmp "$V3_ROOT/e17-content-export.json" "$V3_ROOT/e17-content-verify.json"
           cat "$V3_ROOT/e17-content-verify.json"
+      - name: Pack exact OCI content into deterministic archive
+        run: |
+          set -euo pipefail
+          umask 077
+          expected="sha256:$(sha256sum "$V3_ROOT/e17-content-export/image-bom.json" | cut -d' ' -f1)"
+          python3 v3-spike/kit/release-lab/oci_envelope.py pack "$V3_ROOT/e17-content-export" "$V3_ROOT/e17-content.tar" "$expected" > "$V3_ROOT/e17-envelope-pack.json"
+          cat "$V3_ROOT/e17-envelope-pack.json"
       - name: Bind payload to producer and immutable registry bootstrap
         id: transport_identity
         run: |
@@ -152,12 +162,19 @@ jobs:
           registry_ref=$(docker image inspect registry:2 --format '{{json .RepoDigests}}' | python3 -c 'import json,re,sys; refs=[r for r in json.load(sys.stdin) if re.fullmatch(r"(?:docker.io/library/)?registry@sha256:[a-f0-9]{64}",r)]; assert len(refs)==1; print("docker.io/library/registry@"+refs[0].split("@")[1])')
           daemon_id=$(docker info --format '{{.ID}}')
           test -n "$daemon_id"
-          printf 'bom_sha256=%s\nregistry_ref=%s\ndaemon_id=%s\n' "$expected" "$registry_ref" "$daemon_id" >> "$GITHUB_OUTPUT"
+          archive="sha256:$(sha256sum "$V3_ROOT/e17-content.tar" | cut -d' ' -f1)"
+          python3 - "$V3_ROOT/e17-envelope-pack.json" "$archive" "$expected" <<'PY'
+          import json,sys
+          r=json.load(open(sys.argv[1]))
+          assert r["archive_sha256"] == sys.argv[2] and r["bom_sha256"] == sys.argv[3]
+          assert r["result"] == "PASS" and r["production_authorized"] is False
+          PY
+          printf 'bom_sha256=%s\narchive_sha256=%s\nregistry_ref=%s\ndaemon_id=%s\n' "$expected" "$archive" "$registry_ref" "$daemon_id" >> "$GITHUB_OUTPUT"
       - name: Transfer verified OCI payload only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: v3-e17-content-payload
-          path: /tmp/aiops-v3-rootless-ci/e17-content-export/
+          path: /tmp/aiops-v3-rootless-ci/e17-content.tar
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -212,6 +229,7 @@ jobs:
         with:
           name: v3-e17-target-bom
           path: |
+            /tmp/aiops-v3-rootless-ci/e17-envelope-pack.json
             /tmp/aiops-v3-rootless-ci/e17-content-restore.json
             /tmp/aiops-v3-rootless-ci/e17-content-pull.json
             /tmp/aiops-v3-rootless-ci/e17-content-export.json
@@ -246,6 +264,7 @@ jobs:
       V3_ROOT: /tmp/aiops-v3-rootless-ci
       COMPOSE_PROJECT_NAME: v3-e17-cold-install-ci
       EXPECTED_BOM_SHA: ${{ needs.target-bom.outputs.bom_sha256 }}
+      EXPECTED_ARCHIVE_SHA: ${{ needs.target-bom.outputs.archive_sha256 }}
       REGISTRY_REF: ${{ needs.target-bom.outputs.registry_ref }}
       PRODUCER_DAEMON: ${{ needs.target-bom.outputs.daemon_id }}
     steps:
@@ -290,17 +309,20 @@ jobs:
           test -n "$destination"
           test "$destination" != "$PRODUCER_DAEMON"
           echo "COLD_DAEMON_EMPTY_AND_DISTINCT"
-          install -m 0700 -d "$V3_ROOT/e17-content-export"
+          install -m 0700 -d "$V3_ROOT/transport-inbox"
       - name: Receive exact OCI payload from producer job
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: v3-e17-content-payload
-          path: /tmp/aiops-v3-rootless-ci/e17-content-export
-      - name: Validate payload before registry writes
+          path: /tmp/aiops-v3-rootless-ci/transport-inbox
+      - name: Validate and unpack archive before registry writes
         run: |
           set -euo pipefail
           umask 077
+          test "$(find "$V3_ROOT/transport-inbox" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1
+          python3 v3-spike/kit/release-lab/oci_envelope.py unpack "$V3_ROOT/transport-inbox/e17-content.tar" "$V3_ROOT/e17-content-export" "$EXPECTED_ARCHIVE_SHA" "$EXPECTED_BOM_SHA" > "$V3_ROOT/cold-envelope-unpack.json"
           python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$EXPECTED_BOM_SHA" > "$V3_ROOT/cold-content-verify.json"
+          cat "$V3_ROOT/cold-envelope-unpack.json"
           python3 -c 'import json,os,sys; r=json.load(open(sys.argv[1])); assert r["source_sha"]==os.environ["GITHUB_SHA"] and r["production_authorized"] is False' "$V3_ROOT/cold-content-verify.json"
       - name: Bootstrap only the pinned registry
         shell: bash
@@ -375,6 +397,7 @@ jobs:
         with:
           name: v3-e17-cold-runner
           path: |
+            /tmp/aiops-v3-rootless-ci/cold-envelope-unpack.json
             /tmp/aiops-v3-rootless-ci/cold-content-verify.json
             /tmp/aiops-v3-rootless-ci/cold-content-pull.json
             /tmp/aiops-v3-rootless-ci/e17-bom/image-bom.json
