@@ -5,6 +5,48 @@ import sys
 from product_preflight import validate
 
 PROTECTED_PORTS = {7770, 7777, 7790}
+DRAFT_VOLUMES = {"core": ("core_data", "/var/lib/aiops"),
+                 "temporal": ("temporal_data", "/var/lib/temporal"),
+                 "evidence": ("evidence_data", "/var/lib/evidence")}
+
+def verify_draft_volumes(document, normalized=False):
+    """Exact draft topology; logical keys and their own effective aliases only."""
+    if document.get("name") != "aiops-v3":
+        raise ValueError("unexpected draft project name")
+    definitions = document.get("volumes", {})
+    if not isinstance(definitions, dict) or set(definitions) != {v[0] for v in DRAFT_VOLUMES.values()}:
+        raise ValueError("draft volume declarations mismatch")
+    for key, spec in definitions.items():
+        if normalized:
+            if (not isinstance(spec, dict) or set(spec) - {"name", "driver"}
+                    or spec.get("name") != "aiops-v3_" + key or spec.get("driver", "local") != "local"):
+                raise ValueError("untrusted draft effective volume: " + key)
+        elif spec not in ({}, None):
+            raise ValueError("untrusted draft raw volume: " + key)
+    services = document["services"]
+    if not set(DRAFT_VOLUMES).issubset(services):
+        raise ValueError("draft volume owner missing")
+    for name, spec in services.items():
+        mounts = spec.get("volumes", [])
+        expected = DRAFT_VOLUMES.get(name)
+        if not isinstance(mounts, list) or len(mounts) != int(expected is not None):
+            raise ValueError("draft volume cardinality: " + name)
+        if expected is None:
+            continue
+        key, target = expected
+        mount = mounts[0]
+        if isinstance(mount, str) and not normalized:
+            if mount != key + ":" + target:
+                raise ValueError("draft raw volume mapping: " + name)
+        elif isinstance(mount, dict):
+            allowed = {key, "aiops-v3_" + key} if normalized else {key}
+            if (set(mount) - {"type", "source", "target", "volume"}
+                    or mount.get("type") != "volume" or mount.get("source") not in allowed
+                    or mount.get("target") != target or mount.get("volume", {}) != {}):
+                raise ValueError("draft volume mapping: " + name)
+        else:
+            raise ValueError("draft volume mapping: " + name)
+
 def verify(bom_path, compose_path, normalized_path=None):
     import yaml
     bom = json.loads(pathlib.Path(bom_path).read_text(encoding="utf-8"))
@@ -13,6 +55,9 @@ def verify(bom_path, compose_path, normalized_path=None):
     # Raw interpolation is allowed ONLY for image inputs when a separately
     # normalized Compose JSON is supplied; never trust raw YAML as effective config.
     document = yaml.safe_load(raw_compose)
+    draft = document.get("name") == "aiops-v3" or pathlib.Path(compose_path).parent.name == "product"
+    if draft:
+        verify_draft_volumes(document)
     if normalized_path is None and "$" in raw_compose:
         raise ValueError("unresolved Compose interpolation forbidden")
     if normalized_path is not None:
@@ -48,6 +93,8 @@ def verify(bom_path, compose_path, normalized_path=None):
                     raise ValueError("required service hidden behind profile: " + name)
             elif declared != [entry["profile"]]:
                 raise ValueError("raw profile mismatch: " + name)
+        if draft:
+            verify_draft_volumes(effective, normalized=True)
         selected = set(effective["services"])
         required = {name for name, entry in bom["services"].items()
                     if entry["profile"] == "default"}
@@ -98,9 +145,10 @@ def verify(bom_path, compose_path, normalized_path=None):
             # provenance or alternate driver must fail closed.
             if set(spec) - {"name", "driver"} or spec.get("driver", "local") != "local":
                 raise ValueError("untrusted normalized named volume driver/opts/external forbidden: " + key)
-        definitions = {spec["name"]: {} for spec in effective_volumes.values()}
-        if len(definitions) != len(effective_volumes):
+        aliases = {spec["name"]: {} for spec in effective_volumes.values()}
+        if len(aliases) != len(effective_volumes):
             raise ValueError("duplicate effective volume names")
+        definitions = {**raw_volumes, **aliases}
     if not isinstance(definitions, dict):
         raise ValueError("invalid top-level volumes")
     for volume_name, definition in definitions.items():
