@@ -54,6 +54,8 @@ def get_json(port, token, path, *, timeout=5, limit=65536):
         response = conn.getresponse()
         if response.status != 200:
             raise ValueError("HTTP read unavailable")
+        if response.headers.defects:
+            raise ValueError("malformed HTTP response headers")
         lengths = response.headers.get_all("Content-Length", [])
         if response.headers.get_all("Transfer-Encoding") or len(lengths) > 1:
             raise ValueError("unsupported HTTP framing")
