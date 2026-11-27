@@ -1,0 +1,30 @@
+name: V3 OCI archive contract (synthetic)
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/release-lab/oci_envelope.py'
+      - 'v3-spike/kit/release-lab/test_oci_envelope.py'
+      - 'v3-spike/kit/release-lab/oci_transport.py'
+      - '.github/workflows/v3-oci-envelope-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  envelope-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify checkout and exercise archive contract
+        working-directory: v3-spike/kit/release-lab
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 --version
+          python3 -m unittest -v test_oci_envelope
+          echo "qualification=synthetic_disk_archive real_oci_payload=NOT_RUN production_authorized=false"
