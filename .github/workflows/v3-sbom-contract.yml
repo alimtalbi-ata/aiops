@@ -1,0 +1,49 @@
+name: V3 LAB SBOM contract
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/release-lab/sbom_contract.py'
+      - 'v3-spike/kit/release-lab/test_sbom_contract.py'
+      - 'v3-spike/kit/release-lab/oci_transport.py'
+      - '.github/workflows/v3-sbom-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sbom-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Exercise strict inventory binding
+        working-directory: v3-spike/kit/release-lab
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -m unittest -v test_sbom_contract
+      - name: Verify published scanner archive and exercise real SPDX output
+        run: |
+          set -euo pipefail
+          umask 077
+          dir="$RUNNER_TEMP/v3-syft"
+          mkdir "$dir"
+          curl --fail --location --proto '=https' --proto-redir '=https' --retry 2 --max-time 120 https://github.com/anchore/syft/releases/download/v1.38.0/syft_1.38.0_linux_amd64.tar.gz -o "$dir/syft.tar.gz"
+          printf '%s  %s\n' bc664debb00db1b9b4b9dae4ba1a29d99621e33b641b94b78b9048374b812a3d "$dir/syft.tar.gz" | sha256sum -c -
+          tar -xzf "$dir/syft.tar.gz" -C "$dir" syft
+          "$dir/syft" version -o json
+          mkdir -p "$dir/sample/usr/lib/python3.13/site-packages/fixture_package-1.0.dist-info"
+          printf 'Metadata-Version: 2.1\nName: fixture-package\nVersion: 1.0\n' > "$dir/sample/usr/lib/python3.13/site-packages/fixture_package-1.0.dist-info/METADATA"
+          SYFT_CHECK_FOR_APP_UPDATE=false "$dir/syft" scan "dir:$dir/sample" -o "spdx-json=$dir/sample.spdx.json"
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=v3-spike/kit/release-lab python3 - "$dir/sample.spdx.json" <<'PY'
+          import json, pathlib, sys
+          from sbom_contract import read_report
+          raw,count=read_report(pathlib.Path(sys.argv[1]))
+          assert any(p["name"]=="fixture-package" for p in json.loads(raw)["packages"])
+          print("PASS real Syft SPDX fixture packages:",count)
+          PY
+          echo "qualification=sbom_contract_real_scanner_fixture actual_ten_oci_images=NOT_RUN vulnerability_scan=NOT_RUN production_authorized=false"
