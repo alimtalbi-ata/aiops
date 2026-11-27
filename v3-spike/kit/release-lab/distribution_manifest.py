@@ -36,16 +36,18 @@ def read_regular(path, limit):
         return data
 
 
-def statement(source, bom, archive, support, verifier, sbom, registry):
+def statement(source, bom, archive, support, verifier, sbom, registry, producer_daemon):
     require(isinstance(source, str) and SOURCE.fullmatch(source), "invalid source")
     for value in (bom, archive, support, verifier, sbom):
         require(isinstance(value, str) and DIGEST.fullmatch(value), "invalid content digest")
     require(isinstance(registry, str) and REGISTRY.fullmatch(registry), "invalid registry bootstrap")
-    return {"schema_version": 2, "classification": CLASSIFICATION,
+    require(isinstance(producer_daemon, str) and re.fullmatch(r"[a-f0-9]{64}", producer_daemon),
+            "invalid producer daemon identity")
+    return {"schema_version": 3, "classification": CLASSIFICATION,
             "source_sha": source, "bom_sha256": bom, "archive_sha256": archive,
             "support_manifest_sha256": support, "support_verifier_sha256": verifier,
             "sbom_index_sha256": sbom, "registry_reference": registry, "platform": "linux/amd64",
-            "production_authorized": False}
+            "producer_daemon_id": producer_daemon, "production_authorized": False}
 
 
 def canonical(value):
@@ -58,17 +60,19 @@ def write_new(path, data):
         f.write(data)
 
 
-def create(path, source, bom, archive, support, verifier, sbom, registry):
-    data = canonical(statement(source, bom, archive, support, verifier, sbom, registry))
+def create(path, source, bom, archive, support, verifier, sbom, registry, producer_daemon):
+    data = canonical(statement(source, bom, archive, support, verifier, sbom, registry, producer_daemon))
     write_new(path, data)
     return sha(data)
 
 
-def verify(path, signature, public_key, expected_key_sha, expected_source):
+def verify(path, signature, public_key, expected_key_sha, expected_source, expected_producer_daemon):
     require(isinstance(expected_key_sha, str) and DIGEST.fullmatch(expected_key_sha),
             "independently trusted key digest required")
     require(isinstance(expected_source, str) and SOURCE.fullmatch(expected_source),
             "expected source required")
+    require(isinstance(expected_producer_daemon, str) and re.fullmatch(r"[a-f0-9]{64}", expected_producer_daemon),
+            "expected producer daemon required")
     raw = read_regular(path, MAX_STATEMENT)
     sig = read_regular(signature, 64)
     key = read_regular(public_key, 44)
@@ -91,7 +95,7 @@ def verify(path, signature, public_key, expected_key_sha, expected_source):
     doc = json.loads(raw)
     expected = statement(expected_source, doc["bom_sha256"], doc["archive_sha256"],
                          doc["support_manifest_sha256"], doc["support_verifier_sha256"],
-                         doc.get("sbom_index_sha256"), doc["registry_reference"])
+                         doc.get("sbom_index_sha256"), doc["registry_reference"], expected_producer_daemon)
     require(raw == canonical(expected), "noncanonical statement or wrong source/scope")
     return {"classification": CLASSIFICATION, "result": "PASS",
             "statement_sha256": sha(raw), "public_key_sha256": sha(key),
@@ -100,9 +104,9 @@ def verify(path, signature, public_key, expected_key_sha, expected_source):
 
 if __name__ == "__main__":
     mode, *args = sys.argv[1:]
-    if mode == "create" and len(args) == 8:
+    if mode == "create" and len(args) == 9:
         print(create(Path(args[0]), *args[1:]))
-    elif mode == "verify" and len(args) == 5:
+    elif mode == "verify" and len(args) == 6:
         print(json.dumps(verify(*(Path(p) for p in args[:3]), *args[3:]), sort_keys=True))
     else:
-        raise SystemExit("create NEW_MANIFEST SOURCE BOM ARCHIVE SUPPORT VERIFIER SBOM_INDEX REGISTRY | verify MANIFEST SIG PUBLIC_DER TRUSTED_KEY_SHA SOURCE")
+        raise SystemExit("create NEW_MANIFEST SOURCE BOM ARCHIVE SUPPORT VERIFIER SBOM_INDEX REGISTRY PRODUCER_DAEMON | verify MANIFEST SIG PUBLIC_DER TRUSTED_KEY_SHA SOURCE EXPECTED_PRODUCER_DAEMON")
