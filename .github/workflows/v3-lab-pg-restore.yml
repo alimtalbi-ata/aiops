@@ -1,0 +1,93 @@
+name: V3 isolated PostgreSQL logical restore (synthetic)
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/release-lab/check_pg_restore.py'
+      - '.github/workflows/v3-lab-pg-restore.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pg-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      V3_ROOT: /tmp/aiops-v3-rootless-ci
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Start isolated rootless daemon
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" != 0
+          # Only Ubuntu and Docker repositories are required by this disposable runner.
+          # Scope APT for the entire job, including Playwright's dependency bootstrap.
+          # Do not modify the original source files or relax signature verification.
+          apt_sources=/etc/apt/v3-e17-ci-sources
+          apt_conf=/etc/apt/apt.conf.d/99v3e17-ci-sources
+          test ! -e "$apt_sources"
+          test ! -e "$apt_conf"
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo install -m 0755 -d "$apt_sources" /etc/apt/keyrings
+          sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$apt_sources/ubuntu.sources"
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee "$apt_sources/docker.list"
+          printf 'Dir::Etc::sourcelist "/dev/null";\nDir::Etc::sourceparts "%s";\nAPT::Get::List-Cleanup "false";\n' "$apt_sources" | sudo tee "$apt_conf"
+          apt-config dump | grep -F 'Dir::Etc::sourceparts "/etc/apt/v3-e17-ci-sources";'
+          sudo apt-get -o APT::Update::Error-Mode=any update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          # Disposable runner only: provision dedicated daemon storage before starting Docker.
+          test ! -e "$V3_ROOT"
+          install -m 0700 -d "$V3_ROOT" "$HOME/.config/docker"
+          test ! -e "$HOME/.config/docker/daemon.json"
+          (umask 077; printf '{"data-root":"%s/docker-data"}\n' "$V3_ROOT" > "$HOME/.config/docker/daemon.json")
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Resolve PostgreSQL 16 Alpine digest for this disposable campaign
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          docker pull --platform linux/amd64 docker.io/library/postgres:16-alpine
+          ref=$(docker image inspect docker.io/library/postgres:16-alpine --format '{{json .RepoDigests}}' | python3 -c 'import json,re,sys; refs=[r for r in json.load(sys.stdin) if re.fullmatch(r"(?:docker.io/library/)?postgres@sha256:[a-f0-9]{64}",r)]; assert len(refs)==1; print("docker.io/library/postgres@"+refs[0].split("@")[1])')
+          echo "PG_RESTORE_IMAGE=$ref" >> "$GITHUB_ENV"
+      - name: Backup and restore actual PostgreSQL into independently initialized volume
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 v3-spike/kit/release-lab/check_pg_restore.py "$PG_RESTORE_IMAGE" "$V3_ROOT/pg-restore-proof"
+          test -z "$(docker container ls -aq)"
+          test -z "$(docker volume ls -q)"
+          test ! -e "$V3_ROOT/pg-restore.env"
+      - name: Preserve synthetic backup and restore receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-synthetic-pg-restore
+          path: |
+            /tmp/aiops-v3-rootless-ci/pg-restore-proof/backup.dump
+            /tmp/aiops-v3-rootless-ci/pg-restore-proof/restore.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Restore default APT source selection on disposable runner
+        if: always()
+        run: |
+          set -eu
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          sudo rm -f /etc/apt/apt.conf.d/99v3e17-ci-sources
+          sudo rm -f /etc/apt/v3-e17-ci-sources/ubuntu.sources /etc/apt/v3-e17-ci-sources/docker.list
+          if test -d /etc/apt/v3-e17-ci-sources; then sudo rmdir /etc/apt/v3-e17-ci-sources; fi
