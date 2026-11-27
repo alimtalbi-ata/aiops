@@ -128,6 +128,92 @@ class PersistedReceiptTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify_persisted_receipt(c, r, read_context=readback)
 
+class DynamicReadbackTests(unittest.TestCase):
+    def exercise(self, *, fault=None, legacy=False):
+        import json
+        import threading
+        from contextlib import ExitStack
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from lab_context import context, dynamic_context
+
+        c, r, core, _ = fixture()
+        incident = c['incidents'][0]
+        run = core['run']
+        run_id = 'RUN-CI-LEGACY' if legacy else run['run_id']
+        root = incident['resource']
+        items = []
+        for ref, signal in zip(r['publication']['stored_evidence'], incident['evidence']):
+            payload = {'run_id': run_id, 'incident_id': run['incident_id'],
+                       'signal': signal, 'correlation_id': incident['id'], 'resource': root}
+            items.append({'evidence_id': ref['evidence_id'], 'payload_hash': digest(payload),
+                          'payload': payload, 'source': 'v3-synthetic-ingestion',
+                          'provenance': {'run_id': run_id, 'synthetic': True}})
+        if fault == 'duplicate':
+            items.append(deepcopy(items[0]))
+        elif fault == 'foreign':
+            items[0]['provenance']['run_id'] = 'RUN-FOREIGN'
+        elif fault == 'conflict':
+            items.append(dict(deepcopy(items[0]), source='other'))
+        calls = []
+
+        def handler(path, data, token=None):
+            class Handler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    calls.append((self.path, self.headers.get('Authorization')))
+                    if self.path != path or self.headers.get('Authorization') != token:
+                        self.send_error(403)
+                        return
+                    raw = json.dumps(data).encode()
+                    self.send_response(200)
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                def log_message(self, *args):
+                    pass
+            return Handler
+
+        with ExitStack() as stack:
+            def serve(path, data, token=None):
+                server = stack.enter_context(HTTPServer(('127.0.0.1', 0), handler(path, data, token)))
+                thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01})
+                thread.start()
+                stack.callback(thread.join)
+                stack.callback(server.shutdown)
+                return server.server_port
+            cp = serve('/api/noc/runs/'+run_id, {'data_classification': 'SYNTHETIC_CANONICAL_RUN',
+                'live_remediation_authorized': False, 'tenant_acl_qualified': False,
+                'runtime_authenticated': False, 'run': run}, 'Bearer '+'x'*32)
+            tp = serve('/api/twin/impact/'+root, {'root': root, 'affected': [{'node_id': root, 'depth': 0}]})
+            ep = serve('/api/evidence?run_id='+run_id+'&limit=20', {'items': items})
+            if legacy:
+                self.assertEqual(len(context(tp, ep, run_id, root)['evidence']), 3)
+            else:
+                def readback(selected):
+                    return dynamic_context(cp, 'x'*32, selected, tp, ep, root, include_signals=True)
+                if fault:
+                    with self.assertRaises(ValueError):
+                        verify_persisted_receipt(c, r, read_context=readback)
+                else:
+                    self.assertEqual(verify_persisted_receipt(c, r, read_context=readback), run_id)
+        expected = [('/api/twin/impact/'+root, None), ('/api/evidence?run_id='+run_id+'&limit=20', None)]
+        if not legacy:
+            expected.insert(0, ('/api/noc/runs/'+run_id, 'Bearer '+'x'*32))
+        self.assertEqual(calls, expected)
+
+    def test_dynamic_readback_exact(self):
+        self.exercise()
+
+    def test_dynamic_readback_duplicate_rejected(self):
+        self.exercise(fault='duplicate')
+
+    def test_dynamic_readback_foreign_or_conflicting_rejected(self):
+        for fault in ('foreign', 'conflict'):
+            with self.subTest(fault=fault):
+                self.exercise(fault=fault)
+
+    def test_legacy_identical_duplicate_preserved(self):
+        self.exercise(fault='duplicate', legacy=True)
+
 
 if __name__ == '__main__':
     unittest.main()
