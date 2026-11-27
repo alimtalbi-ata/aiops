@@ -17,12 +17,18 @@ on:
       - 'v3-spike/kit/test_product_alignment.py'
       - 'v3-spike/product/oci-provenance.json'
       - '.github/workflows/v3-product-preflight.yml'
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/verify_product_compose.py'
+      - 'v3-spike/kit/test_product_alignment.py'
+      - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   synthetic-dev:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -75,7 +81,7 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "qualification=synthetic-dev runtime=NOT_RUN deploy_authorized=false"
   vertical-synthetic:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -141,7 +147,7 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA synthetic_only=true runtime=NOT_RUN"
   compose-static:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -164,25 +170,20 @@ jobs:
           mkdir -p compose-reports
           docker compose -f v3-spike/product/docker-compose.yml config --format json > compose-reports/default.json
           docker compose --profile demo -f v3-spike/product/docker-compose.yml config --format json > compose-reports/demo.json
-          python3 - <<'PY'
+          PYTHONPATH=v3-spike/kit python3 - <<'PY'
           import json, pathlib, re
+          from verify_product_compose import verify_draft_volumes
           base = pathlib.Path('compose-reports')
           required = {'gamma','core','temporal','worker','policy','hitl','evidence'}
           for profile, expected in [('default', required), ('demo', required | {'demo'})]:
               doc = json.loads((base / (profile+'.json')).read_text())
+              verify_draft_volumes(doc, normalized=True)
               services = doc['services']
               assert set(services) == expected, (profile, sorted(services))
               for name, spec in services.items():
                   assert re.fullmatch(r'example[.]invalid/[a-z]+@sha256:[0-9a-f]{64}', spec['image']), name
                   assert not spec.get('privileged'), name
                   assert spec.get('network_mode') != 'host', name
-                  for mount in spec.get('volumes', []):
-                      assert mount.get('type') == 'volume', (name,mount)
-                      assert mount.get('source') in {
-                          doc['volumes'][key]['name']
-                          for key in ('core_data','temporal_data','evidence_data')
-                          if key in doc.get('volumes', {})
-                      }, (name,mount)
                   for port in spec.get('ports', []):
                       assert name == 'gamma' and port.get('host_ip') == '127.0.0.1', (name,port)
                       assert int(port.get('published')) not in {7770,7777,7790}, port
@@ -204,7 +205,7 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA compose_static_only=true runtime=NOT_RUN"
   decision-evidence-contract:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -267,14 +268,14 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=676900cd9bcd927c5d63d5ea11789eba094acd90 runtime=NOT_RUN production_authorized=false"
   product-alignment-synthetic:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Execute forty-seven BOM Compose provenance mutation tests
+      - name: Execute sixty-one BOM Compose provenance mutation tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -283,11 +284,11 @@ jobs:
           PYTHONPATH=v3-spike/kit python3 -B - <<'PY'
           import unittest, xmlrunner
           suite = unittest.defaultTestLoader.loadTestsFromName('test_product_alignment')
-          assert suite.countTestCases() == 47, f'FAIL expected 47, got {suite.countTestCases()}'
+          assert suite.countTestCases() == 61, f'FAIL expected 61, got {suite.countTestCases()}'
           result = xmlrunner.XMLTestRunner(output='alignment-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 47, 'FAIL alignment tests'
+          assert result.wasSuccessful() and result.testsRun == 61, 'FAIL alignment tests'
           PY
-          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 47 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
+          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 61 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
       - name: Upload alignment JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -303,7 +304,7 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA synthetic_only=true runtime=NOT_RUN"
 
   product-qualification:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -320,7 +321,7 @@ jobs:
           test -f v3-spike/product/oci-provenance.json || { echo 'FAIL: OCI provenance manifest absent'; exit 1; }
           python3 -B v3-spike/kit/verify_product_provenance.py v3-spike/kit/product-bom.json v3-spike/product/oci-provenance.json
           echo 'STRUCTURAL_ONLY: independent OCI provenance gate remains pending; release still blocked'
-      - name: Product BOM to Compose consistency
+      - name: Resolve structural image inputs from validated manifests
         run: |
           python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
           set -eu
@@ -328,11 +329,24 @@ jobs:
           test -f v3-spike/product/docker-compose.yml
           # Fail closed on absent registry-verified image inputs, without making
           # downstream Compose validation permanently unreachable.
-          for image in CORE TEMPORAL WORKER POLICY HITL EVIDENCE GAMMA DEMO; do
-            key="${image}_IMAGE"
-            eval 'value=${'"${key}"'-}'
-            test -n "$value" || { echo "NOT_ATTESTED: missing verified $key"; exit 1; }
-          done
+          # Structural inputs come from the already validated BOM/provenance pair.
+          # This is not a registry attestation and cannot promote the product.
+          python3 -B - <<'PY'
+          import json, os, re
+          rows = json.load(open('v3-spike/kit/product-bom.json'))['services']
+          names = {'core','temporal','worker','policy','hitl','evidence','gamma','demo'}
+          if set(rows) != names:
+              raise SystemExit('NOT_ATTESTED: draft topology does not match product BOM')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              for name in sorted(names):
+                  image = rows[name]['image']
+                  if not re.fullmatch(r'[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}', image):
+                      raise SystemExit('NOT_ATTESTED: invalid image reference')
+                  env.write(name.upper() + '_IMAGE=' + image + '\n')
+          PY
+      - name: Product BOM to Compose consistency
+        run: |
+          set -eu
           docker compose -f v3-spike/product/docker-compose.yml config --format json > /tmp/product-default.json
           docker compose --profile demo -f v3-spike/product/docker-compose.yml config --format json > /tmp/product-demo.json
           python3 -B v3-spike/kit/verify_product_compose.py v3-spike/kit/product-bom.json v3-spike/product/docker-compose.yml /tmp/product-default.json

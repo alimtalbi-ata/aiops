@@ -4,6 +4,7 @@ on:
     paths:
       - 'v3-spike/kit/release-lab/**'
       - '.github/workflows/v3-poc-lab-kit-install.yml'
+      - 'v3-spike/qa/check-lab-install-failure.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,6 +17,8 @@ jobs:
       COMPOSE_PROJECT_NAME: v3-lab-kit-build-ci
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify diagnostic fixture redaction and allowlist
+        run: python3 v3-spike/qa/check-lab-install-failure.py fixture v3-spike/kit/release-lab/install-ci.py
       - name: Start isolated rootless daemon
         run: |
           sudo install -m 0755 -d /etc/apt/keyrings
@@ -75,6 +78,14 @@ jobs:
           python3 v3-spike/kit/poc-image-bom.py create-gamma "$out" "$(git rev-parse HEAD)"
           python3 v3-spike/kit/release-lab/assemble.py "$out/image-bom.json" "$V3_ROOT/bundle"
           tar -C "$V3_ROOT" -czf "$V3_ROOT/lab-kit.tar.gz" bundle
+      - name: Force a disposable installation failure and verify cleanup
+        run: |
+          set -euo pipefail
+          install -m 0700 -d "$V3_ROOT/install-1"
+          tar -C "$V3_ROOT/install-1" -xzf "$V3_ROOT/lab-kit.tar.gz"
+          python3 v3-spike/qa/check-lab-install-failure.py runtime "$V3_ROOT/install-1/bundle"
+          test ! -e "$V3_ROOT/forced-failure"
+          mv "$V3_ROOT/install-1" "$V3_ROOT/forced-failure"
       - name: Three fresh prepared installations from the same package
         run: |
           set -euo pipefail
@@ -110,6 +121,8 @@ jobs:
             /tmp/aiops-v3-rootless-ci/lab-kit.tar.gz
             /tmp/aiops-v3-rootless-ci/three-install-report.json
             /tmp/aiops-v3-rootless-ci/install-*/install-report.json
+            /tmp/aiops-v3-rootless-ci/install-*/failure-diagnostics.json
+            /tmp/aiops-v3-rootless-ci/forced-failure/failure-diagnostics.json
           if-no-files-found: warn
           retention-days: 14
       - name: Remove disposable registry only
