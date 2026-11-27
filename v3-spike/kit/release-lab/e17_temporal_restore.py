@@ -50,7 +50,36 @@ SELECT jsonb_build_object(
 )::text;
 """)
     require(bool(metadata) and len(metadata) <= MAX_BYTES, "invalid Temporal schema projection")
-    return {"tables": rows, "schema_sha256": sha(metadata)}
+    schema = json.loads(metadata)
+    require(set(schema) == {"columns", "constraints", "indexes"}, "unexpected Temporal schema projection")
+    return {"tables": rows, "schema_sha256": sha(metadata),
+            "schema_components": {name: sha(json.dumps(value, sort_keys=True, separators=(",", ":")).encode())
+                                  for name, value in schema.items()}}
+
+
+def require_equal_snapshots(before, after, phase):
+    """Report bounded structural differences, never row payloads or SQL definitions."""
+    if before == after:
+        return
+    differences = []
+    for db in DATABASES:
+        left, right = before[db], after[db]
+        tables = []
+        for name in sorted(left["tables"].keys() | right["tables"].keys()):
+            a, b = left["tables"].get(name), right["tables"].get(name)
+            if a != b:
+                tables.append({"table": name, "before_rows": None if a is None else a["rows"],
+                               "after_rows": None if b is None else b["rows"],
+                               "row_digest_changed": a is not None and b is not None and a["sha256"] != b["sha256"]})
+        components = sorted(name for name in left["schema_components"]
+                            if left["schema_components"][name] != right["schema_components"][name])
+        if left != right:
+            differences.append({"database": db, "tables": tables,
+                                "schema_digest_changed": left["schema_sha256"] != right["schema_sha256"],
+                                "schema_components_changed": components})
+    print(json.dumps({"classification": "V3_E17_TEMPORAL_SNAPSHOT_DIFFERENCE",
+                      "phase": phase, "result": "FAIL", "differences": differences}, sort_keys=True), flush=True)
+    raise ValueError("Temporal snapshot mismatch: " + phase)
 
 
 def prove(docker, compose, root, bom, project, report, history_probe, history):
@@ -158,14 +187,14 @@ def prove(docker, compose, root, bom, project, report, history_probe, history):
         for db in DATABASES:
             restore(db,dumps[db],expected[db])
         after={db:snapshot(dest_query,db) for db in DATABASES}
-        require(after==before,"restored Temporal rows differ")
+        require_equal_snapshots(before, after, "after_restore_before_server_start")
         try:
             restore("temporal",dumps["temporal"],expected["temporal"])
         except ValueError as exc:
             require(str(exc)=="Temporal destination not empty","incorrect overwrite refusal")
         else:
             raise ValueError("existing destination accepted")
-        require({db:snapshot(dest_query,db) for db in DATABASES}==after,"overwrite refusal mutated rows")
+        require_equal_snapshots(after, {db:snapshot(dest_query,db) for db in DATABASES}, "after_overwrite_refusal")
         server=start("server","temporal","--network-alias","temporal","--env-file",str(server_env))
         # The existing SDK readback below proves server readiness and the restored namespace;
         # do not assume the auto-setup image ships the standalone Temporal CLI.
