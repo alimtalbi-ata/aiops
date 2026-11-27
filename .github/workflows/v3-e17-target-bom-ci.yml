@@ -4,6 +4,7 @@ on:
     branches: [v3-spike/c-e17-target-image-20261127]
     paths:
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
+      - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
       - 'v3-spike/kit/poc-image-bom.py'
       - '.github/workflows/v3-e17-target-bom-ci.yml'
 permissions:
@@ -95,6 +96,8 @@ jobs:
           python3 v3-spike/kit/poc-image-bom.py extend-e17 "$V3_ROOT/bom" "$V3_ROOT/target-bom" "$V3_ROOT/e17-bom" "$GITHUB_SHA"
           target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"]["e17-target"]["reference"])' "$V3_ROOT/e17-bom/image-bom.json")
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint python "$target" -c 'import os,sys,ast,pathlib; assert os.getuid()==1000; p=pathlib.Path("/lab"); files=list(p.rglob("*.py")); assert len(files)==29; [ast.parse(f.read_bytes()) for f in files]; import temporalio; print("E17_TARGET_IMAGE_STATIC_ONLY")'
+      - name: Exercise pinned E17 Worker target and readback
+        run: python3 v3-spike/kit/release-lab/e17-runtime-ci.py
       - name: Preserve OCI identity and build context receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -104,6 +107,11 @@ jobs:
             /tmp/aiops-v3-rootless-ci/e17-context-report.json
             /tmp/aiops-v3-rootless-ci/e17-bom/image-bom.json
             /tmp/aiops-v3-rootless-ci/e17-bom/compose.pinned.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker-replay.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-recreated-target.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-gamma.json
           if-no-files-found: warn
           retention-days: 14
       - name: Remove disposable registry only
