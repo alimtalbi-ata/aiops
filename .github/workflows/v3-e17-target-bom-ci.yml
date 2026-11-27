@@ -1,13 +1,19 @@
 name: V3 isolated E17 target OCI BOM
 on:
-  push:
-    branches: [v3-spike/c-e17-browser-convergence-20261127]
+  pull_request:
+    branches: [v3-spike/central-integration]
     paths:
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
       - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
       - 'v3-spike/kit/release-lab/e17-history-evidence.py'
       - 'v3-spike/kit/poc-image-bom.py'
+      - 'v3-spike/kit/compose.poc-source.yml'
+      - 'v3-spike/kit/compose.gamma-ci.yml'
+      - 'v3-spike/kit/poc*e17*.py'
+      - 'v3-spike/kit/release-lab/assemble.py'
+      - 'v3-spike/vertical/**'
       - '.github/workflows/v3-e17-target-bom-ci.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -97,19 +103,15 @@ jobs:
           python3 v3-spike/kit/poc-image-bom.py extend-e17 "$V3_ROOT/bom" "$V3_ROOT/target-bom" "$V3_ROOT/e17-bom" "$GITHUB_SHA"
           target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"]["e17-target"]["reference"])' "$V3_ROOT/e17-bom/image-bom.json")
           docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint python "$target" -c 'import os,sys,ast,pathlib; assert os.getuid()==1000; p=pathlib.Path("/lab"); files=list(p.rglob("*.py")); assert len(files)==29; [ast.parse(f.read_bytes()) for f in files]; import temporalio; print("E17_TARGET_IMAGE_STATIC_ONLY")'
-      - name: Checkout exact A read-only probe
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: e6588e209e8eaff8ee156004531f00b3c3c902dd
-          path: .a-e17-probe
-          persist-credentials: false
-      - name: Prepare isolated Chromium
+      - name: Prepare isolated Chromium from integrated checkout
         run: |
           set -euo pipefail
           umask 077
-          test "$(git -C .a-e17-probe rev-parse HEAD)" = e6588e209e8eaff8ee156004531f00b3c3c902dd
-          probe=.a-e17-probe/v3-spike/vertical/tests/gamma_oci_e17_readback.py
-          test "$(git hash-object "$probe")" = 771ee628cc515ae316f8699fd26963efa80a9db3
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          probe=v3-spike/vertical/tests/gamma_oci_e17_readback.py
+          test -f "$probe"
+          git ls-files --error-unmatch "$probe" >/dev/null
+          echo "A probe blob=$(git hash-object "$probe")"
           install -m 0600 "$probe" "$V3_ROOT/a-e17-probe.py"
           python3 -m venv "$V3_ROOT/browser-venv"
           "$V3_ROOT/browser-venv/bin/python" -m pip install --no-cache-dir playwright==1.51.0
