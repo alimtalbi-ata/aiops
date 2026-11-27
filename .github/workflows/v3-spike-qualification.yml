@@ -7,12 +7,20 @@ on:
       - 'v3-spike/contracts/**'
       - 'v3-spike/ux/**'
       - '.github/workflows/v3-spike-qualification.yml'
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - '.github/workflows/v3-spike-qualification.yml'
+      - 'v3-spike/kit/*compose*.yml'
+      - 'v3-spike/kit/*compose*.yaml'
+      - 'v3-spike/kit/preflight.py'
+      - 'v3-spike/kit/fixture.py'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   contracts-unit:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -66,7 +74,7 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "runtime=NOT_RUN deploy_authorized=false"
   ux-browser:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -146,7 +154,7 @@ jobs:
           echo "runtime=NOT_RUN deploy_authorized=false"
 
   kit-unit:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -253,7 +261,7 @@ jobs:
           retention-days: 14
 
   secure-boundary:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -332,7 +340,7 @@ jobs:
 
 
   resource-binding:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -481,7 +489,7 @@ jobs:
           retention-days: 14
 
   compose-static:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -503,7 +511,12 @@ jobs:
         run: |
           set -eu
           docker compose version
-          test "$(find . -maxdepth 1 -name '*compose*.yml' -o -name '*compose*.yaml' | wc -l)" -eq 1
+          # The fixture remains canonical; specialized LAB/integration overlays coexist.
+          expected=$(printf '%s\n' compose.e17-product-ci.yml compose.gamma-ci.yml compose.poc-source.yml docker-compose.yml glpi-native.compose.yml mattermost-native.compose.yml | LC_ALL=C sort)
+          actual=$(find . -maxdepth 1 \( -name '*compose*.yml' -o -name '*compose*.yaml' \) -printf '%f\n' | LC_ALL=C sort)
+          test "$actual" = "$expected"
+          while IFS= read -r name; do test -f "$name" && test ! -L "$name"; done <<< "$expected"
+          echo "PASS canonical fixture and six-file Compose inventory"
           mkdir -p reports
           for profile in default demo; do
             if [ "$profile" = default ]; then
