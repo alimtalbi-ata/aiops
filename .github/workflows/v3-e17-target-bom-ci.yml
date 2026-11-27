@@ -3,6 +3,9 @@ on:
   pull_request:
     branches: [v3-spike/central-integration]
     paths:
+      - 'v3-spike/kit/release-lab/runtime_payload.py'
+      - 'v3-spike/kit/release-lab/test_runtime_payload.py'
+      - 'db/migrations/**'
       - 'v3-spike/kit/release-lab/oci_envelope.py'
       - 'v3-spike/kit/release-lab/test_oci_envelope.py'
       - 'v3-spike/kit/release-lab/oci_import.py'
@@ -29,6 +32,8 @@ jobs:
       archive_sha256: ${{ steps.transport_identity.outputs.archive_sha256 }}
       registry_ref: ${{ steps.transport_identity.outputs.registry_ref }}
       daemon_id: ${{ steps.transport_identity.outputs.daemon_id }}
+      support_manifest: ${{ steps.runtime_support.outputs.manifest }}
+      support_verifier: ${{ steps.runtime_support.outputs.verifier }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -42,14 +47,29 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Qualify transport against isolated HTTP registry fixture
         working-directory: v3-spike/kit/release-lab
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests
       - name: Start isolated rootless daemon
         run: |
-          sudo install -m 0755 -d /etc/apt/keyrings
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" != 0
+          # Only Ubuntu and Docker repositories are required by this disposable runner.
+          # Scope APT for the entire job, including Playwright's dependency bootstrap.
+          # Do not modify the original source files or relax signature verification.
+          apt_sources=/etc/apt/v3-e17-ci-sources
+          apt_conf=/etc/apt/apt.conf.d/99v3e17-ci-sources
+          test ! -e "$apt_sources"
+          test ! -e "$apt_conf"
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo install -m 0755 -d "$apt_sources" /etc/apt/keyrings
+          sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$apt_sources/ubuntu.sources"
           sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
           sudo chmod a+r /etc/apt/keyrings/docker.asc
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
-          sudo apt-get update
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee "$apt_sources/docker.list"
+          printf 'Dir::Etc::sourcelist "/dev/null";\nDir::Etc::sourceparts "%s";\nAPT::Get::List-Cleanup "false";\n' "$apt_sources" | sudo tee "$apt_conf"
+          apt-config dump | grep -F 'Dir::Etc::sourceparts "/etc/apt/v3-e17-ci-sources";'
+          sudo apt-get -o APT::Update::Error-Mode=any update
           sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -170,6 +190,33 @@ jobs:
           assert r["result"] == "PASS" and r["production_authorized"] is False
           PY
           printf 'bom_sha256=%s\narchive_sha256=%s\nregistry_ref=%s\ndaemon_id=%s\n' "$expected" "$archive" "$registry_ref" "$daemon_id" >> "$GITHUB_OUTPUT"
+      - name: Stage and bind exact runtime support
+        id: runtime_support
+        run: |
+          set -euo pipefail
+          umask 077
+          export PYTHONDONTWRITEBYTECODE=1
+          python3 - <<'PY'
+          import subprocess,sys
+          sys.path.insert(0,"v3-spike/kit/release-lab")
+          from runtime_payload import FILES
+          for name in sorted(FILES):
+              subprocess.run(["git","ls-files","--error-unmatch",name],check=True,stdout=subprocess.DEVNULL)
+          PY
+          python3 v3-spike/kit/release-lab/runtime_payload.py stage "$GITHUB_WORKSPACE" "$V3_ROOT/runtime-support" "$GITHUB_SHA" > "$V3_ROOT/runtime-support-stage.json"
+          manifest="sha256:$(sha256sum "$V3_ROOT/runtime-support/runtime-manifest.json" | cut -d' ' -f1)"
+          verifier="$(sha256sum "$GITHUB_WORKSPACE/v3-spike/kit/release-lab/runtime_payload.py" | cut -d' ' -f1)"
+          test "$(sha256sum "$V3_ROOT/runtime-support/v3-spike/kit/release-lab/runtime_payload.py" | cut -d' ' -f1)" = "$verifier"
+          python3 v3-spike/kit/release-lab/runtime_payload.py verify "$V3_ROOT/runtime-support" "$manifest" "$GITHUB_SHA" > "$V3_ROOT/runtime-support-verify.json"
+          cmp "$V3_ROOT/runtime-support-stage.json" "$V3_ROOT/runtime-support-verify.json"
+          printf 'manifest=%s\nverifier=%s\n' "$manifest" "$verifier" >> "$GITHUB_OUTPUT"
+      - name: Transfer only allowlisted runtime support
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-e17-runtime-support
+          path: /tmp/aiops-v3-rootless-ci/runtime-support/
+          if-no-files-found: error
+          retention-days: 1
       - name: Transfer verified OCI payload only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -229,6 +276,9 @@ jobs:
         with:
           name: v3-e17-target-bom
           path: |
+            /tmp/aiops-v3-rootless-ci/runtime-support-stage.json
+            /tmp/aiops-v3-rootless-ci/runtime-support-verify.json
+            /tmp/aiops-v3-rootless-ci/runtime-support/runtime-manifest.json
             /tmp/aiops-v3-rootless-ci/e17-envelope-pack.json
             /tmp/aiops-v3-rootless-ci/e17-content-restore.json
             /tmp/aiops-v3-rootless-ci/e17-content-pull.json
@@ -256,6 +306,16 @@ jobs:
             docker rm -f v3-lab-kit-registry || true
           fi
 
+      - name: Restore default APT source selection on disposable runner
+        if: always()
+        run: |
+          set -eu
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          sudo rm -f /etc/apt/apt.conf.d/99v3e17-ci-sources
+          sudo rm -f /etc/apt/v3-e17-ci-sources/ubuntu.sources /etc/apt/v3-e17-ci-sources/docker.list
+          if test -d /etc/apt/v3-e17-ci-sources; then sudo rmdir /etc/apt/v3-e17-ci-sources; fi
+
   cold-install:
     needs: target-bom
     runs-on: ubuntu-24.04
@@ -267,19 +327,39 @@ jobs:
       EXPECTED_ARCHIVE_SHA: ${{ needs.target-bom.outputs.archive_sha256 }}
       REGISTRY_REF: ${{ needs.target-bom.outputs.registry_ref }}
       PRODUCER_DAEMON: ${{ needs.target-bom.outputs.daemon_id }}
+      EXPECTED_SUPPORT_MANIFEST: ${{ needs.target-bom.outputs.support_manifest }}
+      EXPECTED_SUPPORT_VERIFIER: ${{ needs.target-bom.outputs.support_verifier }}
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: false
-      - name: Verify same integration checkout
-        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Assert no source checkout
+        run: |
+          set -eu
+          test -d "$GITHUB_WORKSPACE"
+          test -z "$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)"
+          if git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 1; fi
+          echo "NO_SOURCE_CHECKOUT"
       - name: Start isolated rootless daemon
         run: |
-          sudo install -m 0755 -d /etc/apt/keyrings
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" != 0
+          # Only Ubuntu and Docker repositories are required by this disposable runner.
+          # Scope APT for the entire job, including Playwright's dependency bootstrap.
+          # Do not modify the original source files or relax signature verification.
+          apt_sources=/etc/apt/v3-e17-ci-sources
+          apt_conf=/etc/apt/apt.conf.d/99v3e17-ci-sources
+          test ! -e "$apt_sources"
+          test ! -e "$apt_conf"
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo install -m 0755 -d "$apt_sources" /etc/apt/keyrings
+          sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$apt_sources/ubuntu.sources"
           sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
           sudo chmod a+r /etc/apt/keyrings/docker.asc
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
-          sudo apt-get update
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee "$apt_sources/docker.list"
+          printf 'Dir::Etc::sourcelist "/dev/null";\nDir::Etc::sourceparts "%s";\nAPT::Get::List-Cleanup "false";\n' "$apt_sources" | sudo tee "$apt_conf"
+          apt-config dump | grep -F 'Dir::Etc::sourceparts "/etc/apt/v3-e17-ci-sources";'
+          sudo apt-get -o APT::Update::Error-Mode=any update
           sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -310,6 +390,32 @@ jobs:
           test "$destination" != "$PRODUCER_DAEMON"
           echo "COLD_DAEMON_EMPTY_AND_DISTINCT"
           install -m 0700 -d "$V3_ROOT/transport-inbox"
+      - name: Receive only the allowlisted runtime support
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: v3-e17-runtime-support
+          path: /tmp/aiops-v3-rootless-ci/runtime-support
+      - name: Verify bootstrap and support before executing any transferred code
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          support="$V3_ROOT/runtime-support"
+          verifier="$support/v3-spike/kit/release-lab/runtime_payload.py"
+          [[ "$EXPECTED_SUPPORT_VERIFIER" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$EXPECTED_SUPPORT_MANIFEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          python3 -I - "$support" "$EXPECTED_SUPPORT_VERIFIER" "$EXPECTED_SUPPORT_MANIFEST" <<'PY'
+          import hashlib, pathlib, sys
+          root=pathlib.Path(sys.argv[1])
+          for rel,expected in [("v3-spike/kit/release-lab/runtime_payload.py",sys.argv[2]),("runtime-manifest.json",sys.argv[3][7:])]:
+              path=root/rel
+              assert root.resolve()==root and path.resolve()==path and path.is_file()
+              assert 0<path.stat().st_size<=8*1024**2
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==expected
+          PY
+          python3 -I -B "$verifier" verify "$support" "$EXPECTED_SUPPORT_MANIFEST" "$GITHUB_SHA" > "$V3_ROOT/cold-support-verify.json"
+          cat "$V3_ROOT/cold-support-verify.json"
+          test ! -e "$support/.git"
       - name: Receive exact OCI payload from producer job
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -319,6 +425,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          cd "$V3_ROOT/runtime-support"
           test "$(find "$V3_ROOT/transport-inbox" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1
           python3 v3-spike/kit/release-lab/oci_envelope.py unpack "$V3_ROOT/transport-inbox/e17-content.tar" "$V3_ROOT/e17-content-export" "$EXPECTED_ARCHIVE_SHA" "$EXPECTED_BOM_SHA" > "$V3_ROOT/cold-envelope-unpack.json"
           python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$EXPECTED_BOM_SHA" > "$V3_ROOT/cold-content-verify.json"
@@ -340,6 +447,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          cd "$V3_ROOT/runtime-support"
           python3 - "$V3_ROOT" <<'PY'
           import json, os, pathlib, runpy, subprocess, sys
           root = pathlib.Path(sys.argv[1])
@@ -376,27 +484,53 @@ jobs:
           (root/"cold-content-pull.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
           print(json.dumps(receipt,sort_keys=True))
           PY
-      - name: Prepare isolated Chromium from integrated checkout
+      - name: Prepare isolated Chromium from verified runtime support
         run: |
           set -euo pipefail
           umask 077
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          cd "$V3_ROOT/runtime-support"
           probe=v3-spike/vertical/tests/gamma_oci_e17_readback.py
           test -f "$probe"
-          git ls-files --error-unmatch "$probe" >/dev/null
-          echo "A probe blob=$(git hash-object "$probe")"
+          test ! -L "$probe"
           install -m 0600 "$probe" "$V3_ROOT/a-e17-probe.py"
           python3 -m venv "$V3_ROOT/browser-venv"
           "$V3_ROOT/browser-venv/bin/python" -m pip install --no-cache-dir playwright==1.51.0
           PLAYWRIGHT_BROWSERS_PATH="$V3_ROOT/chromium" "$V3_ROOT/browser-venv/bin/python" -m playwright install --with-deps chromium
-      - name: Run existing E17 qualification without rebuilding product images
-        run: python3 v3-spike/kit/release-lab/e17-runtime-ci.py
+      - name: Run E17 from support only without checkout or rebuild
+        run: |
+          set -euo pipefail
+          cd "$V3_ROOT/runtime-support"
+          python3 v3-spike/kit/release-lab/e17-runtime-ci.py
+          python3 -I -B v3-spike/kit/release-lab/runtime_payload.py verify "$V3_ROOT/runtime-support" "$EXPECTED_SUPPORT_MANIFEST" "$GITHUB_SHA" > "$V3_ROOT/cold-support-after.json"
+          cmp "$V3_ROOT/cold-support-verify.json" "$V3_ROOT/cold-support-after.json"
+          test -z "$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)"
+          python3 -I - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ["V3_ROOT"])
+          support=json.loads((root/"cold-support-after.json").read_text())
+          pull=json.loads((root/"cold-content-pull.json").read_text())
+          report=json.loads((root/"temporal-e17-product.json").read_text())
+          browser=json.loads((root/"e17-browser/e17-browser.json").read_text())
+          assert support["result"]==pull["result"]==report["result"]==browser["result"]=="PASS"
+          assert support["source_sha"]==pull["source_sha"]==os.environ["GITHUB_SHA"]
+          assert report["production_authorized"] is False and browser["production_authorized"] is False
+          receipt={"classification":"V3_E17_NO_CHECKOUT_RUNTIME","result":"PASS","source_sha":os.environ["GITHUB_SHA"],
+                   "support_manifest_sha256":support["manifest_sha256"],"bom_sha256":pull["bom_sha256"],
+                   "archive_sha256":os.environ["EXPECTED_ARCHIVE_SHA"],"checkout_present":False,
+                   "product_build":False,"support_unchanged":True,"production_authorized":False}
+          (root/"cold-no-checkout.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
+          print(json.dumps(receipt,sort_keys=True))
+          PY
       - name: Preserve cold-runner proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: v3-e17-cold-runner
           path: |
+            /tmp/aiops-v3-rootless-ci/cold-support-verify.json
+            /tmp/aiops-v3-rootless-ci/cold-support-after.json
+            /tmp/aiops-v3-rootless-ci/cold-no-checkout.json
+            /tmp/aiops-v3-rootless-ci/runtime-support/runtime-manifest.json
             /tmp/aiops-v3-rootless-ci/cold-envelope-unpack.json
             /tmp/aiops-v3-rootless-ci/cold-content-verify.json
             /tmp/aiops-v3-rootless-ci/cold-content-pull.json
@@ -419,3 +553,12 @@ jobs:
           if docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless && test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"; then
             docker rm -fv v3-lab-kit-registry || true
           fi
+      - name: Restore default APT source selection on disposable runner
+        if: always()
+        run: |
+          set -eu
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          sudo rm -f /etc/apt/apt.conf.d/99v3e17-ci-sources
+          sudo rm -f /etc/apt/v3-e17-ci-sources/ubuntu.sources /etc/apt/v3-e17-ci-sources/docker.list
+          if test -d /etc/apt/v3-e17-ci-sources; then sudo rmdir /etc/apt/v3-e17-ci-sources; fi
