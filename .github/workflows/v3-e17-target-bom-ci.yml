@@ -50,11 +50,26 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests
       - name: Start isolated rootless daemon
         run: |
-          sudo install -m 0755 -d /etc/apt/keyrings
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" != 0
+          # Only Ubuntu and Docker repositories are required by this disposable runner.
+          # Scope APT for the entire job, including Playwright's dependency bootstrap.
+          # Do not modify the original source files or relax signature verification.
+          apt_sources=/etc/apt/v3-e17-ci-sources
+          apt_conf=/etc/apt/apt.conf.d/99v3e17-ci-sources
+          test ! -e "$apt_sources"
+          test ! -e "$apt_conf"
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo install -m 0755 -d "$apt_sources" /etc/apt/keyrings
+          sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$apt_sources/ubuntu.sources"
           sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
           sudo chmod a+r /etc/apt/keyrings/docker.asc
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
-          sudo apt-get update
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee "$apt_sources/docker.list"
+          printf 'Dir::Etc::sourcelist "/dev/null";\nDir::Etc::sourceparts "%s";\nAPT::Get::List-Cleanup "false";\n' "$apt_sources" | sudo tee "$apt_conf"
+          apt-config dump | grep -F 'Dir::Etc::sourceparts "/etc/apt/v3-e17-ci-sources";'
+          sudo apt-get -o APT::Update::Error-Mode=any update
           sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -291,6 +306,16 @@ jobs:
             docker rm -f v3-lab-kit-registry || true
           fi
 
+      - name: Restore default APT source selection on disposable runner
+        if: always()
+        run: |
+          set -eu
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          sudo rm -f /etc/apt/apt.conf.d/99v3e17-ci-sources
+          sudo rm -f /etc/apt/v3-e17-ci-sources/ubuntu.sources /etc/apt/v3-e17-ci-sources/docker.list
+          if test -d /etc/apt/v3-e17-ci-sources; then sudo rmdir /etc/apt/v3-e17-ci-sources; fi
+
   cold-install:
     needs: target-bom
     runs-on: ubuntu-24.04
@@ -315,11 +340,26 @@ jobs:
           echo "NO_SOURCE_CHECKOUT"
       - name: Start isolated rootless daemon
         run: |
-          sudo install -m 0755 -d /etc/apt/keyrings
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(id -u)" != 0
+          # Only Ubuntu and Docker repositories are required by this disposable runner.
+          # Scope APT for the entire job, including Playwright's dependency bootstrap.
+          # Do not modify the original source files or relax signature verification.
+          apt_sources=/etc/apt/v3-e17-ci-sources
+          apt_conf=/etc/apt/apt.conf.d/99v3e17-ci-sources
+          test ! -e "$apt_sources"
+          test ! -e "$apt_conf"
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo install -m 0755 -d "$apt_sources" /etc/apt/keyrings
+          sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$apt_sources/ubuntu.sources"
           sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
           sudo chmod a+r /etc/apt/keyrings/docker.asc
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
-          sudo apt-get update
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee "$apt_sources/docker.list"
+          printf 'Dir::Etc::sourcelist "/dev/null";\nDir::Etc::sourceparts "%s";\nAPT::Get::List-Cleanup "false";\n' "$apt_sources" | sudo tee "$apt_conf"
+          apt-config dump | grep -F 'Dir::Etc::sourceparts "/etc/apt/v3-e17-ci-sources";'
+          sudo apt-get -o APT::Update::Error-Mode=any update
           sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -513,3 +553,12 @@ jobs:
           if docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless && test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"; then
             docker rm -fv v3-lab-kit-registry || true
           fi
+      - name: Restore default APT source selection on disposable runner
+        if: always()
+        run: |
+          set -eu
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          sudo rm -f /etc/apt/apt.conf.d/99v3e17-ci-sources
+          sudo rm -f /etc/apt/v3-e17-ci-sources/ubuntu.sources /etc/apt/v3-e17-ci-sources/docker.list
+          if test -d /etc/apt/v3-e17-ci-sources; then sudo rmdir /etc/apt/v3-e17-ci-sources; fi
