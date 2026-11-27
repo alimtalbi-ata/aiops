@@ -154,13 +154,18 @@ def prove(docker, compose, root, bom, project, report, history_probe, history):
             raise ValueError("existing destination accepted")
         require({db:snapshot(dest_query,db) for db in DATABASES}==after,"overwrite refusal mutated rows")
         server=start("server","temporal","--network-alias","temporal","--env-file",str(server_env))
-        wait(("exec",server,"temporal","operator","cluster","health","--address","127.0.0.1:7233"))
-        wait(("exec",server,"temporal","operator","namespace","describe","--address","127.0.0.1:7233","--namespace","default"))
+        # The existing SDK readback below proves server readiness and the restored namespace;
+        # do not assume the auto-setup image ships the standalone Temporal CLI.
         # Explicit entrypoint: no worker process, activity polling, or target access.
+        probe=history_probe.decode()
+        connect='    client=await asyncio.wait_for(Client.connect("temporal:7233"),timeout=10)'
+        retry='    client=None\n    for _ in range(60):\n        try:\n            client=await asyncio.wait_for(Client.connect("temporal:7233"),timeout=5)\n            break\n        except Exception:\n            await asyncio.sleep(1)\n    require(client is not None,"restored Temporal server not ready")'
+        require(probe.count(connect)==1,"unexpected Temporal SDK probe")
+        probe=probe.replace(connect,retry)
         recovered=docker("run","--rm","-i","--pull","never","--name",names["reader"],
                          "--network",names["net"],"--cap-drop","ALL","--security-opt","no-new-privileges",
                          "--env","AIOPS_V3_BOUNDARY=1","--env","TEMPORAL_ADDRESS=temporal:7233",
-                         "--entrypoint","python",reader_ref,"-c",history_probe.decode(),data=report,timeout=60)
+                         "--entrypoint","python",reader_ref,"-c",probe,data=report,timeout=70)
         require(recovered==history,"restored history projection changed")
         receipt={"classification":"V3_E17_TEMPORAL_PERSISTENCE_RESTORE","result":"PASS",
                  "source_sha":bom["source_sha"],"workflow_id":parsed["workflow_id"],
