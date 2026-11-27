@@ -54,6 +54,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
+        collector_guard = getattr(self.server, 'collector_guard', None)
+        if collector_guard is not None:
+            from collector_http_boundary import dispatch
+            if dispatch(self, **collector_guard):
+                return
         if self.path == '/api/v1/mattermost/command':
             try:
                 if self.headers.get('Content-Type','').split(';')[0] != 'application/x-www-form-urlencoded':
@@ -500,13 +505,45 @@ class ContainerLabHandler(Handler):
         else:
             super().do_POST()
 
-def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None, ai_providers=None, *, container_lab=False):
+def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None, ai_providers=None, *, container_lab=False, collector_guard=None):
+    # Explicit, loopback-only LAB activation. No automatic provisioning or
+    # trust in request-supplied scope, database paths, or publisher callbacks.
+    guarded_config = None
+    if collector_guard is not None:
+        from collector_admission_fence import scope_key
+        from continuous_collector import ROOT, port as lab_port
+        if (container_lab or type(collector_guard) is not dict
+                or set(collector_guard) != {'scope', 'authority', 'witness', 'restore_permitted'}
+                or not all(callable(collector_guard[k]) for k in ('authority', 'witness', 'restore_permitted'))
+                or core_config is None or context_config is None):
+            raise ValueError('explicit isolated collector configuration required')
+        scope = collector_guard['scope']
+        scope_key(scope)
+        core_port, core_token, _ = core_config
+        twin_port, evidence_port, node_id, _ = context_config
+        if scope[1] != ROOT or node_id != ROOT:
+            raise ValueError('collector root mismatch')
+        ports = [lab_port(p) for p in (core_port, twin_port, evidence_port)]
+        if len(set(ports)) != len(ports) or (port != 0 and (lab_port(port) in ports)):
+            raise ValueError('distinct isolated service ports required')
+        if (not isinstance(core_token, str) or not 32 <= len(core_token) <= 256
+                or any(not 33 <= ord(c) <= 126 for c in core_token)):
+            raise ValueError('invalid Core credential')
+        guarded_config = dict(collector_guard,
+            graph_reader=lambda: Graph(get(twin_port, '/api/twin/graph')),
+            publish_records=lambda rows: create_and_persist(rows, core_port, core_token, evidence_port),
+            read_context=lambda run_id: dynamic_context(core_port, core_token, run_id,
+                twin_port, evidence_port, node_id, include_signals=True))
     if container_lab:
         if os.environ.get("AIOPS_V3_GAMMA_CONTAINER_LAB")!="1" or os.getuid()==0 or port!=18080 or enterprise_clock is None:
             raise ValueError("explicit nonroot synthetic container profile required")
         http=ThreadingHTTPServer(("0.0.0.0",port),ContainerLabHandler)
     else:
         http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    if guarded_config is not None and (http.server_port in ports or http.server_port in (7770, 7777, 7790)):
+        http.server_close()
+        raise ValueError('unverified collector listener port')
+    http.collector_guard = guarded_config
     http.core_config = core_config
     http.context_config = context_config
     http.policy_port = policy_port

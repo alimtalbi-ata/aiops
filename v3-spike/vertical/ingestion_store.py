@@ -1,7 +1,8 @@
 """Synthetic lab persistence; partial writes are retryable, not transactional."""
 import hashlib
 import json
-from urllib.request import Request,urlopen
+from bounded_http_transport import post_legacy_evidence_json
+from evidence_retrieval import validated_reference
 from ingestion_demo import ingest
 
 def persist(records,port,run_id,*,core_config=None):
@@ -21,6 +22,7 @@ def persist(records,port,run_id,*,core_config=None):
     elif not isinstance(run_id,str) or not run_id.startswith("RUN-CI-"):
         raise ValueError("Synthetic run required")
     receipts=[]
+    seen=set()
     for incident in result["incidents"]:
         for event in incident["evidence"]:
             payload={"run_id":run_id,"incident_id":canonical_incident or incident["id"],"signal":event}
@@ -31,13 +33,10 @@ def persist(records,port,run_id,*,core_config=None):
             body={"source":"v3-synthetic-ingestion","external_id":event["event_id"],
                   "claim":"Normalized synthetic signal","confidence":0.0,
                   "provenance":{"synthetic":True,"run_id":run_id},"payload":payload}
-            req=Request(f"http://127.0.0.1:{port}/api/evidence",data=json.dumps(body).encode(),headers={"Content-Type":"application/json"})
-            with urlopen(req,timeout=5) as response:
-                raw=response.read(65537)
-                if len(raw)>65536: raise ValueError("Oversized receipt")
-                receipt=json.loads(raw)
-            if receipt.get("payload_hash")!=digest or not isinstance(receipt.get("evidence_id"),str) or not receipt["evidence_id"]:
+            receipt=validated_reference(post_legacy_evidence_json(port,body))
+            if receipt["payload_hash"]!=digest or receipt["evidence_id"] in seen:
                 raise ValueError("Unverified receipt")
-            receipts.append({"evidence_id":receipt["evidence_id"],"payload_hash":digest})
+            seen.add(receipt["evidence_id"])
+            receipts.append(receipt)
     result["stored_evidence"]=receipts
     return result

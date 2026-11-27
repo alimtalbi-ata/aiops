@@ -4,6 +4,7 @@ The reader must resolve authenticated Core and isolated Evidence via the
 existing dynamic_context(include_signals=True) contract. This is not tenant
 ACL qualification or authentication of Evidence's legacy HTTP endpoint.
 """
+from copy import deepcopy
 from collector_receipt import digest, validate_receipt
 from evidence_retrieval import index_references
 
@@ -14,18 +15,25 @@ def verify_persisted_receipt(correlation, response, *, read_context):
         if not ok:
             raise ValueError('persisted collector receipt mismatch')
 
-    run_id = validate_receipt(correlation, response)
-    incident = correlation['incidents'][0]
-    publication = response['publication']
+    # Freeze the validated JSON inputs before invoking external readback.
+    expected_correlation = deepcopy(correlation)
+    expected_response = deepcopy(response)
+    run_id = validate_receipt(expected_correlation, expected_response)
+    correlation_hash = digest(expected_correlation)
+    response_hash = digest(expected_response)
+    incident = expected_correlation['incidents'][0]
+    publication = expected_response['publication']
     expected_run = publication['core']['run']
+    expected_refs = index_references(publication['stored_evidence'])
     core, context = read_context(run_id)
+    # The caller may persist a digest of the original response after verification.
+    require(digest(correlation) == correlation_hash and digest(response) == response_hash)
     require(core.get('classification') == 'SYNTHETIC_CANONICAL_RUN'
             and core.get('policy') == 'DENY' and core.get('production_authorized') is False
             and core['run'] == expected_run
             and context.get('classification') == 'SYNTHETIC_LAB_CONTEXT'
             and context.get('policy') == 'DENY' and context.get('production_authorized') is False
             and context.get('run_id') == run_id and context.get('root') == incident['resource'])
-    expected_refs = index_references(publication['stored_evidence'])
     rows = context['verified_signals']
     require(index_references(context['evidence']) == expected_refs
             and index_references(rows) == expected_refs)

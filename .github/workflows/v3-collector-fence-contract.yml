@@ -5,6 +5,7 @@ on:
       - v3-spike/central-integration
       - v3-spike/b-rearm-proof-binding-20261127
       - v3-spike/collector-authority-restore-guard-lab-20261127
+      - v3-spike/guarded-collector-operations-lab-20261127
     paths:
       - 'v3-spike/vertical/*collector*.py'
       - 'v3-spike/vertical/test_recovery_verify_contract.py'
@@ -21,6 +22,12 @@ on:
       - 'v3-spike/vertical/enterprise_context.py'
       - 'v3-spike/vertical/evidence_retrieval.py'
       - 'v3-spike/vertical/rca_preview.py'
+      - 'v3-spike/vertical/bounded_http_transport.py'
+      - 'v3-spike/vertical/test_bounded_http_transport.py'
+      - 'v3-spike/vertical/core_read.py'
+      - 'v3-spike/vertical/core_ingest.py'
+      - 'v3-spike/vertical/ingestion_store.py'
+      - 'v3-spike/vertical/lab_context.py'
       - '.github/workflows/v3-collector-fence-contract.yml'
   workflow_dispatch:
 permissions:
@@ -49,7 +56,7 @@ jobs:
             test_collector_http_boundary test_fenced_durable_collector \
             test_recovery_verify_contract test_authority_restore_guard_candidate \
             test_authority_guard_preflight_candidate test_authority_guard_operations_candidate \
-            test_authority_guard_process_integration
+            test_authority_guard_process_integration test_bounded_http_transport
       - name: Qualification boundary
         if: always()
         run: |

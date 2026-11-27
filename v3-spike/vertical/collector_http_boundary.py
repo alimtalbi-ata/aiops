@@ -2,11 +2,11 @@
 
 Call before legacy routing, only on the dedicated fenced instance. A false
 return delegates to an explicitly audited non-publication route. The caller
-must supply an external restore guard and an existing private authority DB.
+must supply an external restore guard and existing private authority and witness DBs.
 No deployment, actions or automatic authority initialization here.
 """
 import json
-from collector_admission_service import publish, lookup, bearer
+from collector_admission_service import publish_guarded, lookup_guarded, bearer
 from collector_admission_fence import require
 
 ADMIT = '/api/v1/collector/admit'
@@ -29,7 +29,7 @@ def unique_object(pairs):
     return result
 
 
-def dispatch(handler, *, scope, authority, restore_permitted, graph_reader, publish_records, read_context):
+def dispatch(handler, *, scope, authority, witness, restore_permitted, graph_reader, publish_records, read_context):
     """Return True if handled. Never fall back on any admission error."""
     if handler.path in DELEGATE:
         return False
@@ -51,13 +51,13 @@ def dispatch(handler, *, scope, authority, restore_permitted, graph_reader, publ
         body = json.loads(raw, object_pairs_hook=unique_object)
         keys = {'generation', 'rows'} if handler.path == ADMIT else {'generation', 'episode', 'batch'}
         require(isinstance(body, dict) and set(body) == keys and type(body['generation']) is int)
-        with authority() as db:
+        with authority() as db, witness() as guard_db:
             args = dict(scope=scope, authorization=auth[0], generation=body['generation'])
             if handler.path == ADMIT:
-                result = publish(db, **args, rows=body['rows'], graph=graph_reader(), publish_records=publish_records,
+                result = publish_guarded(db, guard_db, **args, rows=body['rows'], graph=graph_reader(), publish_records=publish_records,
                                  read_context=read_context)
             else:
-                result = lookup(db, **args, episode=body['episode'], batch=body['batch'])
+                result = lookup_guarded(db, guard_db, **args, episode=body['episode'], batch=body['batch'])
         handler.reply(200, json.dumps(result, allow_nan=False).encode())
     except Exception:
         handler.reply(403, b'{"state":"UNKNOWN_BLOCKED","policy":"DENY"}')

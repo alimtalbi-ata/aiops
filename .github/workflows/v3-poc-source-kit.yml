@@ -879,6 +879,11 @@ jobs:
           test "$(counts)" = "$((i+1))|$((r+1))|$((e+3))|$x"
           cat "$V3_ROOT/admission-fault.json"
           echo "Admission exactly one incident/run, three evidence, zero execution receipts PASS"
+      - name: Qualify guarded continuous collector against real source kit
+        run: |
+          set -euo pipefail
+          python3 -m py_compile v3-spike/kit/poc-guarded-collector-smoke.py
+          python3 v3-spike/kit/poc-guarded-collector-smoke.py
       - name: Collect bounded Worker diagnostics on failure
         if: failure()
         run: |
@@ -916,6 +921,7 @@ jobs:
             ${{ env.V3_ROOT }}/temporal-e17-recreated-target.json
             ${{ env.V3_ROOT }}/admission-controls.json
             ${{ env.V3_ROOT }}/admission-fault.json
+            ${{ env.V3_ROOT }}/guarded-collector-report.json
           if-no-files-found: warn
       - if: always()
         run: |
