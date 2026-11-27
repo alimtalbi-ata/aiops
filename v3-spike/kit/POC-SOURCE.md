@@ -23,3 +23,41 @@ Limitations: source builds use mutable base tags; no immutable product BOM, rele
 ### Optional Mattermost lab configuration
 
 Create `$V3_ROOT/mattermost.env` with mode 0600, owned by the POC user, containing `TOKEN=<dedicated slash command token>` and `CHANNEL_ID=<26-character lab channel ID>` on separate lines. Restart the foreground GAMMA launcher. The endpoint is `/api/v1/mattermost/command` on its printed loopback address. Without this file ChatOps is disabled. Never reuse production tokens. Native Mattermost server transport still requires an isolated network design; no public bind is enabled.
+
+## Executable POC lifecycle
+
+Use the new controller on a **fresh, private (0700), dedicated rootless LAB root** whose Docker data directory has already been provisioned and attested. Never point it at an existing production daemon. From the repository root:
+
+```sh
+export V3_ROOT="$HOME/aiops-v3-poc"
+export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
+unset DOCKER_CONTEXT
+
+python3 v3-spike/kit/pocctl.py install
+python3 v3-spike/kit/pocctl.py health
+python3 v3-spike/kit/pocctl.py gamma
+```
+
+Open the loopback GAMMA URL printed by the foreground launcher. The optional `--orchestration` flag on install/start/health includes the Temporal and Worker profile; use it consistently for that profile. Health reports actual container readiness for the selected services, not GAMMA or an end-to-end business qualification.
+
+After stopping foreground GAMMA (Ctrl-C), manage the same installation without rebuilding or reseeding:
+
+```sh
+python3 v3-spike/kit/pocctl.py backup
+python3 v3-spike/kit/pocctl.py stop
+python3 v3-spike/kit/pocctl.py start
+python3 v3-spike/kit/pocctl.py health
+```
+
+Install refuses an existing data directory or credential file; a partially failed installation requires investigation, never automatic deletion or reinitialization. Start reuses local images only. Stop preserves containers and data. Backup creates a private PostgreSQL custom-format archive under `V3_ROOT/backup`, verifies its catalog with pg_restore --list, and reports SHA-256 and size. This is a logical PostgreSQL snapshot only: it excludes Temporal, collector authority/witness, GAMMA clock and secrets. Catalog validation is not a restore test. Do not copy or restore authority/witness with the application database.
+
+For a separate guarded-collector demonstration, stop any foreground GAMMA first, then provision once:
+
+```sh
+python3 v3-spike/kit/pocctl.py provision
+python3 v3-spike/kit/pocctl.py gamma --port 18081
+```
+
+Choose a free dedicated loopback port and reuse it across restarts. On a provisioned root the controller never silently falls back to the legacy GAMMA launcher. The collector token remains private in `collector-control/collector.token`. Actual target collection and server-owned Verify are separate steps. No automatic rearm, host remediation or production authorization is enabled.
+
+This controller is a source-built POC, not the signed offline OCI release. Full restore, coordinated multistore backup, upgrade and rollback remain separate work; do not treat these commands as an Enterprise disaster recovery procedure.
