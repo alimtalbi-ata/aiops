@@ -13,7 +13,9 @@ from urllib.error import HTTPError
 from urllib.request import build_opener, ProxyHandler, Request
 
 from collector_admission_fence import initialize, provision
-from collector_admission_service import publish, lookup
+from collector_admission_service import publish, lookup, publish_guarded, lookup_guarded
+from authority_restore_guard_candidate import provision_witness, snapshot, RestoreBlocked
+from collector_admission_fence import FenceRejected
 from collector_receipt import digest
 from continuous_collector import batch, NoRedirect, SCOPE
 from ingestion_demo import ingest
@@ -155,6 +157,123 @@ class ServiceTests(unittest.TestCase):
                     finally:
                         server.shutdown()
                         thread.join()
+
+
+class GuardedServiceTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.db = self.connect('authority.db')
+        self.witness = self.connect('witness.db')
+        self.scope = ('synthetic-demo', 'NODE-CI-ROOT', 'COLLECTOR-one')
+        self.auth = 'Bearer ' + secrets.token_hex(32)
+        initialize(self.db)
+        provision(self.db, self.scope, self.auth[7:])
+        provision_witness(self.db, self.witness)
+        now = datetime.now(timezone.utc)
+        self.rows = batch(*[{'at': (now - timedelta(seconds=age)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                             'median': value, 'samples': [value] * 5}
+                            for age, value in ((10, 10), (2, 100))])
+        self.episode = self.rows[0]['id'][:32]
+        self.batch = digest(ingest(self.rows)['incidents'][0])
+        self.calls = []
+        self.reads = []
+
+    def connect(self, name):
+        db = sqlite3.connect(self.root / name)
+        self.addCleanup(db.close)
+        return db
+
+    def state(self):
+        return (self.db.execute('SELECT state FROM collector_fence').fetchone()[0],
+                self.witness.execute('SELECT state FROM guard').fetchone()[0])
+
+    def publisher(self, rows):
+        self.assertEqual(self.state(), ('PENDING', 'BUSY'))
+        self.calls.append(rows)
+        return response_for(rows)['publication']
+
+    def reader(self, run_id):
+        self.assertEqual(self.state(), ('PENDING', 'BUSY'))
+        self.reads.append(run_id)
+        return persisted_fixture(self.rows)
+
+    def publish(self, **overrides):
+        args = dict(scope=self.scope, authorization=self.auth, generation=0, rows=self.rows,
+                    graph=GraphFixture(), publish_records=self.publisher, read_context=self.reader)
+        args.update(overrides)
+        return publish_guarded(self.db, self.witness, **args)
+
+    def lookup(self, db=None, **overrides):
+        args = dict(scope=self.scope, authorization=self.auth, generation=0,
+                    episode=self.episode, batch=self.batch)
+        args.update(overrides)
+        return lookup_guarded(db if db is not None else self.db, self.witness, **args)
+
+    def test_guarded_nominal_and_replay(self):
+        result = self.publish()
+        self.assertEqual(self.state(), ('COMMITTED', 'READY'))
+        self.assertEqual(self.lookup(), {'state': 'COMMITTED',
+                         'run_id': result['publication']['core']['run']['run_id'],
+                         'receipt_sha256': digest(result)})
+        self.assertEqual(self.witness.execute('SELECT digest FROM guard').fetchone()[0], snapshot(self.db))
+        with self.assertRaises(FenceRejected):
+            self.publish()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(len(self.reads), 1)
+        self.assertEqual(self.state(), ('COMMITTED', 'READY'))
+
+    def test_guarded_prevalidation_does_not_poison_witness(self):
+        before = snapshot(self.db)
+        for overrides in ({'authorization': 'Bearer ' + '0' * 64}, {'generation': 1},
+                          {'rows': self.rows[:2]}, {'rows': [dict(r, resource='NODE-CI-OTHER') for r in self.rows]}):
+            with self.subTest(overrides=list(overrides)):
+                with self.assertRaises(FenceRejected):
+                    self.publish(**overrides)
+                self.assertEqual(self.state(), ('ARMED', 'READY'))
+                self.assertEqual(snapshot(self.db), before)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.reads, [])
+
+    def test_guarded_publication_failure_latches(self):
+        def fail(rows):
+            self.publisher(rows)
+            raise OSError('synthetic publication uncertainty')
+        with self.assertRaises(OSError):
+            self.publish(publish_records=fail)
+        self.assertEqual(self.state(), ('PENDING', 'BUSY'))
+        with self.assertRaises(RestoreBlocked):
+            self.publish()
+        with self.assertRaises(RestoreBlocked):
+            self.lookup()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.reads, [])
+
+    def test_guarded_readback_failure_latches(self):
+        def fail(run_id):
+            self.reader(run_id)
+            raise OSError('synthetic readback uncertainty')
+        with self.assertRaises(OSError):
+            self.publish(read_context=fail)
+        self.assertEqual(self.state(), ('PENDING', 'BUSY'))
+        with self.assertRaises(RestoreBlocked):
+            self.lookup()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(len(self.reads), 1)
+
+    def test_guarded_old_authority_refused(self):
+        old = self.connect('old.db')
+        self.db.backup(old)
+        self.publish()
+        with self.assertRaises(RestoreBlocked):
+            self.lookup(old)
+        with self.assertRaises(RestoreBlocked):
+            publish_guarded(old, self.witness, scope=self.scope, authorization=self.auth,
+                            generation=0, rows=self.rows, graph=GraphFixture(),
+                            publish_records=self.publisher, read_context=self.reader)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.state(), ('COMMITTED', 'READY'))
 
 
 if __name__ == '__main__':
