@@ -97,6 +97,17 @@ class GuardTests(unittest.TestCase):
             provision_witness(self.a,self.w)
         with guarded(self.a,self.w):
             self.assertTrue(snapshot(self.a))
+    def test_independent_daemon_identity_contract(self):
+        from authority_restore_guard_candidate import require_independent_daemons
+        self.assertTrue(require_independent_daemons('a'*64, 'b'*64))
+        for authority_id, witness_id in (
+            ('a'*64, 'a'*64), ('', 'b'*64), ('a'*63, 'b'*64),
+            ('A'*64, 'b'*64), (None, 'b'*64),
+        ):
+            with self.subTest(authority=authority_id, witness=witness_id):
+                with self.assertRaises(RestoreBlocked):
+                    require_independent_daemons(authority_id, witness_id)
+
     def test_simultaneous_rollback_is_outside_contract(self):
         old_a=self.backup('old.db')
         old_w=self.connect('old-witness.db')
