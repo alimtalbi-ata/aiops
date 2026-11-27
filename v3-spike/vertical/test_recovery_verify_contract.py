@@ -185,5 +185,55 @@ class VerifyContractTests(unittest.TestCase):
         self.assertEqual(reads, {ORIGINAL: 2, COMPARISON: 2, 'receipt': 2})
 
 
+    def test_returned_evidence_detached_and_canonical(self):
+        args, _, _ = fixture()
+        expected_original = deepcopy(args['original_refs'])
+        expected_comparison = deepcopy(args['comparison_refs'])
+        args['original_refs'][0]['extra'] = {'unverified': True}
+        result = verify_recovery(**args)
+        args['original_refs'][0]['payload_hash'] = '0' * 64
+        args['comparison_refs'].clear()
+        self.assertEqual(result['original_evidence'], expected_original)
+        self.assertEqual(result['comparison_evidence'], expected_comparison)
+
+    def test_last_receipt_callback_cannot_rewrite_evidence(self):
+        args, _, receipt = fixture()
+        expected = deepcopy(args['original_refs'])
+        reads = 0
+        def reader(_):
+            nonlocal reads
+            reads += 1
+            if reads == 2:
+                args['original_refs'][0]['payload_hash'] = '0' * 64
+                args['comparison_refs'].clear()
+            return receipt
+        result = verify_recovery(**(args | {'read_action_receipt': reader}))
+        self.assertEqual(reads, 2)
+        self.assertEqual(result['original_evidence'], expected)
+        self.assertEqual(len(result['comparison_evidence']), 5)
+
+    def test_coordinated_comparison_reference_substitution_rejected(self):
+        args, contexts, _ = fixture()
+        reader = args['read_context']
+        def changed(rid):
+            if rid == COMPARISON:
+                args['comparison_refs'][0]['payload_hash'] = '0' * 64
+                contexts[rid][1]['evidence'][0]['payload_hash'] = '0' * 64
+                contexts[rid][1]['verified_signals'][0]['payload_hash'] = '0' * 64
+            return reader(rid)
+        with self.assertRaisesRegex(ValueError, 'unverified run or evidence binding'):
+            verify_recovery(**(args | {'read_context': changed}))
+
+    def test_scope_detached_before_first_callback(self):
+        args, _, _ = fixture()
+        reader = args['read_context']
+        def changed(rid):
+            args['scope'].clear()
+            return reader(rid)
+        result = verify_recovery(**(args | {'read_context': changed}))
+        self.assertEqual(result['status'], 'RECOVERED')
+        self.assertEqual(result['operational_decision'], 'DENY')
+
+
 if __name__ == '__main__':
     unittest.main()
