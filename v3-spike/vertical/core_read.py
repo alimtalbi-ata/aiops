@@ -12,8 +12,9 @@ def read_run(port, token, run_id):
     if not isinstance(run_id, str) or not IDENT.fullmatch(run_id):
         raise ValueError("invalid run identity")
     data = get_json(port, token, "/api/noc/runs/" + run_id)
-    run = data["run"]
-    if (data.get("data_classification") != "SYNTHETIC_CANONICAL_RUN"
+    run = data.get("run")
+    if (type(run) is not dict
+        or data.get("data_classification") != "SYNTHETIC_CANONICAL_RUN"
         or data.get("live_remediation_authorized") is not False
         or data.get("tenant_acl_qualified") is not False
         or data.get("runtime_authenticated") is not False
