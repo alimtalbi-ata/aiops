@@ -17,12 +17,18 @@ on:
       - 'v3-spike/kit/test_product_alignment.py'
       - 'v3-spike/product/oci-provenance.json'
       - '.github/workflows/v3-product-preflight.yml'
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/verify_product_compose.py'
+      - 'v3-spike/kit/test_product_alignment.py'
+      - '.github/workflows/v3-product-preflight.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   synthetic-dev:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -75,7 +81,7 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA"
           echo "qualification=synthetic-dev runtime=NOT_RUN deploy_authorized=false"
   vertical-synthetic:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -141,7 +147,7 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA synthetic_only=true runtime=NOT_RUN"
   compose-static:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -164,25 +170,20 @@ jobs:
           mkdir -p compose-reports
           docker compose -f v3-spike/product/docker-compose.yml config --format json > compose-reports/default.json
           docker compose --profile demo -f v3-spike/product/docker-compose.yml config --format json > compose-reports/demo.json
-          python3 - <<'PY'
+          PYTHONPATH=v3-spike/kit python3 - <<'PY'
           import json, pathlib, re
+          from verify_product_compose import verify_draft_volumes
           base = pathlib.Path('compose-reports')
           required = {'gamma','core','temporal','worker','policy','hitl','evidence'}
           for profile, expected in [('default', required), ('demo', required | {'demo'})]:
               doc = json.loads((base / (profile+'.json')).read_text())
+              verify_draft_volumes(doc, normalized=True)
               services = doc['services']
               assert set(services) == expected, (profile, sorted(services))
               for name, spec in services.items():
                   assert re.fullmatch(r'example[.]invalid/[a-z]+@sha256:[0-9a-f]{64}', spec['image']), name
                   assert not spec.get('privileged'), name
                   assert spec.get('network_mode') != 'host', name
-                  for mount in spec.get('volumes', []):
-                      assert mount.get('type') == 'volume', (name,mount)
-                      assert mount.get('source') in {
-                          doc['volumes'][key]['name']
-                          for key in ('core_data','temporal_data','evidence_data')
-                          if key in doc.get('volumes', {})
-                      }, (name,mount)
                   for port in spec.get('ports', []):
                       assert name == 'gamma' and port.get('host_ip') == '127.0.0.1', (name,port)
                       assert int(port.get('published')) not in {7770,7777,7790}, port
@@ -204,7 +205,7 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA compose_static_only=true runtime=NOT_RUN"
   decision-evidence-contract:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -267,14 +268,14 @@ jobs:
           date -u +%FT%TZ
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB integration_sha=$GITHUB_SHA b_sha=676900cd9bcd927c5d63d5ea11789eba094acd90 runtime=NOT_RUN production_authorized=false"
   product-alignment-synthetic:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Execute forty-seven BOM Compose provenance mutation tests
+      - name: Execute sixty-one BOM Compose provenance mutation tests
         run: |
           set -eu
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -283,11 +284,11 @@ jobs:
           PYTHONPATH=v3-spike/kit python3 -B - <<'PY'
           import unittest, xmlrunner
           suite = unittest.defaultTestLoader.loadTestsFromName('test_product_alignment')
-          assert suite.countTestCases() == 47, f'FAIL expected 47, got {suite.countTestCases()}'
+          assert suite.countTestCases() == 61, f'FAIL expected 61, got {suite.countTestCases()}'
           result = xmlrunner.XMLTestRunner(output='alignment-junit', verbosity=2).run(suite)
-          assert result.wasSuccessful() and result.testsRun == 47, 'FAIL alignment tests'
+          assert result.wasSuccessful() and result.testsRun == 61, 'FAIL alignment tests'
           PY
-          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 47 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
+          python3 -B v3-spike/kit/verify_junit.py alignment-junit --expected 61 --source v3-spike/kit/test_product_alignment.py --sha "$GITHUB_SHA" --job "$GITHUB_JOB" --manifest alignment-junit/manifest.json
       - name: Upload alignment JUnit
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -303,7 +304,7 @@ jobs:
           echo "run=$GITHUB_RUN_ID job=$GITHUB_JOB sha=$GITHUB_SHA synthetic_only=true runtime=NOT_RUN"
 
   product-qualification:
-    if: github.ref == 'refs/heads/v3-spike/central-integration'
+    if: github.ref == 'refs/heads/v3-spike/central-integration' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
