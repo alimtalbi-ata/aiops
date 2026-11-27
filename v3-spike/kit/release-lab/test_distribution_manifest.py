@@ -9,6 +9,7 @@ from distribution_manifest import canonical, create, sha, verify
 SOURCE = "a" * 40
 D = ["sha256:" + str(i) * 64 for i in range(1, 6)]
 REGISTRY = "docker.io/library/registry@sha256:" + "6" * 64
+PRODUCER_DAEMON = "d" * 64
 
 
 class DistributionTests(unittest.TestCase):
@@ -22,7 +23,7 @@ class DistributionTests(unittest.TestCase):
         self.sig = self.root / "manifest.sig"
         self.make_key(self.key, self.public)
         self.trust = sha(self.public.read_bytes())
-        create(self.manifest, SOURCE, *D, REGISTRY)
+        create(self.manifest, SOURCE, *D, REGISTRY, PRODUCER_DAEMON)
         self.sign()
 
     def openssl(self, *args):
@@ -38,7 +39,7 @@ class DistributionTests(unittest.TestCase):
                      "-in", self.manifest, "-out", self.sig)
 
     def check(self, trust=None, source=SOURCE):
-        return verify(self.manifest, self.sig, self.public, trust or self.trust, source)
+        return verify(self.manifest, self.sig, self.public, trust or self.trust, source, PRODUCER_DAEMON)
 
     def mutate(self, field, value, resign=False):
         doc = json.loads(self.manifest.read_bytes())
@@ -53,7 +54,22 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual(receipt["statement"]["archive_sha256"], D[1])
         self.assertFalse(receipt["production_authorized"])
         self.assertEqual(receipt["statement"]["sbom_index_sha256"], D[4])
-        self.assertEqual(receipt["statement"]["schema_version"], 2)
+        self.assertEqual(receipt["statement"]["schema_version"], 3)
+        self.assertEqual(receipt["statement"]["producer_daemon_id"], PRODUCER_DAEMON)
+
+
+    def test_wrong_expected_producer_daemon(self):
+        with self.assertRaises(ValueError):
+            verify(self.manifest, self.sig, self.public, self.trust, SOURCE, "e" * 64)
+
+    def test_invalid_producer_daemon_refused(self):
+        with self.assertRaises(ValueError):
+            create(self.root / "bad.json", SOURCE, *D, REGISTRY, "not-a-daemon-id")
+
+    def test_tampered_producer_daemon(self):
+        self.mutate("producer_daemon_id", "e" * 64)
+        with self.assertRaises(ValueError):
+            self.check()
 
     def test_tampered_archive(self):
         self.mutate("archive_sha256", D[0])
@@ -70,7 +86,7 @@ class DistributionTests(unittest.TestCase):
     def test_signed_legacy_schema_refused(self):
         doc = json.loads(self.manifest.read_bytes())
         doc.pop("sbom_index_sha256")
-        doc["schema_version"] = 1
+        doc["schema_version"] = 2
         self.manifest.write_bytes(canonical(doc))
         self.sign()
         with self.assertRaises(ValueError): self.check()
