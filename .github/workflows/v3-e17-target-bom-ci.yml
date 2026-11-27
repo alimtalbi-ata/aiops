@@ -1,7 +1,7 @@
 name: V3 isolated E17 target OCI BOM
 on:
   pull_request:
-    branches: [v3-spike/central-integration]
+    branches: [v3-spike/central-integration, v3-spike/po-e17-content-import-20261127]
     paths:
       - 'v3-spike/kit/release-lab/oci_import.py'
       - 'v3-spike/kit/release-lab/test_oci_import.py'
@@ -22,6 +22,10 @@ permissions:
   contents: read
 jobs:
   target-bom:
+    outputs:
+      bom_sha256: ${{ steps.transport_identity.outputs.bom_sha256 }}
+      registry_ref: ${{ steps.transport_identity.outputs.registry_ref }}
+      daemon_id: ${{ steps.transport_identity.outputs.daemon_id }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -140,6 +144,23 @@ jobs:
           python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$expected" > "$V3_ROOT/e17-content-verify.json"
           cmp "$V3_ROOT/e17-content-export.json" "$V3_ROOT/e17-content-verify.json"
           cat "$V3_ROOT/e17-content-verify.json"
+      - name: Bind payload to producer and immutable registry bootstrap
+        id: transport_identity
+        run: |
+          set -euo pipefail
+          expected="sha256:$(sha256sum "$V3_ROOT/e17-content-export/image-bom.json" | cut -d' ' -f1)"
+          registry_ref=$(docker image inspect registry:2 --format '{{json .RepoDigests}}' | python3 -c 'import json,re,sys; refs=[r for r in json.load(sys.stdin) if re.fullmatch(r"(?:docker.io/library/)?registry@sha256:[a-f0-9]{64}",r)]; assert len(refs)==1; print("docker.io/library/registry@"+refs[0].split("@")[1])')
+          daemon_id=$(docker info --format '{{.ID}}')
+          test -n "$daemon_id"
+          printf 'bom_sha256=%s\nregistry_ref=%s\ndaemon_id=%s\n' "$expected" "$registry_ref" "$daemon_id" >> "$GITHUB_OUTPUT"
+      - name: Transfer verified OCI payload only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-e17-content-payload
+          path: /tmp/aiops-v3-rootless-ci/e17-content-export/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
       - name: Restore exact content to a fresh registry with source stopped
         shell: bash
         run: |
@@ -215,4 +236,163 @@ jobs:
         run: |
           if docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless && test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"; then
             docker rm -f v3-lab-kit-registry || true
+          fi
+
+  cold-install:
+    needs: target-bom
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      V3_ROOT: /tmp/aiops-v3-rootless-ci
+      COMPOSE_PROJECT_NAME: v3-e17-cold-install-ci
+      EXPECTED_BOM_SHA: ${{ needs.target-bom.outputs.bom_sha256 }}
+      REGISTRY_REF: ${{ needs.target-bom.outputs.registry_ref }}
+      PRODUCER_DAEMON: ${{ needs.target-bom.outputs.daemon_id }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify same integration checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Start isolated rootless daemon
+        run: |
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
+          sudo apt-get update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          # Disposable runner only: provision dedicated daemon storage before starting Docker.
+          test ! -e "$V3_ROOT"
+          install -m 0700 -d "$V3_ROOT" "$HOME/.config/docker"
+          test ! -e "$HOME/.config/docker/daemon.json"
+          (umask 077; printf '{"data-root":"%s/docker-data"}\n' "$V3_ROOT" > "$HOME/.config/docker/daemon.json")
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Assert a cold independent rootless daemon
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$(id -u)" != 0
+          test "$DOCKER_HOST" = "unix:///run/user/$(id -u)/docker.sock"
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          test -z "$(docker image ls -aq)"
+          test -z "$(docker container ls -aq)"
+          test -z "$(docker volume ls -q)"
+          destination=$(docker info --format '{{.ID}}')
+          test -n "$PRODUCER_DAEMON"
+          test -n "$destination"
+          test "$destination" != "$PRODUCER_DAEMON"
+          echo "COLD_DAEMON_EMPTY_AND_DISTINCT"
+          install -m 0700 -d "$V3_ROOT/e17-content-export"
+      - name: Receive exact OCI payload from producer job
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: v3-e17-content-payload
+          path: /tmp/aiops-v3-rootless-ci/e17-content-export
+      - name: Validate payload before registry writes
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$EXPECTED_BOM_SHA" > "$V3_ROOT/cold-content-verify.json"
+          python3 -c 'import json,os,sys; r=json.load(open(sys.argv[1])); assert r["source_sha"]==os.environ["GITHUB_SHA"] and r["production_authorized"] is False' "$V3_ROOT/cold-content-verify.json"
+      - name: Bootstrap only the pinned registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REGISTRY_REF" =~ ^docker\.io/library/registry@sha256:[a-f0-9]{64}$ ]]
+          docker pull --platform linux/amd64 "$REGISTRY_REF"
+          docker run -d --pull never --name v3-lab-kit-registry -p 127.0.0.1:15080:5000 "$REGISTRY_REF"
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:15080/v2/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:15080/v2/ >/dev/null
+      - name: Restore and cold pull all original image digests
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - "$V3_ROOT" <<'PY'
+          import json, os, pathlib, runpy, subprocess, sys
+          root = pathlib.Path(sys.argv[1])
+          sys.path.insert(0, "v3-spike/kit/release-lab")
+          from oci_import import restore
+          from oci_transport import read_bom
+          archive = root / "e17-content-export"
+          expected = os.environ["EXPECTED_BOM_SHA"]
+          result = restore(archive, expected, port=15080)
+          raw = (archive / "image-bom.json").read_bytes()
+          bom = read_bom(raw)
+          assert bom["source_sha"] == os.environ["GITHUB_SHA"]
+          assert result["manifests"] == {s:r["manifest_digest"] for s,r in bom["images"].items()}
+          reader = runpy.run_path("v3-spike/kit/poc-image-bom.py")["platform_config"]
+          # Inspect all references before the first product pull (shared PG identity is legitimate).
+          for row in bom["images"].values():
+              assert subprocess.run(["docker","image","inspect",row["reference"]],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode != 0
+          for name, row in sorted(bom["images"].items()):
+              ref = row["reference"]
+              subprocess.run(["docker","pull","--platform","linux/amd64",ref],check=True)
+              assert reader(ref, root) == row["config_digest"]
+              # Engine-local IDs need not be portable; record destination identity
+              # only after the registry and platform config identity are verified.
+              info = json.loads(subprocess.check_output(["docker","image","inspect",ref]))[0]
+              assert info["Os"]=="linux" and info["Architecture"]=="amd64"
+              row["engine_image_id"] = info["Id"]
+          (root/"e17-bom").mkdir(mode=0o700)
+          (root/"bom").mkdir(mode=0o700)
+          (root/"e17-bom/image-bom.json").write_text(json.dumps(bom,sort_keys=True)+"\n")
+          base = {**bom,"classification":"DISPOSABLE_POC_IMAGE_BOM","images":{s:r for s,r in bom["images"].items() if s!="e17-target"}}
+          (root/"bom/image-bom.json").write_text(json.dumps(base,sort_keys=True)+"\n")
+          receipt = {**result,"classification":"V3_E17_COLD_RUNNER_PULL","source_sha":bom["source_sha"],
+                     "empty_distinct_daemon":True,"product_build":False,"product_references_present_before_pull":False}
+          (root/"cold-content-pull.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Prepare isolated Chromium from integrated checkout
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          probe=v3-spike/vertical/tests/gamma_oci_e17_readback.py
+          test -f "$probe"
+          git ls-files --error-unmatch "$probe" >/dev/null
+          echo "A probe blob=$(git hash-object "$probe")"
+          install -m 0600 "$probe" "$V3_ROOT/a-e17-probe.py"
+          python3 -m venv "$V3_ROOT/browser-venv"
+          "$V3_ROOT/browser-venv/bin/python" -m pip install --no-cache-dir playwright==1.51.0
+          PLAYWRIGHT_BROWSERS_PATH="$V3_ROOT/chromium" "$V3_ROOT/browser-venv/bin/python" -m playwright install --with-deps chromium
+      - name: Run existing E17 qualification without rebuilding product images
+        run: python3 v3-spike/kit/release-lab/e17-runtime-ci.py
+      - name: Preserve cold-runner proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-e17-cold-runner
+          path: |
+            /tmp/aiops-v3-rootless-ci/cold-content-verify.json
+            /tmp/aiops-v3-rootless-ci/cold-content-pull.json
+            /tmp/aiops-v3-rootless-ci/e17-bom/image-bom.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker-replay.json
+            /tmp/aiops-v3-rootless-ci/e17-history-before.json
+            /tmp/aiops-v3-rootless-ci/e17-history-after.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-recreated-target.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-gamma.json
+            /tmp/aiops-v3-rootless-ci/e17-browser/e17-browser.json
+            /tmp/aiops-v3-rootless-ci/e17-browser/e17-readback.png
+            /tmp/aiops-v3-rootless-ci/e17-browser/trace.zip
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Remove cold disposable registry only
+        if: always()
+        run: |
+          if docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless && test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"; then
+            docker rm -fv v3-lab-kit-registry || true
           fi
