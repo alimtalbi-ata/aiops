@@ -62,5 +62,22 @@ try {
   fs.writeFileSync(reportPaths[1],"not-json"); execute("malformed report",1); reset();
   fs.unlinkSync(reportPaths[1]); execute("missing report",1); reset();
   fs.writeFileSync(reportPaths[1],JSON.stringify({...fixture(2),db_delta:[0,0,0,0]})); execute("incorrect DB delta",1); reset();
-  console.log(JSON.stringify({classification:"V3_STATIC_LAB_RECEIPT_CLI_TEST",result:"PASS",cases:count,positive:1,negative:count-1,production_authorized:false}));
+  const copyProofs = (field) => {
+    const target=fixture(2);
+    target.gamma[field]=fixture(1).gamma[field];
+    fs.writeFileSync(reportPaths[1],JSON.stringify(target));
+  };
+  copyProofs("evidence"); execute("cross-slot copied Evidence",1); reset();
+  copyProofs("decisions"); execute("cross-slot copied HITL",1); reset();
+  const both=fixture(2); both.gamma.evidence=fixture(1).gamma.evidence; both.gamma.decisions=fixture(1).gamma.decisions;
+  fs.writeFileSync(reportPaths[1],JSON.stringify(both)); execute("cross-slot copied proofs",1); reset();
+  const single=fixture(2); single.gamma.evidence[0].evidence_id=fixture(1).gamma.evidence[0].evidence_id;
+  fs.writeFileSync(reportPaths[1],JSON.stringify(single)); execute("cross-slot single Evidence ID",1); reset();
+  const decision=fixture(2); decision.gamma.decisions[0].receipt_id=fixture(1).gamma.decisions[0].receipt_id;
+  fs.writeFileSync(reportPaths[1],JSON.stringify(decision)); execute("cross-slot single HITL ID",1); reset();
+  const repeatedHashes=fixture(2);
+  repeatedHashes.gamma.evidence[0].payload_hash=fixture(1).gamma.evidence[0].payload_hash;
+  repeatedHashes.gamma.decisions[0].receipt_sha256=fixture(1).gamma.decisions[0].receipt_sha256;
+  fs.writeFileSync(reportPaths[1],JSON.stringify(repeatedHashes)); execute("equal hashes with distinct IDs",0); reset();
+  console.log(JSON.stringify({classification:"V3_STATIC_LAB_RECEIPT_CLI_TEST",result:"PASS",cases:count,positive:2,negative:count-2,production_authorized:false}));
 } finally { fs.rmSync(dir,{recursive:true,force:true}); }
