@@ -147,5 +147,75 @@ class BoundaryTests(unittest.TestCase):
                 self.assertEqual(len(calls), 1)
 
 
+class GammaGuardedIntegrationTests(unittest.TestCase):
+    def test_explicit_server_wiring_and_legacy_denial(self):
+        from threading import Thread
+        from unittest.mock import patch
+        from http_demo import server as gamma_server
+        with tempfile.TemporaryDirectory() as tmp:
+            authority_path = Path(tmp) / 'authority.db'
+            witness_path = Path(tmp) / 'witness.db'
+            scope = ('synthetic-demo', 'NODE-CI-ROOT', 'COLLECTOR-one')
+            token = secrets.token_hex(32)
+            with closing(sqlite3.connect(authority_path)) as db, closing(sqlite3.connect(witness_path)) as witness:
+                initialize(db)
+                provision(db, scope, token)
+                provision_witness(db, witness)
+            now = datetime.now(timezone.utc)
+            windows = [{'at': (now - timedelta(seconds=age)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                        'median': value, 'samples': [value] * 5} for age, value in ((10, 10), (2, 100))]
+            rows = batch(*windows)
+            config = {'scope': scope,
+                      'authority': lambda: closing(sqlite3.connect(authority_path)),
+                      'witness': lambda: closing(sqlite3.connect(witness_path)),
+                      'restore_permitted': lambda: True}
+            core = (18101, 'x' * 32, 'RUN-CI-CONTEXT')
+            context = (18102, 18103, 'NODE-CI-ROOT', 'INC-CI-CONTEXT')
+            for invalid in ({**config, 'witness': None}, {**config, 'scope': ('synthetic-demo', 'NODE-CI-OTHER', 'COLLECTOR-one')}):
+                with self.assertRaises(ValueError):
+                    gamma_server(core_config=core, context_config=context, collector_guard=invalid)
+            with self.assertRaises(ValueError):
+                gamma_server(core_config=core, context_config=context, collector_guard=config, container_lab=True)
+            with patch('http_demo.get', return_value={}) as graph_get, \
+                    patch('http_demo.Graph', return_value=GraphFixture()), \
+                    patch('http_demo.create_and_persist', side_effect=lambda r, p, t, e: response_for(r)['publication']) as publisher, \
+                    patch('http_demo.dynamic_context', return_value=persisted_fixture(rows)) as reader:
+                with gamma_server(core_config=core, context_config=context, collector_guard=config) as gamma:
+                    thread = Thread(target=gamma.serve_forever, daemon=True)
+                    thread.start()
+                    try:
+                        def call(route, data):
+                            host = '127.0.0.1:' + str(gamma.server_port)
+                            with closing(http.client.HTTPConnection('127.0.0.1', gamma.server_port, timeout=3)) as conn:
+                                conn.request('POST', route, body=json.dumps(data).encode(), headers={
+                                    'Origin': 'http://' + host, 'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer ' + token})
+                                res = conn.getresponse()
+                                return res.status, json.loads(res.read())
+                        data = {'generation': 0, 'rows': rows}
+                        for route in ('/api/v1/ingest/admit', '/api/v1/ingest/create', '/api/v1/ingest/persist',
+                                      '/api/v1/enterprise-clock/advance', '/api/v1/enterprise-clock/capture'):
+                            self.assertEqual(call(route, rows)[0], 403)
+                        publisher.assert_not_called()
+                        self.assertEqual(call('/api/v1/ingest', rows)[0], 200)
+                        status, result = call(ADMIT, data)
+                        self.assertEqual(status, 200)
+                        run_id = result['publication']['core']['run']['run_id']
+                        publisher.assert_called_once_with(rows, core[0], core[1], context[1])
+                        reader.assert_called_once_with(core[0], core[1], run_id, context[0], context[1], context[2], include_signals=True)
+                        graph_get.assert_called_once_with(context[0], '/api/twin/graph')
+                        self.assertEqual(call(ADMIT, data)[0], 403)
+                        query = {'generation': 0, 'episode': rows[0]['id'][:32], 'batch': digest(ingest(rows)['incidents'][0])}
+                        self.assertEqual(call(RECEIPT, query), (200, {'state': 'COMMITTED', 'run_id': run_id, 'receipt_sha256': digest(result)}))
+                        self.assertEqual(publisher.call_count, 1)
+                        self.assertEqual(reader.call_count, 1)
+                    finally:
+                        gamma.shutdown()
+                        thread.join()
+            with gamma_server() as plain:
+                self.assertIsNone(plain.collector_guard)
+
+
+
 if __name__ == '__main__':
     unittest.main()
