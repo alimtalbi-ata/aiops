@@ -66,6 +66,30 @@ class DistributionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             create(self.root / "bad.json", SOURCE, *D, REGISTRY, "not-a-daemon-id")
 
+    def test_signed_canonical_uuid_producer(self):
+        producer = "1613f9ab-6f5a-4ea9-abfd-7a347656df91"
+        self.manifest.unlink()
+        create(self.manifest, SOURCE, *D, REGISTRY, producer)
+        self.sign()
+        receipt = verify(self.manifest, self.sig, self.public, self.trust, SOURCE, producer)
+        self.assertEqual(receipt["statement"]["producer_daemon_id"], producer)
+        self.assertFalse(receipt["production_authorized"])
+        with self.assertRaises(ValueError):
+            verify(self.manifest, self.sig, self.public, self.trust, SOURCE,
+                   "2613f9ab-6f5a-4ea9-abfd-7a347656df91")
+        self.mutate("producer_daemon_id", "2613f9ab-6f5a-4ea9-abfd-7a347656df91")
+        with self.assertRaises(ValueError):
+            verify(self.manifest, self.sig, self.public, self.trust, SOURCE, producer)
+
+    def test_noncanonical_daemon_identity_refused(self):
+        producer = "1613f9ab-6f5a-4ea9-abfd-7a347656df91"
+        for value in (producer.upper(), producer.replace("-", ""), producer + " ",
+                      " " + producer, producer + "\n", "g" * 64, "", None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                create(self.root / "bad.json", SOURCE, *D, REGISTRY, value)
+            with self.subTest(expected=value), self.assertRaises(ValueError):
+                verify(self.manifest, self.sig, self.public, self.trust, SOURCE, value)
+
     def test_tampered_producer_daemon(self):
         self.mutate("producer_daemon_id", "e" * 64)
         with self.assertRaises(ValueError):
