@@ -712,7 +712,26 @@ jobs:
           test "$evidence_initial" = "$("${compose[@]}" ps -q evidence)"
           test "$(docker inspect -f '{{.State.Health.Status}}' "$core_initial")" = healthy
           test "$(docker inspect -f '{{.State.Health.Status}}' "$evidence_initial")" = healthy
-          "${compose[@]}" up -d --no-deps temporal-ui
+          # RootlessKit can race a host process for a dynamically allocated
+          # loopback port. Retry only an explicit bind collision, and only the
+          # disposable UI container; never restart the Temporal DB or app stack.
+          ui_log=$(mktemp "$V3_ROOT/.temporal-ui-start.XXXXXX")
+          for attempt in 1 2 3; do
+            if "${compose[@]}" up -d --no-deps temporal-ui >"$ui_log" 2>&1; then
+              cat "$ui_log"
+              break
+            else
+              status=$?
+            fi
+            cat "$ui_log" >&2
+            if [[ "$attempt" == 3 ]] || ! grep -Eqi 'RootlessKit PortManager.AddPort.*address already in use|port is already allocated' "$ui_log"; then
+              exit "$status"
+            fi
+            echo "Temporal UI loopback bind collision; retrying only this disposable UI container" >&2
+            "${compose[@]}" rm -sf temporal-ui
+            sleep "$attempt"
+          done
+          rm -f "$ui_log"
           ui=$("${compose[@]}" port temporal-ui 8080)
           [[ "$ui" =~ ^127\.0\.0\.1:[0-9]+$ ]]
           case "${ui##*:}" in 7770|7777|7790) exit 1 ;; esac
