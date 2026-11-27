@@ -4,10 +4,13 @@ on:
     branches:
       - v3-spike/central-integration
       - v3-spike/b-rearm-proof-binding-20261127
+      - v3-spike/collector-authority-restore-guard-lab-20261127
     paths:
       - 'v3-spike/vertical/*collector*.py'
       - 'v3-spike/vertical/test_recovery_verify_contract.py'
       - 'v3-spike/vertical/recovery_verify.py'
+      - 'v3-spike/vertical/authority_restore_guard_candidate.py'
+      - 'v3-spike/vertical/test_authority_restore_guard_candidate.py'
       - 'v3-spike/vertical/ingestion_demo.py'
       - 'v3-spike/vertical/incident_admission.py'
       - 'v3-spike/vertical/enterprise_context.py'
@@ -39,7 +42,7 @@ jobs:
             test_collector_admission_fence test_collector_scope_history \
             test_collector_persisted_receipt test_collector_admission_service \
             test_collector_http_boundary test_fenced_durable_collector \
-            test_recovery_verify_contract
+            test_recovery_verify_contract test_authority_restore_guard_candidate
       - name: Qualification boundary
         if: always()
         run: |

@@ -57,6 +57,7 @@ jobs:
         working-directory: v3-spike/kit/release-lab
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport.TransportTests test_oci_import.RestoreTests test_oci_envelope.EnvelopeTests test_runtime_payload.RuntimePayloadTests test_distribution_manifest.DistributionTests test_sbom_contract.SBOMTests test_e17_temporal_restore.TemporalRestoreSchemaTests
       - name: Start isolated rootless daemon
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           test "$GITHUB_ACTIONS" = true
@@ -72,13 +73,14 @@ jobs:
           test -f /etc/apt/sources.list.d/ubuntu.sources
           sudo install -m 0755 -d "$apt_sources" /etc/apt/keyrings
           sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$apt_sources/ubuntu.sources"
-          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo curl -fsSL --connect-timeout 15 --max-time 60 https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
           sudo chmod a+r /etc/apt/keyrings/docker.asc
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee "$apt_sources/docker.list"
           printf 'Dir::Etc::sourcelist "/dev/null";\nDir::Etc::sourceparts "%s";\nAPT::Get::List-Cleanup "false";\n' "$apt_sources" | sudo tee "$apt_conf"
           apt-config dump | grep -F 'Dir::Etc::sourceparts "/etc/apt/v3-e17-ci-sources";'
-          sudo apt-get -o APT::Update::Error-Mode=any update
-          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          # Bound mirror/network stalls; retain mandatory signed index validation.
+          sudo timeout --kill-after=15s 240s apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 -o Acquire::Languages=none -o APT::Update::Error-Mode=any update
+          sudo timeout --kill-after=15s 240s apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 install -y uidmap dbus-user-session docker-ce-rootless-extras
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
@@ -239,6 +241,7 @@ jobs:
           SUPPORT_SHA: ${{ steps.runtime_support.outputs.manifest }}
           VERIFIER_SHA: ${{ steps.runtime_support.outputs.verifier }}
           REGISTRY_REF: ${{ steps.transport_identity.outputs.registry_ref }}
+          PRODUCER_DAEMON: ${{ steps.transport_identity.outputs.daemon_id }}
         run: |
           set -euo pipefail
           umask 077
@@ -246,12 +249,12 @@ jobs:
           trap 'rm -f "$keydir/private.pem"; rmdir "$keydir"' EXIT
           auth="$V3_ROOT/distribution-proof/auth"
           sbom="sha256:$(sha256sum "$V3_ROOT/distribution-proof/sbom/index.json" | cut -d' ' -f1)"
-          python3 v3-spike/kit/release-lab/distribution_manifest.py create "$auth/manifest.json" "$GITHUB_SHA" "$BOM_SHA" "$ARCHIVE_SHA" "$SUPPORT_SHA" "sha256:$VERIFIER_SHA" "$sbom" "$REGISTRY_REF"
+          python3 v3-spike/kit/release-lab/distribution_manifest.py create "$auth/manifest.json" "$GITHUB_SHA" "$BOM_SHA" "$ARCHIVE_SHA" "$SUPPORT_SHA" "sha256:$VERIFIER_SHA" "$sbom" "$REGISTRY_REF" "$PRODUCER_DAEMON"
           openssl genpkey -algorithm ED25519 -out "$keydir/private.pem"
           openssl pkey -in "$keydir/private.pem" -pubout -outform DER -out "$auth/public.der"
           openssl pkeyutl -sign -rawin -inkey "$keydir/private.pem" -in "$auth/manifest.json" -out "$auth/manifest.sig"
           key_sha="sha256:$(sha256sum "$auth/public.der" | cut -d' ' -f1)"
-          python3 v3-spike/kit/release-lab/distribution_manifest.py verify "$auth/manifest.json" "$auth/manifest.sig" "$auth/public.der" "$key_sha" "$GITHUB_SHA" > "$V3_ROOT/distribution-signature-verify.json"
+          python3 v3-spike/kit/release-lab/distribution_manifest.py verify "$auth/manifest.json" "$auth/manifest.sig" "$auth/public.der" "$key_sha" "$GITHUB_SHA" "$PRODUCER_DAEMON" > "$V3_ROOT/distribution-signature-verify.json"
           printf 'key_sha=%s\n' "$key_sha" >> "$GITHUB_OUTPUT"
           cat "$V3_ROOT/distribution-signature-verify.json"
       - name: Transfer signed statement and bound SPDX reports only
@@ -390,10 +393,12 @@ jobs:
         run: |
           set -eu
           test -d "$GITHUB_WORKSPACE"
-          test -z "$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)"
+          workspace_entry=$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)
+          test -z "$workspace_entry"
           if git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 1; fi
           echo "NO_SOURCE_CHECKOUT"
       - name: Start isolated rootless daemon
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           test "$GITHUB_ACTIONS" = true
@@ -409,13 +414,14 @@ jobs:
           test -f /etc/apt/sources.list.d/ubuntu.sources
           sudo install -m 0755 -d "$apt_sources" /etc/apt/keyrings
           sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$apt_sources/ubuntu.sources"
-          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo curl -fsSL --connect-timeout 15 --max-time 60 https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
           sudo chmod a+r /etc/apt/keyrings/docker.asc
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee "$apt_sources/docker.list"
           printf 'Dir::Etc::sourcelist "/dev/null";\nDir::Etc::sourceparts "%s";\nAPT::Get::List-Cleanup "false";\n' "$apt_sources" | sudo tee "$apt_conf"
           apt-config dump | grep -F 'Dir::Etc::sourceparts "/etc/apt/v3-e17-ci-sources";'
-          sudo apt-get -o APT::Update::Error-Mode=any update
-          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          # Bound mirror/network stalls; retain mandatory signed index validation.
+          sudo timeout --kill-after=15s 240s apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 -o Acquire::Languages=none -o APT::Update::Error-Mode=any update
+          sudo timeout --kill-after=15s 240s apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 install -y uidmap dbus-user-session docker-ce-rootless-extras
           sudo loginctl enable-linger "$USER"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
@@ -436,9 +442,12 @@ jobs:
           test "$DOCKER_HOST" = "unix:///run/user/$(id -u)/docker.sock"
           docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
           test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
-          test -z "$(docker image ls -aq)"
-          test -z "$(docker container ls -aq)"
-          test -z "$(docker volume ls -q)"
+          images=$(docker image ls -aq)
+          containers=$(docker container ls -aq)
+          volumes=$(docker volume ls -q)
+          test -z "$images"
+          test -z "$containers"
+          test -z "$volumes"
           destination=$(docker info --format '{{.ID}}')
           test -n "$PRODUCER_DAEMON"
           test -n "$destination"
@@ -481,9 +490,9 @@ jobs:
           set -euo pipefail
           umask 077
           auth="$V3_ROOT/distribution-proof/auth"
-          python3 -I -B "$V3_ROOT/runtime-support/v3-spike/kit/release-lab/distribution_manifest.py" verify "$auth/manifest.json" "$auth/manifest.sig" "$auth/public.der" "$EXPECTED_SIGNING_KEY_SHA" "$GITHUB_SHA" > "$V3_ROOT/cold-signature-verify.json"
+          python3 -I -B "$V3_ROOT/runtime-support/v3-spike/kit/release-lab/distribution_manifest.py" verify "$auth/manifest.json" "$auth/manifest.sig" "$auth/public.der" "$EXPECTED_SIGNING_KEY_SHA" "$GITHUB_SHA" "$PRODUCER_DAEMON" > "$V3_ROOT/cold-signature-verify.json"
           python3 -I - <<'PY'
-          import hashlib,json,os,pathlib
+          import hashlib,json,os,pathlib,re,subprocess
           root=pathlib.Path(os.environ["V3_ROOT"])
           proof=root/"distribution-proof"
           assert {p.name for p in proof.iterdir()}=={"auth","sbom"}
@@ -494,12 +503,15 @@ jobs:
           receipt=json.loads((root/"cold-signature-verify.json").read_text())
           doc=receipt["statement"]
           assert receipt["result"]=="PASS" and receipt["production_authorized"] is False
-          assert doc["schema_version"]==2
+          assert doc["schema_version"]==3
           for key,env in (("bom_sha256","EXPECTED_BOM_SHA"),("archive_sha256","EXPECTED_ARCHIVE_SHA"),("support_manifest_sha256","EXPECTED_SUPPORT_MANIFEST"),("registry_reference","REGISTRY_REF")):
               assert doc[key]==os.environ[env]
+          assert doc["producer_daemon_id"]==os.environ["PRODUCER_DAEMON"]
+          destination=subprocess.check_output(["docker","info","--format","{{.ID}}"],text=True).strip()
+          assert re.fullmatch(r"[a-f0-9]{64}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}",destination) and destination!=doc["producer_daemon_id"]
           assert doc["support_verifier_sha256"]=="sha256:"+os.environ["EXPECTED_SUPPORT_VERIFIER"]
           assert doc["sbom_index_sha256"]=="sha256:"+hashlib.sha256(index.read_bytes()).hexdigest()
-          print("PASS signed transport identities and SBOM index bound to ephemeral LAB key")
+          print("PASS signed producer daemon identity, distinct cold daemon, transport identities and SBOM index")
           PY
       - name: Receive exact OCI payload from producer job
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -607,7 +619,8 @@ jobs:
           python3 v3-spike/kit/release-lab/e17-runtime-ci.py
           python3 -I -B v3-spike/kit/release-lab/runtime_payload.py verify "$V3_ROOT/runtime-support" "$EXPECTED_SUPPORT_MANIFEST" "$GITHUB_SHA" > "$V3_ROOT/cold-support-after.json"
           cmp "$V3_ROOT/cold-support-verify.json" "$V3_ROOT/cold-support-after.json"
-          test -z "$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)"
+          workspace_entry=$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)
+          test -z "$workspace_entry"
           python3 -I - <<'PY'
           import json,os,pathlib
           root=pathlib.Path(os.environ["V3_ROOT"])
