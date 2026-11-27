@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [v3-spike/central-integration]
     paths:
+      - 'v3-spike/kit/release-lab/oci_transport.py'
+      - 'v3-spike/kit/release-lab/test_oci_transport.py'
       - 'v3-spike/kit/release-lab/stage-e17-target.py'
       - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
       - 'v3-spike/kit/release-lab/e17-history-evidence.py'
@@ -29,6 +31,9 @@ jobs:
           persist-credentials: false
       - name: Verify exact branch checkout
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Qualify transport against isolated HTTP registry fixture
+        working-directory: v3-spike/kit/release-lab
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v test_oci_transport
       - name: Start isolated rootless daemon
         run: |
           sudo install -m 0755 -d /etc/apt/keyrings
@@ -118,12 +123,29 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH="$V3_ROOT/chromium" "$V3_ROOT/browser-venv/bin/python" -m playwright install --with-deps chromium
       - name: Exercise pinned E17 Worker target and readback
         run: python3 v3-spike/kit/release-lab/e17-runtime-ci.py
+      - name: Export and independently verify original registry content
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          test "$(id -u)" != 0
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          bom="$V3_ROOT/e17-bom/image-bom.json"
+          expected="sha256:$(sha256sum "$bom" | cut -d' ' -f1)"
+          python3 v3-spike/kit/release-lab/oci_transport.py export "$bom" "$V3_ROOT/e17-content-export" > "$V3_ROOT/e17-content-export.json"
+          python3 v3-spike/kit/release-lab/oci_transport.py verify "$V3_ROOT/e17-content-export" "$expected" > "$V3_ROOT/e17-content-verify.json"
+          cmp "$V3_ROOT/e17-content-export.json" "$V3_ROOT/e17-content-verify.json"
+          cat "$V3_ROOT/e17-content-verify.json"
       - name: Preserve OCI identity and build context receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: v3-e17-target-bom
           path: |
+            /tmp/aiops-v3-rootless-ci/e17-content-export.json
+            /tmp/aiops-v3-rootless-ci/e17-content-verify.json
             /tmp/aiops-v3-rootless-ci/e17-context-report.json
             /tmp/aiops-v3-rootless-ci/e17-bom/image-bom.json
             /tmp/aiops-v3-rootless-ci/e17-bom/compose.pinned.json
