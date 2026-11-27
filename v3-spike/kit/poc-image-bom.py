@@ -12,6 +12,7 @@ import tempfile
 
 SERVICES = ("postgres", "core", "twin", "evidence", "policy")
 ORCHESTRATION_SERVICES = SERVICES + ("temporal-postgres", "temporal", "worker")
+GAMMA_SERVICES = ORCHESTRATION_SERVICES + ("gamma",)
 REGISTRY = "127.0.0.1:15080"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -66,7 +67,7 @@ def platform_config(ref, out):
 
 def registry_manifest(service, expected_config):
     """Read the actual published single-platform manifest, not local RepoDigests."""
-    if service not in ORCHESTRATION_SERVICES or not DIGEST.fullmatch(expected_config):
+    if service not in GAMMA_SERVICES or not DIGEST.fullmatch(expected_config):
         raise ValueError("invalid registry manifest request")
     media=("application/vnd.oci.image.manifest.v1+json",
            "application/vnd.docker.distribution.manifest.v2+json")
@@ -97,7 +98,7 @@ def create(out, source_sha, services=SERVICES):
         repo = REGISTRY + "/aiops-v3/" + service
         tag = repo + ":ci"
         info = image_info(tag)
-        if services == ORCHESTRATION_SERVICES:
+        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
             platform=info["Os"]+"/"+info["Architecture"]
             if platform!="linux/amd64":
                 raise ValueError("this disposable campaign qualifies linux/amd64 only")
@@ -115,7 +116,7 @@ def create(out, source_sha, services=SERVICES):
             ref = refs[0]
         subprocess.run(["docker", "pull", ref], check=True)
         pinned = image_info(ref)
-        if services == ORCHESTRATION_SERVICES:
+        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
             pinned_config=platform_config(ref,out)
             if pinned_config!=source_config or pinned["Os"]!="linux" or pinned["Architecture"]!="amd64":
                 raise ValueError("pinned platform config differs from source: "+service)
@@ -157,7 +158,7 @@ def verify(out, container_ids, services=SERVICES):
         if not DIGEST.fullmatch(expected["config_digest"]):
             raise ValueError("invalid config digest")
         expected_engine=expected["config_digest"]
-        if services == ORCHESTRATION_SERVICES:
+        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
             expected_engine=expected["engine_image_id"]
             if not DIGEST.fullmatch(expected_engine) or image_info(expected["reference"])["Id"]!=expected_engine:
                 raise ValueError("pinned engine identity changed")
@@ -172,7 +173,7 @@ def verify(out, container_ids, services=SERVICES):
             raise ValueError("container not healthy or differs from BOM: " + service)
         receipts[service] = {"manifest_digest": expected["manifest_digest"],
                              "config_digest": expected["config_digest"], "health": "healthy"}
-        if services == ORCHESTRATION_SERVICES:
+        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
             receipts[service]["engine_image_id"]=row["Image"]
     result = {"classification": "DISPOSABLE_POC_PINNED_START",
               "source_sha": bom["source_sha"], "production_authorized": False,
@@ -191,5 +192,9 @@ if __name__ == "__main__":
         create(Path(sys.argv[2]), sys.argv[3], ORCHESTRATION_SERVICES)
     elif len(sys.argv) == 3 + len(ORCHESTRATION_SERVICES) and sys.argv[1] == "verify-orchestration":
         verify(Path(sys.argv[2]), sys.argv[3:], ORCHESTRATION_SERVICES)
+    elif len(sys.argv)==4 and sys.argv[1]=="create-gamma":
+        create(Path(sys.argv[2]),sys.argv[3],GAMMA_SERVICES)
+    elif len(sys.argv)==3+len(GAMMA_SERVICES) and sys.argv[1]=="verify-gamma":
+        verify(Path(sys.argv[2]),sys.argv[3:],GAMMA_SERVICES)
     else:
-        raise SystemExit("usage: poc-image-bom.py create OUT SHA | verify OUT IDS... | create-orchestration OUT SHA | verify-orchestration OUT IDS...")
+        raise SystemExit("usage: poc-image-bom.py create/verify | create-orchestration/verify-orchestration | create-gamma/verify-gamma")

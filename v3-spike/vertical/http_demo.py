@@ -242,7 +242,13 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 result=self.server.approval_gate.decide(data["request_id"],*args,data.get("approved"))
             self.reply(200,json.dumps(result).encode())
-        except Exception:
+        except Exception as exc:
+            if isinstance(self,ContainerLabHandler):
+                # The explicit disposable profile logs only the exception class
+                # and a code location, never the request, message, token or body.
+                import traceback
+                last=traceback.extract_tb(exc.__traceback__)[-1]
+                print("GAMMA_REQUEST_UNVERIFIED",type(exc).__name__,Path(last.filename).name,last.lineno,flush=True)
             self.reply(503,b'{"error":"REQUEST_UNVERIFIED","policy":"DENY"}')
 
     def do_GET(self):
@@ -477,8 +483,30 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.reply(404, b'{"error":"NOT_FOUND"}')
 
-def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None, ai_providers=None):
-    http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+class ContainerLabHandler(Handler):
+    def trusted_origin(self):
+        origin="http://127.0.0.1:18080"
+        return self.headers.get("Host")=="127.0.0.1:18080" and self.headers.get("Origin",origin)==origin
+
+    def do_GET(self):
+        if not self.trusted_origin():
+            self.reply(403,b'{"policy":"DENY"}')
+        else:
+            super().do_GET()
+
+    def do_POST(self):
+        if not self.trusted_origin():
+            self.reply(403,b'{"policy":"DENY"}')
+        else:
+            super().do_POST()
+
+def server(port=0, core_config=None, context_config=None, policy_port=None, mattermost_config=None, enterprise_clock=None, enterprise_collector=None, technical_collector=None, ai_providers=None, *, container_lab=False):
+    if container_lab:
+        if os.environ.get("AIOPS_V3_GAMMA_CONTAINER_LAB")!="1" or os.getuid()==0 or port!=18080 or enterprise_clock is None:
+            raise ValueError("explicit nonroot synthetic container profile required")
+        http=ThreadingHTTPServer(("0.0.0.0",port),ContainerLabHandler)
+    else:
+        http = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     http.core_config = core_config
     http.context_config = context_config
     http.policy_port = policy_port
