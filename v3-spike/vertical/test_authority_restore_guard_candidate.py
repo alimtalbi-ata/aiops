@@ -108,6 +108,39 @@ class GuardTests(unittest.TestCase):
                 with self.assertRaises(RestoreBlocked):
                     require_independent_daemons(authority_id, witness_id)
 
+
+    def test_signed_distinct_daemon_attestations(self):
+        import hashlib, hmac, json
+        from authority_restore_guard_candidate import require_independent_daemon_attestations
+        challenge='c'*64
+        akey=b'A'*32
+        wkey=b'W'*32
+        def attest(daemon_id, role, domain, key, nonce=challenge):
+            payload=json.dumps({'daemon_id':daemon_id,'challenge':nonce,'role':role,
+                                'failure_domain_id':domain},
+                               sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+            return {'daemon_id':daemon_id,'challenge':nonce,'role':role,
+                    'failure_domain_id':domain,
+                    'signature':hmac.new(key,payload,hashlib.sha256).hexdigest()}
+        authority=attest('a'*64,'authority','host-A',akey)
+        witness=attest('b'*64,'witness','host-B',wkey)
+        self.assertTrue(require_independent_daemon_attestations(authority,witness,challenge,akey,wkey))
+        cases=(
+            (authority,attest('a'*64,'witness','host-B',wkey),akey,wkey),
+            (authority,attest('b'*64,'witness','host-A',wkey),akey,wkey),
+            (authority,attest('b'*64,'witness','host-B',wkey,nonce='d'*64),akey,wkey),
+            (authority,attest('b'*64,'witness','host-B',b'X'*32),akey,wkey),
+            (authority,attest('b'*64,'witness','host-B',akey),akey,akey),
+        )
+        for a,w,ak,wk in cases:
+            with self.subTest(attestation=w):
+                with self.assertRaises(RestoreBlocked):
+                    require_independent_daemon_attestations(a,w,challenge,ak,wk)
+        tampered=dict(witness)
+        tampered['failure_domain_id']='host-A'
+        with self.assertRaises(RestoreBlocked):
+            require_independent_daemon_attestations(authority,tampered,challenge,akey,wkey)
+
     def test_simultaneous_rollback_is_outside_contract(self):
         old_a=self.backup('old.db')
         old_w=self.connect('old-witness.db')
