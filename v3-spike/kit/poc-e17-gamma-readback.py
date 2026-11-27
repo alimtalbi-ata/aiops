@@ -9,7 +9,10 @@ from urllib.request import build_opener,ProxyHandler,HTTPRedirectHandler,Request
 from urllib.error import HTTPError
 
 origin,root=sys.argv[1:3]
-assert sys.argv[3:] in ([],["product"])
+assert sys.argv[3:] in ([],["product"],["product-container"])
+container_profile=sys.argv[3:]==["product-container"]
+if container_profile:
+    assert origin=="http://127.0.0.1:18080"
 name="temporal-e17-product" if sys.argv[3:] else "temporal-e17"
 assert re.fullmatch(r"http://127\.0\.0\.1:[0-9]{4,5}",origin)
 assert int(origin.rsplit(":",1)[1]) not in (7770,7777,7790)
@@ -30,7 +33,10 @@ def get(route,headers=None):
         raw=r.read(65537)
         assert len(raw)<=65536 and r.headers["Cache-Control"]=="no-store"
         return json.loads(raw)
-result=get(path(rid,comparison))
+try:
+    result=get(path(rid,comparison))
+except HTTPError as exc:
+    raise SystemExit("E17_POSITIVE_HTTP_"+str(exc.code)) from None
 def canonical_projection(value):
     # Evidence collections are unordered sets of immutable references. Preserve
     # every ID and digest, reject duplicate IDs, and compare all other fields exactly.
@@ -64,7 +70,9 @@ for route,headers in ((path(comparison,rid),{}),(path(rid,rid),{}),
                       (path(rid,comparison),{"Host":"foreign.invalid"})):
     try: get(route,headers)
     except HTTPError as exc:
-        assert exc.code==503 and json.load(exc)["policy"]=="DENY"
+        expected_status=403 if container_profile and headers else 503
+        if exc.code!=expected_status or json.load(exc).get("policy")!="DENY":
+            raise SystemExit("E17_NEGATIVE_STATUS_"+str(exc.code)+"_EXPECTED_"+str(expected_status)) from None
     else: raise AssertionError("unverified request accepted")
 assert canonical_projection(get(path(rid,comparison)))==actual
 print(json.dumps({"classification":"V3_GAMMA_E17_REAL_READBACK","result":"PASS",

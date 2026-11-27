@@ -1,0 +1,147 @@
+name: V3 isolated E17 target OCI BOM
+on:
+  pull_request:
+    branches: [v3-spike/central-integration]
+    paths:
+      - 'v3-spike/kit/release-lab/stage-e17-target.py'
+      - 'v3-spike/kit/release-lab/e17-runtime-ci.py'
+      - 'v3-spike/kit/release-lab/e17-history-evidence.py'
+      - 'v3-spike/kit/poc-image-bom.py'
+      - 'v3-spike/kit/compose.poc-source.yml'
+      - 'v3-spike/kit/compose.gamma-ci.yml'
+      - 'v3-spike/kit/poc*e17*.py'
+      - 'v3-spike/kit/release-lab/assemble.py'
+      - 'v3-spike/vertical/**'
+      - '.github/workflows/v3-e17-target-bom-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  target-bom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      V3_ROOT: /tmp/aiops-v3-rootless-ci
+      COMPOSE_PROJECT_NAME: v3-e17-target-build-ci
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify exact branch checkout
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Start isolated rootless daemon
+        run: |
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker-rootless-ci.list
+          sudo apt-get update
+          sudo apt-get install -y uidmap dbus-user-session docker-ce-rootless-extras
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          # Disposable runner only: provision dedicated daemon storage before starting Docker.
+          test ! -e "$V3_ROOT"
+          install -m 0700 -d "$V3_ROOT" "$HOME/.config/docker"
+          test ! -e "$HOME/.config/docker/daemon.json"
+          (umask 077; printf '{"data-root":"%s/docker-data"}\n' "$V3_ROOT" > "$HOME/.config/docker/daemon.json")
+          dockerd-rootless-setuptool.sh install --force
+          systemctl --user start docker
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+      - name: Prepare actual nine-image immutable BOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          test "$(id -u)" != 0
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          export V3_DB_PASSWORD="$(openssl rand -hex 24)"
+          export V3_LAB_TOKEN="$(openssl rand -hex 32)"
+          echo "::add-mask::$V3_DB_PASSWORD"
+          echo "::add-mask::$V3_LAB_TOKEN"
+          mkdir -p "$V3_ROOT/data/postgres" "$V3_ROOT/data/temporal-postgres" "$V3_ROOT/bom"
+          printf 'V3_DB_PASSWORD=%s\nV3_LAB_TOKEN=%s\n' "$V3_DB_PASSWORD" "$V3_LAB_TOKEN" > "$V3_ROOT/poc.env"
+          out="$V3_ROOT/bom"
+          base=v3-spike/kit/compose.poc-source.yml
+          compose=(docker compose --env-file "$V3_ROOT/poc.env" -f "$base" -f v3-spike/kit/compose.gamma-ci.yml --profile orchestration)
+          docker run -d --name v3-lab-kit-registry -p 127.0.0.1:15080:5000 registry:2
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:15080/v2/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS --max-time 5 http://127.0.0.1:15080/v2/ >/dev/null
+          python3 -m py_compile v3-spike/kit/poc-image-bom.py
+          python3 - "$V3_ROOT/build.json" <<'PY'
+          import json,sys
+          names=("core","twin","evidence","policy","worker","gamma")
+          with open(sys.argv[1],"x") as f:
+              json.dump({"services":{s:{"image":"127.0.0.1:15080/aiops-v3/"+s+":ci"} for s in names}},f)
+          PY
+          "${compose[@]}" -f "$V3_ROOT/build.json" build core twin evidence policy worker gamma
+          "${compose[@]}" pull postgres temporal
+          docker tag postgres:16-alpine 127.0.0.1:15080/aiops-v3/postgres:ci
+          docker tag postgres:16-alpine 127.0.0.1:15080/aiops-v3/temporal-postgres:ci
+          docker tag temporalio/auto-setup:1.29.7 127.0.0.1:15080/aiops-v3/temporal:ci
+          python3 v3-spike/kit/poc-image-bom.py create-gamma "$out" "$(git rev-parse HEAD)"
+      - name: Build and verify tenth image from immutable Worker base
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          test "$(id -u)" != 0
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          worker=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"]["worker"]["reference"])' "$V3_ROOT/bom/image-bom.json")
+          python3 v3-spike/kit/release-lab/stage-e17-target.py v3-spike "$V3_ROOT/e17-context" "$worker" > "$V3_ROOT/e17-context-report.json"
+          docker build --network none --pull --platform linux/amd64 -t 127.0.0.1:15080/aiops-v3/e17-target:ci "$V3_ROOT/e17-context"
+          install -m 0700 -d "$V3_ROOT/target-bom"
+          python3 v3-spike/kit/poc-image-bom.py create-e17-target "$V3_ROOT/target-bom" "$GITHUB_SHA"
+          python3 v3-spike/kit/poc-image-bom.py extend-e17 "$V3_ROOT/bom" "$V3_ROOT/target-bom" "$V3_ROOT/e17-bom" "$GITHUB_SHA"
+          target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"]["e17-target"]["reference"])' "$V3_ROOT/e17-bom/image-bom.json")
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --entrypoint python "$target" -c 'import os,sys,ast,pathlib; assert os.getuid()==1000; p=pathlib.Path("/lab"); files=list(p.rglob("*.py")); assert len(files)==29; [ast.parse(f.read_bytes()) for f in files]; import temporalio; print("E17_TARGET_IMAGE_STATIC_ONLY")'
+      - name: Prepare isolated Chromium from integrated checkout
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          probe=v3-spike/vertical/tests/gamma_oci_e17_readback.py
+          test -f "$probe"
+          git ls-files --error-unmatch "$probe" >/dev/null
+          echo "A probe blob=$(git hash-object "$probe")"
+          install -m 0600 "$probe" "$V3_ROOT/a-e17-probe.py"
+          python3 -m venv "$V3_ROOT/browser-venv"
+          "$V3_ROOT/browser-venv/bin/python" -m pip install --no-cache-dir playwright==1.51.0
+          PLAYWRIGHT_BROWSERS_PATH="$V3_ROOT/chromium" "$V3_ROOT/browser-venv/bin/python" -m playwright install --with-deps chromium
+      - name: Exercise pinned E17 Worker target and readback
+        run: python3 v3-spike/kit/release-lab/e17-runtime-ci.py
+      - name: Preserve OCI identity and build context receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v3-e17-target-bom
+          path: |
+            /tmp/aiops-v3-rootless-ci/e17-context-report.json
+            /tmp/aiops-v3-rootless-ci/e17-bom/image-bom.json
+            /tmp/aiops-v3-rootless-ci/e17-bom/compose.pinned.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-worker-replay.json
+            /tmp/aiops-v3-rootless-ci/e17-history-before.json
+            /tmp/aiops-v3-rootless-ci/e17-history-after.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-recreated-target.json
+            /tmp/aiops-v3-rootless-ci/temporal-e17-product-gamma.json
+            /tmp/aiops-v3-rootless-ci/e17-browser/e17-browser.json
+            /tmp/aiops-v3-rootless-ci/e17-browser/e17-readback.png
+            /tmp/aiops-v3-rootless-ci/e17-browser/trace.zip
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Remove disposable registry only
+        if: always()
+        run: |
+          if docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless && test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"; then
+            docker rm -f v3-lab-kit-registry || true
+          fi

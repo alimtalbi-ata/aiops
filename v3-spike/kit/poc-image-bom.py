@@ -13,6 +13,9 @@ import tempfile
 SERVICES = ("postgres", "core", "twin", "evidence", "policy")
 ORCHESTRATION_SERVICES = SERVICES + ("temporal-postgres", "temporal", "worker")
 GAMMA_SERVICES = ORCHESTRATION_SERVICES + ("gamma",)
+E17_SERVICES = GAMMA_SERVICES + ("e17-target",)
+E17_TARGET_ONLY = ("e17-target",)
+PLATFORM_SERVICE_SETS = (ORCHESTRATION_SERVICES, GAMMA_SERVICES, E17_TARGET_ONLY)
 REGISTRY = "127.0.0.1:15080"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -67,7 +70,7 @@ def platform_config(ref, out):
 
 def registry_manifest(service, expected_config):
     """Read the actual published single-platform manifest, not local RepoDigests."""
-    if service not in GAMMA_SERVICES or not DIGEST.fullmatch(expected_config):
+    if service not in E17_SERVICES or not DIGEST.fullmatch(expected_config):
         raise ValueError("invalid registry manifest request")
     media=("application/vnd.oci.image.manifest.v1+json",
            "application/vnd.docker.distribution.manifest.v2+json")
@@ -98,7 +101,7 @@ def create(out, source_sha, services=SERVICES):
         repo = REGISTRY + "/aiops-v3/" + service
         tag = repo + ":ci"
         info = image_info(tag)
-        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
+        if services in PLATFORM_SERVICE_SETS:
             platform=info["Os"]+"/"+info["Architecture"]
             if platform!="linux/amd64":
                 raise ValueError("this disposable campaign qualifies linux/amd64 only")
@@ -116,7 +119,7 @@ def create(out, source_sha, services=SERVICES):
             ref = refs[0]
         subprocess.run(["docker", "pull", ref], check=True)
         pinned = image_info(ref)
-        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
+        if services in PLATFORM_SERVICE_SETS:
             pinned_config=platform_config(ref,out)
             if pinned_config!=source_config or pinned["Os"]!="linux" or pinned["Architecture"]!="amd64":
                 raise ValueError("pinned platform config differs from source: "+service)
@@ -138,6 +141,43 @@ def create(out, source_sha, services=SERVICES):
         service: {"image": item["reference"]} for service, item in images.items()}})
     print("Image BOM generated for", source_sha)
 
+def extend_e17(base_dir, target_dir, out, source_sha):
+    """Combine the nine verified LAB images and the separately published E17 target.
+    Re-read each pinned identity before emitting a new BOM; never label a product BOM.
+    """
+    if not SHA.fullmatch(source_sha) or out.exists():
+        raise ValueError("invalid E17 BOM destination or source")
+    def load(directory, services):
+        bom = json.loads((directory / "image-bom.json").read_text())
+        if (bom.get("schema_version") != 1
+            or bom.get("classification") != "DISPOSABLE_POC_IMAGE_BOM"
+            or bom.get("source_sha") != source_sha
+            or bom.get("production_authorized") is not False
+            or set(bom["images"]) != set(services)):
+            raise ValueError("invalid E17 input BOM")
+        for service, row in bom["images"].items():
+            if (not DIGEST.fullmatch(row["manifest_digest"])
+                or not DIGEST.fullmatch(row["config_digest"])
+                or not DIGEST.fullmatch(row["engine_image_id"])
+                or row["reference"] != REGISTRY+"/aiops-v3/"+service+"@"+row["manifest_digest"]
+                or (row["os"], row["architecture"]) != ("linux","amd64")):
+                raise ValueError("invalid pinned E17 image")
+            info = image_info(row["reference"])
+            if (info["Id"] != row["engine_image_id"]
+                or (info["Os"], info["Architecture"]) != ("linux","amd64")
+                or platform_config(row["reference"], directory) != row["config_digest"]
+                or registry_manifest(service, row["config_digest"]) != row["reference"]):
+                raise ValueError("E17 image identity changed")
+        return bom["images"]
+    images = {**load(base_dir,GAMMA_SERVICES), **load(target_dir,E17_TARGET_ONLY)}
+    out.mkdir(mode=0o700)
+    write_json(out/"image-bom.json", {"schema_version":1,
+               "classification":"DISPOSABLE_POC_E17_IMAGE_BOM",
+               "source_sha":source_sha,"production_authorized":False,"images":images})
+    write_json(out/"compose.pinned.json", {"services":{
+        service:{"image":row["reference"]} for service,row in images.items()}})
+    print("E17 ten-image BOM generated for", source_sha)
+
 def verify(out, container_ids, services=SERVICES):
     bom = json.loads((out / "image-bom.json").read_text())
     if set(bom["images"]) != set(services) or len(container_ids) != len(services):
@@ -158,7 +198,7 @@ def verify(out, container_ids, services=SERVICES):
         if not DIGEST.fullmatch(expected["config_digest"]):
             raise ValueError("invalid config digest")
         expected_engine=expected["config_digest"]
-        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
+        if services in PLATFORM_SERVICE_SETS:
             expected_engine=expected["engine_image_id"]
             if not DIGEST.fullmatch(expected_engine) or image_info(expected["reference"])["Id"]!=expected_engine:
                 raise ValueError("pinned engine identity changed")
@@ -173,7 +213,7 @@ def verify(out, container_ids, services=SERVICES):
             raise ValueError("container not healthy or differs from BOM: " + service)
         receipts[service] = {"manifest_digest": expected["manifest_digest"],
                              "config_digest": expected["config_digest"], "health": "healthy"}
-        if services in (ORCHESTRATION_SERVICES,GAMMA_SERVICES):
+        if services in PLATFORM_SERVICE_SETS:
             receipts[service]["engine_image_id"]=row["Image"]
     result = {"classification": "DISPOSABLE_POC_PINNED_START",
               "source_sha": bom["source_sha"], "production_authorized": False,
@@ -194,7 +234,11 @@ if __name__ == "__main__":
         verify(Path(sys.argv[2]), sys.argv[3:], ORCHESTRATION_SERVICES)
     elif len(sys.argv)==4 and sys.argv[1]=="create-gamma":
         create(Path(sys.argv[2]),sys.argv[3],GAMMA_SERVICES)
+    elif len(sys.argv)==4 and sys.argv[1]=="create-e17-target":
+        create(Path(sys.argv[2]),sys.argv[3],E17_TARGET_ONLY)
+    elif len(sys.argv)==6 and sys.argv[1]=="extend-e17":
+        extend_e17(Path(sys.argv[2]),Path(sys.argv[3]),Path(sys.argv[4]),sys.argv[5])
     elif len(sys.argv)==3+len(GAMMA_SERVICES) and sys.argv[1]=="verify-gamma":
         verify(Path(sys.argv[2]),sys.argv[3:],GAMMA_SERVICES)
     else:
-        raise SystemExit("usage: poc-image-bom.py create/verify | create-orchestration/verify-orchestration | create-gamma/verify-gamma")
+        raise SystemExit("usage: poc-image-bom.py create/verify | create-orchestration/verify-orchestration | create-gamma/verify-gamma | create-e17-target | extend-e17")
