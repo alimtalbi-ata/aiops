@@ -37,7 +37,20 @@ def snapshot(query, db):
         require(total <= MAX_BYTES and len(raw.splitlines()) == count, "invalid Temporal row snapshot")
         rows[name] = {"rows": count, "sha256": sha(raw)}
     require(sum(v["rows"] for v in rows.values()) > 0, "empty Temporal database")
-    return rows
+    metadata = query(db, """
+SELECT jsonb_build_object(
+ 'columns',(SELECT jsonb_agg(to_jsonb(c) ORDER BY table_name,ordinal_position)
+ FROM (SELECT table_name,column_name,ordinal_position,data_type,udt_name,is_nullable,column_default
+ FROM information_schema.columns WHERE table_schema='public') c),
+ 'constraints',(SELECT jsonb_agg(to_jsonb(c) ORDER BY rel,name)
+ FROM (SELECT conrelid::regclass::text rel,conname name,pg_get_constraintdef(oid) definition
+ FROM pg_constraint WHERE connamespace='public'::regnamespace) c),
+ 'indexes',(SELECT jsonb_agg(to_jsonb(i) ORDER BY tablename,indexname)
+ FROM (SELECT tablename,indexname,indexdef FROM pg_indexes WHERE schemaname='public') i)
+)::text;
+""")
+    require(bool(metadata) and len(metadata) <= MAX_BYTES, "invalid Temporal schema projection")
+    return {"tables": rows, "schema_sha256": sha(metadata)}
 
 
 def prove(docker, compose, root, bom, project, report, history_probe, history):
@@ -172,7 +185,8 @@ def prove(docker, compose, root, bom, project, report, history_probe, history):
                  "action_receipt_sha256":parsed["action_receipt_sha256"],"history_projection_sha256":sha(history),
                  "events":len(projected["events"]),"activity_attempt":projected["activity_attempt"],
                  "databases":{db:{"backup_sha256":expected[db],"backup_bytes":len(dumps[db]),
-                                  "tables":len(after[db]),"rows":sum(v["rows"] for v in after[db].values()),
+                                  "tables":len(after[db]["tables"]),"rows":sum(v["rows"] for v in after[db]["tables"].values()),
+                                  "schema_sha256":after[db]["schema_sha256"],
                                   "snapshot_sha256":sha(json.dumps(after[db],sort_keys=True).encode())} for db in DATABASES},
                  "source_stopped":True,"fresh_volume":True,"same_daemon":True,"worker_started":False,
                  "wrong_digest_refused":True,"overwrite_refused":True,"history_projection_identical":True,
