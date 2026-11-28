@@ -61,3 +61,13 @@ python3 v3-spike/kit/pocctl.py gamma --port 18081
 Choose a free dedicated loopback port and reuse it across restarts. On a provisioned root the controller never silently falls back to the legacy GAMMA launcher. The collector token remains private in `collector-control/collector.token`. Actual target collection and server-owned Verify are separate steps. No automatic rearm, host remediation or production authorization is enabled.
 
 This controller is a source-built POC, not the signed offline OCI release. Full restore, coordinated multistore backup, upgrade and rollback remain separate work; do not treat these commands as an Enterprise disaster recovery procedure.
+
+## Verify a logical backup by isolated restore
+
+On the dedicated source-built LAB daemon, stop foreground GAMMA and other external clients. Use a trusted backup receipt from pocctl.py backup. Supply its archive basename and SHA-256 to poc_restore_check.py:
+
+```sh
+python3 v3-spike/kit/poc_restore_check.py "$ARCHIVE_BASENAME" "$BACKUP_SHA256"
+```
+
+This restores into a fresh disconnected disposable container, not the active database. The archive must be private, canonical, no larger than 32 MiB and match the supplied digest. PASS means the archive could be restored and the destination schema and rows projected; the standalone check does not attest equality with an independently captured source snapshot. It does not restore Temporal, the collector authority or witness. If resource creation has an ambiguous result, investigate the isolated residue; do not delete unverified resources. The post-E17 CI recipe is separate and checks source/destination hashes, DEMO run identities, Evidence digests and the exact Core execution receipt. Full business stages and coordinated recovery are not qualified by it.
