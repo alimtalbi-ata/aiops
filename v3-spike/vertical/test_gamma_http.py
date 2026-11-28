@@ -86,6 +86,22 @@ class GammaHttpTests(unittest.TestCase):
                             expect(page.locator("#context-result")).to_contain_text("Verified dynamic lab binding")
                             expect(page.locator("#context-result")).to_contain_text("Critic evidence: SUPPORTED")
                             self.assertEqual(read.call_args.args[2],run_id)
+                        # Tamper only the browser response: duplicate one citation, omit the other.
+                        def duplicate_citation(route):
+                            response = route.fetch()
+                            payload = response.json()
+                            sources = payload["copilot"]["sources"]
+                            self.assertEqual(len(sources), 2)
+                            payload["copilot"]["sources"] = [sources[0], sources[0]]
+                            route.fulfill(response=response, json=payload)
+                        pattern = "**/api/v1/incident-context/dynamic?*"
+                        page.route(pattern, duplicate_citation)
+                        try:
+                            with patch("http_demo.dynamic_context",return_value=(core,details)):
+                                page.locator("#load-dynamic-context").click()
+                                expect(page.locator("#context-result")).to_have_text("UNKNOWN / DENY — context unavailable or unverified")
+                        finally:
+                            page.unroute(pattern, duplicate_citation)
                         with patch("http_demo.dynamic_context",return_value=({**core,"run":{**core["run"],"run_id":"RUN-"+"B"*16}},dict(details,run_id="RUN-"+"B"*16))):
                             page.locator("#load-dynamic-context").click()
                             expect(page.locator("#context-result")).to_contain_text("UNKNOWN / DENY")
