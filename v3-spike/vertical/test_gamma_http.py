@@ -4,6 +4,42 @@ from unittest.mock import patch
 from http_demo import server
 
 class GammaHttpTests(unittest.TestCase):
+    def test_walkthrough_keyboard_focus(self):
+        from playwright.sync_api import sync_playwright, expect
+        targets = ["dynamic-ingestion", "enterprise-workbench",
+                   "incident-context", "enterprise-inventory",
+                   "dynamic-ingestion", "e17-recovery"]
+        with server() as http:
+            worker = threading.Thread(target=http.serve_forever, daemon=True)
+            worker.start()
+            try:
+                with sync_playwright() as pw:
+                    browser = pw.chromium.launch(headless=True)
+                    try:
+                        for width in (390, 1280):
+                            with self.subTest(width=width):
+                                page = browser.new_page(viewport={"width": width, "height": 800})
+                                try:
+                                    page.goto("http://127.0.0.1:%d/" % http.server_port)
+                                    links = page.get_by_role("navigation", name="Mono-incident demonstration").get_by_role("link")
+                                    expect(links).to_have_count(len(targets))
+                                    for index, target in enumerate(targets):
+                                        link = links.nth(index)
+                                        expect(link).to_have_attribute("href", "#" + target)
+                                        link.focus()
+                                        expect(link).to_be_focused()
+                                        page.keyboard.press("Enter")
+                                        expect(page.locator("#" + target)).to_be_focused()
+                                        expect(page.locator("#dynamic-hitl-approve")).to_be_disabled()
+                                        expect(page.locator("#hitl-approve")).to_be_disabled()
+                                finally:
+                                    page.close()
+                    finally:
+                        browser.close()
+            finally:
+                http.shutdown()
+                worker.join(5)
+
     def test_connected_gamma(self):
         from playwright.sync_api import sync_playwright, expect
         with server() as http:
