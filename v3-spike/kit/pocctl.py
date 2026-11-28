@@ -127,6 +127,15 @@ class Lifecycle:
         finally:
             temporary.unlink(missing_ok=True)
 
+    def restore_check(self, archive, sha256):
+        """Verify a trusted logical archive in a disconnected disposable DB."""
+        from poc_restore_check import verify_restore
+        release_lab = str(HERE / 'release-lab')
+        if release_lab not in sys.path:
+            sys.path.insert(0, release_lab)
+        from e17_pg_restore import snapshot
+        return verify_restore(self, archive, sha256, snapshot)
+
     def gamma(self, provision=False, port=None):
         self.installed()
         args = [sys.executable, str(HERE / 'poc-gamma.py')]
@@ -142,20 +151,31 @@ class Lifecycle:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('install', 'start', 'stop', 'health', 'backup', 'provision', 'gamma'))
+    parser.add_argument('action', choices=('install', 'start', 'stop', 'health', 'backup', 'restore-check', 'provision', 'gamma'))
     parser.add_argument('--root', default=os.environ.get('V3_ROOT', '/srv/aiops-v3'))
     parser.add_argument('--orchestration', action='store_true')
     parser.add_argument('--port', type=int)
+    parser.add_argument('--archive', help='trusted backup basename under V3_ROOT/backup')
+    parser.add_argument('--sha256', help='expected digest from the backup receipt')
     args = parser.parse_args(argv)
+    if args.action == 'restore-check':
+        if (not args.archive or not re.fullmatch(r'poc-pg-[0-9]{8}T[0-9]{12}Z\.dump', args.archive)
+                or not args.sha256 or not re.fullmatch(r'[a-f0-9]{64}', args.sha256)):
+            parser.error('restore-check requires canonical --archive and --sha256')
+        if args.port is not None:
+            parser.error('--port is not valid for restore-check')
+    elif args.archive is not None or args.sha256 is not None:
+        parser.error('--archive and --sha256 are only valid for restore-check')
     try:
         ctl = Lifecycle(args.root, args.orchestration)
         if args.action in ('provision', 'gamma'):
             ctl.gamma(provision=args.action == 'provision', port=args.port)
         else:
-            report = getattr(ctl, args.action)()
+            report = (ctl.restore_check(args.archive, args.sha256) if args.action == 'restore-check'
+                      else getattr(ctl, args.action)())
             if report is not None:
                 print(json.dumps(report, sort_keys=True))
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         # Never emit subprocess captured output or credentials.
         print('POC command failed: ' + type(exc).__name__, file=sys.stderr)
         return 2
