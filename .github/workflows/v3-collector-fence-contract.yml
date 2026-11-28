@@ -56,7 +56,7 @@ jobs:
             test_collector_http_boundary test_fenced_durable_collector \
             test_recovery_verify_contract test_authority_restore_guard_candidate \
             test_authority_guard_preflight_candidate test_authority_guard_operations_candidate \
-            test_authority_guard_process_integration test_bounded_http_transport
+            test_authority_guard_process_integration test_bounded_http_transport test_guarded_collector_rearm
       - name: Qualification boundary
         if: always()
         run: |
