@@ -118,7 +118,14 @@ async function loadContext(simulate=false,dynamicRun=null){
   const lines=[r.incident_id,r.run_id,dynamicRun?"Verified dynamic lab binding":"Explicit lab binding","Affected nodes:",...c.affected.map(n=>n.node_id+" | depth "+n.depth),"Evidence:",...c.evidence.map(e=>e.evidence_id+" | "+e.payload_hash),"RCA: UNKNOWN","Policy: DENY"];
   const cp=data.copilot;
   if(!cp||cp.classification!=="SYNTHETIC_COPILOT_CONTEXT"||cp.run_id!==r.run_id||cp.incident_id!==r.incident_id||cp.confidence!==null||cp.operational_decision!=="DENY"||cp.production_authorized!==false||!Array.isArray(cp.sources))throw Error("unverified Copilot");
-  if(dynamicRun&&(cp.sources.length!==c.evidence.length||!cp.sources.every(s=>c.evidence.some(e=>e.evidence_id===s.evidence_id&&e.payload_hash===s.payload_hash))))throw Error("dynamic evidence mismatch");
+  if(dynamicRun){
+   const citationKeys=items=>items.map(e=>{
+    if(!validString(e?.evidence_id)||typeof e.payload_hash!=="string"||!/^[a-f0-9]{64}$/.test(e.payload_hash))throw Error("invalid evidence citation");
+    return e.evidence_id;
+   });
+   const sourceIds=citationKeys(cp.sources), evidenceIds=citationKeys(c.evidence);
+   if(new Set(sourceIds).size!==sourceIds.length||new Set(evidenceIds).size!==evidenceIds.length||cp.sources.length!==c.evidence.length||!cp.sources.every(s=>c.evidence.some(e=>e.evidence_id===s.evidence_id&&e.payload_hash===s.payload_hash)))throw Error("dynamic evidence mismatch");
+  }
   lines.push("Copilot: "+cp.answer,...cp.sources.map(e=>"Source: "+e.evidence_id+" | "+e.payload_hash));
   const a=cp.analysis, k=cp.criticism;
   if(!a||!k||a.classification!=="SYNTHETIC_RULE_BASED_ANALYST"||k.classification!=="SYNTHETIC_RULE_BASED_CRITIC"||a.root_cause!=="UNKNOWN"||a.confidence!==null||k.causality_established!==false||k.operational_decision!=="DENY"||k.production_authorized!==false||typeof k.evidence_supported!=="boolean"||!Array.isArray(a.evidence_ids)||!a.evidence_ids.every(id=>cp.sources.some(s=>s.evidence_id===id)))throw Error("unverified Analyst/Critic");
