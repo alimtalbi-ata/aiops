@@ -920,6 +920,19 @@ jobs:
           set -euo pipefail
           python3 -m py_compile v3-spike/kit/poc-guarded-collector-smoke.py
           python3 v3-spike/kit/poc-guarded-collector-smoke.py
+      - name: Prove restore against persisted post-E17 identities
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$V3_ROOT" = /tmp/aiops-v3-rootless-ci
+          docker info --format '{{json .SecurityOptions}}' | grep -q name=rootless
+          test "$(docker info --format '{{.DockerRootDir}}')" = "$V3_ROOT/docker-data"
+          project="aiops-v3-poc-$(printf %s "$V3_ROOT" | sha256sum | cut -c1-12)"
+          compose=(docker compose --project-name "$project" --env-file "$V3_ROOT/poc.env" -f v3-spike/kit/compose.poc-source.yml --profile orchestration -f "$V3_ROOT/temporal-e17-ci.yml" -f v3-spike/kit/compose.e17-product-ci.yml)
+          "${compose[@]}" stop worker
+          test -z "$("${compose[@]}" ps -q --status running worker)"
+          python3 v3-spike/kit/poc_restore_e17_smoke.py > "$V3_ROOT/poc-restore-post-e17-proof.json"
+          cat "$V3_ROOT/poc-restore-post-e17-proof.json"
       - name: Collect bounded Worker diagnostics on failure
         if: failure()
         run: |
@@ -960,6 +973,7 @@ jobs:
             ${{ env.V3_ROOT }}/guarded-collector-report.json
             ${{ env.V3_ROOT }}/poc-lifecycle-backup.json
             ${{ env.V3_ROOT }}/poc-restore-proof.json
+            ${{ env.V3_ROOT }}/poc-restore-post-e17-proof.json
           if-no-files-found: warn
       - if: always()
         run: |
