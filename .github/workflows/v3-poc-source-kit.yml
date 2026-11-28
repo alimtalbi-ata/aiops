@@ -16,6 +16,7 @@ jobs:
       - run: bash .github/scripts/test_retry_rootless_compose_port.sh
       - run: python3 -m unittest discover -s v3-spike/kit -p test_rootless_preflight.py -v
       - run: python3 -m unittest discover -s v3-spike/kit -p test_pocctl.py -v
+      - run: python3 -m unittest discover -s v3-spike/kit -p 'test_poc_restore*.py' -v
       - run: python3 -m py_compile app/worker/v3_boundary.py app/worker/v3_boundary_workflow.py v3-spike/kit/poc-temporal-boundary-smoke.py v3-spike/kit/poc-temporal-ui-smoke.py
       - name: Validate Workbench JavaScript syntax before service tests
         run: |
@@ -381,6 +382,11 @@ jobs:
           python3 v3-spike/kit/pocctl.py health
           test "$before" = "$(snapshot)"
           echo 'POC lifecycle stop/start and backup preserve PostgreSQL snapshots PASS'
+      - name: Prove isolated PostgreSQL restore against quiesced source
+        run: |
+          set -euo pipefail
+          python3 v3-spike/kit/poc_restore_smoke.py > "$V3_ROOT/poc-restore-proof.json"
+          cat "$V3_ROOT/poc-restore-proof.json"
       - name: Qualify upgrade from pre-008 schema on disposable runner
         run: |
           set -euo pipefail
@@ -953,6 +959,7 @@ jobs:
             ${{ env.V3_ROOT }}/admission-fault.json
             ${{ env.V3_ROOT }}/guarded-collector-report.json
             ${{ env.V3_ROOT }}/poc-lifecycle-backup.json
+            ${{ env.V3_ROOT }}/poc-restore-proof.json
           if-no-files-found: warn
       - if: always()
         run: |
